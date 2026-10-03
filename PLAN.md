@@ -3,7 +3,7 @@
 The sibling flashback-re plan owns research. Exact fidelity and maintainability are independent
 gates. All runtime work uses the original as the reference; no approximate acceptance stage.
 
-- [ ] **00 — Independent architecture review** — Depends: reference survey.
+- [x] **00 — Independent architecture review** — Depends: reference survey.
   - Design scene lifecycles, actor state, movement/collision, inventory, world behaviors, content,
     rendering and audio for readability and extensibility; original code boundaries are no guide
     to modern module/API boundaries (user clarification, 2026-10-03).
