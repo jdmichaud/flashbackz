@@ -32,8 +32,8 @@ gates. All runtime work uses the original as the reference; no approximate accep
   - Gate: exact behavior coverage is complete and the user can play the game through.
 - [ ] **05 — Target acceptance** — Depends: 04.
   - Linux, Windows and browser packaging, inputs, audio, storage, lifecycle and long sessions.
-  - Gate: the same exact references pass on supported targets; Windows and browsers are tested
-    on the actual hosts, not accepted solely from cross builds or headless output.
+  - Gate: Linux runtime acceptance and a successful Windows cross-build suffice for Windows
+    (user decision, 2026-10-03); browser acceptance still includes actual browser execution.
 - [ ] **S1 — Standalone builds and tests** — Depends: none.
   - Gate, repeated at each phase: clean checkout builds and tests without game files, research
     tools or sibling repositories; no proprietary content enters version control.

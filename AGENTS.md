@@ -30,7 +30,8 @@ Rules:
   targets. Use few dependencies and static linking where practical. Network play is excluded.
 - Build and capture under /tmp/flashback, not the repository or zig-out; emulate a copy only.
 - Verify the build the user runs with real input and presented frames before marking playable
-  gates complete. Headless tests and cross builds do not prove interactive acceptance.
+  gates complete. For Windows, the user accepts Linux runtime checks plus a successful Windows
+  cross-build (2026-10-03); an actual Windows machine is not an acceptance prerequisite.
 - Review maintainability independently of fidelity tests. A faithful result that remains tied
   to the original code structure fails acceptance, even if every fidelity test passes.
 - Once DESIGN.md is established, changes require explicit user approval. No design is approved
