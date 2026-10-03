@@ -37,6 +37,12 @@ gates. All runtime work uses the original as the reference; no approximate accep
   - Gate: actual SDL input drives the shared controller, headless held-input replay agrees,
     and an original frame checkpoint matches through the native application. This does not
     close the complete first-room gate, cinematics, audio or scheduler acceptance.
+- [ ] **03b — Normal executable launch and game entry** — User priority, 2026-10-04.
+  - Load the original startup presentation, make the title menu interactive, and connect Start
+    through the original introductory/wake-up sequence to the shared jungle scene.
+  - Gate: direct ISO/BIN launch, movie completion/skipping, menu input and Start work in the
+    actual SDL executable; frames and movie data are checked against the supplied original.
+    Broader gameplay, password/demo coverage and audio completeness remain separately tracked.
 - [ ] **04 — Whole local game** — Depends: 03, research 08 and 09.
   - All levels, difficulties, enemy and puzzle behaviors, menus, demos, cinematics, languages,
     sound modes, checkpoints/passwords and configuration.
