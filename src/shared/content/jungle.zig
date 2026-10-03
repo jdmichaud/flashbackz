@@ -10,6 +10,7 @@ const collision = @import("collision.zig");
 const sprite = @import("sprite.zig");
 const artwork = @import("room_artwork.zig");
 const palette = @import("palette.zig");
+const placement = @import("placement.zig");
 
 const Move = enum { wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover };
 const source_moves = [_]u16{ 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88 };
@@ -123,11 +124,8 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
     defer icons.deinit();
     var placements = try read(source, "DATA/LEVEL1.PGE", 16384);
     defer placements.deinit();
-    if (placements.bytes.len < 34) return error.InvalidPlayerPlacement;
-    const count = std.mem.readInt(u16, placements.bytes[0..2], .little);
-    if (count == 0 or placements.bytes.len != 2 + @as(usize, count) * 32) return error.InvalidPlayerPlacement;
-    const player = placements.bytes[2..34];
-    if (std.mem.readInt(u16, player[0..2], .little) != 99 or player[18] != 1 or player[19] >= 64) return error.UnsupportedPlayerStart;
+    const player = try (try placement.Table.init(placements.bytes)).record(0);
+    if (player.initial_state != 99 or player.kind != 1 or player.room >= 64) return error.UnsupportedPlayerStart;
     var executable = try read(source, "GAME_E.OVL", 1024 * 1024);
     defer executable.deinit();
     var digest: [32]u8 = undefined;
@@ -173,7 +171,7 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
         room_art.deinit(allocator);
     }
     if (map.bytes.len < 384) return error.TruncatedRoomDirectory;
-    const first_offset = @abs(std.mem.readInt(i32, map.bytes[@as(usize, player[19]) * 6 ..][0..4], .little));
+    const first_offset = @abs(std.mem.readInt(i32, map.bytes[@as(usize, player.room) * 6 ..][0..4], .little));
     if (first_offset == 0) return error.MissingRoomArtwork;
     if (first_offset >= map.bytes.len or map.bytes.len - first_offset < 4) return error.InvalidRoomRange;
     const reference_bank = map.bytes[first_offset + 2];
@@ -195,7 +193,7 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
         for (rooms) |*room| room.artwork.deinit();
         allocator.free(rooms);
     }
-    const facing: motion.Facing = if (player[26] == 0) .left else .right;
+    const facing: motion.Facing = if (player.facing_right == 0) .left else .right;
     const first_visual = switch (motions[@backingInt(Move.wake)].steps[0]) {
         .frame => |frame| frame.visual,
         .hold => return error.UnsupportedPlayerStart,
@@ -210,7 +208,7 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
         .run_strides = run,
         .terrain = terrain,
         .icon = icon,
-        .initial_room = room_ids[player[19]],
-        .initial_pose = .{ .position = .{ .x = std.mem.readInt(i16, player[2..4], .little), .y = std.mem.readInt(i16, player[4..6], .little) }, .facing = facing, .visual = .{ .id = first_visual.id, .mirrored = first_visual.mirrored != (facing == .left) } },
+        .initial_room = room_ids[player.room],
+        .initial_pose = .{ .position = player.position, .facing = facing, .visual = .{ .id = first_visual.id, .mirrored = first_visual.mirrored != (facing == .left) } },
     };
 }

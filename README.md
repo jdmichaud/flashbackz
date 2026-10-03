@@ -16,8 +16,10 @@ sound, cinematics, saves and menu actions remain unfinished. Unsupported control
 report errors. The development clock has measured room-change discrepancies; full original
 scheduling is not accepted yet. One alternate sprite encoding also remains unresolved.
 
-The content library covers all 193 room backgrounds, 1,284 packed sprite frames, icons, palettes
-and collision streams. Imported motion steps match 59,964 original routine executions and use
+The content library covers all 193 room backgrounds, 1,284 packed sprite frames, icons, palettes,
+collision streams, object graphics banks and composed object frames. The latter match 4,964
+original drawing cases; object behaviors and scene integration are still unfinished.
+Imported motion steps match 59,964 original routine executions and use
 opaque art references in an independent playback API. Without content, the template's moving
 ball remains a platform smoke fixture.
 
