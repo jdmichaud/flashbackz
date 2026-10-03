@@ -4,6 +4,7 @@ pub const bitmap = @import("bitmap.zig");
 pub const font = @import("font.zig");
 pub const palette = @import("palette.zig");
 pub const menu_artwork = @import("menu_artwork.zig");
+pub const room_artwork = @import("room_artwork.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());

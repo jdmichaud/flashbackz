@@ -4,10 +4,35 @@ const std = @import("std");
 
 pub const Rgb = struct { r: u8, g: u8, b: u8 };
 pub const Palette = [256]Rgb;
+pub const Bank = [16]Rgb;
+
+/// Level palettes store big-endian 0BGR words. For every nonzero word the DOS game
+/// sets BOTH low DAC bits in ALL channels, including channels whose nibble is zero.
+/// This differs from scaling a four-bit color to eight bits. A completely zero word
+/// remains black. Evidence: canonical routine 2a146h and original room captures.
+pub fn decodeLevelBank(bytes: []const u8, bank: u8) !Bank {
+    if (bytes.len == 0 or bytes.len % 32 != 0) return error.InvalidPaletteLength;
+    if (@as(usize, bank) >= bytes.len / 32) return error.InvalidPaletteBank;
+    var result: Bank = undefined;
+    for (&result, 0..) |*color, i| {
+        const word = std.mem.readInt(u16, bytes[@as(usize, bank) * 32 + i * 2 ..][0..2], .big);
+        const low: u8 = if (word == 0) 0 else 3;
+        color.* = .{
+            .r = expandDac((@as(u8, @truncate(word)) & 15) << 2 | low),
+            .g = expandDac((@as(u8, @truncate(word >> 4)) & 15) << 2 | low),
+            .b = expandDac((@as(u8, @truncate(word >> 8)) & 15) << 2 | low),
+        };
+    }
+    return result;
+}
+
+fn expandDac(component: u8) u8 {
+    return (component << 2) | (component >> 4);
+}
 
 pub fn expandComponent(component: u8) u8 {
     const quantized = component >> 2;
-    return (quantized << 2) | (quantized >> 4);
+    return expandDac(quantized);
 }
 
 pub fn decodeRgb8(bytes: []const u8) !Palette {
@@ -48,4 +73,16 @@ test "RGB and alpha ordering is explicit and invalid buffers are refused" {
     try std.testing.expectEqualSlices(u8, &.{ 231, 16, 255, 255, 0, 0, 0, 255 }, &out);
     try std.testing.expectError(error.InvalidFrameLength, writeRgba(&.{1}, &colors, &out));
     try std.testing.expectError(error.InvalidPaletteLength, decodeRgb8(source[0..767]));
+}
+
+test "level palette black and zero channels in nonblack colors are distinct" {
+    var source: [32]u8 = @splat(0);
+    @memcpy(source[2..8], &[_]u8{ 0, 1, 0x0f, 0, 0x01, 0x23 });
+    const bank = try decodeLevelBank(&source, 0);
+    try std.testing.expectEqual(Rgb{ .r = 0, .g = 0, .b = 0 }, bank[0]);
+    try std.testing.expectEqual(Rgb{ .r = 28, .g = 12, .b = 12 }, bank[1]);
+    try std.testing.expectEqual(Rgb{ .r = 12, .g = 12, .b = 255 }, bank[2]);
+    try std.testing.expectEqual(Rgb{ .r = 60, .g = 44, .b = 28 }, bank[3]);
+    try std.testing.expectError(error.InvalidPaletteBank, decodeLevelBank(&source, 1));
+    try std.testing.expectError(error.InvalidPaletteLength, decodeLevelBank(source[0..31], 0));
 }

@@ -5,6 +5,11 @@ loads the original main-menu artwork directly from an ISO, MODE1/2352 BIN, or ex
 and reproduces its pixels. This is a menu preview; gameplay and menu actions are still being
 implemented. Without game content, the template's moving ball is a platform smoke placeholder.
 
+The content library also imports all 193 original room backgrounds with bounded run decoding
+and the DOS level-palette conversion. Their indices match execution of the original decoder;
+first-room background colors match the original capture outside its actor/UI overlays. These
+content checks do not yet make the preview playable.
+
 Build with Zig 0.17.0 and SDL2 2.32.4 on Linux. `zig build`, `zig build test`, `zig build smoke`,
 `zig build verify`, `zig build web` and `zig build web-check` are the foundation checks.
 `web-check` also needs Node.js. Windows is cross-built with
