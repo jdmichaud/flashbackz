@@ -31,6 +31,12 @@ gates. All runtime work uses the original as the reference; no approximate accep
     shared simulation and the SDL/agent hosts.
   - Gate: exact state/events/timing/frame/audio comparisons pass, and the SDL build is played
     using real input; implementation review confirms readable game concepts and bounded work.
+- [ ] **03a — Interactive scene integration for development** — Depends: verified movement/rendering slices.
+  - Add an explicit jungle development entry to both native hosts, using shared content,
+    session, input and presentation with direct disc access. Keep unfinished mechanics visible.
+  - Gate: actual SDL input drives the shared controller, headless held-input replay agrees,
+    and an original frame checkpoint matches through the native application. This does not
+    close the complete first-room gate, cinematics, audio or scheduler acceptance.
 - [ ] **04 — Whole local game** — Depends: 03, research 08 and 09.
   - All levels, difficulties, enemy and puzzle behaviors, menus, demos, cinematics, languages,
     sound modes, checkpoints/passwords and configuration.
