@@ -9,6 +9,15 @@ Rules:
   Never transplant decompiler output or remaster control flow into this runtime.
 - Model rooms, actors, actions, animation, collision, inventory, puzzles, scenes and audio in
   game terms. Use typed state and explicit ownership. Keep the simulation independent of hosts.
+- Design the architecture independently for readability and extensibility. Renaming original
+  routines or fields is insufficient. Original routine boundaries, object records, dispatch
+  tables and state numbers must not dictate module or API boundaries.
+- Content definitions and small, cohesive systems must support adding a room, actor behavior,
+  item or scene without reconstructing DOS control flow. No embedded executable, translated
+  machine-state interpreter or runtime dependency on a remaster or research tool.
+- Recover original scripts into meaningful content rules at the import boundary where needed;
+  do not make the modern engine a reproduction of the original program's instruction dispatch.
+  Evidence may require observable event order, but does not require the original's call graph.
 - Original addresses, CPU registers, segment layouts and DOS services belong in research or
   compatibility parsers, never as the engine's state model. Semantic comparisons must not
   require a copy of the original's RAM layout.
@@ -22,5 +31,7 @@ Rules:
 - Build and capture under /tmp/flashback, not the repository or zig-out; emulate a copy only.
 - Verify the build the user runs with real input and presented frames before marking playable
   gates complete. Headless tests and cross builds do not prove interactive acceptance.
+- Review maintainability independently of fidelity tests. A faithful result that remains tied
+  to the original code structure fails acceptance, even if every fidelity test passes.
 - Once DESIGN.md is established, changes require explicit user approval. No design is approved
   merely by copying a template. Do not ask again for decisions already authorized in the session.

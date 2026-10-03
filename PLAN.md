@@ -3,7 +3,15 @@
 The sibling flashback-re plan owns research. Exact fidelity and maintainability are independent
 gates. All runtime work uses the original as the reference; no approximate acceptance stage.
 
-- [ ] **01 — Platform foundation and initial architecture** — Depends: reference survey.
+- [ ] **00 — Independent architecture review** — Depends: reference survey.
+  - Design scene lifecycles, actor state, movement/collision, inventory, world behaviors, content,
+    rendering and audio for readability and extensibility; original code boundaries are no guide
+    to modern module/API boundaries (user clarification, 2026-10-03).
+  - Gate: a concrete design explains ownership and extension points, demonstrates adding a room
+    and actor behavior, and avoids translated machine state or legacy instruction dispatch in
+    the engine. Review this independently of all fidelity comparisons.
+
+- [ ] **01 — Platform foundation and initial architecture** — Depends: 00.
   - Adapt the template's Zig skeleton and establish typed game/content boundaries, with no
     multiplayer. Write the initial design from measured Flashback requirements.
   - Gate: standalone synthetic build, tests, smoke, no-SDL headless verification and browser
