@@ -4,5 +4,6 @@
 pub const AgentBackend = @import("backend.zig").AgentBackend;
 
 test {
+    _ = @import("startup_test.zig");
     @import("std").testing.refAllDecls(@This());
 }

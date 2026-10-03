@@ -4,12 +4,12 @@
 const std = @import("std");
 const platform = @import("platform.zig");
 const menu_art = @import("content/menu_artwork.zig");
-const menu_mod = @import("scenes/menu.zig");
+const front_end = @import("scenes/front_end.zig");
 const jungle_mod = @import("scenes/jungle.zig");
-pub const Entry = enum { automatic, jungle_development };
+pub const Entry = enum { automatic, menu_development, jungle_development };
 const Scene = union(enum) {
     smoke,
-    menu: struct { assets: menu_art.Assets, menu: menu_mod.Menu = .{} },
+    menu: front_end.Scene,
     jungle: jungle_mod.Scene,
 };
 
@@ -180,13 +180,20 @@ pub const Game = struct {
             return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .scene = .{ .jungle = scene } };
         }
         const original_menu = if (assets) |source| try menu_art.load(allocator, source) else null;
-        return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .scene = if (original_menu) |menu| .{ .menu = .{ .assets = menu } } else .smoke };
+        var scene: Scene = .smoke;
+        if (original_menu) |menu| {
+            var front = front_end.Scene.init(allocator, assets.?, menu);
+            errdefer front.deinit();
+            if (entry == .automatic) try front.intro();
+            scene = .{ .menu = front };
+        }
+        return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .scene = scene };
     }
 
     pub fn deinit(self: *Game) void {
         switch (self.scene) {
             .smoke => {},
-            .menu => |*scene| scene.assets.deinit(),
+            .menu => |*scene| scene.deinit(),
             .jungle => |*scene| scene.deinit(),
         }
         self.allocator.free(self.page);
@@ -200,6 +207,7 @@ pub const Game = struct {
 
     pub fn stateHash(self: *const Game) u64 {
         if (self.scene == .jungle) return self.scene.jungle.stateHash();
+        if (self.scene == .menu) return self.scene.menu.stateHash();
         return self.state.hash();
     }
 
@@ -213,6 +221,7 @@ pub const Game = struct {
 
     pub fn needsCatchup(self: *const Game, now_ns: u64) bool {
         if (self.scene == .jungle) return self.scene.jungle.needsCatchup(now_ns);
+        if (self.scene == .menu) return self.scene.menu.needsCatchup(now_ns);
         return false;
     }
 
@@ -224,7 +233,8 @@ pub const Game = struct {
             .startup => {
                 _ = try p.start();
                 const original_content = self.scene != .smoke;
-                try p.setResolution(if (original_content) 256 else page_width, if (original_content) 224 else page_height);
+                const size = self.resolution();
+                try p.setResolution(size.width, size.height);
                 if (!original_content) self.audio = p.audioOpen(audio_format) catch null;
                 self.readTitle();
                 self.phase = .playing;
@@ -238,7 +248,22 @@ pub const Game = struct {
         }
         if (self.phase == .finished) {
             if (self.audio != null) p.audioClose();
+            if (self.scene == .menu) self.scene.menu.stopAudio(p);
             return .finished;
+        }
+        if (self.scene == .menu) {
+            const front = &self.scene.menu;
+            if (front.stage == .quit) {
+                front.stopAudio(p);
+                self.phase = .finished;
+                return .finished;
+            }
+            try front.update(p);
+            if (front.stage == .ready) {
+                const next = try jungle_mod.Scene.loadWithDifficulty(self.allocator, self.assets.?, front.difficulty);
+                front.deinit();
+                self.scene = .{ .jungle = next };
+            }
         }
         if (self.jungle()) |scene| {
             const now = p.nowNs();
@@ -279,11 +304,13 @@ pub const Game = struct {
                     }
                     continue;
                 }
+                if (self.scene == .menu) {
+                    try self.scene.menu.event(event);
+                    continue;
+                }
                 switch (event.payload) {
                     .quit => self.phase = .finished,
-                    .key_down => |k| if (self.scene == .menu) {
-                        if (k.key == .escape) self.phase = .finished;
-                    } else switch (k.key) {
+                    .key_down => |k| switch (k.key) {
                         .escape => self.phase = .finished,
                         .f2 => self.saveState(),
                         .f3 => self.loadState(),
@@ -331,23 +358,34 @@ pub const Game = struct {
         _ = p.audioQueue(samples[0 .. frames * format.channels]) catch {};
     }
 
+    fn resolution(self: *const Game) platform.Size {
+        return switch (self.scene) {
+            .smoke => .{ .width = page_width, .height = page_height },
+            .menu => |*front| front.resolution(),
+            .jungle => .{ .width = 256, .height = 224 },
+        };
+    }
+
     fn present(self: *Game, p: *platform.Platform) !void {
+        const size = self.resolution();
+        try p.setResolution(size.width, size.height);
         if (self.jungle()) |scene| {
             const indices = self.page[0..57344];
             const frame = self.rgba[0 .. 57344 * 4];
             try scene.draw(indices, frame);
             self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
-            try p.present(.{ .width = 256, .height = 224, .stride = 256 * 4, .pixels = frame });
+            try p.present(.{ .width = size.width, .height = size.height, .stride = size.width * 4, .pixels = frame });
             self.frames_presented += 1;
             return;
         }
         if (self.scene == .menu) {
             const scene = &self.scene.menu;
-            const indices = self.page[0..57344];
-            const frame = self.rgba[0 .. 57344 * 4];
-            try scene.menu.draw(scene.assets.artwork(), .{}, indices, frame);
+            const count = size.width * size.height;
+            const indices = self.page[0..count];
+            const frame = self.rgba[0 .. count * 4];
+            try scene.draw(indices, frame);
             self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
-            try p.present(.{ .width = 256, .height = 224, .stride = 256 * 4, .pixels = frame });
+            try p.present(.{ .width = size.width, .height = size.height, .stride = size.width * 4, .pixels = frame });
             self.frames_presented += 1;
             return;
         }

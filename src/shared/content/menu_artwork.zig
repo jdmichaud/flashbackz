@@ -48,6 +48,20 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !?Assets
     return .{ .background = background, .colors = colors, .font = font };
 }
 
+pub fn loadNamed(allocator: std.mem.Allocator, source: platform.AssetSource, name: []const u8) !Assets {
+    var path: [64]u8 = undefined;
+    var image_file = try read(source, try std.fmt.bufPrint(&path, "DATA/{s}.MAP", .{name}), 57344);
+    defer image_file.deinit();
+    var palette_file = try read(source, try std.fmt.bufPrint(&path, "DATA/{s}.PAL", .{name}), 768);
+    defer palette_file.deinit();
+    var font_file = try read(source, "DATA/FB_TXT.FNT", 16384);
+    defer font_file.deinit();
+    var background = try bitmap.decodePlanar(allocator, image_file.bytes, 256, 224);
+    errdefer background.deinit();
+    const colors = try palette.decodeRgb8(palette_file.bytes);
+    return .{ .background = background, .colors = colors, .font = try font_mod.decode(allocator, font_file.bytes) };
+}
+
 test "missing menu is distinguishable from incomplete supplied content" {
     const memory = @import("../memory.zig");
     var source = memory.MemoryAssetSource.init(std.testing.allocator);

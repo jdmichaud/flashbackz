@@ -14,6 +14,7 @@ const NativeByteSource = @import("iso_source.zig").NativeByteSource;
 
 pub const usage =
     \\  ASSET_PATH    an ISO, raw MODE1/2352 BIN image, or directory of original files
+    \\  --scene NAME   development shortcut: menu or jungle (default: normal startup)
     \\  --saves DIR    where saves are kept (default: the per-user application data directory)
     \\
 ;
@@ -30,8 +31,7 @@ pub const Options = struct {
     pub fn take(self: *Options, arg: []const u8, args: anytype) TakeError!bool {
         if (std.mem.eql(u8, arg, "--scene")) {
             const value = args.next() orelse return error.MissingValue;
-            if (!std.mem.eql(u8, value, "jungle")) return error.UnknownScene;
-            self.entry = .jungle_development;
+            self.entry = if (std.mem.eql(u8, value, "jungle")) .jungle_development else if (std.mem.eql(u8, value, "menu")) .menu_development else return error.UnknownScene;
             return true;
         }
         if (std.mem.eql(u8, arg, "--saves")) {

@@ -1,8 +1,14 @@
 # flashbackz
 
 The modern Zig reimplementation of the supplied Flashback DOS CD edition. Both native hosts
-load an ISO, MODE1/2352 BIN or extracted game root directly. The default entry remains a menu
-preview; `--scene jungle` opens the interactive development slice.
+load an ISO, MODE1/2352 BIN or extracted game root directly. The default entry plays the CD intro with movie audio, opens the interactive title menu,
+and starts the jungle through the wake-up movie. `--scene jungle` opens the development slice
+directly; `--scene menu` skips the initial intro.
+
+Use Up/Down in the menu and Shift or Enter to select. Tab skips a movie. Skill selection,
+Info, password entry for the first level, and Quit work. Demo playback and passwords for
+later levels remain unfinished. Movie decoding and stable menu frames have exact comparisons;
+menu fades, cursor blinking, input-repeat timing and music still need implementation.
 
 In that slice, Left/Right walk or turn, Shift with a direction runs, Up jumps in place,
 Shift+Up jumps forward from standing, Down crouches, and Escape exits.
@@ -18,7 +24,7 @@ The inventory screen has exact original navigation and pixel comparisons. Item u
 menu sounds and exact menu entry/exit timing remain unfinished.
 
 This is not a complete game. Running jumps, climbing/grabs, compound roll exits, combat, other actors, dynamic geometry,
-sound, cinematics, saves and menu actions remain unfinished. Unsupported controls/transitions
+gameplay sound, later cinematics, saves and the remaining menu modes are unfinished. Unsupported controls/transitions
 report errors. The development clock has measured room-change discrepancies; full original
 scheduling is not accepted yet. One alternate sprite encoding also remains unresolved.
 

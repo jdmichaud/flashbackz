@@ -123,6 +123,10 @@ fn read(source: platform.AssetSource, name: []const u8, maximum: usize) !platfor
 }
 
 pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
+    return loadWithDifficulty(allocator, source, .normal);
+}
+
+pub fn loadWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSource, difficulty_setting: @import("../settings.zig").Difficulty) !Pack {
     var map = try read(source, "DATA/LEVEL1.MAP", 8 * 1024 * 1024);
     defer map.deinit();
     var colors = try read(source, "DATA/LEVEL1.PAL", 8192);
@@ -166,10 +170,10 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
         const rgb = executable.bytes[palette_offset + 96 + i * 3 ..][0..3];
         color.* = .{ .r = palette.expandComponent(rgb[0]), .g = palette.expandComponent(rgb[1]), .b = palette.expandComponent(rgb[2]) };
     }
-    // The development jungle entry has the observed default normal difficulty. UI labels
+    // Difficulty selection supplies the original inventory label. UI labels
     // come from the checked English overlay; executable offsets stay at this boundary.
     const data_base: usize = 5632 + 0x1a680;
-    const difficulty_offset = std.mem.readInt(u16, executable.bytes[data_base + 0x1843 ..][0..2], .little);
+    const difficulty_offset = std.mem.readInt(u16, executable.bytes[data_base + 0x1841 + 2 * @as(usize, @backingInt(difficulty_setting)) ..][0..2], .little);
     const difficulty = try embeddedLabel(executable.bytes, data_base + difficulty_offset);
     const level_prefix = try embeddedLabel(executable.bytes, data_base + 0x186a);
     const level_label = try std.mem.concat(allocator, u8, &.{ level_prefix, difficulty });

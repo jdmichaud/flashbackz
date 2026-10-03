@@ -83,7 +83,11 @@ pub const Scene = struct {
     dialog: ?struct { menu: inventory_menu.Menu, keys: inventory_menu.Keys = .{}, clock: clock_mod.Clock } = null,
 
     pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Scene {
-        var pack = try content.load(allocator, source);
+        return loadWithDifficulty(allocator, source, .normal);
+    }
+
+    pub fn loadWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSource, difficulty: @import("../settings.zig").Difficulty) !Scene {
+        var pack = try content.loadWithDifficulty(allocator, source, difficulty);
         errdefer pack.deinit();
         var equipment = try equipment_mod.Loadout.init(allocator, pack.initial_items);
         errdefer equipment.deinit();
