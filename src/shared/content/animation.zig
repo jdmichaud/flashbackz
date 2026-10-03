@@ -6,7 +6,7 @@ const motion = @import("../motion.zig");
 pub const VisualKind = enum { sprite, composition };
 pub const SourceFrame = union(enum) {
     hold,
-    frame: struct { index: u15, mirrored: bool, forward: i8, down: i8 },
+    frame: struct { index: u15, mirrored: bool, dx: i8, dy: i8 },
 };
 
 pub const SourceClip = struct {
@@ -30,11 +30,15 @@ pub const SourceClip = struct {
         for (self.frames, steps) |source, *step| {
             step.* = switch (source) {
                 .hold => .hold,
-                .frame => |frame| .{ .frame = .{
-                    .visual = .{ .id = try resolver.resolve(self.kind, frame.index), .mirrored = frame.mirrored },
-                    .forward = frame.forward,
-                    .down = frame.down,
-                } },
+                .frame => |frame| .{
+                    .frame = .{
+                        // Original unreflected actor art faces left. Modern clips describe
+                        // a right-facing actor; playback reflects both motion and art for left.
+                        .visual = .{ .id = try resolver.resolve(self.kind, frame.index), .mirrored = !frame.mirrored },
+                        .forward = -@as(i16, frame.dx),
+                        .down = frame.dy,
+                    },
+                },
             };
         }
         return .{ .allocator = allocator, .steps = steps };
@@ -77,8 +81,8 @@ pub fn decode(allocator: std.mem.Allocator, bytes: []const u8, index: u16) !Sour
         frame.* = if (visual == 0xffff) .hold else .{ .frame = .{
             .index = @truncate(visual),
             .mirrored = visual & 0x8000 != 0,
-            .forward = @bitCast(record[2]),
-            .down = @bitCast(record[3]),
+            .dx = @bitCast(record[2]),
+            .dy = @bitCast(record[3]),
         } };
     }
     const sound = bytes[offset + 2];
@@ -106,7 +110,7 @@ test "binary animation resolves to an independent clip and sentinel frames hold"
     };
     var owned = try source.resolve(std.testing.allocator, Resolver{});
     defer owned.deinit();
-    var pose: motion.Pose = .{ .position = .{ .x = 10, .y = 20 }, .visual = .{ .id = @fromBackingInt(0) } };
+    var pose: motion.Pose = .{ .position = .{ .x = 10, .y = 20 }, .facing = .left, .visual = .{ .id = @fromBackingInt(0) } };
     var playback: motion.Playback = .{};
     _ = playback.advance(owned.clip(), &pose);
     try std.testing.expectEqual(motion.Position{ .x = 9, .y = 22 }, pose.position);

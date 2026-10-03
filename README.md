@@ -19,6 +19,10 @@ Motion clips use an independent playback API with opaque art references. Importe
 steps match 59,964 original routine executions, covering facing, movement and signed wrapping.
 Behavior selection, clip transitions and the original scheduling clock remain unfinished.
 
+Wake-up and complete turns now have a named controller, verified update by update against
+three original runs. Forward movement, other actions and scene integration remain unfinished;
+the native application is still the menu preview.
+
 Build with Zig 0.17.0 and SDL2 2.32.4 on Linux. `zig build`, `zig build test`, `zig build smoke`,
 `zig build verify`, `zig build web` and `zig build web-check` are the foundation checks.
 `web-check` also needs Node.js. Windows is cross-built with

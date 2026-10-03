@@ -10,6 +10,7 @@ pub const cd_track = @import("cd_track.zig");
 pub const menu = @import("scenes/menu.zig");
 pub const sprite_renderer = @import("render/sprite.zig");
 pub const motion = @import("motion.zig");
+pub const conrad = @import("actors/conrad.zig");
 pub const game = @import("game.zig");
 pub const Game = game.Game;
 
