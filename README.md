@@ -4,12 +4,13 @@ The modern Zig reimplementation of the supplied Flashback DOS CD edition. Both n
 load an ISO, MODE1/2352 BIN or extracted game root directly. The default entry remains a menu
 preview; `--scene jungle` opens the interactive development slice.
 
-In that slice, Left/Right walk or turn, Shift with a direction runs, and Escape exits.
+In that slice, Left/Right walk or turn, Shift with a direction runs, Up jumps in place,
+Shift+Up jumps forward from standing, Down crouches, and Escape exits.
 Wake-up, committed steps, turns, braking, one room crossing and the first ledge landing have
 exact original state comparisons. Four actual SDL frame checkpoints match the original pixels.
 The scene uses shared content, input, controller and rendering code in both native hosts.
 
-This is not a complete game. Jumping/climbing, inventory, combat, other actors, dynamic geometry,
+This is not a complete game. Running jumps, climbing/grabs, rolling, inventory, combat, other actors, dynamic geometry,
 sound, cinematics, saves and menu actions remain unfinished. Unsupported controls/transitions
 report errors. The development clock has measured room-change discrepancies; full original
 scheduling is not accepted yet. One alternate sprite encoding also remains unresolved.

@@ -9,24 +9,35 @@ const motion = @import("../motion.zig");
 const clock_mod = @import("../step_clock.zig");
 const sprite_renderer = @import("../render/sprite.zig");
 const palette = @import("../content/palette.zig");
+const controls = @import("../actors/controls.zig");
 
 pub const HeldInput = struct {
     left: bool = false,
     right: bool = false,
+    up: bool = false,
+    down: bool = false,
     left_action: bool = false,
     right_action: bool = false,
+    previous_direction: struct { horizontal: ?motion.Facing = null, vertical: ?controls.Vertical = null } = .{},
     pub fn key(self: *HeldInput, key_code: platform.Key, down: bool) void {
         switch (key_code) {
             .left => self.left = down,
             .right => self.right = down,
+            .up => self.up = down,
+            .down => self.down = down,
             .left_shift => self.left_action = down,
             .right_shift => self.right_action = down,
             else => {},
         }
     }
-    pub fn intent(self: HeldInput) !conrad.Intent {
-        if (self.left and self.right) return error.UnverifiedOpposingDirections;
-        return .{ .direction = if (self.left) .left else if (self.right) .right else null, .action = self.left_action or self.right_action };
+    pub fn intent(self: *HeldInput) !conrad.Intent {
+        if ((self.left and self.right) or (self.up and self.down)) return error.UnverifiedOpposingDirections;
+        const horizontal: ?motion.Facing = if (self.left) .left else if (self.right) .right else null;
+        const vertical: ?controls.Vertical = if (self.up) .up else if (self.down) .down else null;
+        // Mixed axes retain the last accepted direction, while the action modifier remains
+        // current. This is the original input arbitration, expressed without a DOS bitmask.
+        if (horizontal == null or vertical == null) self.previous_direction = .{ .horizontal = horizontal, .vertical = vertical };
+        return .{ .direction = self.previous_direction.horizontal, .vertical = self.previous_direction.vertical, .action = self.left_action or self.right_action };
     }
 };
 
@@ -37,7 +48,7 @@ fn consumeInput(pending: *std.ArrayList(platform.Event), held: *HeldInput, deadl
             .focus_lost => held.* = .{},
             .key_down => |key| {
                 switch (key.key) {
-                    .up, .down, .space, .tab, .left_ctrl, .right_ctrl, .enter, .p, .f1, .f2, .f3 => return error.UnimplementedJungleControl,
+                    .space, .tab, .left_ctrl, .right_ctrl, .enter, .p, .f1, .f2, .f3 => return error.UnimplementedJungleControl,
                     else => {},
                 }
                 held.*.key(key.key, true);
@@ -114,13 +125,15 @@ pub const Scene = struct {
                 .stride => |i| @intCast(i + 1),
             },
             .stopping_run => |p| @backingInt(p),
+            .jumping => |jump| (@as(u32, @backingInt(jump.kind)) << 8) | @backingInt(jump.phase),
+            .crouching => |p| @backingInt(p),
             else => 0,
         };
         for ([_]u32{ @backingInt(self.environment.room), @as(u16, @bitCast(self.pose.position.x)), @as(u16, @bitCast(self.pose.position.y)), @backingInt(self.pose.facing), @backingInt(self.pose.visual.id), @intFromBool(self.pose.visual.mirrored), activity, phase, @intCast(self.controller.playback.next_step) }) |value|
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
         for ([_]u64{ self.simulation_steps, if (self.clock) |clock| clock.next_tick else 0 }) |value|
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
-        const held = [_]u8{ @intFromBool(self.input.left), @intFromBool(self.input.right), @intFromBool(self.input.left_action), @intFromBool(self.input.right_action) };
+        const held = [_]u8{ @intFromBool(self.input.left), @intFromBool(self.input.right), @intFromBool(self.input.up), @intFromBool(self.input.down), @intFromBool(self.input.left_action), @intFromBool(self.input.right_action), if (self.input.previous_direction.horizontal) |direction| 1 + @as(u8, @backingInt(direction)) else 0, if (self.input.previous_direction.vertical) |direction| 1 + @as(u8, @backingInt(direction)) else 0 };
         hash.update(&held);
         for (self.pending.items) |event| {
             const relative_time = event.time_ns -| (if (self.clock) |clock| clock.origin_ns else 0);
@@ -149,6 +162,22 @@ test "held controls retain separate shift keys and release directions" {
     try std.testing.expect((try held.intent()).direction == null);
     held.key(.right_shift, false);
     try std.testing.expect(!(try held.intent()).action);
+}
+
+test "mixed directional axes retain the last sampled direction but use current action state" {
+    var held: HeldInput = .{};
+    held.key(.left, true);
+    try std.testing.expectEqual(@as(?motion.Facing, .left), (try held.intent()).direction);
+    held.key(.up, true);
+    held.key(.left_shift, true);
+    const mixed = try held.intent();
+    try std.testing.expectEqual(@as(?motion.Facing, .left), mixed.direction);
+    try std.testing.expect(mixed.vertical == null);
+    try std.testing.expect(mixed.action);
+    held.key(.left, false);
+    const vertical = try held.intent();
+    try std.testing.expect(vertical.direction == null);
+    try std.testing.expectEqual(@as(?controls.Vertical, .up), vertical.vertical);
 }
 
 test "late host polling applies queued controls at simulation deadlines and focus loss releases them" {

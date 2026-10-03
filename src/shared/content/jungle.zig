@@ -11,8 +11,8 @@ const sprite = @import("sprite.zig");
 const artwork = @import("room_artwork.zig");
 const palette = @import("palette.zig");
 
-const Move = enum { wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land };
-const source_moves = [_]u16{ 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93 };
+const Move = enum { wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn };
+const source_moves = [_]u16{ 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233 };
 pub const RoomArt = struct { id: geometry.RoomId, artwork: artwork.Artwork };
 
 pub const Pack = struct {
@@ -54,6 +54,12 @@ pub const Pack = struct {
             .walk = .{ .start = .{ .clip = self.clip(.walk_start) }, .strides = self.walk_strides },
             .run = .{ .start = self.clip(.run_start), .strides = self.run_strides, .entry_stride = 3, .brake = self.clip(.brake), .settle = self.clip(.settle) },
             .descend = .{ .step_off = self.clip(.step_off), .land = self.clip(.land) },
+            .jumps = .{
+                .upward = .{ .rise = self.clip(.jump_up), .recover = self.clip(.jump_recover) },
+                .low_clearance = .{ .rise = self.clip(.jump_low), .recover = self.clip(.jump_low_recover) },
+                .forward = .{ .takeoff = self.clip(.jump_takeoff), .flight = self.clip(.jump_flight), .landing = self.clip(.jump_land), .recover = self.clip(.jump_finish) },
+            },
+            .crouch = .{ .lower = self.clip(.crouch_lower), .hold = self.clip(.crouch_hold), .rise = self.clip(.crouch_rise), .turn = self.clip(.crouch_turn) },
         };
     }
 

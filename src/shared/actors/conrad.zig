@@ -2,6 +2,8 @@
 //! probes choose transitions, and room handoff occurs before the first frame of a new motion.
 const std = @import("std");
 const motion = @import("../motion.zig");
+const jumping = @import("conrad_jump.zig");
+pub const Intent = @import("controls.zig").Intent;
 
 pub const WalkMotion = struct {
     clip: motion.Clip,
@@ -17,6 +19,8 @@ pub const Clips = struct {
     walk: ?struct { start: WalkMotion, strides: []const WalkMotion } = null,
     run: ?struct { start: motion.Clip, strides: []const motion.Clip, entry_stride: usize, brake: motion.Clip, settle: motion.Clip } = null,
     descend: ?struct { step_off: motion.Clip, land: motion.Clip } = null,
+    jumps: ?jumping.Clips = null,
+    crouch: ?struct { lower: motion.Clip, hold: motion.Clip, rise: motion.Clip, turn: motion.Clip } = null,
 };
 
 pub const TurnPhase = enum { preparation, follow_through };
@@ -30,8 +34,9 @@ pub const Activity = union(enum) {
     stopping_run: enum { braking, settling },
     stepping_down,
     landing,
+    jumping: jumping.State,
+    crouching: enum { lowering, holding, rising, turning },
 };
-pub const Intent = struct { direction: ?motion.Facing = null, action: bool = false };
 pub const Result = enum { advanced, locomotion_requested, terrain_transition_requested };
 
 const NoEnvironment = struct {
@@ -39,6 +44,9 @@ const NoEnvironment = struct {
         return error.EnvironmentRequired;
     }
     pub fn motionBoundary(_: @This(), _: *motion.Pose) !void {}
+    pub fn ledge(_: @This(), _: motion.Pose, _: anytype, _: i16, _: anytype) !bool {
+        return error.EnvironmentRequired;
+    }
 };
 
 pub const Controller = struct {
@@ -70,6 +78,16 @@ pub const Controller = struct {
             },
             .stepping_down => (clips.descend orelse return error.MissingMotion).step_off,
             .landing => (clips.descend orelse return error.MissingMotion).land,
+            .jumping => |jump| jump.clip(clips.jumps orelse return error.MissingMotion),
+            .crouching => |phase| blk: {
+                const crouch = clips.crouch orelse return error.MissingMotion;
+                break :blk switch (phase) {
+                    .lowering => crouch.lower,
+                    .holding => crouch.hold,
+                    .rising => crouch.rise,
+                    .turning => crouch.turn,
+                };
+            },
         };
     }
 
@@ -88,7 +106,25 @@ pub const Controller = struct {
             switch (self.activity) {
                 .waking => self.activity = .standing,
                 .standing => {
-                    if (intent.direction) |direction| {
+                    if (intent.vertical) |vertical| {
+                        if (vertical == .up) {
+                            if (!intent.action and try environment.ledge(pose.*, .head, 0, .ahead)) {
+                                self.activity = .{ .turning = .preparation };
+                            } else {
+                                if (clips.jumps == null) return .locomotion_requested;
+                                if (intent.action) {
+                                    if (!try environment.at(pose.*, .torso, 1)) self.activity = .{ .jumping = .{ .kind = .forward } };
+                                } else self.activity = .{ .jumping = .{ .kind = if (try environment.at(pose.*, .torso, 0)) .low_clearance else .upward } };
+                            }
+                        } else if (intent.action) {
+                            if (try environment.ledge(pose.*, .support, 0, .ahead)) self.activity = .{ .turning = .preparation } else if (try environment.ledge(pose.*, .support, 0, .behind)) return .terrain_transition_requested;
+                        } else if (try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .torso, -1)) {
+                            self.activity = .{ .turning = .preparation };
+                        } else {
+                            if (clips.crouch == null) return .locomotion_requested;
+                            self.activity = .{ .crouching = .lowering };
+                        }
+                    } else if (intent.direction) |direction| {
                         if (direction != pose.facing) {
                             self.activity = .{ .turning = .preparation };
                         } else {
@@ -130,6 +166,7 @@ pub const Controller = struct {
                 },
                 .running => |phase| {
                     const gait = clips.run orelse return error.MissingMotion;
+                    if (intent.vertical != null) return .locomotion_requested;
                     if (!try environment.at(pose.*, .support, 1)) return .terrain_transition_requested;
                     if (try environment.at(pose.*, .torso, 3) and !try environment.at(pose.*, .torso, 2)) return .terrain_transition_requested;
                     if (phase == .starting and ((try environment.at(pose.*, .torso, 2) and !try environment.at(pose.*, .torso, 1)) or
@@ -153,6 +190,27 @@ pub const Controller = struct {
                     self.activity = .landing;
                 },
                 .landing => self.activity = .standing,
+                .jumping => |*jump| switch (try jump.finishPhase(clips.jumps orelse return error.MissingMotion, intent, pose, environment)) {
+                    .continued => {},
+                    .finished => self.activity = .standing,
+                    .terrain_requested => return .terrain_transition_requested,
+                },
+                .crouching => |phase| switch (phase) {
+                    .lowering => self.activity = .{ .crouching = .holding },
+                    .rising => self.activity = .standing,
+                    .turning => {
+                        pose.facing = if (pose.facing == .left) .right else .left;
+                        self.activity = .{ .crouching = .holding };
+                    },
+                    .holding => {
+                        if (intent.vertical == .down or (intent.vertical == null and intent.action and (intent.direction == null or intent.direction == pose.facing))) {
+                            // Remain low while crouch/action is held.
+                        } else if (intent.direction) |direction| {
+                            if (direction == pose.facing) return .locomotion_requested;
+                            if (!try environment.at(pose.*, .torso, -1)) self.activity = .{ .crouching = .turning } else self.activity = .{ .crouching = .rising };
+                        } else self.activity = .{ .crouching = .rising };
+                    },
+                },
             }
             self.playback = .{};
             try environment.motionBoundary(pose);
@@ -204,6 +262,9 @@ test "walking commits a stride and requests room handoff only at its boundary" {
         }
         pub fn motionBoundary(self: *@This(), _: *motion.Pose) !void {
             self.boundaries += 1;
+        }
+        pub fn ledge(_: *@This(), _: motion.Pose, _: anytype, _: i16, _: anytype) !bool {
+            return false;
         }
     };
     var ground: Ground = .{};
