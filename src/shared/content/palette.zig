@@ -6,6 +6,22 @@ pub const Rgb = struct { r: u8, g: u8, b: u8 };
 pub const Palette = [256]Rgb;
 pub const Bank = [16]Rgb;
 
+/// Actor colors are little-endian 0RGB words and leave the two low DAC bits clear.
+/// The level-file bank conversion below has a different channel order and brightness rule.
+pub fn decodeActorBank(bytes: []const u8) !Bank {
+    if (bytes.len != 32) return error.InvalidPaletteLength;
+    var result: Bank = undefined;
+    for (&result, 0..) |*color, i| {
+        const word = std.mem.readInt(u16, bytes[i * 2 ..][0..2], .little);
+        color.* = .{
+            .r = expandDac((@as(u8, @truncate(word >> 8)) & 15) << 2),
+            .g = expandDac((@as(u8, @truncate(word >> 4)) & 15) << 2),
+            .b = expandDac((@as(u8, @truncate(word)) & 15) << 2),
+        };
+    }
+    return result;
+}
+
 /// Level palettes store big-endian 0BGR words. For every nonzero word the DOS game
 /// sets BOTH low DAC bits in ALL channels, including channels whose nibble is zero.
 /// This differs from scaling a four-bit color to eight bits. A completely zero word
@@ -85,4 +101,12 @@ test "level palette black and zero channels in nonblack colors are distinct" {
     try std.testing.expectEqual(Rgb{ .r = 60, .g = 44, .b = 28 }, bank[3]);
     try std.testing.expectError(error.InvalidPaletteBank, decodeLevelBank(&source, 1));
     try std.testing.expectError(error.InvalidPaletteLength, decodeLevelBank(source[0..31], 0));
+}
+
+test "actor palette uses its own channel order and DAC brightness" {
+    var source: [32]u8 = @splat(0);
+    @memcpy(source[2..6], &[_]u8{ 0x23, 0x01, 0xff, 0x0f });
+    const bank = try decodeActorBank(&source);
+    try std.testing.expectEqual(Rgb{ .r = 16, .g = 32, .b = 48 }, bank[1]);
+    try std.testing.expectEqual(Rgb{ .r = 243, .g = 243, .b = 243 }, bank[2]);
 }
