@@ -12,8 +12,10 @@ exact original state comparisons. Four actual SDL frame checkpoints match the or
 The scene uses shared content, input, controller and rendering code in both native hosts.
 
 The initial shield, gun and credits now enter the inventory at their original startup updates.
-The HUD uses the selected item's imported icon. The ordered inventory container has exact
-original operation comparisons; inventory UI, item use and pickup/drop are still unfinished.
+The HUD uses the selected item's imported icon. Tab opens and closes inventory; arrows navigate.
+Hold Shift, Space or Enter to see the score panel. Closing selects the last displayed item.
+The inventory screen has exact original navigation and pixel comparisons. Item use, pickup/drop,
+menu sounds and exact menu entry/exit timing remain unfinished.
 
 This is not a complete game. Running jumps, climbing/grabs, compound roll exits, combat, other actors, dynamic geometry,
 sound, cinematics, saves and menu actions remain unfinished. Unsupported controls/transitions

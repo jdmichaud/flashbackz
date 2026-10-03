@@ -4,8 +4,9 @@ const std = @import("std");
 const equipment = @import("../equipment.zig");
 const placement = @import("placement.zig");
 const animation = @import("animation.zig");
+const strings = @import("string_table.zig");
 
-pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animations: []const u8, rules: []const u8, resolver: anytype) ![]equipment.Definition {
+pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animations: []const u8, rules: []const u8, names: []const u8, resolver: anytype) ![]equipment.Definition {
     const Spec = struct { kind: equipment.Kind, index: u16, state: u16, target: u16, operations: [3]u8 };
     // Ascending source activation order determines simultaneous item-arrival order. The
     // result contains semantic kinds, resolved icons and durations, not source entity IDs.
@@ -16,6 +17,8 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
     };
     const definitions = try allocator.alloc(equipment.Definition, specs.len);
     errdefer allocator.free(definitions);
+    var loaded: usize = 0;
+    errdefer for (definitions[0..loaded]) |definition| allocator.free(definition.label);
     for (specs, definitions) |spec, *definition| {
         const source = try placements.record(spec.index);
         if (source.initial_state != spec.state or source.kind != 3 or source.minimum_difficulty != 0 or source.initially_active == 0)
@@ -37,9 +40,17 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
             .icon = try resolver.icon(source.inventory_icon),
             .introduction_steps = @intCast(introduction.frames.len),
             .initial_quantity = source.life,
+            .label = try strings.copy(allocator, names, source.text_id),
+            .show_quantity = source.visual_flags & 4 != 0,
         };
+        loaded += 1;
     }
     return definitions;
+}
+
+pub fn release(allocator: std.mem.Allocator, definitions: []equipment.Definition) void {
+    for (definitions) |definition| allocator.free(definition.label);
+    allocator.free(definitions);
 }
 
 fn word(bytes: []const u8, offset: usize) u16 {

@@ -13,6 +13,7 @@ pub const motion = @import("motion.zig");
 pub const identity = @import("identity.zig");
 pub const inventory = @import("inventory.zig");
 pub const equipment = @import("equipment.zig");
+pub const inventory_menu = @import("scenes/inventory_menu.zig");
 pub const conrad = @import("actors/conrad.zig");
 pub const geometry = @import("geometry.zig");
 pub const conrad_environment = @import("actors/conrad_environment.zig");

@@ -212,7 +212,7 @@ pub const Game = struct {
     }
 
     pub fn needsCatchup(self: *const Game, now_ns: u64) bool {
-        if (self.scene == .jungle) if (self.scene.jungle.clock) |clock| return clock.due(now_ns);
+        if (self.scene == .jungle) return self.scene.jungle.needsCatchup(now_ns);
         return false;
     }
 

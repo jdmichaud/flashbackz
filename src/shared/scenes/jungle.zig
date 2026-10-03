@@ -11,6 +11,7 @@ const sprite_renderer = @import("../render/sprite.zig");
 const palette = @import("../content/palette.zig");
 const controls = @import("../actors/controls.zig");
 const equipment_mod = @import("../equipment.zig");
+const inventory_menu = @import("inventory_menu.zig");
 
 pub const HeldInput = struct {
     left: bool = false,
@@ -19,6 +20,7 @@ pub const HeldInput = struct {
     down: bool = false,
     left_action: bool = false,
     right_action: bool = false,
+    inventory: bool = false,
     previous_direction: struct { horizontal: ?motion.Facing = null, vertical: ?controls.Vertical = null } = .{},
     pub fn key(self: *HeldInput, key_code: platform.Key, down: bool) void {
         switch (key_code) {
@@ -28,6 +30,7 @@ pub const HeldInput = struct {
             .down => self.down = down,
             .left_shift => self.left_action = down,
             .right_shift => self.right_action = down,
+            .tab => self.inventory = down,
             else => {},
         }
     }
@@ -49,7 +52,7 @@ fn consumeInput(pending: *std.ArrayList(platform.Event), held: *HeldInput, deadl
             .focus_lost => held.* = .{},
             .key_down => |key| {
                 switch (key.key) {
-                    .space, .tab, .left_ctrl, .right_ctrl, .enter, .p, .f1, .f2, .f3 => return error.UnimplementedJungleControl,
+                    .space, .left_ctrl, .right_ctrl, .enter, .p, .f1, .f2, .f3 => return error.UnimplementedJungleControl,
                     else => {},
                 }
                 held.*.key(key.key, true);
@@ -74,6 +77,10 @@ pub const Scene = struct {
     pending: std.ArrayList(platform.Event) = .empty,
     clock: ?clock_mod.Clock = null,
     simulation_steps: u64 = 0,
+    score: u32 = 0,
+    inventory_cooldown: u8 = 0,
+    menu_entries: []inventory_menu.Entry,
+    dialog: ?struct { menu: inventory_menu.Menu, keys: inventory_menu.Keys = .{}, clock: clock_mod.Clock } = null,
 
     pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Scene {
         var pack = try content.load(allocator, source);
@@ -81,6 +88,8 @@ pub const Scene = struct {
         var equipment = try equipment_mod.Loadout.init(allocator, pack.initial_items);
         errdefer equipment.deinit();
         const received_items = try allocator.alloc(equipment_mod.Received, pack.initial_items.len);
+        errdefer allocator.free(received_items);
+        const menu_entries = try allocator.alloc(inventory_menu.Entry, pack.initial_items.len);
         return .{
             .allocator = allocator,
             .content = pack,
@@ -89,12 +98,14 @@ pub const Scene = struct {
             .health = pack.initial_health,
             .equipment = equipment,
             .received_items = received_items,
+            .menu_entries = menu_entries,
         };
     }
 
     pub fn deinit(self: *Scene) void {
         self.equipment.deinit();
         self.allocator.free(self.received_items);
+        self.allocator.free(self.menu_entries);
         self.pending.deinit(self.allocator);
         self.content.deinit();
         self.* = undefined;
@@ -114,7 +125,31 @@ pub const Scene = struct {
         if (self.clock == null) self.clock = try clock_mod.Clock.init(clock_mod.jungle, now_ns);
         // Preserve remaining debt for the next host call instead of dropping simulation.
         var work: usize = 0;
-        while (self.clock.?.due(now_ns) and work < 8) : (work += 1) {
+        while (self.needsCatchup(now_ns) and work < 8) : (work += 1) {
+            if (self.dialog) |*dialog| {
+                const deadline = dialog.clock.deadline();
+                while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
+                    const event = self.pending.orderedRemove(0);
+                    switch (event.payload) {
+                        .key_down => |key| try dialog.keys.key(key.key, true),
+                        .key_up => |key| try dialog.keys.key(key.key, false),
+                        .focus_lost => dialog.keys = .{},
+                        else => unreachable,
+                    }
+                }
+                switch (dialog.menu.poll(dialog.keys.sample())) {
+                    .stay => dialog.clock.consume(),
+                    .choose => |index| {
+                        const handle = self.equipment.inventory.items()[index];
+                        if (!self.equipment.inventory.select(handle)) return error.MissingSelectedItem;
+                        self.dialog = null;
+                        self.input = .{};
+                        self.inventory_cooldown = 10;
+                        try self.clock.?.resumeAfterPause(deadline);
+                    },
+                }
+                continue;
+            }
             const deadline = self.clock.?.deadline();
             try consumeInput(&self.pending, &self.input, deadline);
             const result = try self.controller.advanceIn(self.content.controllerClips(), try self.input.intent(), &self.pose, &self.environment);
@@ -122,7 +157,27 @@ pub const Scene = struct {
             self.received_count = try self.equipment.advance(self.health, self.received_items);
             self.simulation_steps += 1;
             self.clock.?.consume();
+            if (self.inventory_cooldown != 0) {
+                self.inventory_cooldown -= 1;
+            } else if (self.input.inventory and self.health > 0 and self.equipment.inventory.items().len != 0) {
+                const items = self.equipment.inventory.items();
+                for (items, self.menu_entries[0..items.len]) |handle, *entry| {
+                    const item = try self.equipment.item(handle);
+                    entry.* = .{ .icon = try self.content.frame(item.definition.icon), .label = item.definition.label, .quantity = if (item.definition.show_quantity) @as(u16, @bitCast(item.quantity)) else null };
+                }
+                self.dialog = .{ .menu = try inventory_menu.Menu.init(items.len), .clock = try clock_mod.Clock.init(clock_mod.inventory, deadline) };
+                self.input = .{};
+            }
         }
+    }
+
+    pub fn nextDeadline(self: *const Scene) ?u64 {
+        if (self.dialog) |dialog| return dialog.clock.deadline();
+        return if (self.clock) |clock| clock.deadline() else null;
+    }
+
+    pub fn needsCatchup(self: *const Scene, now_ns: u64) bool {
+        return if (self.nextDeadline()) |time| now_ns >= time else false;
     }
 
     pub fn draw(self: *const Scene, indices: []u8, rgba: []u8) !void {
@@ -135,6 +190,7 @@ pub const Scene = struct {
             const icon = try self.content.frame(selected.definition.icon);
             try sprite_renderer.draw(indices, room.image.width, room.image.height, icon, 232, 8, .{ .palette_bank = 10, .foreground = .overwrite });
         }
+        if (self.dialog) |dialog| try dialog.menu.draw(self.content.inventory_art.artwork(), self.menu_entries[0..dialog.menu.count], self.score, indices, room.image.width, room.image.height);
         try palette.writeRgba(indices, &room.colors, rgba);
     }
 
@@ -142,6 +198,16 @@ pub const Scene = struct {
         var hash = std.hash.Wyhash.init(0);
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(i16, self.health)));
         self.equipment.hashInto(&hash);
+        hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, self.score)));
+        hash.update(&.{ self.inventory_cooldown, @intFromBool(self.input.inventory), @intFromBool(self.dialog != null) });
+        if (self.dialog) |dialog| {
+            for ([_]u64{ dialog.menu.cursor, dialog.menu.last_displayed, dialog.clock.next_tick, dialog.clock.origin_ns - self.clock.?.origin_ns }) |value|
+                hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+            hash.update(&.{ @intFromBool(dialog.menu.score_next), @intFromBool(dialog.menu.view == .score) });
+            if (dialog.menu.view == .items) hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, dialog.menu.view.items)));
+            const keys = dialog.keys;
+            for ([_]bool{ keys.directions.right, keys.directions.left, keys.directions.up, keys.directions.down, keys.previous.right, keys.previous.left, keys.previous.up, keys.previous.down, keys.left_shift, keys.right_shift, keys.space, keys.enter, keys.tab }) |value| hash.update(&.{@intFromBool(value)});
+        }
         const activity: u32 = @backingInt(std.meta.activeTag(self.controller.activity));
         const phase: u32 = switch (self.controller.activity) {
             .turning => |p| @backingInt(p),

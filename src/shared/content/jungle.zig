@@ -13,6 +13,7 @@ const palette = @import("palette.zig");
 const placement = @import("placement.zig");
 const equipment = @import("../equipment.zig");
 const starting_equipment = @import("starting_equipment.zig");
+const inventory_artwork = @import("inventory_artwork.zig");
 
 const Move = enum { wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover };
 const source_moves = [_]u16{ 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88 };
@@ -28,6 +29,7 @@ pub const Pack = struct {
     terrain: collision.Layout,
     initial_items: []equipment.Definition,
     initial_health: i16,
+    inventory_art: inventory_artwork.Assets,
     initial_pose: motion.Pose,
     initial_room: geometry.RoomId,
 
@@ -40,7 +42,8 @@ pub const Pack = struct {
         self.allocator.free(self.motions);
         self.allocator.free(self.walk_strides);
         self.allocator.free(self.run_strides);
-        self.allocator.free(self.initial_items);
+        starting_equipment.release(self.allocator, self.initial_items);
+        self.inventory_art.deinit();
         self.terrain.deinit();
         self.* = undefined;
     }
@@ -136,6 +139,10 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
     defer ct.deinit();
     var icons = try read(source, "DATA/GLOBAL.ICN", 32768);
     defer icons.deinit();
+    var font_bytes = try read(source, "DATA/FB_TXT.FNT", 16384);
+    defer font_bytes.deinit();
+    var names = try read(source, "DATA/LEVEL1.TBN", 16384);
+    defer names.deinit();
     var placements = try read(source, "DATA/LEVEL1.PGE", 16384);
     defer placements.deinit();
     const placement_table = try placement.Table.init(placements.bytes);
@@ -153,6 +160,22 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
         try palette.decodeActorBank(executable.bytes[palette_offset..][0..32]),
         try palette.decodeActorBank(executable.bytes[palette_offset + 32 ..][0..32]),
     };
+    const text_colors = try palette.decodeActorBank(executable.bytes[palette_offset + 64 ..][0..32]);
+    var interface_colors: palette.Bank = undefined;
+    for (&interface_colors, 0..) |*color, i| {
+        const rgb = executable.bytes[palette_offset + 96 + i * 3 ..][0..3];
+        color.* = .{ .r = palette.expandComponent(rgb[0]), .g = palette.expandComponent(rgb[1]), .b = palette.expandComponent(rgb[2]) };
+    }
+    // The development jungle entry has the observed default normal difficulty. UI labels
+    // come from the checked English overlay; executable offsets stay at this boundary.
+    const data_base: usize = 5632 + 0x1a680;
+    const difficulty_offset = std.mem.readInt(u16, executable.bytes[data_base + 0x1843 ..][0..2], .little);
+    const difficulty = try embeddedLabel(executable.bytes, data_base + difficulty_offset);
+    const level_prefix = try embeddedLabel(executable.bytes, data_base + 0x186a);
+    const level_label = try std.mem.concat(allocator, u8, &.{ level_prefix, difficulty });
+    defer allocator.free(level_label);
+    var inventory_art = try inventory_artwork.load(allocator, icons.bytes, font_bytes.bytes, level_label);
+    errdefer inventory_art.deinit();
     var room_ids: [64]geometry.RoomId = undefined;
     for (&room_ids, 0..) |*id, i| id.* = @fromBackingInt(@as(u16, @intCast(i)) + 1);
     var terrain = try collision.decode(allocator, ct.bytes, &room_ids);
@@ -178,8 +201,8 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
     const run = try allocator.alloc(motion.Clip, 4);
     errdefer allocator.free(run);
     for (run, 0..) |*clip, i| clip.* = motions[@backingInt(Move.run_a) + i].clip();
-    const initial_items = try starting_equipment.recover(allocator, placement_table, ani.bytes, rules.bytes, &resolver);
-    errdefer allocator.free(initial_items);
+    const initial_items = try starting_equipment.recover(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &resolver);
+    errdefer starting_equipment.release(allocator, initial_items);
     var room_art: std.ArrayList(RoomArt) = .empty;
     errdefer {
         for (room_art.items) |*room| room.artwork.deinit();
@@ -201,6 +224,8 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
         const alternate = map.bytes[offset + 2] != reference_bank;
         @memcpy(art.colors[0x40..0x50], &actor_colors[@intFromBool(alternate)]);
         @memcpy(art.colors[0xa0..0xb0], &icon_colors);
+        @memcpy(art.colors[0xe0..0xf0], &text_colors);
+        @memcpy(art.colors[0xf0..0x100], &interface_colors);
         try room_art.append(allocator, .{ .id = room_ids[index], .artwork = art });
     }
     const rooms = try room_art.toOwnedSlice(allocator);
@@ -224,7 +249,15 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
         .terrain = terrain,
         .initial_items = initial_items,
         .initial_health = player.life,
+        .inventory_art = inventory_art,
         .initial_room = room_ids[player.room],
         .initial_pose = .{ .position = player.position, .facing = facing, .visual = .{ .id = first_visual.id, .mirrored = first_visual.mirrored != (facing == .left) } },
     };
+}
+
+fn embeddedLabel(bytes: []const u8, offset: usize) ![]const u8 {
+    if (offset >= bytes.len) return error.InvalidInterfaceLabel;
+    const tail = bytes[offset..@min(bytes.len, offset + 257)];
+    const length = std.mem.indexOfScalar(u8, tail, 0) orelse return error.InvalidInterfaceLabel;
+    return tail[0..length];
 }

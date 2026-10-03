@@ -7,6 +7,8 @@ pub const Style = struct {
     foreground: u8,
     shadow: u8,
     advance: u8 = 8,
+    /// Some fonts use additional indexed inks beyond foreground and shadow.
+    palette_bank: ?u4 = null,
 };
 
 pub fn draw(pixels: []u8, width: u16, height: u16, font: *const font_mod.Font, text: []const u8, x: i32, y: i32, style: Style) !void {
@@ -25,7 +27,7 @@ pub fn draw(pixels: []u8, width: u16, height: u16, font: *const font_mod.Font, t
                     0 => continue,
                     15 => style.foreground,
                     2 => style.shadow,
-                    else => return error.UnknownGlyphInk,
+                    else => if (style.palette_bank) |bank| (@as(u8, bank) << 4) | ink else return error.UnknownGlyphInk,
                 };
                 pixels[@as(usize, @intCast(dy)) * width + @as(usize, @intCast(dx))] = color;
             }
@@ -44,4 +46,8 @@ test "text inks and negative coordinates preserve surrounding pixels" {
     try draw(&page, 2, 2, &font, " ", -1, 0, .{ .foreground = 3, .shadow = 1 });
     try std.testing.expectEqualSlices(u8, &.{ 1, 7, 3, 7 }, &page);
     try std.testing.expectError(error.MissingGlyph, draw(&page, 2, 2, &font, "A", 0, 0, .{ .foreground = 3, .shadow = 1 }));
+    font.pixels[0] = 8;
+    try std.testing.expectError(error.UnknownGlyphInk, draw(&page, 2, 2, &font, " ", 0, 0, .{ .foreground = 3, .shadow = 1 }));
+    try draw(&page, 2, 2, &font, " ", 0, 0, .{ .foreground = 0xed, .shadow = 0xe2, .palette_bank = 14 });
+    try std.testing.expectEqual(@as(u8, 0xe8), page[0]);
 }

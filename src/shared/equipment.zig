@@ -11,6 +11,8 @@ pub const Definition = struct {
     icon: motion.VisualId,
     introduction_steps: u16,
     initial_quantity: i16,
+    label: []const u8 = "",
+    show_quantity: bool = false,
 };
 pub const Item = struct {
     definition: Definition,
