@@ -30,6 +30,9 @@ gates. All runtime work uses the original as the reference; no approximate accep
   - All levels, difficulties, enemy and puzzle behaviors, menus, demos, cinematics, languages,
     sound modes, checkpoints/passwords and configuration.
   - Gate: exact behavior coverage is complete and the user can play the game through.
+  - Audio acceptance uses AdLib FM plus game-supplied PCM; MT-32 emulation is not required
+    (user decision, 2026-10-03). Reuse only generic chip code after review, with its tests and
+    attribution; Flashback's audio engine is independently designed and verified.
 - [ ] **05 — Target acceptance** — Depends: 04.
   - Linux, Windows and browser packaging, inputs, audio, storage, lifecycle and long sessions.
   - Gate: Linux runtime acceptance and a successful Windows cross-build suffice for Windows
