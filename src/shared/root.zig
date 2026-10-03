@@ -11,6 +11,8 @@ pub const menu = @import("scenes/menu.zig");
 pub const sprite_renderer = @import("render/sprite.zig");
 pub const motion = @import("motion.zig");
 pub const conrad = @import("actors/conrad.zig");
+pub const geometry = @import("geometry.zig");
+pub const conrad_environment = @import("actors/conrad_environment.zig");
 pub const game = @import("game.zig");
 pub const Game = game.Game;
 

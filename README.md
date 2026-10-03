@@ -20,7 +20,8 @@ steps match 59,964 original routine executions, covering facing, movement and si
 Behavior selection, clip transitions and the original scheduling clock remain unfinished.
 
 Wake-up and complete turns now have a named controller, verified update by update against
-three original runs. Forward movement, other actions and scene integration remain unfinished;
+three original runs. Walking, running, braking, a room crossing and the first ledge descent
+also match original state traces. Other actions, dynamic geometry and scene integration remain unfinished;
 the native application is still the menu preview.
 
 Build with Zig 0.17.0 and SDL2 2.32.4 on Linux. `zig build`, `zig build test`, `zig build smoke`,
