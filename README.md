@@ -15,6 +15,10 @@ collision streams. A research composition through these importers and the modern
 matches the complete first-room screenshot pixel for pixel. Animation and gameplay are still
 being implemented; one alternate sprite encoding remains explicitly unsupported.
 
+Motion clips use an independent playback API with opaque art references. Imported animation
+steps match 59,964 original routine executions, covering facing, movement and signed wrapping.
+Behavior selection, clip transitions and the original scheduling clock remain unfinished.
+
 Build with Zig 0.17.0 and SDL2 2.32.4 on Linux. `zig build`, `zig build test`, `zig build smoke`,
 `zig build verify`, `zig build web` and `zig build web-check` are the foundation checks.
 `web-check` also needs Node.js. Windows is cross-built with

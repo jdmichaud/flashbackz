@@ -7,6 +7,7 @@ pub const menu_artwork = @import("menu_artwork.zig");
 pub const room_artwork = @import("room_artwork.zig");
 pub const sprite = @import("sprite.zig");
 pub const backward_stream = @import("backward_stream.zig");
+pub const animation = @import("animation.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());

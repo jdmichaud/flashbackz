@@ -1,0 +1,77 @@
+//! Discrete motion clips. A simulation step advances artwork and displacement together;
+//! behaviors choose clips and transitions, while the renderer resolves opaque visual IDs.
+const std = @import("std");
+
+pub const VisualId = enum(u32) { _ };
+pub const Facing = enum { right, left };
+pub const Position = struct { x: i16, y: i16 };
+pub const Visual = struct { id: VisualId, mirrored: bool = false };
+pub const Pose = struct {
+    position: Position,
+    facing: Facing = .right,
+    visual: Visual,
+};
+
+pub const Step = union(enum) {
+    hold,
+    frame: struct {
+        visual: Visual,
+        forward: i16 = 0,
+        down: i16 = 0,
+    },
+};
+
+pub const Clip = struct { steps: []const Step };
+
+pub const Playback = struct {
+    next_step: usize = 0,
+
+    pub fn exhausted(self: Playback, clip: Clip) bool {
+        return self.next_step >= clip.steps.len;
+    }
+
+    /// The caller handles an exhausted clip before choosing the next step. End-of-clip
+    /// never reads neighboring content or silently starts an unrelated movement.
+    pub fn advance(self: *Playback, clip: Clip, pose: *Pose) enum { advanced, exhausted } {
+        if (self.exhausted(clip)) return .exhausted;
+        switch (clip.steps[self.next_step]) {
+            .hold => {},
+            .frame => |frame| {
+                const displacement: i32 = if (pose.facing == .left) -@as(i32, frame.forward) else frame.forward;
+                pose.position.x = @truncate(@as(i32, pose.position.x) + displacement);
+                pose.position.y +%= frame.down;
+                pose.visual = .{ .id = frame.visual.id, .mirrored = frame.visual.mirrored != (pose.facing == .left) };
+            },
+        }
+        self.next_step += 1;
+        return .advanced;
+    }
+};
+
+test "motion holds preserve the pose and clip completion is explicit" {
+    const old_visual: VisualId = @fromBackingInt(7);
+    const new_visual: VisualId = @fromBackingInt(9);
+    const steps = [_]Step{ .hold, .{ .frame = .{ .visual = .{ .id = new_visual }, .forward = 3, .down = -2 } } };
+    const clip: Clip = .{ .steps = &steps };
+    var pose: Pose = .{ .position = .{ .x = 100, .y = 60 }, .visual = .{ .id = old_visual } };
+    var playback: Playback = .{};
+    const initial = pose;
+    try std.testing.expectEqual(.advanced, playback.advance(clip, &pose));
+    try std.testing.expectEqualDeep(initial, pose);
+    try std.testing.expectEqual(.advanced, playback.advance(clip, &pose));
+    try std.testing.expectEqual(Position{ .x = 103, .y = 58 }, pose.position);
+    try std.testing.expectEqual(new_visual, pose.visual.id);
+    try std.testing.expect(playback.exhausted(clip));
+    const completed = pose;
+    try std.testing.expectEqual(.exhausted, playback.advance(clip, &pose));
+    try std.testing.expectEqualDeep(completed, pose);
+}
+
+test "facing reflects displacement and artwork with explicit signed wrapping" {
+    const steps = [_]Step{.{ .frame = .{ .visual = .{ .id = @fromBackingInt(1), .mirrored = true }, .forward = -128, .down = 1 } }};
+    var pose: Pose = .{ .position = .{ .x = 32760, .y = 32767 }, .facing = .left, .visual = .{ .id = @fromBackingInt(0) } };
+    var playback: Playback = .{};
+    _ = playback.advance(.{ .steps = &steps }, &pose);
+    try std.testing.expectEqual(Position{ .x = -32648, .y = -32768 }, pose.position);
+    try std.testing.expect(!pose.visual.mirrored);
+}
