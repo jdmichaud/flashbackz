@@ -1,8 +1,7 @@
 //! The command-line options that both native hosts take and open for the game: a positional
 //! asset path and `--saves <dir>`.
 //!
-//! The asset path is the directory of the original's files. A port whose original ships on a CD
-//! adds an image reader beside `DirectoryAssetSource` (DESIGN.md). `--saves` defaults to the per-user application data directory, which
+//! The asset path is a directory or a cooked/raw data-track image. `--saves` defaults to the per-user application data directory, which
 //! is created on first use. The result is a bound `AssetSource` and `Storage`. The game uses
 //! them and does not know which kind of source it has.
 const std = @import("std");
@@ -11,9 +10,10 @@ const flashbackz = @import("flashbackz");
 const platform = flashbackz.platform;
 const DirectoryAssetSource = @import("directory.zig").DirectoryAssetSource;
 const DirectoryStorage = @import("storage.zig").DirectoryStorage;
+const NativeByteSource = @import("iso_source.zig").NativeByteSource;
 
 pub const usage =
-    \\  ASSET_PATH    the directory of the original's files
+    \\  ASSET_PATH    an ISO, raw MODE1/2352 BIN image, or directory of original files
     \\  --saves DIR    where saves are kept (default: the per-user application data directory)
     \\
 ;
@@ -52,11 +52,12 @@ pub const Options = struct {
 };
 
 /// The kind of asset source, for the host's start-up line and the agent's diagnostics.
-pub const AssetKind = enum { none, directory };
+pub const AssetKind = enum { none, directory, iso };
 
 pub const OpenError = error{
     NotFound,
     NotADirectory,
+    InvalidImage,
     AccessDenied,
     NoApplicationDirectory,
     Io,
@@ -71,6 +72,9 @@ pub const Providers = struct {
     /// The save directory in use (owned).
     saves_path: []u8 = &.{},
     assets_directory: ?DirectoryAssetSource = null,
+    image_bytes: ?NativeByteSource = null,
+    image_track: ?flashbackz.cd_track.Track = null,
+    image_assets: ?flashbackz.iso.IsoAssetSource = null,
     saves: ?DirectoryStorage = null,
 
     pub const empty: Providers = .{};
@@ -92,8 +96,22 @@ pub const Providers = struct {
             try defaultSaveDirectory(allocator, environ);
         self.saves = try mapOpen(DirectoryStorage.open(allocator, io, self.saves_path, true));
         const path = options.assets orelse return;
-        self.assets_directory = try mapOpen(DirectoryAssetSource.open(allocator, io, path));
-        self.kind = .directory;
+        if (DirectoryAssetSource.open(allocator, io, path)) |directory| {
+            self.assets_directory = directory;
+            self.kind = .directory;
+        } else |err| {
+            if (err != error.NotADirectory) return err;
+            self.image_bytes = NativeByteSource.open(io, path) catch |failure| return switch (failure) {
+                error.NotFound => error.NotFound,
+                error.NotAFile => error.InvalidImage,
+                error.AccessDenied => error.AccessDenied,
+                error.Canceled => error.Canceled,
+                error.Io => error.Io,
+            };
+            self.image_track = flashbackz.cd_track.Track.init(self.image_bytes.?.byteSource()) catch return error.InvalidImage;
+            self.image_assets = flashbackz.iso.IsoAssetSource.init(allocator, self.image_track.?.byteSource()) catch return error.InvalidImage;
+            self.kind = .iso;
+        }
     }
 
     fn mapOpen(result: anytype) OpenError!@typeInfo(@TypeOf(result)).error_union.payload {
@@ -107,6 +125,8 @@ pub const Providers = struct {
     }
 
     pub fn deinit(self: *Providers) void {
+        if (self.image_assets) |*image| image.deinit();
+        if (self.image_bytes) |*bytes| bytes.deinit();
         if (self.assets_directory) |*d| d.deinit();
         if (self.saves) |*s| s.deinit();
         self.allocator.free(self.saves_path);
@@ -118,6 +138,7 @@ pub const Providers = struct {
         return switch (self.kind) {
             .none => null,
             .directory => self.assets_directory.?.assetSource(),
+            .iso => self.image_assets.?.assetSource(),
         };
     }
 
@@ -241,6 +262,36 @@ test "the options open a game directory, or none" {
         try std.testing.expectError(error.NotFound, providers.open(allocator, io, &env, .{ .assets = missing, .saves = paths[1] }));
         const not_a_directory = try std.fmt.allocPrint(allocator, "{s}/game/game.cfg", .{base});
         defer allocator.free(not_a_directory);
-        try std.testing.expectError(error.NotADirectory, providers.open(allocator, io, &env, .{ .assets = not_a_directory, .saves = paths[1] }));
+        try std.testing.expectError(error.InvalidImage, providers.open(allocator, io, &env, .{ .assets = not_a_directory, .saves = paths[1] }));
+    }
+}
+
+test "the positional source opens a cooked or raw image through stable provider ownership" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+    const cooked = try flashbackz.iso.buildTestImage(allocator, &.{.{ .path = "DATA/FILE.DAT", .bytes = "content" }});
+    defer allocator.free(cooked);
+    const raw = try flashbackz.cd_track.makeTestRaw(allocator, cooked);
+    defer allocator.free(raw);
+    try tmp.dir.writeFile(io, .{ .sub_path = "disc.iso", .data = cooked });
+    try tmp.dir.writeFile(io, .{ .sub_path = "disc.bin", .data = raw });
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const base = path_buffer[0..try tmp.dir.realPath(io, &path_buffer)];
+    var env = try testEnviron(allocator, &.{});
+    defer env.deinit();
+    const saves = try std.fmt.allocPrint(allocator, "{s}/saves", .{base});
+    defer allocator.free(saves);
+    for ([_][]const u8{ "disc.iso", "disc.bin" }) |name| {
+        const path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ base, name });
+        defer allocator.free(path);
+        var providers: Providers = .empty;
+        try providers.open(allocator, io, &env, .{ .assets = path, .saves = saves });
+        defer providers.deinit();
+        try std.testing.expectEqual(AssetKind.iso, providers.kind);
+        var content = try providers.assetSource().?.readAll("data/file.dat", 32);
+        defer content.deinit();
+        try std.testing.expectEqualStrings("content", content.bytes);
     }
 }

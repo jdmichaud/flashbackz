@@ -11,7 +11,7 @@ gates. All runtime work uses the original as the reference; no approximate accep
     and actor behavior, and avoids translated machine state or legacy instruction dispatch in
     the engine. Review this independently of all fidelity comparisons.
 
-- [ ] **01 — Platform foundation and initial architecture** — Depends: 00.
+- [x] **01 — Platform foundation and initial architecture** — Depends: 00.
   - Adapt the template's Zig skeleton and establish typed game/content boundaries, with no
     multiplayer. Write the initial design from measured Flashback requirements.
   - Gate: standalone synthetic build, tests, smoke, no-SDL headless verification and browser
@@ -21,7 +21,7 @@ gates. All runtime work uses the original as the reference; no approximate accep
     source layout and legacy scripting semantics at the compatibility boundary.
   - Gate: synthetic malformed-input cases pass; decoders agree with independent original
     observations; game code consumes typed content rather than executable addresses.
-- [ ] **02a — Direct disc-image argument** — Depends: 01.
+- [x] **02a — Direct disc-image argument** — Depends: 01.
   - Both native hosts accept an ISO or supplied MODE1/2352 BIN image in the existing positional
     asset argument, reading files directly through the same asset contract as a directory.
   - Gate: synthetic image and malformed-input tests pass; all original files read from the

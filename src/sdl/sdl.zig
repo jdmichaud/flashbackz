@@ -4,6 +4,7 @@
 //! The `layout` test below checks the struct sizes, and the offsets of the fields that the
 //! backend reads, against the values that a C probe printed for those headers.
 const std = @import("std");
+pub extern "c" fn SDL_SetWindowTitle(window: *Window, title: [*:0]const u8) void;
 
 pub const Version = extern struct {
     major: u8,

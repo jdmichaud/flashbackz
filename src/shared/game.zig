@@ -15,6 +15,8 @@
 //! - A save has one versioned format, and a record of another version is refused.
 const std = @import("std");
 const platform = @import("platform.zig");
+const menu_art = @import("content/menu_artwork.zig");
+const menu_mod = @import("scenes/menu.zig");
 
 pub const page_width: u32 = 320;
 pub const page_height: u32 = 200;
@@ -167,15 +169,20 @@ pub const Game = struct {
     click_phase: u32 = 0,
     page: []u8,
     rgba: []u8,
+    menu_assets: ?menu_art.Assets = null,
+    menu_scene: menu_mod.Menu = .{},
 
-    pub fn init(allocator: std.mem.Allocator, assets: ?platform.AssetSource, storage: ?platform.Storage) error{OutOfMemory}!Game {
+    pub fn init(allocator: std.mem.Allocator, assets: ?platform.AssetSource, storage: ?platform.Storage) !Game {
         const page = try allocator.alloc(u8, page_width * page_height);
         errdefer allocator.free(page);
         const rgba = try allocator.alloc(u8, page_width * page_height * platform.RgbaFrame.bytes_per_pixel);
-        return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba };
+        errdefer allocator.free(rgba);
+        const original_menu = if (assets) |source| try menu_art.load(allocator, source) else null;
+        return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .menu_assets = original_menu };
     }
 
     pub fn deinit(self: *Game) void {
+        if (self.menu_assets) |*menu| menu.deinit();
         self.allocator.free(self.page);
         self.allocator.free(self.rgba);
         self.* = undefined;
@@ -192,14 +199,14 @@ pub const Game = struct {
         switch (self.phase) {
             .startup => {
                 _ = try p.start();
-                try p.setResolution(page_width, page_height);
-                self.audio = p.audioOpen(audio_format) catch null;
+                try p.setResolution(if (self.menu_assets != null) 256 else page_width, if (self.menu_assets != null) 224 else page_height);
+                if (self.menu_assets == null) self.audio = p.audioOpen(audio_format) catch null;
                 self.readTitle();
                 self.phase = .playing;
             },
             .playing => {
                 self.consumeEvents(p);
-                if (self.phase == .playing and self.state.step()) self.click_left = click_samples;
+                if (self.phase == .playing and self.menu_assets == null and self.state.step()) self.click_left = click_samples;
             },
             .finished => {},
         }
@@ -231,7 +238,9 @@ pub const Game = struct {
                 self.events_consumed += 1;
                 switch (event.payload) {
                     .quit => self.phase = .finished,
-                    .key_down => |k| switch (k.key) {
+                    .key_down => |k| if (self.menu_assets != null) {
+                        if (k.key == .escape) self.phase = .finished;
+                    } else switch (k.key) {
                         .escape => self.phase = .finished,
                         .f2 => self.saveState(),
                         .f3 => self.loadState(),
@@ -280,6 +289,15 @@ pub const Game = struct {
     }
 
     fn present(self: *Game, p: *platform.Platform) !void {
+        if (self.menu_assets) |*assets| {
+            const indices = self.page[0..57344];
+            const frame = self.rgba[0 .. 57344 * 4];
+            try self.menu_scene.draw(assets.artwork(), .{}, indices, frame);
+            self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
+            try p.present(.{ .width = 256, .height = 224, .stride = 256 * 4, .pixels = frame });
+            self.frames_presented += 1;
+            return;
+        }
         self.draw();
         self.last_frame_hash = std.hash.Wyhash.hash(0, self.page);
         for (self.page, 0..) |index, i| {

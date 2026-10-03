@@ -5,6 +5,7 @@
 pub const directory = @import("directory.zig");
 pub const storage = @import("storage.zig");
 pub const cli = @import("cli.zig");
+pub const iso_source = @import("iso_source.zig");
 pub const contract = @import("contract.zig");
 
 pub const DirectoryAssetSource = directory.DirectoryAssetSource;

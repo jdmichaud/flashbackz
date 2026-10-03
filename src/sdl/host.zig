@@ -119,6 +119,7 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, environ: *const std.process.Envir
         // A window that never painted looks the same as a window whose frames do not reach the
         // display. The renderer's name and the first frame tell them apart.
         if (!announced_first_frame and game.frames_presented > 0) {
+            if (game.menu_assets != null) c.SDL_SetWindowTitle(backend.window.?, "flashbackz — menu preview");
             announced_first_frame = true;
             const size = backend.window_size;
             try err.print("{s}: first frame after {d}ms in a {d}x{d} window, renderer {s}{s}\n", .{

@@ -1,13 +1,25 @@
 # flashbackz
 
-The modern reimplementation of the supplied Flashback DOS CD edition. The current code is a
-platform smoke skeleton, not Flashback gameplay. The native, headless and browser hosts share
-one module; the template's synthetic moving ball only exercises those boundaries.
+The modern reimplementation of the supplied Flashback DOS CD edition. The current native build
+loads the original main-menu artwork directly from an ISO, MODE1/2352 BIN, or extracted directory
+and reproduces its pixels. This is a menu preview; gameplay and menu actions are still being
+implemented. Without game content, the template's moving ball is a platform smoke placeholder.
 
 Build with Zig 0.17.0 and SDL2 2.32.4 on Linux. `zig build`, `zig build test`, `zig build smoke`,
 `zig build verify`, `zig build web` and `zig build web-check` are the foundation checks.
 `web-check` also needs Node.js. Windows is cross-built with
 `zig build -Dtarget=x86_64-windows-gnu`; its SDL2 dependency is pinned and built from source.
+
+```sh
+zig build
+zig-out/bin/flashbackz-sdl "../Flashback CD.bin"
+zig-out/bin/flashbackz-sdl /path/to/flashback.iso
+zig-out/bin/flashbackz-agent --frames 2 /path/to/flashback.iso --saves /tmp/flashback/saves
+```
+
+Images are opened read-only and accessed by ranges, with no external extraction program or full
+image buffering. Use the BIN itself for the supplied raw track; CUE descriptors are not yet input
+paths. Asset lookup follows DOS case-insensitive names and removes ISO version suffixes.
 
 The game will use the port template's Zig/platform foundation, with Linux/SDL, a deterministic
 headless host, Windows/SDL and WebAssembly sharing one game implementation. Its engine will
