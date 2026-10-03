@@ -4,6 +4,8 @@
 pub const platform = @import("platform.zig");
 pub const memory = @import("memory.zig");
 pub const version = @import("version.zig");
+pub const content = @import("content/root.zig");
+pub const menu = @import("scenes/menu.zig");
 pub const game = @import("game.zig");
 pub const Game = game.Game;
 
