@@ -15,8 +15,10 @@ const strip_size = pixel_count / 4;
 pub const Artwork = struct {
     image: bitmap.IndexedImage,
     colors: palette.Palette,
+    foreground: []bool,
 
     pub fn deinit(self: *Artwork) void {
+        self.image.allocator.free(self.foreground);
         self.image.deinit();
         self.* = undefined;
     }
@@ -65,7 +67,9 @@ pub fn decode(allocator: std.mem.Allocator, map: []const u8, color_file: []const
     for (image.pixels) |index| {
         if (!(index < 0x40 or (index >= 0x80 and index < 0xc0))) return error.UnboundBackgroundColor;
     }
-    return .{ .image = image, .colors = colors };
+    const foreground = try allocator.alloc(bool, pixel_count);
+    for (image.pixels, foreground) |index, *covered| covered.* = index & 0x80 != 0;
+    return .{ .image = image, .colors = colors, .foreground = foreground };
 }
 
 /// Nonnegative codes copy 1..128 literals; negative codes repeat the following byte

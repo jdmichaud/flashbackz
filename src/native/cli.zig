@@ -18,15 +18,22 @@ pub const usage =
     \\
 ;
 
-pub const TakeError = error{ MissingValue, DuplicateAssets };
+pub const TakeError = error{ MissingValue, DuplicateAssets, UnknownScene };
 
 pub const Options = struct {
     assets: ?[]const u8 = null,
     saves: ?[]const u8 = null,
+    entry: flashbackz.game.Entry = .automatic,
 
     /// Consumes `--saves` and the single positional asset path. Returns false for
     /// any other argument. After `--`, an asset path can start with a dash.
     pub fn take(self: *Options, arg: []const u8, args: anytype) TakeError!bool {
+        if (std.mem.eql(u8, arg, "--scene")) {
+            const value = args.next() orelse return error.MissingValue;
+            if (!std.mem.eql(u8, value, "jungle")) return error.UnknownScene;
+            self.entry = .jungle_development;
+            return true;
+        }
         if (std.mem.eql(u8, arg, "--saves")) {
             const value = args.next() orelse return error.MissingValue;
             if (value.len == 0) return error.MissingValue;

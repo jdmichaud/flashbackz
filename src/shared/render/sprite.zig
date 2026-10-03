@@ -7,12 +7,14 @@ pub const Style = struct {
     palette_bank: u4,
     facing: Facing = .original,
     foreground: enum { respect, overwrite } = .respect,
+    occlusion: ?[]const bool = null,
 };
 
 /// Position is the frame's drawing origin in the destination image. Widen coordinates
 /// before clipping so off-screen positions cannot overflow into visible pixels.
 pub fn draw(pixels: []u8, width: u16, height: u16, frame: *const sprites.Frame, x: i32, y: i32, style: Style) !void {
     if (pixels.len != @as(usize, width) * height) return error.InvalidFrameLength;
+    if (style.occlusion) |mask| if (mask.len != pixels.len) return error.InvalidOcclusionMask;
     const image = &frame.image;
     if (image.pixels.len != @as(usize, image.width) * image.height) return error.InvalidSpriteLength;
     const left: i64 = switch (style.facing) {
@@ -33,8 +35,11 @@ pub fn draw(pixels: []u8, width: u16, height: u16, frame: *const sprites.Frame, 
             const color = image.pixels[sy * image.width + sx];
             if (color == 0) continue;
             if (color > 15) return error.InvalidSpriteColor;
-            const target = &pixels[dy * width + dx];
-            if (style.foreground == .respect and target.* & 0x80 != 0) continue;
+            const offset = dy * width + dx;
+            const target = &pixels[offset];
+            if (style.foreground == .respect) if (style.occlusion) |mask| if (mask[offset]) {
+                continue;
+            };
             target.* = (@as(u8, style.palette_bank) << 4) | color;
         }
     }
@@ -44,7 +49,8 @@ test "clipping, mirroring, transparency and foreground all apply in image space"
     var frame = try sprites.decode(std.testing.allocator, &.{ 1, 0, 3, 2, 0, 3, 0x12, 0x30, 0x45 });
     defer frame.deinit();
     var page = [_]u8{ 7, 0x88, 7, 7, 7, 7 };
-    try draw(&page, 3, 2, &frame, 0, 0, .{ .palette_bank = 4 });
+    const mask = [_]bool{ false, true, false, false, false, false };
+    try draw(&page, 3, 2, &frame, 0, 0, .{ .palette_bank = 4, .occlusion = &mask });
     try std.testing.expectEqualSlices(u8, &.{ 0x42, 0x88, 7, 0x44, 0x45, 7 }, &page);
     @memset(&page, 7);
     try draw(&page, 3, 2, &frame, 2, 0, .{ .palette_bank = 5, .facing = .mirrored });

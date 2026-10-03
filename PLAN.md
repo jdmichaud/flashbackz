@@ -31,7 +31,7 @@ gates. All runtime work uses the original as the reference; no approximate accep
     shared simulation and the SDL/agent hosts.
   - Gate: exact state/events/timing/frame/audio comparisons pass, and the SDL build is played
     using real input; implementation review confirms readable game concepts and bounded work.
-- [ ] **03a — Interactive scene integration for development** — Depends: verified movement/rendering slices.
+- [x] **03a — Interactive scene integration for development** — Depends: verified movement/rendering slices.
   - Add an explicit jungle development entry to both native hosts, using shared content,
     session, input and presentation with direct disc access. Keep unfinished mechanics visible.
   - Gate: actual SDL input drives the shared controller, headless held-input replay agrees,

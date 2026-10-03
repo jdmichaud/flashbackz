@@ -23,7 +23,8 @@ const program_name = "flashbackz-sdl";
 
 pub const usage =
     \\usage: flashbackz-sdl [OPTIONS] [ASSET_PATH]
-    \\  ASSET_PATH           the directory of the original's files
+    \\  ASSET_PATH           an ISO/BIN image or directory of original files
+    \\  --scene jungle       enter the jungle development slice directly
     \\  --help, -h           show this help
     \\  --scale N            window scale, 1 to 64 (default 3)
     \\  --no-vsync           do not ask for display-paced presentation
@@ -100,7 +101,7 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, environ: *const std.process.Envir
     defer out.flush() catch {};
     if (options.event_log_ns != null) backend.event_log = out;
 
-    var game = try flashbackz.Game.init(gpa, providers.assetSource(), providers.storage());
+    var game = try flashbackz.Game.initWithEntry(gpa, providers.assetSource(), providers.storage(), options.providers.entry);
     defer game.deinit();
 
     var p = backend.asPlatform();
@@ -119,7 +120,8 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, environ: *const std.process.Envir
         // A window that never painted looks the same as a window whose frames do not reach the
         // display. The renderer's name and the first frame tell them apart.
         if (!announced_first_frame and game.frames_presented > 0) {
-            if (game.menu_assets != null) c.SDL_SetWindowTitle(backend.window.?, "flashbackz — menu preview");
+            if (game.sceneKind() == .menu) c.SDL_SetWindowTitle(backend.window.?, "flashbackz — menu preview");
+            if (game.sceneKind() == .jungle) c.SDL_SetWindowTitle(backend.window.?, "flashbackz — jungle development");
             announced_first_frame = true;
             const size = backend.window_size;
             try err.print("{s}: first frame after {d}ms in a {d}x{d} window, renderer {s}{s}\n", .{
@@ -141,6 +143,7 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, environ: *const std.process.Envir
             if (deadline_ns) |d| if (now >= d) break;
         }
         // The display paces an iteration only if the iteration presented a frame.
+        if (game.needsCatchup(now)) continue;
         pacer.wait(now, backend.vsync and game.frames_presented != frames_before);
     }
 
@@ -214,7 +217,7 @@ pub fn parseArgs(iter: anytype) ArgError!Options {
             return error.BadArguments;
         }
     }
-    if (assets_required and !options.help and options.providers.assets == null) return error.MissingAssets;
+    if ((assets_required or options.providers.entry == .jungle_development) and !options.help and options.providers.assets == null) return error.MissingAssets;
     return options;
 }
 
@@ -266,7 +269,16 @@ test "the host options are parsed, bounded and defaulted" {
         &.{ "flashbackz-sdl", "--fps", "0" },
         &.{ "flashbackz-sdl", "--frobnicate" },
         &.{ "flashbackz-sdl", "first", "second" },
-    }) |args| try std.testing.expectError(error.BadArguments, parseArgs(SliceArgs{ .items = args }));
+        &.{ "flashbackz-sdl", "--scene", "jungle" },
+        &.{ "flashbackz-sdl", "--scene", "unknown", "game" },
+    }) |args| {
+        const result = parseArgs(SliceArgs{ .items = args });
+        if (args.len == 3 and std.mem.eql(u8, args[1], "--scene")) {
+            try std.testing.expectError(error.MissingAssets, result);
+        } else try std.testing.expectError(error.BadArguments, result);
+    }
+    const jungle_options = try parseArgs(SliceArgs{ .items = &.{ "flashbackz-sdl", "--scene", "jungle", "disc.iso" } });
+    try std.testing.expectEqual(flashbackz.game.Entry.jungle_development, jungle_options.providers.entry);
 }
 
 test "the fallback pacer holds its period without accumulating debt" {

@@ -1,0 +1,209 @@
+//! Owned content for the current jungle development slice. Source identifiers and embedded
+//! palette locations are resolved here; the scene uses named motions and opaque art/room IDs.
+const std = @import("std");
+const platform = @import("../platform.zig");
+const motion = @import("../motion.zig");
+const conrad = @import("../actors/conrad.zig");
+const geometry = @import("../geometry.zig");
+const animation = @import("animation.zig");
+const collision = @import("collision.zig");
+const sprite = @import("sprite.zig");
+const artwork = @import("room_artwork.zig");
+const palette = @import("palette.zig");
+
+const Move = enum { wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land };
+const source_moves = [_]u16{ 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93 };
+pub const RoomArt = struct { id: geometry.RoomId, artwork: artwork.Artwork };
+
+pub const Pack = struct {
+    allocator: std.mem.Allocator,
+    rooms: []RoomArt,
+    frames: []sprite.Frame,
+    motions: []animation.OwnedClip,
+    walk_strides: []conrad.WalkMotion,
+    run_strides: []motion.Clip,
+    terrain: collision.Layout,
+    icon: sprite.Frame,
+    initial_pose: motion.Pose,
+    initial_room: geometry.RoomId,
+
+    pub fn deinit(self: *Pack) void {
+        for (self.rooms) |*room| room.artwork.deinit();
+        for (self.frames) |*art_frame| art_frame.deinit();
+        for (self.motions) |*move| move.deinit();
+        self.allocator.free(self.rooms);
+        self.allocator.free(self.frames);
+        self.allocator.free(self.motions);
+        self.allocator.free(self.walk_strides);
+        self.allocator.free(self.run_strides);
+        self.terrain.deinit();
+        self.icon.deinit();
+        self.* = undefined;
+    }
+
+    fn clip(self: *const Pack, move: Move) motion.Clip {
+        return self.motions[@backingInt(move)].clip();
+    }
+
+    pub fn controllerClips(self: *const Pack) conrad.Clips {
+        return .{
+            .wake = self.clip(.wake),
+            .stand = self.clip(.stand),
+            .turn_preparation = self.clip(.turn_prepare),
+            .turn_follow_through = self.clip(.turn_finish),
+            .walk = .{ .start = .{ .clip = self.clip(.walk_start) }, .strides = self.walk_strides },
+            .run = .{ .start = self.clip(.run_start), .strides = self.run_strides, .entry_stride = 3, .brake = self.clip(.brake), .settle = self.clip(.settle) },
+            .descend = .{ .step_off = self.clip(.step_off), .land = self.clip(.land) },
+        };
+    }
+
+    pub fn roomArt(self: *const Pack, id: geometry.RoomId) !*const artwork.Artwork {
+        for (self.rooms) |*room| if (room.id == id) return &room.artwork;
+        return error.MissingRoomArtwork;
+    }
+
+    pub fn frame(self: *const Pack, id: motion.VisualId) !*const sprite.Frame {
+        const i = @backingInt(id);
+        if (i >= self.frames.len) return error.MissingVisual;
+        return &self.frames[i];
+    }
+};
+
+const Resolver = struct {
+    allocator: std.mem.Allocator,
+    sprites: []const u8,
+    offsets: []const u8,
+    ids: std.AutoHashMap(u16, motion.VisualId),
+    frames: std.ArrayList(sprite.Frame) = .empty,
+
+    fn deinit(self: *Resolver) void {
+        for (self.frames.items) |*frame| frame.deinit();
+        self.frames.deinit(self.allocator);
+        self.ids.deinit();
+    }
+
+    pub fn resolve(self: *Resolver, kind: animation.VisualKind, index: u15) !motion.VisualId {
+        if (kind != .sprite) return error.UnsupportedPlayerArtwork;
+        if (self.ids.get(index)) |id| return id;
+        var frame = try sprite.fromArchive(self.allocator, self.sprites, self.offsets, index);
+        errdefer frame.deinit();
+        try self.frames.ensureUnusedCapacity(self.allocator, 1);
+        const id: motion.VisualId = @fromBackingInt(@as(u32, @intCast(self.frames.items.len)));
+        try self.ids.put(index, id);
+        self.frames.appendAssumeCapacity(frame);
+        return id;
+    }
+};
+
+fn read(source: platform.AssetSource, name: []const u8, maximum: usize) !platform.OwnedBytes {
+    return source.readAll(name, maximum);
+}
+
+pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
+    var map = try read(source, "DATA/LEVEL1.MAP", 8 * 1024 * 1024);
+    defer map.deinit();
+    var colors = try read(source, "DATA/LEVEL1.PAL", 8192);
+    defer colors.deinit();
+    var sprites = try read(source, "DATA/PERSO.SPR", 1024 * 1024);
+    defer sprites.deinit();
+    var offsets = try read(source, "DATA/PERSO.OFF", 32768);
+    defer offsets.deinit();
+    var ani = try read(source, "DATA/LEVEL1.ANI", 65536);
+    defer ani.deinit();
+    var ct = try read(source, "DATA/LEVEL1.CT", 65536);
+    defer ct.deinit();
+    var icons = try read(source, "DATA/GLOBAL.ICN", 32768);
+    defer icons.deinit();
+    var placements = try read(source, "DATA/LEVEL1.PGE", 16384);
+    defer placements.deinit();
+    if (placements.bytes.len < 34) return error.InvalidPlayerPlacement;
+    const count = std.mem.readInt(u16, placements.bytes[0..2], .little);
+    if (count == 0 or placements.bytes.len != 2 + @as(usize, count) * 32) return error.InvalidPlayerPlacement;
+    const player = placements.bytes[2..34];
+    if (std.mem.readInt(u16, player[0..2], .little) != 99 or player[18] != 1 or player[19] >= 64) return error.UnsupportedPlayerStart;
+    var executable = try read(source, "GAME_E.OVL", 1024 * 1024);
+    defer executable.deinit();
+    var digest: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(executable.bytes, &digest, .{});
+    var expected: [32]u8 = undefined;
+    _ = try std.fmt.hexToBytes(&expected, "bf6cef92ae8606180b907c4f901734470699b9bb999fed23a744e27eb19644ea");
+    if (!std.mem.eql(u8, &digest, &expected)) return error.UnsupportedGameEdition;
+    const palette_offset = 5632 + 0x1a680 + 0xf61;
+    const actor_colors = [_]palette.Bank{
+        try palette.decodeActorBank(executable.bytes[palette_offset..][0..32]),
+        try palette.decodeActorBank(executable.bytes[palette_offset + 32 ..][0..32]),
+    };
+    var room_ids: [64]geometry.RoomId = undefined;
+    for (&room_ids, 0..) |*id, i| id.* = @fromBackingInt(@as(u16, @intCast(i)) + 1);
+    var terrain = try collision.decode(allocator, ct.bytes, &room_ids);
+    errdefer terrain.deinit();
+    var resolver: Resolver = .{ .allocator = allocator, .sprites = sprites.bytes, .offsets = offsets.bytes, .ids = std.AutoHashMap(u16, motion.VisualId).init(allocator) };
+    defer resolver.deinit();
+    const motions = try allocator.alloc(animation.OwnedClip, source_moves.len);
+    var loaded: usize = 0;
+    errdefer {
+        for (motions[0..loaded]) |*move| move.deinit();
+        allocator.free(motions);
+    }
+    for (source_moves, 0..) |index, i| {
+        var clip = try animation.decode(allocator, ani.bytes, index);
+        defer clip.deinit();
+        motions[i] = try clip.resolve(allocator, &resolver);
+        loaded += 1;
+    }
+    const walk = try allocator.alloc(conrad.WalkMotion, 2);
+    errdefer allocator.free(walk);
+    walk[0] = .{ .clip = motions[@backingInt(Move.walk_a)].clip(), .torso_clearance_ahead = 0 };
+    walk[1] = .{ .clip = motions[@backingInt(Move.walk_b)].clip() };
+    const run = try allocator.alloc(motion.Clip, 4);
+    errdefer allocator.free(run);
+    for (run, 0..) |*clip, i| clip.* = motions[@backingInt(Move.run_a) + i].clip();
+    var icon = try sprite.fromIcons(allocator, icons.bytes, 13);
+    errdefer icon.deinit();
+    var room_art: std.ArrayList(RoomArt) = .empty;
+    errdefer {
+        for (room_art.items) |*room| room.artwork.deinit();
+        room_art.deinit(allocator);
+    }
+    if (map.bytes.len < 384) return error.TruncatedRoomDirectory;
+    const first_offset = @abs(std.mem.readInt(i32, map.bytes[@as(usize, player[19]) * 6 ..][0..4], .little));
+    if (first_offset == 0) return error.MissingRoomArtwork;
+    if (first_offset >= map.bytes.len or map.bytes.len - first_offset < 4) return error.InvalidRoomRange;
+    const reference_bank = map.bytes[first_offset + 2];
+    const icon_colors = try palette.decodeLevelBank(colors.bytes, reference_bank);
+    for (0..64) |index| {
+        var art = artwork.decode(allocator, map.bytes, colors.bytes, @intCast(index)) catch |err| switch (err) {
+            error.AbsentRoom => continue,
+            else => return err,
+        };
+        errdefer art.deinit();
+        const offset = @abs(std.mem.readInt(i32, map.bytes[index * 6 ..][0..4], .little));
+        const alternate = map.bytes[offset + 2] != reference_bank;
+        @memcpy(art.colors[0x40..0x50], &actor_colors[@intFromBool(alternate)]);
+        @memcpy(art.colors[0xa0..0xb0], &icon_colors);
+        try room_art.append(allocator, .{ .id = room_ids[index], .artwork = art });
+    }
+    const rooms = try room_art.toOwnedSlice(allocator);
+    errdefer {
+        for (rooms) |*room| room.artwork.deinit();
+        allocator.free(rooms);
+    }
+    const facing: motion.Facing = if (player[26] == 0) .left else .right;
+    const first_visual = switch (motions[@backingInt(Move.wake)].steps[0]) {
+        .frame => |frame| frame.visual,
+        .hold => return error.UnsupportedPlayerStart,
+    };
+    const frames = try resolver.frames.toOwnedSlice(allocator);
+    return .{
+        .allocator = allocator,
+        .rooms = rooms,
+        .frames = frames,
+        .motions = motions,
+        .walk_strides = walk,
+        .run_strides = run,
+        .terrain = terrain,
+        .icon = icon,
+        .initial_room = room_ids[player[19]],
+        .initial_pose = .{ .position = .{ .x = std.mem.readInt(i16, player[2..4], .little), .y = std.mem.readInt(i16, player[4..6], .little) }, .facing = facing, .visual = .{ .id = first_visual.id, .mirrored = first_visual.mirrored != (facing == .left) } },
+    };
+}

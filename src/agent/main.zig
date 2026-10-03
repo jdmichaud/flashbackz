@@ -15,13 +15,16 @@ const usage =
     \\  --frames N       run N frames (default 120)
     \\  --key FRAME:NAME press and release the key NAME (a platform.Key, as `f2` or `left`) at
     \\                   frame FRAME; the option repeats
-    \\  ASSET_PATH       the directory of the original's files
+    \\  --key-down F:KEY hold KEY from host frame F
+    \\  --key-up F:KEY   release KEY at host frame F
+    \\  --scene jungle   enter the jungle development slice directly
+    \\  ASSET_PATH       an ISO/BIN image or directory of original files
     \\  --saves DIR      where saves are kept
     \\
 ;
 
 const frame_ns: u64 = std.time.ns_per_s / 60;
-const Press = struct { frame: u64, key: flashbackz.platform.Key };
+const Press = struct { frame: u64, key: flashbackz.platform.Key, mode: enum { tap, down, up } = .tap };
 
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
@@ -40,10 +43,15 @@ pub fn main(init: std.process.Init) !void {
             frames = std.fmt.parseInt(u64, args.next() orelse return fail(io), 10) catch return fail(io);
         } else if (std.mem.eql(u8, arg, "--key")) {
             try presses.append(gpa, parsePress(args.next() orelse return fail(io)) orelse return fail(io));
+        } else if (std.mem.eql(u8, arg, "--key-down") or std.mem.eql(u8, arg, "--key-up")) {
+            var press = parsePress(args.next() orelse return fail(io)) orelse return fail(io);
+            press.mode = if (std.mem.eql(u8, arg, "--key-down")) .down else .up;
+            try presses.append(gpa, press);
         } else {
             return fail(io);
         }
     }
+    if (options.entry == .jungle_development and options.assets == null) return fail(io);
 
     // Real providers when the options name them, else in-memory ones. They outlive the game.
     var providers: native.cli.Providers = .empty;
@@ -65,14 +73,14 @@ pub fn main(init: std.process.Init) !void {
 
     var backend = agent.AgentBackend.init(gpa, .{});
     defer backend.deinit();
-    var game = try flashbackz.Game.init(gpa, assets, storage);
+    var game = try flashbackz.Game.initWithEntry(gpa, assets, storage, options.entry);
     defer game.deinit();
     var p = backend.asPlatform();
     var frame: u64 = 0;
     while (frame < frames) : (frame += 1) {
         for (presses.items) |press| if (press.frame == frame) {
-            try backend.inject(.{ .time_ns = backend.clock_ns, .payload = .{ .key_down = .{ .key = press.key } } });
-            try backend.inject(.{ .time_ns = backend.clock_ns, .payload = .{ .key_up = .{ .key = press.key } } });
+            if (press.mode != .up) try backend.inject(.{ .time_ns = backend.clock_ns, .payload = .{ .key_down = .{ .key = press.key } } });
+            if (press.mode != .down) try backend.inject(.{ .time_ns = backend.clock_ns, .payload = .{ .key_up = .{ .key = press.key } } });
         };
         if (try game.update(&p) == .finished) break;
         backend.advance(frame_ns);
@@ -81,8 +89,11 @@ pub fn main(init: std.process.Init) !void {
     var buf: [512]u8 = undefined;
     var w = std.Io.File.stdout().writerStreaming(io, &buf);
     try w.interface.print("{{\"updates\":{d},\"frames_presented\":{d},\"events_consumed\":{d},\"saves\":{d},\"loads\":{d},\"state_hash\":\"{x:0>16}\",\"frame_hash\":\"{x:0>16}\"}}\n", .{
-        game.update_count, game.frames_presented, game.events_consumed, game.saves_written, game.loads_done, game.state.hash(), game.last_frame_hash,
+        game.update_count, game.frames_presented, game.events_consumed, game.saves_written, game.loads_done, game.stateHash(), game.last_frame_hash,
     });
+    if (game.jungle()) |scene| {
+        try w.interface.print("{{\"scene\":\"jungle_development\",\"simulation_steps\":{d},\"x\":{d},\"y\":{d},\"facing\":\"{s}\"}}\n", .{ scene.simulation_steps, scene.pose.position.x, scene.pose.position.y, @tagName(scene.pose.facing) });
+    }
     try w.interface.flush();
 }
 

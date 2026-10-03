@@ -1,28 +1,23 @@
 # flashbackz
 
-The modern reimplementation of the supplied Flashback DOS CD edition. The current native build
-loads the original main-menu artwork directly from an ISO, MODE1/2352 BIN, or extracted directory
-and reproduces its pixels. This is a menu preview; gameplay and menu actions are still being
-implemented. Without game content, the template's moving ball is a platform smoke placeholder.
+The modern Zig reimplementation of the supplied Flashback DOS CD edition. Both native hosts
+load an ISO, MODE1/2352 BIN or extracted game root directly. The default entry remains a menu
+preview; `--scene jungle` opens the interactive development slice.
 
-The content library also imports all 193 original room backgrounds with bounded run decoding
-and the DOS level-palette conversion. Their indices match execution of the original decoder;
-first-room background colors match the original capture outside its actor/UI overlays. These
-content checks do not yet make the preview playable.
+In that slice, Left/Right walk or turn, Shift with a direction runs, and Escape exits.
+Wake-up, committed steps, turns, braking, one room crossing and the first ledge landing have
+exact original state comparisons. Four actual SDL frame checkpoints match the original pixels.
+The scene uses shared content, input, controller and rendering code in both native hosts.
 
-The shared library now also imports packed sprites, interface icons, actor palettes and
-collision streams. A research composition through these importers and the modern renderer
-matches the complete first-room screenshot pixel for pixel. Animation and gameplay are still
-being implemented; one alternate sprite encoding remains explicitly unsupported.
+This is not a complete game. Jumping/climbing, inventory, combat, other actors, dynamic geometry,
+sound, cinematics, saves and menu actions remain unfinished. Unsupported controls/transitions
+report errors. The development clock has measured room-change discrepancies; full original
+scheduling is not accepted yet. One alternate sprite encoding also remains unresolved.
 
-Motion clips use an independent playback API with opaque art references. Imported animation
-steps match 59,964 original routine executions, covering facing, movement and signed wrapping.
-Behavior selection, clip transitions and the original scheduling clock remain unfinished.
-
-Wake-up and complete turns now have a named controller, verified update by update against
-three original runs. Walking, running, braking, a room crossing and the first ledge descent
-also match original state traces. Other actions, dynamic geometry and scene integration remain unfinished;
-the native application is still the menu preview.
+The content library covers all 193 room backgrounds, 1,284 packed sprite frames, icons, palettes
+and collision streams. Imported motion steps match 59,964 original routine executions and use
+opaque art references in an independent playback API. Without content, the template's moving
+ball remains a platform smoke fixture.
 
 Build with Zig 0.17.0 and SDL2 2.32.4 on Linux. `zig build`, `zig build test`, `zig build smoke`,
 `zig build verify`, `zig build web` and `zig build web-check` are the foundation checks.
@@ -33,7 +28,9 @@ Build with Zig 0.17.0 and SDL2 2.32.4 on Linux. `zig build`, `zig build test`, `
 zig build
 zig-out/bin/flashbackz-sdl "../Flashback CD.bin"
 zig-out/bin/flashbackz-sdl /path/to/flashback.iso
+zig-out/bin/flashbackz-sdl --scene jungle "../Flashback CD.bin"
 zig-out/bin/flashbackz-agent --frames 2 /path/to/flashback.iso --saves /tmp/flashback/saves
+zig-out/bin/flashbackz-agent --scene jungle --frames 180 --key-down 75:left --key-up 85:left /path/to/flashback.iso
 ```
 
 Images are opened read-only and accessed by ranges, with no external extraction program or full

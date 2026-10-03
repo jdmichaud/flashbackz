@@ -1,22 +1,17 @@
-//! A placeholder game: the smallest program that uses every part of the platform boundary, so that
-//! the hosts, the runner and the builds of the skeleton have something to run. A ball bounces in a
-//! box. The arrow keys push it, each bounce clicks, F2 saves the state, F3 loads it back and Escape
-//! quits. Replace it with the port's own game, and keep its shape: `init`, one `update` per frame
-//! with the platform, `deinit`, and the fields that the hosts inspect.
-//!
-//! It shows the pattern that an old game needs:
-//! - The state is integers (16.16 fixed point), advanced by one fixed step per update, so the same
-//!   input gives the same state on every platform. `State.hash` names it.
-//! - The picture is drawn as palette indices into a page of the original's size, and one
-//!   conversion makes the RGBA frame that the platform presents.
-//! - Files come through the two interfaces that the host binds: `AssetSource` for the original's
-//!   files, read-only, and `Storage` for the saves. A missing file is not an error. A game whose
-//!   files must stream while it plays (a film, a CD track) adds I/O jobs to the platform for that.
-//! - A save has one versioned format, and a record of another version is refused.
+//! Shared application lifecycle and tagged scene ownership. Hosts provide input, time and
+//! presentation; the selected scene owns its content and simulation. The no-content branch
+//! retains the template platform smoke program and save contract for host tests.
 const std = @import("std");
 const platform = @import("platform.zig");
 const menu_art = @import("content/menu_artwork.zig");
 const menu_mod = @import("scenes/menu.zig");
+const jungle_mod = @import("scenes/jungle.zig");
+pub const Entry = enum { automatic, jungle_development };
+const Scene = union(enum) {
+    smoke,
+    menu: struct { assets: menu_art.Assets, menu: menu_mod.Menu = .{} },
+    jungle: jungle_mod.Scene,
+};
 
 pub const page_width: u32 = 320;
 pub const page_height: u32 = 200;
@@ -50,7 +45,7 @@ const click_hz: u32 = 880;
 const click_samples: u32 = 441;
 const audio_ahead: u64 = 2048;
 
-/// Everything that decides what the game does next.
+/// Synthetic smoke state. Flashback simulation state belongs to the selected scene.
 pub const State = struct {
     x: i32 = 160 * one,
     y: i32 = 100 * one,
@@ -169,20 +164,31 @@ pub const Game = struct {
     click_phase: u32 = 0,
     page: []u8,
     rgba: []u8,
-    menu_assets: ?menu_art.Assets = null,
-    menu_scene: menu_mod.Menu = .{},
+    scene: Scene = .smoke,
 
     pub fn init(allocator: std.mem.Allocator, assets: ?platform.AssetSource, storage: ?platform.Storage) !Game {
+        return initWithEntry(allocator, assets, storage, .automatic);
+    }
+
+    pub fn initWithEntry(allocator: std.mem.Allocator, assets: ?platform.AssetSource, storage: ?platform.Storage, entry: Entry) !Game {
         const page = try allocator.alloc(u8, page_width * page_height);
         errdefer allocator.free(page);
         const rgba = try allocator.alloc(u8, page_width * page_height * platform.RgbaFrame.bytes_per_pixel);
         errdefer allocator.free(rgba);
+        if (entry == .jungle_development) {
+            const scene = try jungle_mod.Scene.load(allocator, assets orelse return error.OriginalContentRequired);
+            return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .scene = .{ .jungle = scene } };
+        }
         const original_menu = if (assets) |source| try menu_art.load(allocator, source) else null;
-        return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .menu_assets = original_menu };
+        return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .scene = if (original_menu) |menu| .{ .menu = .{ .assets = menu } } else .smoke };
     }
 
     pub fn deinit(self: *Game) void {
-        if (self.menu_assets) |*menu| menu.deinit();
+        switch (self.scene) {
+            .smoke => {},
+            .menu => |*scene| scene.assets.deinit(),
+            .jungle => |*scene| scene.deinit(),
+        }
         self.allocator.free(self.page);
         self.allocator.free(self.rgba);
         self.* = undefined;
@@ -192,6 +198,24 @@ pub const Game = struct {
         return self.title_buf[0..self.title_len];
     }
 
+    pub fn stateHash(self: *const Game) u64 {
+        if (self.scene == .jungle) return self.scene.jungle.stateHash();
+        return self.state.hash();
+    }
+
+    pub fn sceneKind(self: *const Game) std.meta.Tag(Scene) {
+        return std.meta.activeTag(self.scene);
+    }
+
+    pub fn jungle(self: *Game) ?*jungle_mod.Scene {
+        return if (self.scene == .jungle) &self.scene.jungle else null;
+    }
+
+    pub fn needsCatchup(self: *const Game, now_ns: u64) bool {
+        if (self.scene == .jungle) if (self.scene.jungle.clock) |clock| return clock.due(now_ns);
+        return false;
+    }
+
     /// One frame: the input, one step of the state, the sound and the picture.
     pub fn update(self: *Game, p: *platform.Platform) !UpdateResult {
         if (self.phase == .finished) return .finished;
@@ -199,20 +223,27 @@ pub const Game = struct {
         switch (self.phase) {
             .startup => {
                 _ = try p.start();
-                try p.setResolution(if (self.menu_assets != null) 256 else page_width, if (self.menu_assets != null) 224 else page_height);
-                if (self.menu_assets == null) self.audio = p.audioOpen(audio_format) catch null;
+                const original_content = self.scene != .smoke;
+                try p.setResolution(if (original_content) 256 else page_width, if (original_content) 224 else page_height);
+                if (!original_content) self.audio = p.audioOpen(audio_format) catch null;
                 self.readTitle();
                 self.phase = .playing;
+                if (self.scene == .jungle) try self.consumeEvents(p);
             },
             .playing => {
-                self.consumeEvents(p);
-                if (self.phase == .playing and self.menu_assets == null and self.state.step()) self.click_left = click_samples;
+                try self.consumeEvents(p);
+                if (self.phase == .playing and self.scene == .smoke and self.state.step()) self.click_left = click_samples;
             },
             .finished => {},
         }
         if (self.phase == .finished) {
             if (self.audio != null) p.audioClose();
             return .finished;
+        }
+        if (self.jungle()) |scene| {
+            const now = p.nowNs();
+            try scene.update(now);
+            if (self.needsCatchup(now)) return .running;
         }
         self.feedAudio(p);
         try self.present(p);
@@ -229,16 +260,28 @@ pub const Game = struct {
         @memcpy(self.title_buf[0..self.title_len], line[0..self.title_len]);
     }
 
-    fn consumeEvents(self: *Game, p: *platform.Platform) void {
+    fn consumeEvents(self: *Game, p: *platform.Platform) !void {
         var buf: [32]platform.Event = undefined;
         while (true) {
             const n = p.pollEvents(&buf);
             if (n == 0) break;
             for (buf[0..n]) |event| {
                 self.events_consumed += 1;
+                if (self.jungle()) |scene| {
+                    switch (event.payload) {
+                        .quit => self.phase = .finished,
+                        .key_down => |key| if (key.key == .escape) {
+                            self.phase = .finished;
+                        } else {
+                            try scene.enqueue(event);
+                        },
+                        else => try scene.enqueue(event),
+                    }
+                    continue;
+                }
                 switch (event.payload) {
                     .quit => self.phase = .finished,
-                    .key_down => |k| if (self.menu_assets != null) {
+                    .key_down => |k| if (self.scene == .menu) {
                         if (k.key == .escape) self.phase = .finished;
                     } else switch (k.key) {
                         .escape => self.phase = .finished,
@@ -289,10 +332,20 @@ pub const Game = struct {
     }
 
     fn present(self: *Game, p: *platform.Platform) !void {
-        if (self.menu_assets) |*assets| {
+        if (self.jungle()) |scene| {
             const indices = self.page[0..57344];
             const frame = self.rgba[0 .. 57344 * 4];
-            try self.menu_scene.draw(assets.artwork(), .{}, indices, frame);
+            try scene.draw(indices, frame);
+            self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
+            try p.present(.{ .width = 256, .height = 224, .stride = 256 * 4, .pixels = frame });
+            self.frames_presented += 1;
+            return;
+        }
+        if (self.scene == .menu) {
+            const scene = &self.scene.menu;
+            const indices = self.page[0..57344];
+            const frame = self.rgba[0 .. 57344 * 4];
+            try scene.menu.draw(scene.assets.artwork(), .{}, indices, frame);
             self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
             try p.present(.{ .width = 256, .height = 224, .stride = 256 * 4, .pixels = frame });
             self.frames_presented += 1;
