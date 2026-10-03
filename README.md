@@ -11,7 +11,11 @@ Wake-up, committed steps, turns, braking, one room crossing and the first ledge 
 exact original state comparisons. Four actual SDL frame checkpoints match the original pixels.
 The scene uses shared content, input, controller and rendering code in both native hosts.
 
-This is not a complete game. Running jumps, climbing/grabs, compound roll exits, inventory, combat, other actors, dynamic geometry,
+The initial shield, gun and credits now enter the inventory at their original startup updates.
+The HUD uses the selected item's imported icon. The ordered inventory container has exact
+original operation comparisons; inventory UI, item use and pickup/drop are still unfinished.
+
+This is not a complete game. Running jumps, climbing/grabs, compound roll exits, combat, other actors, dynamic geometry,
 sound, cinematics, saves and menu actions remain unfinished. Unsupported controls/transitions
 report errors. The development clock has measured room-change discrepancies; full original
 scheduling is not accepted yet. One alternate sprite encoding also remains unresolved.

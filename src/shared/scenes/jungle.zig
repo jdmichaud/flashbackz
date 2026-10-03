@@ -10,6 +10,7 @@ const clock_mod = @import("../step_clock.zig");
 const sprite_renderer = @import("../render/sprite.zig");
 const palette = @import("../content/palette.zig");
 const controls = @import("../actors/controls.zig");
+const equipment_mod = @import("../equipment.zig");
 
 pub const HeldInput = struct {
     left: bool = false,
@@ -65,17 +66,35 @@ pub const Scene = struct {
     controller: conrad.Controller = .{},
     environment: environment_mod.Environment,
     pose: motion.Pose,
+    health: i16,
+    equipment: equipment_mod.Loadout,
+    received_items: []equipment_mod.Received,
+    received_count: usize = 0,
     input: HeldInput = .{},
     pending: std.ArrayList(platform.Event) = .empty,
     clock: ?clock_mod.Clock = null,
     simulation_steps: u64 = 0,
 
     pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Scene {
-        const pack = try content.load(allocator, source);
-        return .{ .allocator = allocator, .content = pack, .environment = .{ .map = pack.terrain.map(), .room = pack.initial_room }, .pose = pack.initial_pose };
+        var pack = try content.load(allocator, source);
+        errdefer pack.deinit();
+        var equipment = try equipment_mod.Loadout.init(allocator, pack.initial_items);
+        errdefer equipment.deinit();
+        const received_items = try allocator.alloc(equipment_mod.Received, pack.initial_items.len);
+        return .{
+            .allocator = allocator,
+            .content = pack,
+            .environment = .{ .map = pack.terrain.map(), .room = pack.initial_room },
+            .pose = pack.initial_pose,
+            .health = pack.initial_health,
+            .equipment = equipment,
+            .received_items = received_items,
+        };
     }
 
     pub fn deinit(self: *Scene) void {
+        self.equipment.deinit();
+        self.allocator.free(self.received_items);
         self.pending.deinit(self.allocator);
         self.content.deinit();
         self.* = undefined;
@@ -100,6 +119,7 @@ pub const Scene = struct {
             try consumeInput(&self.pending, &self.input, deadline);
             const result = try self.controller.advanceIn(self.content.controllerClips(), try self.input.intent(), &self.pose, &self.environment);
             if (result != .advanced) return error.UnimplementedMovementTransition;
+            self.received_count = try self.equipment.advance(self.health, self.received_items);
             self.simulation_steps += 1;
             self.clock.?.consume();
         }
@@ -111,12 +131,17 @@ pub const Scene = struct {
         @memcpy(indices, room.image.pixels);
         const frame = try self.content.frame(self.pose.visual.id);
         try sprite_renderer.draw(indices, room.image.width, room.image.height, frame, @as(i32, self.pose.position.x) + 8, @as(i32, self.pose.position.y) + 2, .{ .palette_bank = 4, .facing = if (self.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
-        try sprite_renderer.draw(indices, room.image.width, room.image.height, &self.content.icon, 232, 8, .{ .palette_bank = 10, .foreground = .overwrite });
+        if (try self.equipment.selected()) |selected| {
+            const icon = try self.content.frame(selected.definition.icon);
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, icon, 232, 8, .{ .palette_bank = 10, .foreground = .overwrite });
+        }
         try palette.writeRgba(indices, &room.colors, rgba);
     }
 
     pub fn stateHash(self: *const Scene) u64 {
         var hash = std.hash.Wyhash.init(0);
+        hash.update(&std.mem.toBytes(std.mem.nativeToLittle(i16, self.health)));
+        self.equipment.hashInto(&hash);
         const activity: u32 = @backingInt(std.meta.activeTag(self.controller.activity));
         const phase: u32 = switch (self.controller.activity) {
             .turning => |p| @backingInt(p),

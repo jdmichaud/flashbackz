@@ -11,6 +11,8 @@ const sprite = @import("sprite.zig");
 const artwork = @import("room_artwork.zig");
 const palette = @import("palette.zig");
 const placement = @import("placement.zig");
+const equipment = @import("../equipment.zig");
+const starting_equipment = @import("starting_equipment.zig");
 
 const Move = enum { wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover };
 const source_moves = [_]u16{ 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88 };
@@ -24,7 +26,8 @@ pub const Pack = struct {
     walk_strides: []conrad.WalkMotion,
     run_strides: []motion.Clip,
     terrain: collision.Layout,
-    icon: sprite.Frame,
+    initial_items: []equipment.Definition,
+    initial_health: i16,
     initial_pose: motion.Pose,
     initial_room: geometry.RoomId,
 
@@ -37,8 +40,8 @@ pub const Pack = struct {
         self.allocator.free(self.motions);
         self.allocator.free(self.walk_strides);
         self.allocator.free(self.run_strides);
+        self.allocator.free(self.initial_items);
         self.terrain.deinit();
-        self.icon.deinit();
         self.* = undefined;
     }
 
@@ -81,6 +84,7 @@ const Resolver = struct {
     allocator: std.mem.Allocator,
     sprites: []const u8,
     offsets: []const u8,
+    icons: []const u8,
     ids: std.AutoHashMap(u16, motion.VisualId),
     frames: std.ArrayList(sprite.Frame) = .empty,
 
@@ -101,6 +105,14 @@ const Resolver = struct {
         self.frames.appendAssumeCapacity(frame);
         return id;
     }
+
+    pub fn icon(self: *Resolver, index: u16) !motion.VisualId {
+        var image = try sprite.fromIcons(self.allocator, self.icons, index);
+        errdefer image.deinit();
+        const id: motion.VisualId = @fromBackingInt(@as(u32, @intCast(self.frames.items.len)));
+        try self.frames.append(self.allocator, image);
+        return id;
+    }
 };
 
 fn read(source: platform.AssetSource, name: []const u8, maximum: usize) !platform.OwnedBytes {
@@ -118,13 +130,16 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
     defer offsets.deinit();
     var ani = try read(source, "DATA/LEVEL1.ANI", 65536);
     defer ani.deinit();
+    var rules = try read(source, "DATA/LEVEL1.OBJ", 65536);
+    defer rules.deinit();
     var ct = try read(source, "DATA/LEVEL1.CT", 65536);
     defer ct.deinit();
     var icons = try read(source, "DATA/GLOBAL.ICN", 32768);
     defer icons.deinit();
     var placements = try read(source, "DATA/LEVEL1.PGE", 16384);
     defer placements.deinit();
-    const player = try (try placement.Table.init(placements.bytes)).record(0);
+    const placement_table = try placement.Table.init(placements.bytes);
+    const player = try placement_table.record(0);
     if (player.initial_state != 99 or player.kind != 1 or player.room >= 64) return error.UnsupportedPlayerStart;
     var executable = try read(source, "GAME_E.OVL", 1024 * 1024);
     defer executable.deinit();
@@ -142,7 +157,7 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
     for (&room_ids, 0..) |*id, i| id.* = @fromBackingInt(@as(u16, @intCast(i)) + 1);
     var terrain = try collision.decode(allocator, ct.bytes, &room_ids);
     errdefer terrain.deinit();
-    var resolver: Resolver = .{ .allocator = allocator, .sprites = sprites.bytes, .offsets = offsets.bytes, .ids = std.AutoHashMap(u16, motion.VisualId).init(allocator) };
+    var resolver: Resolver = .{ .allocator = allocator, .sprites = sprites.bytes, .offsets = offsets.bytes, .icons = icons.bytes, .ids = std.AutoHashMap(u16, motion.VisualId).init(allocator) };
     defer resolver.deinit();
     const motions = try allocator.alloc(animation.OwnedClip, source_moves.len);
     var loaded: usize = 0;
@@ -163,8 +178,8 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
     const run = try allocator.alloc(motion.Clip, 4);
     errdefer allocator.free(run);
     for (run, 0..) |*clip, i| clip.* = motions[@backingInt(Move.run_a) + i].clip();
-    var icon = try sprite.fromIcons(allocator, icons.bytes, 13);
-    errdefer icon.deinit();
+    const initial_items = try starting_equipment.recover(allocator, placement_table, ani.bytes, rules.bytes, &resolver);
+    errdefer allocator.free(initial_items);
     var room_art: std.ArrayList(RoomArt) = .empty;
     errdefer {
         for (room_art.items) |*room| room.artwork.deinit();
@@ -207,7 +222,8 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
         .walk_strides = walk,
         .run_strides = run,
         .terrain = terrain,
-        .icon = icon,
+        .initial_items = initial_items,
+        .initial_health = player.life,
         .initial_room = room_ids[player.room],
         .initial_pose = .{ .position = player.position, .facing = facing, .visual = .{ .id = first_visual.id, .mirrored = first_visual.mirrored != (facing == .left) } },
     };
