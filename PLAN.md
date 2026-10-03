@@ -21,6 +21,11 @@ gates. All runtime work uses the original as the reference; no approximate accep
     source layout and legacy scripting semantics at the compatibility boundary.
   - Gate: synthetic malformed-input cases pass; decoders agree with independent original
     observations; game code consumes typed content rather than executable addresses.
+- [ ] **02a — Direct disc-image argument** — Depends: 01.
+  - Both native hosts accept an ISO or supplied MODE1/2352 BIN image in the existing positional
+    asset argument, reading files directly through the same asset contract as a directory.
+  - Gate: synthetic image and malformed-input tests pass; all original files read from the
+    image match the inventory, and Linux/Windows hosts build without extraction dependencies.
 - [ ] **03 — Exact first playable room** — Depends: 02, research 05 and 07.
   - Scene flow, input, Conrad, collision, animation, inventory, drawing and sound through the
     shared simulation and the SDL/agent hosts.
