@@ -12,6 +12,7 @@ const palette = @import("../content/palette.zig");
 const controls = @import("../actors/controls.zig");
 const equipment_mod = @import("../equipment.zig");
 const inventory_menu = @import("inventory_menu.zig");
+const terrain_mod = @import("../terrain.zig");
 
 pub const HeldInput = struct {
     left: bool = false,
@@ -68,6 +69,7 @@ pub const Scene = struct {
     content: content.Pack,
     controller: conrad.Controller = .{},
     environment: environment_mod.Environment,
+    terrain: terrain_mod.State,
     pose: motion.Pose,
     health: i16,
     equipment: equipment_mod.Loadout,
@@ -91,13 +93,16 @@ pub const Scene = struct {
         errdefer pack.deinit();
         var equipment = try equipment_mod.Loadout.init(allocator, pack.initial_items);
         errdefer equipment.deinit();
+        var terrain = try terrain_mod.State.init(allocator, pack.terrain.map(), pack.terrain.materials, .{ .history_limit = pack.terrain.history_allowance });
+        errdefer terrain.deinit();
         const received_items = try allocator.alloc(equipment_mod.Received, pack.initial_items.len);
         errdefer allocator.free(received_items);
         const menu_entries = try allocator.alloc(inventory_menu.Entry, pack.initial_items.len);
         return .{
             .allocator = allocator,
             .content = pack,
-            .environment = .{ .map = pack.terrain.map(), .room = pack.initial_room },
+            .environment = .{ .map = terrain.map(), .room = pack.initial_room },
+            .terrain = terrain,
             .pose = pack.initial_pose,
             .health = pack.initial_health,
             .equipment = equipment,
@@ -108,6 +113,7 @@ pub const Scene = struct {
 
     pub fn deinit(self: *Scene) void {
         self.equipment.deinit();
+        self.terrain.deinit();
         self.allocator.free(self.received_items);
         self.allocator.free(self.menu_entries);
         self.pending.deinit(self.allocator);
@@ -202,6 +208,7 @@ pub const Scene = struct {
         var hash = std.hash.Wyhash.init(0);
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(i16, self.health)));
         self.equipment.hashInto(&hash);
+        self.terrain.hashInto(&hash);
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, self.score)));
         hash.update(&.{ self.inventory_cooldown, @intFromBool(self.input.inventory), @intFromBool(self.dialog != null) });
         if (self.dialog) |dialog| {

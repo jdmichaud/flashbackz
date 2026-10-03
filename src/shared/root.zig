@@ -19,6 +19,7 @@ pub const front_end = @import("scenes/front_end.zig");
 pub const settings = @import("settings.zig");
 pub const conrad = @import("actors/conrad.zig");
 pub const geometry = @import("geometry.zig");
+pub const terrain = @import("terrain.zig");
 pub const conrad_environment = @import("actors/conrad_environment.zig");
 pub const step_clock = @import("step_clock.zig");
 pub const jungle_scene = @import("scenes/jungle.zig");

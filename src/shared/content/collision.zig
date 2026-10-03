@@ -3,16 +3,34 @@
 const std = @import("std");
 const backward = @import("backward_stream.zig");
 const geometry = @import("../geometry.zig");
+const terrain = @import("../terrain.zig");
+
+// The original admits a new saved footprint while its accumulated cost is below this
+// bound, even if that final footprint takes the total above it. Keep the source-specific
+// cost at import; terrain storage and restoration use ordinary owned materials.
+pub const history_limit = 762;
+pub fn snapshotWeight(width: u16) usize {
+    return 3 + @as(usize, width) / 2;
+}
+
+pub fn snapshotReuse(width: u16, mirrored: bool) terrain.Reuse {
+    // The original search's increment/decrement pair exits after its first nonmatch
+    // only for a mirrored one-cell footprint. It can therefore create another snapshot.
+    return if (mirrored and width == 1) .latest_only else .matching_origin;
+}
 
 pub const Layout = struct {
     allocator: std.mem.Allocator,
+    history_allowance: usize = history_limit,
     source: []u8,
     occupancy: []bool,
+    materials: []terrain.Material,
     rooms: []geometry.Room,
 
     pub fn deinit(self: *Layout) void {
         self.allocator.free(self.rooms);
         self.allocator.free(self.occupancy);
+        self.allocator.free(self.materials);
         self.allocator.free(self.source);
         self.* = undefined;
     }
@@ -42,9 +60,17 @@ fn importOwned(allocator: std.mem.Allocator, source: []u8, room_ids: *const [64]
     }
     const occupancy = try allocator.alloc(bool, 64 * 112);
     errdefer allocator.free(occupancy);
-    for (source[256..], occupancy) |tag, *cell| {
+    const materials = try allocator.alloc(terrain.Material, occupancy.len);
+    errdefer allocator.free(materials);
+    for (source[256..], occupancy, materials) |tag, *cell, *material| {
         if (tag > 2) return error.UnknownCollisionMaterial;
         cell.* = tag != 0;
+        material.* = switch (tag) {
+            0 => .empty,
+            1 => .solid,
+            2 => .restricted,
+            else => unreachable,
+        };
     }
     const rooms = try allocator.alloc(geometry.Room, 64);
     errdefer allocator.free(rooms);
@@ -64,7 +90,7 @@ fn importOwned(allocator: std.mem.Allocator, source: []u8, room_ids: *const [64]
             },
         };
     }
-    return .{ .allocator = allocator, .source = source, .occupancy = occupancy, .rooms = rooms };
+    return .{ .allocator = allocator, .source = source, .occupancy = occupancy, .materials = materials, .rooms = rooms };
 }
 
 fn edge(index: u8, ids: *const [64]geometry.RoomId, missing_right: bool) !geometry.Edge {

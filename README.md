@@ -28,6 +28,10 @@ gameplay sound, later cinematics, saves and the remaining menu modes are unfinis
 report errors. The development clock has measured room-change discrepancies; full original
 scheduling is not accepted yet. One alternate sprite encoding also remains unresolved.
 
+The scene now owns reversible terrain edits independently of immutable level content.
+Overlapping edits, restoration and history exhaustion match original routine comparisons.
+Gate/lift behavior and their triggers still need integration.
+
 The content library covers all 193 room backgrounds, 1,284 packed sprite frames, icons, palettes,
 collision streams, object graphics banks and composed object frames. The latter match 4,964
 original drawing cases; object behaviors and scene integration are still unfinished.
