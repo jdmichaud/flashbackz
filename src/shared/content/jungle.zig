@@ -11,8 +11,8 @@ const sprite = @import("sprite.zig");
 const artwork = @import("room_artwork.zig");
 const palette = @import("palette.zig");
 
-const Move = enum { wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn };
-const source_moves = [_]u16{ 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233 };
+const Move = enum { wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover };
+const source_moves = [_]u16{ 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88 };
 pub const RoomArt = struct { id: geometry.RoomId, artwork: artwork.Artwork };
 
 pub const Pack = struct {
@@ -60,6 +60,7 @@ pub const Pack = struct {
                 .forward = .{ .takeoff = self.clip(.jump_takeoff), .flight = self.clip(.jump_flight), .landing = self.clip(.jump_land), .recover = self.clip(.jump_finish) },
             },
             .crouch = .{ .lower = self.clip(.crouch_lower), .hold = self.clip(.crouch_hold), .rise = self.clip(.crouch_rise), .turn = self.clip(.crouch_turn) },
+            .roll = .{ .enter = self.clip(.roll_enter), .tumble = self.clip(.roll_tumble), .exit = self.clip(.roll_exit), .balance = self.clip(.roll_balance), .rise = self.clip(.roll_rise), .drop = self.clip(.roll_drop), .recover = self.clip(.roll_recover), .upright_landing = self.clip(.land) },
         };
     }
 

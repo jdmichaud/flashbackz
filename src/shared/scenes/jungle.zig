@@ -127,6 +127,7 @@ pub const Scene = struct {
             .stopping_run => |p| @backingInt(p),
             .jumping => |jump| (@as(u32, @backingInt(jump.kind)) << 8) | @backingInt(jump.phase),
             .crouching => |p| @backingInt(p),
+            .rolling => |roll| @backingInt(roll.phase),
             else => 0,
         };
         for ([_]u32{ @backingInt(self.environment.room), @as(u16, @bitCast(self.pose.position.x)), @as(u16, @bitCast(self.pose.position.y)), @backingInt(self.pose.facing), @backingInt(self.pose.visual.id), @intFromBool(self.pose.visual.mirrored), activity, phase, @intCast(self.controller.playback.next_step) }) |value|

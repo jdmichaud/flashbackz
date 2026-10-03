@@ -3,6 +3,7 @@
 const std = @import("std");
 const motion = @import("../motion.zig");
 const jumping = @import("conrad_jump.zig");
+const rolling = @import("conrad_roll.zig");
 pub const Intent = @import("controls.zig").Intent;
 
 pub const WalkMotion = struct {
@@ -21,6 +22,7 @@ pub const Clips = struct {
     descend: ?struct { step_off: motion.Clip, land: motion.Clip } = null,
     jumps: ?jumping.Clips = null,
     crouch: ?struct { lower: motion.Clip, hold: motion.Clip, rise: motion.Clip, turn: motion.Clip } = null,
+    roll: ?rolling.Clips = null,
 };
 
 pub const TurnPhase = enum { preparation, follow_through };
@@ -36,6 +38,7 @@ pub const Activity = union(enum) {
     landing,
     jumping: jumping.State,
     crouching: enum { lowering, holding, rising, turning },
+    rolling: rolling.State,
 };
 pub const Result = enum { advanced, locomotion_requested, terrain_transition_requested };
 
@@ -88,6 +91,7 @@ pub const Controller = struct {
                     .turning => crouch.turn,
                 };
             },
+            .rolling => |roll| roll.clip(clips.roll orelse return error.MissingMotion),
         };
     }
 
@@ -206,10 +210,24 @@ pub const Controller = struct {
                         if (intent.vertical == .down or (intent.vertical == null and intent.action and (intent.direction == null or intent.direction == pose.facing))) {
                             // Remain low while crouch/action is held.
                         } else if (intent.direction) |direction| {
-                            if (direction == pose.facing) return .locomotion_requested;
-                            if (!try environment.at(pose.*, .torso, -1)) self.activity = .{ .crouching = .turning } else self.activity = .{ .crouching = .rising };
+                            if (direction == pose.facing) {
+                                const roll = clips.roll orelse return .locomotion_requested;
+                                if (!try environment.at(pose.*, .support, 1)) {
+                                    self.activity = .{ .rolling = .{ .phase = .drop } };
+                                } else if (!try environment.at(pose.*, .torso, 1)) {
+                                    rolling.shiftForward(pose, roll.alignment_forward);
+                                    self.activity = .{ .rolling = .{} };
+                                } else self.activity = .{ .crouching = .rising };
+                            } else if (!try environment.at(pose.*, .torso, -1)) self.activity = .{ .crouching = .turning } else self.activity = .{ .crouching = .rising };
                         } else self.activity = .{ .crouching = .rising };
                     },
+                },
+                .rolling => |*roll| switch (try roll.finishPhase(clips.roll orelse return error.MissingMotion, intent, pose, environment)) {
+                    .continued => {},
+                    .standing => self.activity = .standing,
+                    .turning => self.activity = .{ .turning = .preparation },
+                    .terrain_requested => return .terrain_transition_requested,
+                    .action_requested => return .locomotion_requested,
                 },
             }
             self.playback = .{};
