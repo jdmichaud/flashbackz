@@ -20,8 +20,10 @@ The logo and first introduction chapter match every captured original frame. The
 chapter has small edge differences in 18 of 380 frames (at most 33 pixels per frame), retained
 under the user's preference for readability over pixel-specific fixes.
 
-Sound, exact presentation timing, menu fades/blinking, gameplay entry, passwords and Continue
-are still unfinished. The startup error `FloppyCinematicsNotYetImplemented` has been removed
+AdLib music now plays through the logo, introduction and menu. Original musical ticks and
+register writes agree across 16,709 observations; native SDL output has been captured. Digital
+sound effects, exact presentation/audio synchronization, menu fades/blinking, gameplay entry,
+passwords and Continue are still unfinished. The startup error `FloppyCinematicsNotYetImplemented` has been removed
 from normal launch. `--scene menu` remains an optional development shortcut.
 
 ```sh
@@ -51,4 +53,4 @@ Research and historical measurements live in `../flashback-re`; optional direct 
 belongs in `../flashback-remaster`. See [PLAN.md](PLAN.md) and [DESIGN.md](DESIGN.md).
 
 The generic OPL2/OPL3 synthesizer is reused from vpoolz with its synthetic reference tests and
-LGPL notice. It is ready for Flashback's music layer, which is not connected yet.
+LGPL notice. Flashback's original-derived music importer and sample-clock player feed the native PCM queue.

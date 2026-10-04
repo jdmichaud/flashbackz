@@ -50,6 +50,15 @@ test "normal startup completes three vector chapters and skipping introduction r
     try source.add("DATA/INTRO1.POL", &polygons);
     try source.add("DATA/INTRO2.CMD", &commands);
     try source.add("DATA/INTRO2.POL", &polygons);
+    var profile: [753]u8 = @splat(0);
+    profile[544] = 7;
+    profile[549] = 12;
+    @memcpy(profile[550..558], "TEST.MID");
+    const midi = [_]u8{ 'M', 'T', 'h', 'd', 0, 0, 0, 6, 0, 0, 0, 1, 0, 96, 'M', 'T', 'r', 'k', 0, 0, 0, 4, 0, 255, 47, 0 };
+    try source.add("DATA/TEST.MID", &midi);
+    try source.add("DATA/PRESENT3.PRF", &profile);
+    try source.add("DATA/INTROL3.PRF", &profile);
+    try source.add("DATA/OPTION3.PRF", &profile);
     const Backend = @import("backend.zig").AgentBackend;
     var backend = Backend.init(allocator, .{});
     defer backend.deinit();
@@ -66,6 +75,7 @@ test "normal startup completes three vector chapters and skipping introduction r
         backend.advance(100_000_000);
     }
     try std.testing.expect(first and second);
+    try std.testing.expect(backend.calls.audio_queue > 0);
     try std.testing.expectEqual(game.front_end.Stage.menu, app.scene.menu.stage);
     try app.scene.menu.intro();
     _ = try app.update(&platform);

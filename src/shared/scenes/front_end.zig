@@ -6,6 +6,7 @@ const menu_art = @import("../content/menu_artwork.zig");
 const palette = @import("../content/palette.zig");
 const text = @import("../render/text.zig");
 const menu_mod = @import("menu.zig");
+const soundtrack = @import("../audio/soundtrack.zig");
 const vector_player = @import("vector_player.zig");
 pub const Difficulty = @import("../settings.zig").Difficulty;
 pub const Stage = enum { branding, introduction, menu, ready, quit };
@@ -18,6 +19,9 @@ pub const Scene = struct {
     page_assets: ?menu_art.Assets = null,
     menu: menu_mod.Menu = .{},
     player: ?vector_player.Player = null,
+    music: ?soundtrack.Soundtrack = null,
+    music_cue: ?enum { branding, introduction, menu } = null,
+    music_rate: ?u32 = null,
     introduction_part: enum { first, second } = .first,
     skip_requested: bool = false,
     stage: Stage = .menu,
@@ -53,11 +57,51 @@ pub const Scene = struct {
     pub fn deinit(self: *Scene) void {
         if (self.player) |*player| player.deinit();
         if (self.page_assets) |*assets| assets.deinit();
+        if (self.music) |*music| music.deinit();
         self.assets.deinit();
         self.* = undefined;
     }
 
-    pub fn stopAudio(_: *Scene, _: *platform.Platform) void {}
+    pub fn stopAudio(self: *Scene, p: *platform.Platform) void {
+        if (self.music_rate != null) {
+            p.audioClear();
+            p.audioClose();
+            self.music_rate = null;
+        }
+    }
+
+    fn updateMusic(self: *Scene, p: *platform.Platform) !void {
+        const cue: @TypeOf(self.music_cue) = switch (self.stage) {
+            .branding => .branding,
+            .introduction => .introduction,
+            .menu => .menu,
+            else => {
+                self.stopAudio(p);
+                return;
+            },
+        };
+        if (self.music_rate == null) {
+            const format = try p.audioOpen(.{ .channels = 2, .sample_rate = 44100 });
+            if (format.channels != 2) {
+                p.audioClose();
+                return error.UnsupportedAudioFormat;
+            }
+            self.music_rate = format.sample_rate;
+        }
+        if (cue != self.music_cue) {
+            const name: []const u8 = switch (cue.?) {
+                .branding => "PRESENT3",
+                .introduction => "INTROL3",
+                .menu => "OPTION3",
+            };
+            const replacement = try soundtrack.Soundtrack.open(self.allocator, self.source, name, self.music_rate.?);
+            p.audioClear();
+            if (self.music) |*previous| previous.deinit();
+            self.music = replacement;
+            self.music_cue = cue;
+        }
+        if (self.music) |*music| try music.pump(p);
+    }
 
     pub fn stateHash(self: *const Scene) u64 {
         var hash = std.hash.Wyhash.init(0);
@@ -91,6 +135,7 @@ pub const Scene = struct {
                 }
             }
         }
+        try self.updateMusic(p);
     }
     pub fn needsCatchup(self: *const Scene, now: u64) bool {
         return if (self.player) |*player| player.needsCatchup(now) else false;
