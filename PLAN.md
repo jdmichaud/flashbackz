@@ -45,6 +45,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   inventory transfer and recording playback, with explicit scene pause/resume. Gate: original
   floppy observations agree on object visibility, action/transfer order and cinematic selection;
   native input can collect and use the item from direct disk images.
+- [ ] Connect pressure-plate signals to independently modeled gate animation and terrain
+  changes. Recover startup gate/platform footprints as behavior, not permanent level edits.
+  Gate: original floppy object transitions, signal order and complete collision-grid changes
+  agree through plate activation, collection, release and gate settling.
 - [ ] Requalify gameplay imports and executable-backed metadata against this release before
   claiming that earlier movement, scene or inventory evidence applies.
 
