@@ -72,6 +72,9 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   and damage through independent actor/combat components; qualify with quick native encounters.
   Include the robots and ceiling laser guns as distinct behavior families (user reminder);
   gunman completion alone does not close enemy coverage.
+- [ ] Import energy-generator fixtures and shared item recharge capabilities. Restore the
+  shield through its authored use delay, healing value and recharge cinematic/music; reuse
+  the capability for rechargeable puzzle items. Verify nearby and out-of-range use.
 - [ ] Shared key/card pickups and credential locks: match original item codes at contact,
   consume successful uses, and route lock outputs through the normal door circuits.
   Preserve pickup movies, sounds and data-defined activation order.
