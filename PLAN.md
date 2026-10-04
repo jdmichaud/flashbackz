@@ -15,7 +15,10 @@ Windows compilation is deferred until Linux gameplay works, per the user’s 202
 priority update. Preserve portability while concentrating implementation and testing on Linux.
 The user permits small documented pixel differences when that avoids excessive complexity;
 readability takes precedence over frame-specific repairs for isolated pixels.
+Browser/WebAssembly support is excluded by the user; native Linux is the current focus.
 
+- [ ] Remove the web host, browser assets and build/check targets. Gate: native builds and
+  tests pass, and no browser target or host remains in the active implementation.
 - [x] Inventory FAT12 files and ABA archives; identify missing installation media, record
   provenance and reproduce floppy startup on disposable copies.
 - [x] Remove CD filesystem/track and SEQ playback from the modern game. Preserve historical

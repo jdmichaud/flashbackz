@@ -26,8 +26,7 @@ Rules:
 - Builds and tests must stand alone. No original game code, assets, screenshots or memory dumps
   may be committed. Reference behavior measurements with provenance and synthetic tests are
   permitted. The user supplies original content at runtime or during an explicit asset build.
-- Linux/SDL, a deterministic headless agent host, Windows/SDL and WebAssembly are the template
-  targets. Use few dependencies and static linking where practical. Network play is excluded.
+- Linux/SDL, a deterministic headless agent host and eventual Windows/SDL are the targets. Use few dependencies and static linking where practical. Network play is excluded.
 - Build and capture under /tmp/flashback, not the repository or zig-out; emulate a copy only.
 - Verify the build the user runs with real input and presented frames before marking playable
   gates complete. For Windows, the user accepts Linux runtime checks plus a successful Windows
@@ -48,3 +47,7 @@ Rules:
   (2026-10-04). Prefer readable, general rendering rules over frame-specific pixel fixes.
   Keep exact comparison reports and document accepted differences; never alter the reference
   or silently treat a broad visual mismatch as acceptable.
+
+- Browser/WebAssembly support is excluded by the user (2026-10-04). Keep native SDL and
+  headless hosts only. Reuse established vpoolz/template infrastructure and focus new work
+  on Flashback-specific content, music sequencing and gameplay.

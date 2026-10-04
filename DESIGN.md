@@ -24,17 +24,17 @@ Disk 1 is identical to the initial, now-removed `Flashback.ima`. Research lives 
 There is no mandatory remaster and no runtime dependency on an emulator, decompiler, original
 executable's instructions, research tool or sibling repository.
 
-Linux/SDL, a deterministic headless host, Windows/SDL and WebAssembly share the same game.
+Linux/SDL and the deterministic headless host share the same game. Windows/SDL remains a
+future target. Browser/WebAssembly support is excluded by user instruction (2026-10-04).
 The user accepts Linux runtime verification plus a Windows cross-build for Windows. Windows
 compilation is deferred until Linux gameplay is working (user priority, 2026-10-04); portable
-host boundaries remain required. Browser
-acceptance includes browser execution. Network play is excluded. Audio acceptance is AdLib FM
+host boundaries remain required. Network play is excluded. Audio acceptance is AdLib FM
 plus the game's digital samples; MT-32 device ROMs are not required.
 
 ## 2. Ownership and boundaries
 
 ```text
-SDL / agent / browser host
+SDL / agent host
     Platform: input, monotonic time, presentation, PCM, lifecycle
     AssetSource: bounded read-only content access
     Storage: atomic named records
