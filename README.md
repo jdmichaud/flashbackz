@@ -17,13 +17,18 @@ Wake-up, committed steps, turns, braking, one room crossing and the first ledge 
 exact original state comparisons. Four actual SDL frame checkpoints match the original pixels.
 The scene uses shared content, input, controller and rendering code in both native hosts.
 
+Hold Shift+Down at an edge to lower over it. Release Down while keeping Shift held to hang;
+Shift+Up climbs, Shift with the backward direction releases and turns, and releasing Shift
+lets go. Holding Up beneath a reachable ledge jumps up and climbs onto it. Lowering, gripping,
+climbing, dropping and a transfer to a second ledge have original trace and native frame checks.
+
 The initial shield, gun and credits now enter the inventory at their original startup updates.
 The HUD uses the selected item's imported icon. Tab opens and closes inventory; arrows navigate.
 Hold Shift, Space or Enter to see the score panel. Closing selects the last displayed item.
 The inventory screen has exact original navigation and pixel comparisons. Item use, pickup/drop,
 menu sounds and exact menu entry/exit timing remain unfinished.
 
-This is not a complete game. Running jumps, climbing/grabs, compound roll exits, combat, other actors, dynamic geometry,
+This is not a complete game. Running jumps, remaining airborne/ledge variants, compound roll exits, combat, other actors, dynamic geometry,
 gameplay sound, later cinematics, saves and the remaining menu modes are unfinished. Unsupported controls/transitions
 report errors. The development clock has measured room-change discrepancies; full original
 scheduling is not accepted yet. One alternate sprite encoding also remains unresolved.
@@ -35,7 +40,7 @@ Rolling and forward-jump wall collisions now play the backward fall and get-up s
 with unchanged health in the verified cases. Crouching can also start a roll into a low passage.
 Long falls now include fatal landings and the Continue/Abort screen. Continue restarts the
 level through its wake-up movie; Abort, Escape or countdown expiry plays the game-over movie
-and returns to the title. Checkpoint restoration, void-room falls and ledge catches remain open.
+and returns to the title. Checkpoint restoration, void-room falls and further airborne variants remain open.
 Gate/lift behavior and their triggers still need integration.
 
 The content library covers all 193 room backgrounds, 1,284 packed sprite frames, icons, palettes,

@@ -43,7 +43,7 @@ test "roll exit alignment is committed once before its recovery" {
     try std.testing.expectEqual(.standing, try state.finishPhase(clips, .{}, &pose, Ground{}));
     try std.testing.expectEqual(@as(i16, 16), pose.position.x);
 }
-pub const Boundary = enum { continued, standing, turning, wall_collision, long_fall, terrain_requested, action_requested };
+pub const Boundary = enum { continued, standing, turning, wall_collision, catch_ledge, long_fall, terrain_requested, action_requested };
 
 pub fn shiftForward(pose: *motion.Pose, amount: i16) void {
     pose.position.x +%= if (pose.facing == .right) amount else -%amount;
@@ -117,7 +117,10 @@ pub const State = struct {
                 return if (intent.direction != null and intent.direction != pose.facing) .turning else .standing;
             },
             .drop => {
-                if (intent.action and try environment.ledge(pose.*, .support, 0, .behind)) return .terrain_requested;
+                if (intent.action and try environment.ledge(pose.*, .support, 1, .behind)) {
+                    pose.position.y +%= 24;
+                    return .catch_ledge;
+                }
                 if ((try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .support, -1)) or !try environment.at(pose.*, .support, 0)) {
                     pose.position.y +%= clips.long_fall_down;
                     return .long_fall;

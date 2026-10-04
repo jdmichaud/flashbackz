@@ -12,15 +12,23 @@ pub const Clips = struct {
     landing_down: i16 = 16,
     death_wait_steps: u16 = 30,
 };
-pub const Boundary = enum { continued, fatal_landing, ledge_requested };
+pub const Boundary = enum { continued, fatal_landing, catch_ledge };
 pub const State = struct {
     phase: Phase = .initial,
     pub fn clip(self: State, clips: Clips) motion.Clip {
         return if (self.phase == .initial) clips.initial else clips.continuing;
     }
     pub fn finishPhase(self: *State, clips: Clips, intent: controls.Intent, pose: *motion.Pose, environment: anytype) !Boundary {
-        if (intent.action and intent.vertical == .up) {
-            if (try environment.ledge(pose.*, .support, 0, .behind) or try environment.ledge(pose.*, .support, 1, .behind)) return .ledge_requested;
+        if (intent.action) {
+            if (try environment.ledge(pose.*, .support, 1, .behind)) {
+                pose.position.y +%= 32;
+                return .catch_ledge;
+            }
+            if (try environment.ledge(pose.*, .support, 0, .behind)) {
+                pose.position.x +%= if (pose.facing == .left) @as(i16, 16) else -16;
+                pose.position.y +%= 32;
+                return .catch_ledge;
+            }
         }
         // A full landing needs support across the backward footprint. Partial support
         // keeps the descent committed, regardless of the material at torso height.

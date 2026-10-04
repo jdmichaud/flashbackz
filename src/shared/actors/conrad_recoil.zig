@@ -28,7 +28,7 @@ pub const Clips = struct {
         };
     }
 };
-pub const Boundary = enum { continued, standing, low_recovery, long_fall, terrain_requested };
+pub const Boundary = enum { continued, standing, low_recovery, catch_ledge, long_fall, terrain_requested };
 
 pub const State = struct {
     phase: Phase = .impact,
@@ -57,7 +57,10 @@ pub const State = struct {
                     self.phase = .{ .settling = .staggered };
                 } else {
                     const ledge = try environment.ledge(pose.*, .support, 1, .behind);
-                    if (intent.action and ledge) return .terrain_requested;
+                    if (intent.action and ledge) {
+                        pose.position.y +%= 16;
+                        return .catch_ledge;
+                    }
                     if (ledge or !try environment.at(pose.*, .support, 1)) {
                         pose.position.y +%= clips.drop_entry_down;
                         self.phase = .dropping;
@@ -68,6 +71,10 @@ pub const State = struct {
                 if (try environment.at(pose.*, .support, 0)) {
                     pose.position.y +%= clips.drop_landing_down;
                     return .low_recovery;
+                }
+                if (intent.action and try environment.ledge(pose.*, .support, 1, .behind)) {
+                    pose.position.y +%= 32;
+                    return .catch_ledge;
                 }
                 pose.position.y +%= clips.long_fall_down;
                 return .long_fall;

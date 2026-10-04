@@ -15,8 +15,8 @@ const equipment = @import("../equipment.zig");
 const starting_equipment = @import("starting_equipment.zig");
 const inventory_artwork = @import("inventory_artwork.zig");
 
-const Move = enum { wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover, collision_impact, recoil_fall, recoil_confined, recoil_staggered, recoil_prone, recoil_pause_prone, recoil_pause_tight, recoil_rise, recoil_drop, fall_begin, fall_continue, fatal_land };
-const source_moves = [_]u16{ 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88, 263, 94, 85, 84, 83, 111, 74, 103, 86, 89, 90, 73 };
+const Move = enum { wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover, collision_impact, recoil_fall, recoil_confined, recoil_staggered, recoil_prone, recoil_pause_prone, recoil_pause_tight, recoil_rise, recoil_drop, fall_begin, fall_continue, fatal_land, ledge_lower, ledge_catch, ledge_grip, ledge_hang, ledge_reach, ledge_settle_grip, ledge_climb, ledge_stand, ledge_release, ledge_drop, ledge_turn_release, ledge_tumble_release, ledge_brace, ledge_braced_lower };
+const source_moves = [_]u16{ 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88, 263, 94, 85, 84, 83, 111, 74, 103, 86, 89, 90, 73, 15, 60, 61, 25, 101, 102, 16, 178, 91, 107, 123, 92, 104, 105 };
 pub const RoomArt = struct { id: geometry.RoomId, artwork: artwork.Artwork };
 
 pub const Pack = struct {
@@ -67,6 +67,22 @@ pub const Pack = struct {
                 .forward = .{ .takeoff = self.clip(.jump_takeoff), .flight = self.clip(.jump_flight), .landing = self.clip(.jump_land), .recover = self.clip(.jump_finish) },
             },
             .crouch = .{ .lower = self.clip(.crouch_lower), .hold = self.clip(.crouch_hold), .rise = self.clip(.crouch_rise), .turn = self.clip(.crouch_turn) },
+            .ledge = .{
+                .lower = self.clip(.ledge_lower),
+                .catch_fall = self.clip(.ledge_catch),
+                .grip = self.clip(.ledge_grip),
+                .hang = self.clip(.ledge_hang),
+                .reach = self.clip(.ledge_reach),
+                .settle_grip = self.clip(.ledge_settle_grip),
+                .climb = self.clip(.ledge_climb),
+                .stand = self.clip(.ledge_stand),
+                .release = self.clip(.ledge_release),
+                .drop = self.clip(.ledge_drop),
+                .turn_release = self.clip(.ledge_turn_release),
+                .tumble_release = self.clip(.ledge_tumble_release),
+                .brace = self.clip(.ledge_brace),
+                .braced_lower = self.clip(.ledge_braced_lower),
+            },
             .fall = .{ .initial = self.clip(.fall_begin), .continuing = self.clip(.fall_continue), .landing = self.clip(.fatal_land), .resting = self.clip(.recoil_pause_tight) },
             .recoil = .{
                 .impact = self.clip(.collision_impact),

@@ -19,6 +19,7 @@ pub const continue_game = @import("scenes/continue_game.zig");
 pub const cinematic = @import("scenes/cinematic.zig");
 pub const front_end = @import("scenes/front_end.zig");
 pub const settings = @import("settings.zig");
+pub const conrad_ledge = @import("actors/conrad_ledge.zig");
 pub const conrad_fall = @import("actors/conrad_fall.zig");
 pub const conrad_recoil = @import("actors/conrad_recoil.zig");
 pub const conrad_roll = @import("actors/conrad_roll.zig");

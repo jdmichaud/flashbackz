@@ -6,10 +6,10 @@ const std = @import("std");
 
 pub const VerticalClips = struct { rise: motion.Clip, recover: motion.Clip };
 pub const ForwardClips = struct { takeoff: motion.Clip, flight: motion.Clip, landing: motion.Clip, recover: motion.Clip, landing_forward_shift: i16 = 16 };
-pub const Clips = struct { upward: VerticalClips, low_clearance: VerticalClips, forward: ForwardClips };
+pub const Clips = struct { upward: VerticalClips, low_clearance: VerticalClips, forward: ForwardClips, ledge_height: i16 = 72, grip_lift: i16 = 24 };
 pub const Kind = enum { upward, low_clearance, forward };
 pub const Phase = enum { takeoff, flight, landing, recovery };
-pub const Boundary = enum { continued, finished, wall_collision, terrain_requested };
+pub const Boundary = enum { continued, finished, wall_collision, climb_ledge, grip_ledge, terrain_requested };
 
 pub const State = struct {
     kind: Kind,
@@ -33,7 +33,16 @@ pub const State = struct {
     pub fn finishPhase(self: *State, clips: Clips, intent: controls.Intent, pose: *motion.Pose, environment: anytype) !Boundary {
         if (self.kind != .forward) {
             if (self.phase == .recovery) return .finished;
-            if (try environment.ledge(pose.*, .head, 0, .behind) and (intent.vertical == .up or intent.action)) return .terrain_requested;
+            if (try environment.ledge(pose.*, .head, 0, .behind)) {
+                if (intent.vertical == .up) {
+                    pose.position.y -%= clips.ledge_height;
+                    return .climb_ledge;
+                }
+                if (intent.action) {
+                    pose.position.y -%= clips.grip_lift;
+                    return .grip_ledge;
+                }
+            }
             self.phase = .recovery;
             return .continued;
         }

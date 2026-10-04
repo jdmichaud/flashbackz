@@ -3,6 +3,7 @@
 const std = @import("std");
 const motion = @import("../motion.zig");
 const jumping = @import("conrad_jump.zig");
+const ledge = @import("conrad_ledge.zig");
 const falling = @import("conrad_fall.zig");
 const recoil = @import("conrad_recoil.zig");
 const rolling = @import("conrad_roll.zig");
@@ -27,6 +28,7 @@ pub const Clips = struct {
     roll: ?rolling.Clips = null,
     recoil: ?recoil.Clips = null,
     fall: ?falling.Clips = null,
+    ledge: ?ledge.Clips = null,
     walking_fall_down: i16 = 56,
 };
 
@@ -46,6 +48,7 @@ pub const Activity = union(enum) {
     rolling: rolling.State,
     recoiling: recoil.State,
     falling: falling.State,
+    ledge: ledge.State,
     dead: enum { landing, resting },
 };
 pub const Result = enum { advanced, locomotion_requested, terrain_transition_requested };
@@ -109,6 +112,7 @@ pub const Controller = struct {
             .rolling => |roll| roll.clip(clips.roll orelse return error.MissingMotion),
             .recoiling => |state| state.clip(clips.recoil orelse return error.MissingMotion),
             .falling => |state| state.clip(clips.fall orelse return error.MissingMotion),
+            .ledge => |state| state.clip(clips.ledge orelse return error.MissingMotion),
             .dead => |phase| if (phase == .landing) (clips.fall orelse return error.MissingMotion).landing else (clips.fall orelse return error.MissingMotion).resting,
         };
     }
@@ -141,7 +145,7 @@ pub const Controller = struct {
                                 } else self.activity = .{ .jumping = .{ .kind = if (try environment.at(pose.*, .torso, 0)) .low_clearance else .upward } };
                             }
                         } else if (intent.action) {
-                            if (try environment.ledge(pose.*, .support, 0, .ahead)) self.activity = .{ .turning = .preparation } else if (try environment.ledge(pose.*, .support, 0, .behind)) return .terrain_transition_requested;
+                            if (try environment.ledge(pose.*, .support, 0, .ahead)) self.activity = .{ .turning = .preparation } else if (try environment.ledge(pose.*, .support, 0, .behind)) self.activity = .{ .ledge = .{ .phase = .lowering } };
                         } else if (try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .torso, -1)) {
                             self.activity = .{ .turning = .preparation };
                         } else {
@@ -219,6 +223,8 @@ pub const Controller = struct {
                 .jumping => |*jump| switch (try jump.finishPhase(clips.jumps orelse return error.MissingMotion, intent, pose, environment)) {
                     .continued => {},
                     .finished => self.activity = .standing,
+                    .climb_ledge => self.activity = .{ .ledge = .{ .phase = .climbing } },
+                    .grip_ledge => self.activity = .{ .ledge = .{ .phase = .gripping } },
                     .wall_collision => self.activity = .{ .recoiling = .{} },
                     .terrain_requested => return .terrain_transition_requested,
                 },
@@ -251,16 +257,25 @@ pub const Controller = struct {
                         self.fatal_landing = true;
                         self.activity = .{ .dead = .landing };
                     },
-                    .ledge_requested => return .terrain_transition_requested,
+                    .catch_ledge => self.activity = .{ .ledge = .{ .phase = .catching } },
                 },
                 .dead => |phase| if (phase == .landing) {
                     self.activity = .{ .dead = .resting };
                 } else {
                     self.death_wait_requested = (clips.fall orelse return error.MissingMotion).death_wait_steps;
                 },
+                .ledge => |*state| switch (try state.finishPhase(clips.ledge orelse return error.MissingMotion, intent, pose, environment)) {
+                    .continued => {},
+                    .standing => self.activity = .standing,
+                    .upright_landing => self.activity = .landing,
+                    .low_recovery => self.activity = .{ .rolling = .{ .phase = .recover } },
+                    .long_fall => self.activity = .{ .falling = .{} },
+                    .waiting => return .advanced,
+                },
                 .recoiling => |*state| switch (try state.finishPhase(clips.recoil orelse return error.MissingMotion, intent, pose, environment)) {
                     .continued => {},
                     .standing => self.activity = .standing,
+                    .catch_ledge => self.activity = .{ .ledge = .{ .phase = .catching } },
                     .low_recovery => self.activity = .{ .rolling = .{ .phase = .recover } },
                     .long_fall => self.activity = .{ .falling = .{} },
                     .terrain_requested => return .terrain_transition_requested,
@@ -272,6 +287,7 @@ pub const Controller = struct {
                     .wall_collision => self.activity = .{ .recoiling = .{} },
                     .long_fall => self.activity = .{ .falling = .{} },
                     .terrain_requested => return .terrain_transition_requested,
+                    .catch_ledge => self.activity = .{ .ledge = .{ .phase = .catching } },
                     .action_requested => return .locomotion_requested,
                 },
             }
@@ -375,4 +391,33 @@ test "a low passage permits crouch-to-roll while an equally occupied solid wall 
             try std.testing.expectEqual(@as(i16, 24), pose.position.x);
         }
     }
+}
+
+test "an exhausted ledge motion waits without replaying artwork or handing rooms off" {
+    const held = [_]motion.Step{.hold};
+    const clip: motion.Clip = .{ .steps = &held };
+    const clips: Clips = .{ .wake = clip, .stand = clip, .turn_preparation = clip, .turn_follow_through = clip, .ledge = .{ .lower = clip, .catch_fall = clip, .grip = clip, .hang = clip, .reach = clip, .settle_grip = clip, .climb = clip, .stand = clip, .release = clip, .drop = clip, .turn_release = clip, .tumble_release = clip, .brace = clip, .braced_lower = clip } };
+    const Ground = struct {
+        boundaries: usize = 0,
+        pub fn at(_: *@This(), _: motion.Pose, height: anytype, _: i16) !bool {
+            return height == .head;
+        }
+        pub fn ledge(_: *@This(), _: motion.Pose, _: anytype, _: i16, _: anytype) !bool {
+            return false;
+        }
+        pub fn rollPassage(_: *@This(), _: motion.Pose, _: i16) !bool {
+            return false;
+        }
+        pub fn motionBoundary(self: *@This(), _: *motion.Pose) !void {
+            self.boundaries += 1;
+        }
+    };
+    var ground: Ground = .{};
+    var pose: motion.Pose = .{ .position = .{ .x = 20, .y = 60 }, .facing = .left, .visual = .{ .id = @fromBackingInt(8) } };
+    const before = pose;
+    var controller: Controller = .{ .activity = .{ .ledge = .{ .phase = .tumbling_release } }, .playback = .{ .next_step = 1 } };
+    for (0..3) |_| try std.testing.expectEqual(.advanced, try controller.advanceIn(clips, .{}, &pose, &ground));
+    try std.testing.expectEqualDeep(before, pose);
+    try std.testing.expectEqual(@as(usize, 1), controller.playback.next_step);
+    try std.testing.expectEqual(@as(usize, 0), ground.boundaries);
 }

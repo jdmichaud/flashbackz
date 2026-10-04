@@ -246,6 +246,7 @@ pub const Scene = struct {
             .crouching => |p| @backingInt(p),
             .rolling => |roll| @backingInt(roll.phase),
             .falling => |fall| @backingInt(fall.phase),
+            .ledge => |state| @backingInt(state.phase),
             .dead => |phase| @backingInt(phase),
             .recoiling => |state| (@as(u32, @backingInt(std.meta.activeTag(state.phase))) << 8) | switch (state.phase) {
                 .settling, .resting => |landing| @as(u32, @backingInt(landing)),
