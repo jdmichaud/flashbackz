@@ -20,8 +20,8 @@ const art_bank = @import("art_bank.zig");
 const object_art = @import("object_artwork.zig");
 const inventory_artwork = @import("inventory_artwork.zig");
 
-const Move = enum { armed_drawing_crouched, armed_draw_crouched_release, armed_draw_start, armed_drawing, armed_draw_release, armed_aiming, armed_lowering_aim, armed_standing, armed_walking, armed_turning, armed_holstering, armed_holstering_aim, armed_raising_aim, armed_crouching, armed_crouched, armed_turning_crouched, armed_rising, armed_holstering_crouched, armed_lowering_aim_crouched, armed_raising_aim_crouched, armed_aim_crouch_release, armed_aiming_crouched, armed_crouching_aim, armed_rising_aim, armed_turning_aim, armed_turning_aim_crouched, armed_stepping_down, armed_landing, roll_running_entry, roll_running_recovery, roll_jump_launch, run_wall_stop, run_stagger_stop, run_ledge_approach, run_ledge_reach, run_ledge_brace, jump_ledge_reach, run_drop, reverse_drop, unbalanced_drop, short_jump_drop, gliding_drop, vertical_drop, run_jump_takeoff, run_jump_ascent, run_jump_crest, run_jump_descent, run_jump_landing, run_jump_stand, run_jump_run, reverse_run, reverse_run_finish, accelerate_run, slow_to_walk, edge_stop, use_item, wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover, collision_impact, recoil_fall, recoil_confined, recoil_staggered, recoil_prone, recoil_pause_prone, recoil_pause_tight, recoil_rise, recoil_drop, fall_begin, fall_continue, fatal_land, ledge_lower, ledge_catch, ledge_grip, ledge_hang, ledge_reach, ledge_settle_grip, ledge_climb, ledge_stand, ledge_release, ledge_drop, ledge_turn_release, ledge_tumble_release, ledge_brace, ledge_braced_lower };
-const source_moves = [_]u16{ 160, 222, 182, 175, 223, 57, 55, 44, 45, 48, 52, 262, 54, 46, 50, 49, 51, 161, 53, 47, 224, 56, 71, 72, 76, 173, 166, 167, 33, 39, 40, 125, 67, 95, 121, 122, 32, 127, 129, 225, 63, 62, 41, 13, 21, 22, 23, 24, 31, 14, 10, 184, 11, 12, 30, 168, 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88, 263, 94, 85, 84, 83, 111, 74, 103, 86, 89, 90, 73, 15, 60, 61, 25, 101, 102, 16, 178, 91, 107, 123, 92, 104, 105 };
+const Move = enum { surface_rest, surface_burst, armed_clearing_draw, casing_stand_a, casing_stand_b, casing_crouch_a, casing_crouch_b, armed_roll_recovery, armed_drawing_after_climb, shot_ignition, shot_flash, shot_flash_low, shot_impact, shot_impact_low, armed_firing, armed_firing_crouched, armed_drawing_crouched, armed_draw_crouched_release, armed_draw_start, armed_drawing, armed_draw_release, armed_aiming, armed_lowering_aim, armed_standing, armed_walking, armed_turning, armed_holstering, armed_holstering_aim, armed_raising_aim, armed_crouching, armed_crouched, armed_turning_crouched, armed_rising, armed_holstering_crouched, armed_lowering_aim_crouched, armed_raising_aim_crouched, armed_aim_crouch_release, armed_aiming_crouched, armed_crouching_aim, armed_rising_aim, armed_turning_aim, armed_turning_aim_crouched, armed_stepping_down, armed_landing, roll_running_entry, roll_running_recovery, roll_jump_launch, run_wall_stop, run_stagger_stop, run_ledge_approach, run_ledge_reach, run_ledge_brace, jump_ledge_reach, run_drop, reverse_drop, unbalanced_drop, short_jump_drop, gliding_drop, vertical_drop, run_jump_takeoff, run_jump_ascent, run_jump_crest, run_jump_descent, run_jump_landing, run_jump_stand, run_jump_run, reverse_run, reverse_run_finish, accelerate_run, slow_to_walk, edge_stop, use_item, wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover, collision_impact, recoil_fall, recoil_confined, recoil_staggered, recoil_prone, recoil_pause_prone, recoil_pause_tight, recoil_rise, recoil_drop, fall_begin, fall_continue, fatal_land, ledge_lower, ledge_catch, ledge_grip, ledge_hang, ledge_reach, ledge_settle_grip, ledge_climb, ledge_stand, ledge_release, ledge_drop, ledge_turn_release, ledge_tumble_release, ledge_brace, ledge_braced_lower };
+const source_moves = [_]u16{ 565, 566, 77, 162, 163, 164, 165, 177, 174, 443, 414, 415, 411, 413, 58, 59, 160, 222, 182, 175, 223, 57, 55, 44, 45, 48, 52, 262, 54, 46, 50, 49, 51, 161, 53, 47, 224, 56, 71, 72, 76, 173, 166, 167, 33, 39, 40, 125, 67, 95, 121, 122, 32, 127, 129, 225, 63, 62, 41, 13, 21, 22, 23, 24, 31, 14, 10, 184, 11, 12, 30, 168, 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88, 263, 94, 85, 84, 83, 111, 74, 103, 86, 89, 90, 73, 15, 60, 61, 25, 101, 102, 16, 178, 91, 107, 123, 92, 104, 105 };
 pub const RoomArt = struct { id: geometry.RoomId, artwork: artwork.Artwork };
 
 pub const Pack = struct {
@@ -34,9 +34,17 @@ pub const Pack = struct {
     terrain: collision.Layout,
     initial_items: []equipment.Definition,
     initial_health: i16,
+    sounds: @import("sound_effects.zig").Bank,
     inventory_art: inventory_artwork.Assets,
     world_props: prop_import.Assets,
     player_contact_width: u8,
+    surfaces: []@import("../surface_reactions.zig").Definition,
+    forest_calls: [5]@import("../ambience.zig").Call,
+    forest_quiet_steps: u16,
+    casing_definition: @import("../pistol_casing.zig").Definition,
+    pistol_range: u16,
+    pistol_palette: u4,
+    pistol_behind_player: bool,
     initial_pose: motion.Pose,
     initial_room: geometry.RoomId,
 
@@ -52,6 +60,8 @@ pub const Pack = struct {
         starting_equipment.release(self.allocator, self.initial_items);
         self.inventory_art.deinit();
         self.world_props.deinit();
+        self.sounds.deinit();
+        self.allocator.free(self.surfaces);
         self.terrain.deinit();
         self.* = undefined;
     }
@@ -60,9 +70,22 @@ pub const Pack = struct {
         return self.motions[@backingInt(move)].clip();
     }
 
+    pub fn surfaceClips(self: *const Pack) @import("../surface_reactions.zig").Clips {
+        return .{ .resting = self.clip(.surface_rest), .burst = self.clip(.surface_burst) };
+    }
+
+    pub fn pistolDefinition(self: *const Pack) @import("../pistol_shot.zig").Definition {
+        return .{ .ignition = self.clip(.shot_ignition), .standing_flash = self.clip(.shot_flash), .crouched_flash = self.clip(.shot_flash_low), .standing_impact = self.clip(.shot_impact), .crouched_impact = self.clip(.shot_impact_low), .range_cells = self.pistol_range, .palette_bank = self.pistol_palette, .behind_player = self.pistol_behind_player };
+    }
+
     pub fn controllerClips(self: *const Pack) conrad.Clips {
         return .{
             .armed = .{
+                .clearing_draw = self.clip(.armed_clearing_draw),
+                .roll_recovery = self.clip(.armed_roll_recovery),
+                .drawing_after_climb = self.clip(.armed_drawing_after_climb),
+                .firing = self.clip(.armed_firing),
+                .firing_crouched = self.clip(.armed_firing_crouched),
                 .drawing_crouched = self.clip(.armed_drawing_crouched),
                 .draw_crouched_release = self.clip(.armed_draw_crouched_release),
                 .draw_start = self.clip(.armed_draw_start),
@@ -267,10 +290,31 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
     defer font_bytes.deinit();
     var names = try read(source, "DATA/LEVEL1.TBN", 16384);
     defer names.deinit();
+    var sound_bytes = try read(source, "DATA/GLOBAL.FIB", 4 * 1024 * 1024);
+    defer sound_bytes.deinit();
+    var sounds = try @import("sound_effects.zig").decode(allocator, sound_bytes.bytes);
+    errdefer sounds.deinit();
     var placements = try read(source, "DATA/LEVEL1.PGE", 16384);
     defer placements.deinit();
     const placement_table = try placement.Table.init(placements.bytes);
+    const forest_sources = [_]u16{ 1144, 1145, 1146, 1147, 1148 };
+    var forest_calls: [5]@import("../ambience.zig").Call = undefined;
+    for (forest_sources, &forest_calls, 0..) |state, *call, index| {
+        var clip = try animation.decode(allocator, ani.bytes, state);
+        defer clip.deinit();
+        call.* = .{ .sound = @fromBackingInt(clip.sound orelse return error.MissingForestSound), .duration = @intCast(clip.frames.len), .chance = if (index < 2) 20 else 10, .repeat_chance = if (index == 2 or index == 3) @as(u16, 2) else null };
+    }
+    var forest_quiet = try animation.decode(allocator, ani.bytes, 1143);
+    defer forest_quiet.deinit();
     const player = try placement_table.record(0);
+    if (player.parameters[0] < 0) return error.InvalidPistolBinding;
+    const gun = try placement_table.record(@intCast(player.parameters[0]));
+    if (gun.parameters[0] < 0) return error.InvalidPistolBinding;
+    const shot = try placement_table.record(@intCast(gun.parameters[0]));
+    if (shot.parameters[3] < 0) return error.InvalidCasingBinding;
+    const casing = try placement_table.record(@intCast(shot.parameters[3]));
+    if (casing.initial_state != 163) return error.UnsupportedCasingStart;
+    if (gun.object_id != 2 or shot.parameters[0] < 1 or shot.parameters[0] > 64) return error.UnsupportedPistolDefinition;
     if (player.initial_state != 99 or player.kind != 1 or player.room >= 64) return error.UnsupportedPlayerStart;
     var inventory_art = try inventory_artwork.load(allocator, icons.bytes, font_bytes.bytes, interface.level_label);
     errdefer inventory_art.deinit();
@@ -280,6 +324,15 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
     errdefer terrain.deinit();
     var resolver: Resolver = .{ .allocator = allocator, .sprites = sprites.bytes, .offsets = offsets.bytes, .icons = icons.bytes, .compositions = compositions.bytes, .bindings = bindings.bytes, .banks = banks, .ids = std.AutoHashMap(u16, motion.VisualId).init(allocator) };
     defer resolver.deinit();
+    var surfaces: std.ArrayList(@import("../surface_reactions.zig").Definition) = .empty;
+    errdefer surfaces.deinit(allocator);
+    for (0..placement_table.count) |i| {
+        const surface = try placement_table.record(@intCast(i));
+        if (surface.initial_state != 565) continue;
+        if (surface.minimum_difficulty != 0) return error.UnsupportedConditionalSurface;
+        if (surface.room >= room_ids.len) return error.InvalidSurfaceRoom;
+        try surfaces.append(allocator, .{ .footprint = .{ .room = room_ids[surface.room], .position = surface.position, .width = surface.collision_width }, .facing = if (surface.facing_right != 0) .right else .left, .palette_bank = @intCast(surface.visual_flags & 3), .behind_player = surface.visual_flags & 8 != 0 });
+    }
     const motions = try allocator.alloc(animation.OwnedClip, source_moves.len);
     var loaded: usize = 0;
     errdefer {
@@ -350,6 +403,21 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
         .initial_health = player.life,
         .inventory_art = inventory_art,
         .world_props = props,
+        .surfaces = try surfaces.toOwnedSlice(allocator),
+        .sounds = sounds,
+        .forest_calls = forest_calls,
+        .forest_quiet_steps = @intCast(forest_quiet.frames.len),
+        .casing_definition = .{
+            .trajectories = .{ motions[@backingInt(Move.casing_stand_a)].clip(), motions[@backingInt(Move.casing_stand_b)].clip(), motions[@backingInt(Move.casing_crouch_a)].clip(), motions[@backingInt(Move.casing_crouch_b)].clip() },
+            .initial_pose = .{ .position = casing.position, .facing = if (casing.facing_right != 0) .right else .left, .visual = .{ .id = @fromBackingInt(0) } },
+            .initial_room = if (casing.room < room_ids.len) room_ids[casing.room] else null,
+            .initial_path = .standing_b,
+            .palette_bank = @intCast(casing.visual_flags & 3),
+            .behind_player = casing.visual_flags & 8 != 0,
+        },
+        .pistol_range = @intCast(shot.parameters[0]),
+        .pistol_palette = @intCast(shot.visual_flags & 3),
+        .pistol_behind_player = shot.visual_flags & 8 != 0,
         .player_contact_width = player.collision_width,
         .initial_room = room_ids[player.room],
         .initial_pose = .{ .position = player.position, .facing = facing, .visual = .{ .id = first_visual.id, .mirrored = first_visual.mirrored != (facing == .left) } },

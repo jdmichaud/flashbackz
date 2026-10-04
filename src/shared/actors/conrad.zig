@@ -99,6 +99,8 @@ const NoEnvironment = struct {
 pub const Controller = struct {
     activity: Activity = .waking,
     weapon_desired: bool = false,
+    sound_requested: ?motion.SoundId = null,
+    shot_requested: ?@import("../pistol_shot.zig").Height = null,
     playback: motion.Playback = .{},
     /// Ordered consequences of the latest step; the session applies them before equipment.
     fatal_landing: bool = false,
@@ -174,6 +176,10 @@ pub const Controller = struct {
         };
     }
 
+    pub fn disturbsSurface(self: Controller, clips: Clips) !bool {
+        return (try self.selectedClip(clips)).disturbs_surface;
+    }
+
     pub fn pressesFloorSwitches(self: Controller, clips: Clips) !bool {
         return (try self.selectedClip(clips)).presses_floor_switches;
     }
@@ -187,6 +193,8 @@ pub const Controller = struct {
     }
 
     pub fn advanceIn(self: *Controller, clips: Clips, intent: Intent, pose: *motion.Pose, environment: anytype) !Result {
+        self.shot_requested = null;
+        self.sound_requested = null;
         self.pickup_requested = false;
         self.use_requested = false;
         self.fatal_landing = false;
@@ -203,7 +211,8 @@ pub const Controller = struct {
                     .roll => self.activity = .{ .rolling = .{} },
                     .roll_drop => self.activity = .{ .rolling = .{ .phase = .drop } },
                     .long_fall => self.activity = .{ .falling = .{ .phase = .continuing } },
-                    .fire_requested => return .locomotion_requested,
+                    .fire_standing => self.shot_requested = .standing,
+                    .fire_crouched => self.shot_requested = .crouched,
                 },
                 .waking => self.activity = .standing,
                 .using_item => {
@@ -376,10 +385,11 @@ pub const Controller = struct {
                     } else self.activity = .landing;
                 },
                 .landing, .low_landing => self.activity = .standing,
-                .descending => |*drop| switch (try drop.finishPhase(intent, pose, environment)) {
+                .descending => |*drop| switch (try drop.finishPhase(intent, self.weapon_desired, pose, environment)) {
                     .continued => {},
                     .landing => self.activity = .landing,
                     .low_landing => self.activity = .low_landing,
+                    .armed_landing => self.activity = .{ .armed = .{ .phase = .landing } },
                     .long_fall => self.activity = .{ .falling = .{} },
                     .catch_ledge => self.activity = .{ .ledge = .{ .phase = .catching } },
                 },
@@ -446,13 +456,14 @@ pub const Controller = struct {
                 } else {
                     self.death_wait_requested = (clips.fall orelse return error.MissingMotion).death_wait_steps;
                 },
-                .ledge => |*state| switch (try state.finishPhase(clips.ledge orelse return error.MissingMotion, intent, pose, environment)) {
+                .ledge => |*state| switch (try state.finishPhase(clips.ledge orelse return error.MissingMotion, intent, self.weapon_desired, pose, environment)) {
                     .continued => {},
                     .standing => self.activity = .standing,
                     .upright_landing => self.activity = .landing,
                     .low_recovery => self.activity = .{ .rolling = .{ .phase = .recover } },
                     .long_fall => self.activity = .{ .falling = .{} },
                     .waiting => return .advanced,
+                    .armed_draw => self.activity = .{ .armed = .{ .phase = .drawing_after_climb } },
                 },
                 .recoiling => |*state| switch (try state.finishPhase(clips.recoil orelse return error.MissingMotion, intent, pose, environment)) {
                     .continued => {},
@@ -462,7 +473,7 @@ pub const Controller = struct {
                     .long_fall => self.activity = .{ .falling = .{} },
                     .terrain_requested => return .terrain_transition_requested,
                 },
-                .rolling => |*roll| switch (try roll.finishPhase(clips.roll orelse return error.MissingMotion, intent, pose, environment)) {
+                .rolling => |*roll| switch (try roll.finishPhase(clips.roll orelse return error.MissingMotion, intent, self.weapon_desired, pose, environment)) {
                     .continued => {},
                     .standing => self.activity = .standing,
                     .turning => self.activity = .{ .turning = .preparation },
@@ -476,6 +487,7 @@ pub const Controller = struct {
                     .brake => self.activity = .{ .stopping_run = .braking },
                     .wall_stop => self.activity = .{ .stopping_run = .wall },
                     .stagger_stop => self.activity = .{ .stopping_run = .staggered },
+                    .armed_recovery => self.activity = .{ .armed = .{ .phase = .roll_recovery } },
                 },
             }
             self.playback = .{};
@@ -483,6 +495,7 @@ pub const Controller = struct {
             clip = try self.selectedClip(clips);
             if (clip.steps.len == 0) return error.MissingMotion;
         }
+        self.sound_requested = self.playback.soundOnEntry(clip);
         _ = self.playback.advance(clip, pose);
         return .advanced;
     }

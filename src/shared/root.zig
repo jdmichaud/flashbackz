@@ -40,3 +40,6 @@ pub const Game = game.Game;
 test {
     @import("std").testing.refAllDecls(@This());
 }
+
+pub const pistol_casing = @import("pistol_casing.zig");
+pub const random = @import("random.zig");

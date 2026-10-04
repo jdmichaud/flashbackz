@@ -3,8 +3,13 @@
 const motion = @import("../motion.zig");
 const controls = @import("controls.zig");
 const rolling = @import("conrad_roll.zig");
-pub const Phase = enum { drawing_crouched, draw_crouched_release, draw_start, drawing, draw_release, aiming, lowering_aim, standing, walking, turning, holstering, holstering_aim, raising_aim, crouching, crouched, turning_crouched, rising, holstering_crouched, lowering_aim_crouched, raising_aim_crouched, aim_crouch_release, aiming_crouched, crouching_aim, rising_aim, turning_aim, turning_aim_crouched, stepping_down, landing };
+pub const Phase = enum { clearing_draw, roll_recovery, drawing_after_climb, firing, firing_crouched, drawing_crouched, draw_crouched_release, draw_start, drawing, draw_release, aiming, lowering_aim, standing, walking, turning, holstering, holstering_aim, raising_aim, crouching, crouched, turning_crouched, rising, holstering_crouched, lowering_aim_crouched, raising_aim_crouched, aim_crouch_release, aiming_crouched, crouching_aim, rising_aim, turning_aim, turning_aim_crouched, stepping_down, landing };
 pub const Clips = struct {
+    clearing_draw: motion.Clip,
+    roll_recovery: motion.Clip,
+    drawing_after_climb: motion.Clip,
+    firing: motion.Clip,
+    firing_crouched: motion.Clip,
     drawing_crouched: motion.Clip,
     draw_crouched_release: motion.Clip,
     draw_start: motion.Clip,
@@ -55,7 +60,7 @@ pub const Toggle = struct {
         }
     }
 };
-pub const Boundary = enum { continued, unarmed_standing, unarmed_crouched, unarmed_rising, roll, roll_drop, long_fall, fire_requested };
+pub const Boundary = enum { continued, unarmed_standing, unarmed_crouched, unarmed_rising, roll, roll_drop, long_fall, fire_standing, fire_crouched };
 pub const State = struct {
     phase: Phase = .draw_start,
     pub fn clip(self: State, clips: Clips) motion.Clip {
@@ -74,16 +79,22 @@ pub const State = struct {
         const down = direction_allowed and intent.vertical == .down;
         const turn_obstructed = if (backward) try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .torso, 1) else false;
         switch (self.phase) {
+            .firing => self.phase = .aiming,
+            .firing_crouched => self.phase = .aiming_crouched,
             .drawing_crouched => self.phase = .draw_crouched_release,
             .draw_crouched_release => if (!intent.weapon) {
                 self.phase = .crouched;
             },
+            .clearing_draw => return .unarmed_standing,
             .draw_start => {
-                if (try environment.at(pose.*, .torso, 1) and try environment.at(pose.*, .torso, 0)) return error.UnsupportedConfinedWeaponDraw;
+                if (try environment.at(pose.*, .torso, 1) and try environment.at(pose.*, .torso, 0)) {
+                    self.phase = .clearing_draw;
+                    return .continued;
+                }
                 if (!desired) return .unarmed_standing;
                 self.phase = .drawing;
             },
-            .drawing => self.phase = .draw_release,
+            .drawing, .drawing_after_climb => self.phase = .draw_release,
             .draw_release => if (!(intent.weapon and !intent.action and !intent.use_item and intent.neutralDirections())) {
                 self.phase = .aiming;
             },
@@ -92,7 +103,7 @@ pub const State = struct {
             .lowering_aim, .rising => self.phase = .standing,
             .raising_aim => self.phase = .aiming,
             .crouching, .lowering_aim_crouched => self.phase = .crouched,
-            .raising_aim_crouched, .landing => self.phase = .aim_crouch_release,
+            .raising_aim_crouched, .landing, .roll_recovery => self.phase = .aim_crouch_release,
             .aim_crouch_release => if (!intent.weapon) {
                 self.phase = .aiming_crouched;
             },
@@ -145,7 +156,10 @@ pub const State = struct {
                     self.phase = .holstering_aim;
                 } else if (forward and !intent.action) {
                     self.phase = .lowering_aim;
-                } else if (intent.action) return .fire_requested;
+                } else if (intent.action) {
+                    self.phase = .firing;
+                    return .fire_standing;
+                }
             },
             .crouched => {
                 if (backward and turn_obstructed) {} else if (backward) {
@@ -177,7 +191,10 @@ pub const State = struct {
                     self.phase = .turning_aim_crouched;
                 } else if (forward and !intent.action) {
                     self.phase = .lowering_aim_crouched;
-                } else if (intent.action) return .fire_requested;
+                } else if (intent.action) {
+                    self.phase = .firing_crouched;
+                    return .fire_crouched;
+                }
             },
             .stepping_down => {
                 if (try environment.at(pose.*, .support, 0)) {

@@ -23,8 +23,9 @@ under the user's preference for readability over pixel-specific fixes.
 
 AdLib music now plays through the logo, introduction and menu. Original musical ticks and
 register writes agree across 16,709 observations; native SDL output has been captured. Digital
-sound effects, exact presentation/audio synchronization, menu fades/blinking, passwords and
-Continue are still unfinished. Start plays the wake-up animation with music and enters the
+effects now play for forest ambience, movement, the floor switch and weapon effects, with
+animated ejected casings. Other actor/mechanism cues, exact presentation/audio synchronization,
+menu fades/blinking, passwords and Continue are still unfinished. Start plays the wake-up animation with music and enters the
 jungle. Turning, walking and the existing movement/inventory development slice are available;
 The holocube and floor plate animate; Shift collects the cube, plays its pickup movie, and
 adds it to inventory for selection. Tab opens inventory; Return uses the selected holocube
@@ -35,7 +36,8 @@ remaining differences in 11 of 377 frames. The startup error `FloppyCinematicsNo
 from normal launch. `--scene menu` remains an optional development shortcut.
 
 Current priority is completing Conrad movement. Walk/run blends, running turns, running
-jumps, wall stops, automatic running ledge grabs and running rolls are ready for testing; see [movement names and controls](docs/movement-testing.md).
+jumps, wall stops, automatic running ledge grabs, running rolls and weapon-drawn
+movement (including quick draws after climbing/landing and armed roll recovery) are ready for testing; see [movement names and controls](docs/movement-testing.md).
 
 ```sh
 zig build --prefix /tmp/flashback/modern/out --cache-dir /tmp/flashback/modern/cache

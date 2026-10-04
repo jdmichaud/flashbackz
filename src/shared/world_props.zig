@@ -23,6 +23,7 @@ pub const Object = struct {
     playback: motion.Playback = .{},
     pressing: bool = false,
     contact_present: bool = false,
+    sound_requested: ?motion.SoundId = null,
 };
 pub const World = struct {
     allocator: std.mem.Allocator,
@@ -79,6 +80,7 @@ pub const World = struct {
         }
     }
     pub fn advance(self: *World, map: geometry.Map, items: *equipment.Loadout, player_has_weight: bool, pickup: bool) !void {
+        for (self.objects) |*object| object.sound_requested = null;
         self.pressed_count = 0;
         self.acquired = null;
         self.movie = null;
@@ -91,6 +93,7 @@ pub const World = struct {
                     self.movie = item.pickup_movie;
                 } else if (try self.visible(index, items)) {
                     if (object.playback.exhausted(item.idle)) object.playback = .{};
+                    object.sound_requested = object.playback.soundOnEntry(item.idle);
                     _ = object.playback.advance(item.idle, &object.pose);
                 }
             },
@@ -115,6 +118,7 @@ pub const World = struct {
                     object.playback = .{};
                     clip = if (object.pressing) plate.press else plate.rest;
                 }
+                object.sound_requested = object.playback.soundOnEntry(clip);
                 _ = object.playback.advance(clip, &object.pose);
             },
         };

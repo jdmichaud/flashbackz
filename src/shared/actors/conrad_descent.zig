@@ -13,7 +13,7 @@ pub const Clips = struct {
     gliding: motion.Clip,
     vertical: motion.Clip,
 };
-pub const Boundary = enum { continued, landing, low_landing, long_fall, catch_ledge };
+pub const Boundary = enum { continued, landing, low_landing, armed_landing, long_fall, catch_ledge };
 pub const State = struct {
     phase: Phase,
     pub fn clip(self: State, clips: Clips) motion.Clip {
@@ -26,7 +26,7 @@ pub const State = struct {
             .vertical => clips.vertical,
         };
     }
-    pub fn finishPhase(self: *State, intent: controls.Intent, pose: *motion.Pose, environment: anytype) !Boundary {
+    pub fn finishPhase(self: *State, intent: controls.Intent, weapon_desired: bool, pose: *motion.Pose, environment: anytype) !Boundary {
         switch (self.phase) {
             .unbalanced => {
                 if (try environment.at(pose.*, .support, 0)) return .landing;
@@ -89,7 +89,7 @@ pub const State = struct {
                     return .long_fall;
                 }
                 pose.position.y +%= 16;
-                return .low_landing;
+                return if (self.phase == .gliding and weapon_desired) .armed_landing else .low_landing;
             },
         }
     }
@@ -107,8 +107,8 @@ test "running off an edge prioritizes a held ledge catch over continuing the fal
     var state: State = .{ .phase = .running };
     var caught: motion.Pose = .{ .position = .{ .x = 96, .y = 142 }, .visual = .{ .id = @fromBackingInt(0) } };
     var released = caught;
-    try std.testing.expectEqual(.catch_ledge, try state.finishPhase(.{ .action = true }, &caught, Void{}));
-    try std.testing.expectEqual(.long_fall, try state.finishPhase(.{}, &released, Void{}));
+    try std.testing.expectEqual(.catch_ledge, try state.finishPhase(.{ .action = true }, false, &caught, Void{}));
+    try std.testing.expectEqual(.long_fall, try state.finishPhase(.{}, false, &released, Void{}));
     try std.testing.expectEqual(@as(i16, 158), caught.position.y);
     try std.testing.expectEqual(@as(i16, 198), released.position.y);
 }

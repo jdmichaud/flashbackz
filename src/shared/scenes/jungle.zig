@@ -84,9 +84,18 @@ pub const Scene = struct {
     content: content.Pack,
     controller: conrad.Controller = .{},
     weapon_toggle: conrad.armed.Toggle = .{},
+    pistol: @import("../pistol_shot.zig").State = .{},
+    effects: @import("../audio/effects.zig").Output = .{},
+    sound_events: [16]@import("../audio/effects.zig").Event = undefined,
+    sound_event_count: usize = 0,
+    ambience: @import("../ambience.zig").State = .{},
+    last_ambient: ?@import("../ambience.zig").Event = null,
+    casings: @import("../pistol_casing.zig").State = .{},
+    random: @import("../random.zig").Stream = .{},
     environment: environment_mod.Environment,
     terrain: terrain_mod.State,
     props: props_mod.World,
+    surfaces: @import("../surface_reactions.zig").World,
     pending_movie: ?props_mod.Movie = null,
     movie_intent: ?controls.Intent = null,
     pose: motion.Pose,
@@ -118,6 +127,8 @@ pub const Scene = struct {
         errdefer terrain.deinit();
         var props = try props_mod.World.init(allocator, pack.world_props.definitions);
         errdefer props.deinit();
+        var surfaces = try @import("../surface_reactions.zig").World.init(allocator, pack.surfaces, pack.surfaceClips());
+        errdefer surfaces.deinit();
         const received_items = try allocator.alloc(equipment_mod.Received, pack.initial_items.len);
         errdefer allocator.free(received_items);
         const menu_entries = try allocator.alloc(inventory_menu.Entry, pack.initial_items.len);
@@ -127,6 +138,7 @@ pub const Scene = struct {
             .environment = .{ .map = terrain.map(), .room = pack.initial_room, .materials = terrain.view() },
             .terrain = terrain,
             .props = props,
+            .surfaces = surfaces,
             .pose = pack.initial_pose,
             .health = pack.initial_health,
             .equipment = equipment,
@@ -135,10 +147,35 @@ pub const Scene = struct {
         };
     }
 
+    fn emitSound(self: *Scene, sound: motion.SoundId, room: @import("../geometry.zig").RoomId) !void {
+        var attenuation: u2 = 0;
+        if (room != self.environment.room) {
+            const current = try self.environment.map.room(self.environment.room);
+            var adjacent = false;
+            for ([_]@import("../geometry.zig").Edge{ current.edges.left, current.edges.right, current.edges.up, current.edges.down }) |edge| {
+                if (edge == .room and edge.room == room) adjacent = true;
+            }
+            if (!adjacent) return;
+            attenuation = 1;
+        }
+        if (self.sound_event_count == self.sound_events.len) return error.TooManySoundEvents;
+        const event: @import("../audio/effects.zig").Event = .{ .sound = sound, .attenuation = attenuation };
+        self.sound_events[self.sound_event_count] = event;
+        self.sound_event_count += 1;
+        self.effects.submit(self.content.sounds, event);
+    }
+    pub fn pumpAudio(self: *Scene, p: *platform.Platform) !void {
+        try self.effects.pump(self.content.sounds, p);
+    }
+    pub fn stopAudio(self: *Scene, p: *platform.Platform) void {
+        self.effects.stop(p);
+    }
+
     pub fn deinit(self: *Scene) void {
         self.equipment.deinit();
         self.terrain.deinit();
         self.props.deinit();
+        self.surfaces.deinit();
         self.allocator.free(self.received_items);
         self.allocator.free(self.menu_entries);
         self.pending.deinit(self.allocator);
@@ -201,6 +238,7 @@ pub const Scene = struct {
                 try consumeInput(&self.pending, &self.input, deadline);
                 break :blk try self.input.intent();
             };
+            self.sound_event_count = 0;
             try self.props.prepare(self.terrain.map(), &self.equipment, .{ .room = self.environment.room, .position = self.pose.position, .width = self.content.player_contact_width });
             self.controller.pickup_available = self.props.pickup_candidate != null;
             const selected = try self.equipment.selected();
@@ -209,10 +247,19 @@ pub const Scene = struct {
             const result = try self.controller.advanceIn(self.content.controllerClips(), intent, &self.pose, &self.environment);
             if (result != .advanced) return error.UnimplementedMovementTransition;
             self.weapon_toggle.advance(intent.weapon, self.equipment.carries(.gun));
+            if (self.controller.sound_requested) |sound| try self.emitSound(sound, self.environment.room);
+            try self.pistol.advance(self.content.pistolDefinition(), self.controller.shot_requested, self.pose, self.environment.room, self.terrain.view());
+            self.casings.advance(self.content.casing_definition, self.controller.shot_requested, self.pose, self.environment.room, &self.random);
+            try self.surfaces.advance(self.content.surfaces, self.content.surfaceClips(), self.terrain.map(), self.props.player_contact, try self.controller.disturbsSurface(self.content.controllerClips()), &self.random);
+            self.last_ambient = self.ambience.advance(.{ .quiet_steps = self.content.forest_quiet_steps, .calls = &self.content.forest_calls }, self.environment.room, &self.random);
             if (self.controller.fatal_landing) self.health = -1;
             if (self.death_wait == null) self.death_wait = self.controller.death_wait_requested;
             self.received_count = try self.equipment.advance(self.health, self.received_items);
             try self.props.advance(self.terrain.map(), &self.equipment, try self.controller.pressesFloorSwitches(self.content.controllerClips()), self.controller.pickup_requested);
+            for (self.props.objects, self.props.definitions) |object, definition| if (object.sound_requested) |sound| try self.emitSound(sound, definition.footprint.room);
+            if (self.pistol.sound_requested) |sound| try self.emitSound(sound, self.pistol.effect.?.room);
+            for (self.surfaces.instances, self.content.surfaces) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
+            if (self.last_ambient) |event| try self.emitSound(event.sound, event.room);
             if (self.props.acquired) |handle| {
                 const item = try self.equipment.item(handle);
                 self.received_items[self.received_count] = .{ .item = handle, .kind = item.definition.kind };
@@ -269,9 +316,15 @@ pub const Scene = struct {
         if (indices.len != room.image.pixels.len) return error.InvalidFrameLength;
         @memcpy(indices, room.image.pixels);
         try self.drawProps(.behind_player, room, indices);
+        try self.drawShot(room, indices, true);
+        try self.drawCasing(room, indices, true);
+        try self.drawSurfaces(room, indices, true);
         const frame = try self.content.frame(self.pose.visual.id);
         try sprite_renderer.draw(indices, room.image.width, room.image.height, frame, @as(i32, self.pose.position.x) + 8, @as(i32, self.pose.position.y) + 2, .{ .palette_bank = 4, .facing = if (self.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
         try self.drawProps(.in_front_of_player, room, indices);
+        try self.drawShot(room, indices, false);
+        try self.drawCasing(room, indices, false);
+        try self.drawSurfaces(room, indices, false);
         if (try self.equipment.selected()) |selected| {
             const icon = try self.content.frame(selected.definition.icon);
             try sprite_renderer.draw(indices, room.image.width, room.image.height, icon, 232, 8, .{ .palette_bank = 10, .foreground = .overwrite });
@@ -284,6 +337,29 @@ pub const Scene = struct {
         }
         if (self.dialog) |dialog| try dialog.menu.draw(self.content.inventory_art.artwork(), self.menu_entries[0..dialog.menu.count], self.score, indices, room.image.width, room.image.height);
         try palette.writeRgba(indices, &room.colors, rgba);
+    }
+
+    fn drawShot(self: *const Scene, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8, behind_player: bool) !void {
+        const definition = self.content.pistolDefinition();
+        if (definition.behind_player != behind_player) return;
+        if (self.pistol.effect) |effect| if (effect.room == self.environment.room) {
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(effect.pose.visual.id), @as(i32, effect.pose.position.x) + 8, @as(i32, effect.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (effect.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        };
+    }
+
+    fn drawCasing(self: *const Scene, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8, behind_player: bool) !void {
+        const definition = self.content.casing_definition;
+        if (definition.behind_player != behind_player) return;
+        if (self.casings.flight) |flight| if (flight.room == self.environment.room) {
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(flight.pose.visual.id), @as(i32, flight.pose.position.x) + 8, @as(i32, flight.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (flight.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        };
+    }
+
+    fn drawSurfaces(self: *const Scene, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8, behind_player: bool) !void {
+        for (self.surfaces.instances, self.content.surfaces) |instance, definition| {
+            if (definition.footprint.room != self.environment.room or definition.behind_player != behind_player) continue;
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(instance.pose.visual.id), @as(i32, instance.pose.position.x) + 8, @as(i32, instance.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (instance.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        }
     }
 
     fn drawProps(self: *const Scene, layer: props_mod.Layer, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8) !void {
@@ -303,6 +379,11 @@ pub const Scene = struct {
         hash.update(&.{@intFromBool(self.defeated)});
         self.equipment.hashInto(&hash);
         self.terrain.hashInto(&hash);
+        self.pistol.hashInto(&hash);
+        self.casings.hashInto(&hash);
+        self.surfaces.hashInto(&hash);
+        for ([_]u32{ if (self.ambience.call) |call| @intCast(call + 1) else 0, self.ambience.elapsed, if (self.ambience.room) |room| @backingInt(room) else 0 }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
+        hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, self.random.state)));
         self.props.hashInto(&hash);
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, self.score)));
         hash.update(&.{ self.inventory_cooldown, @intFromBool(self.input.inventory), @intFromBool(self.input.use_item), @intFromBool(self.input.use_held), @intFromBool(self.input.use_blocked), @intFromBool(self.dialog != null) });

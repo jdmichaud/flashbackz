@@ -273,6 +273,7 @@ pub const Game = struct {
             if (self.story) |*story| story.stopAudio(p);
             if (self.audio != null) p.audioClose();
             if (self.scene == .menu) self.scene.menu.stopAudio(p);
+            if (self.jungle()) |scene| scene.stopAudio(p);
             return .finished;
         }
         if (self.scene == .menu) {
@@ -293,6 +294,7 @@ pub const Game = struct {
         if (self.jungle()) |scene| {
             const now = p.nowNs();
             if (self.story == null and scene.pending_movie != null and scene.needsCatchup(now)) {
+                scene.stopAudio(p);
                 self.story = try story_mod.Story.open(self.allocator, self.assets.?, scene.pending_movie.?, now, if (scene.input.use_held) .enter else if (scene.input.left_action) .left_shift else if (scene.input.right_action) .right_shift else null);
                 try scene.latchMovieInput();
                 scene.pending_movie = null;
@@ -311,10 +313,14 @@ pub const Game = struct {
             }
             try scene.update(now);
             if (scene.defeated) {
+                scene.stopAudio(p);
                 const next = try continue_mod.Scene.init(self.allocator, self.assets.?, scene.score);
                 scene.deinit();
                 self.scene = .{ .continue_game = next };
-            } else if (self.needsCatchup(now)) return .running;
+            } else {
+                try scene.pumpAudio(p);
+                if (self.needsCatchup(now)) return .running;
+            }
         }
         if (self.scene == .continue_game) {
             const dialog = &self.scene.continue_game;

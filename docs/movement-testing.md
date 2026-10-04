@@ -7,6 +7,10 @@ The full Conrad movement pass is in progress. These additions are ready in the L
 | Walk → run | Hold Left or Right, then press Shift while walking. |
 | Run → walk | Keep holding the direction and release Shift. Conrad finishes the committed stride; some foot placements brake before walking. |
 | Running turn | Keep Shift held, release the current direction, and press the opposite direction. |
+| Draw/holster | Press Space. Drawing from standing enters aim; forward first lowers the aim before walking. |
+| Lower-platform quick draw | Tap Space during a forward jump that descends onto a lower platform. A supported interior landing can finish in crouched aim; an edge or vertical drop can require normal recovery. |
+| Climb quick draw | Tap Space during the pull-up animation. Conrad draws as he finishes climbing. |
+| Armed roll recovery | From a crouched gun-ready pose, release Down and press the facing direction. Conrad rolls and recovers into crouched aim when terrain allows. |
 | Running wall stop | Hold Shift + Left/Right toward a wall, including when starting one step away. Conrad stops without crossing it. |
 | Automatic running ledge grab | Run toward a raised platform, release Left/Right and keep Shift held. Conrad jumps to a reachable ledge. Keep Shift held to hang; add Up to climb. |
 | Running roll | While running, keep Shift held, release Left/Right and press Down. Keep Shift + Down held to repeat where terrain allows. |
@@ -27,6 +31,10 @@ mechanism work resumes.
 Existing basic controls remain: arrows move/jump/crouch, Shift modifies movement and picks up
 nearby objects, Tab opens inventory, and Return uses a selected supported item.
 
-Weapon-drawn walking, turning, crouching and holstering are now implemented in development
-builds and pass 920 original update comparisons. Firing is still unfinished, so this weapon
-batch is not yet included in the executable offered for user testing.
+Weapon-drawn walking, turning, crouching and holstering are included, together with the
+three transitions above. The weapon batch passes 1,165 new player-update comparisons plus
+the previous 2,956 movement checks. Space can be tapped during a committed movement; keeping
+it held delays the gun-ready pose until release. Shift now plays standing/crouched firing
+and the measured flash/wall-impact effects, with animated casings. Forest ambience, movement,
+switch, gunshot and impact sounds use the shared digital-effect system. Enemy damage, further
+world behaviours and complete sound/terrain coverage remain in progress.

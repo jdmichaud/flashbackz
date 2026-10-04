@@ -29,7 +29,7 @@ pub const Clips = struct {
     tumble_catch_up: i16 = 8,
     tumble_drop_down: i16 = 24,
 };
-pub const Boundary = enum { continued, standing, upright_landing, low_recovery, long_fall, waiting };
+pub const Boundary = enum { continued, standing, upright_landing, low_recovery, long_fall, waiting, armed_draw };
 pub const State = struct {
     phase: Phase,
 
@@ -70,7 +70,7 @@ pub const State = struct {
         pose.facing = if (pose.facing == .left) .right else .left;
     }
 
-    pub fn finishPhase(self: *State, clips: Clips, intent: controls.Intent, pose: *motion.Pose, environment: anytype) !Boundary {
+    pub fn finishPhase(self: *State, clips: Clips, intent: controls.Intent, weapon_desired: bool, pose: *motion.Pose, environment: anytype) !Boundary {
         const up = intent.action and intent.vertical == .up;
         const down = intent.action and intent.vertical == .down;
         const backward = intent.action and intent.direction != null and intent.direction != pose.facing;
@@ -106,7 +106,9 @@ pub const State = struct {
             .settling_grip => if (up) self.climb(pose, clips.grip_depth) else if (neutral) self.release(pose, clips, clips.grip_depth) else {
                 self.phase = .hanging;
             },
-            .climbing => self.phase = .standing_up,
+            .climbing => if (weapon_desired) return .armed_draw else {
+                self.phase = .standing_up;
+            },
             .standing_up => return .standing,
             .releasing => {
                 if (!try environment.at(pose.*, .support, 0) or (try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .support, -1))) self.fall(pose, clips.falling_entry_down) else if (down and try environment.ledge(pose.*, .support, 0, .behind)) {
@@ -162,7 +164,7 @@ test "grip depth aligns climbing and release to the same ledge across hang style
         var pose: motion.Pose = .{ .position = .{ .x = 40, .y = 117 + depth }, .facing = .left, .visual = .{ .id = @fromBackingInt(1) } };
         var state: State = .{ .phase = phase };
         const intent: controls.Intent = if (pull_up) .{ .action = true, .vertical = .up } else .{};
-        try std.testing.expectEqual(.continued, try state.finishPhase(clips, intent, &pose, Ground{}));
+        try std.testing.expectEqual(.continued, try state.finishPhase(clips, intent, false, &pose, Ground{}));
         try std.testing.expectEqual(@as(i16, if (pull_up) 117 else 213), pose.position.y);
         try std.testing.expectEqual(if (pull_up) Phase.climbing else .releasing, state.phase);
         try std.testing.expectEqual(@as(i16, 40), pose.position.x);

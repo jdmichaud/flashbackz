@@ -38,15 +38,15 @@ test "roll exit alignment is committed once before its recovery" {
     };
     var pose: motion.Pose = .{ .position = .{ .x = 32, .y = 70 }, .facing = .left, .visual = .{ .id = @fromBackingInt(0) } };
     var state: State = .{};
-    for (0..2) |_| try std.testing.expectEqual(.continued, try state.finishPhase(clips, .{}, &pose, Ground{}));
+    for (0..2) |_| try std.testing.expectEqual(.continued, try state.finishPhase(clips, .{}, false, &pose, Ground{}));
     try std.testing.expectEqual(@as(i16, 32), pose.position.x);
-    try std.testing.expectEqual(.continued, try state.finishPhase(clips, .{}, &pose, Ground{}));
+    try std.testing.expectEqual(.continued, try state.finishPhase(clips, .{}, false, &pose, Ground{}));
     try std.testing.expectEqual(@as(i16, 16), pose.position.x);
-    try std.testing.expectEqual(.continued, try state.finishPhase(clips, .{}, &pose, Ground{}));
-    try std.testing.expectEqual(.standing, try state.finishPhase(clips, .{}, &pose, Ground{}));
+    try std.testing.expectEqual(.continued, try state.finishPhase(clips, .{}, false, &pose, Ground{}));
+    try std.testing.expectEqual(.standing, try state.finishPhase(clips, .{}, false, &pose, Ground{}));
     try std.testing.expectEqual(@as(i16, 16), pose.position.x);
 }
-pub const Boundary = enum { continued, standing, turning, wall_collision, catch_ledge, long_fall, running, running_jump, jump_flight, running_drop, brake, wall_stop, stagger_stop };
+pub const Boundary = enum { continued, standing, turning, wall_collision, catch_ledge, long_fall, armed_recovery, running, running_jump, jump_flight, running_drop, brake, wall_stop, stagger_stop };
 
 pub fn shiftForward(pose: *motion.Pose, amount: i16) void {
     pose.position.x +%= if (pose.facing == .right) amount else -%amount;
@@ -75,7 +75,7 @@ pub const State = struct {
         return try environment.at(pose, .torso, ahead) and !try environment.at(pose, .torso, ahead - 1);
     }
 
-    pub fn finishPhase(self: *State, clips: Clips, intent: controls.Intent, pose: *motion.Pose, environment: anytype) !Boundary {
+    pub fn finishPhase(self: *State, clips: Clips, intent: controls.Intent, weapon_desired: bool, pose: *motion.Pose, environment: anytype) !Boundary {
         switch (self.phase) {
             .running_entry => {
                 const supported = try environment.at(pose.*, .support, 1);
@@ -131,6 +131,11 @@ pub const State = struct {
                     self.phase = .drop;
                 } else if (try environment.rollPassage(pose.*, 0)) {
                     self.phase = .enter;
+                } else if (try wallAt(environment, pose.*, 1) or (intent.action and intent.direction == pose.facing)) {
+                    self.phase = .balance;
+                } else if (weapon_desired) {
+                    shiftForward(pose, clips.alignment_forward);
+                    return .armed_recovery;
                 } else {
                     self.phase = .balance;
                 }
