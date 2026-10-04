@@ -5,7 +5,7 @@ const std = @import("std");
 const inventory = @import("inventory.zig");
 const motion = @import("motion.zig");
 pub const ItemHandle = @import("identity.zig").ItemHandle;
-pub const Kind = enum { gun, shield, credits, holocube };
+pub const Kind = enum { gun, shield, credits, holocube, teleporter };
 pub const Definition = struct {
     kind: Kind,
     icon: motion.VisualId,

@@ -46,6 +46,13 @@ Settings persist during the current application session. Free memory is displaye
 Manual Zoom doubles a cropped view and switches off on a room change. Automatic combat
 zoom and the joystick option are not connected yet.
 
+DEMO plays the three original recorded input streams through normal gameplay, in the
+original jungle / alien surface / tower order. Escape or Tab returns to the title; select
+DEMO again for the next recording, followed by the introduction. It is now a regression
+driver, not a claim that the depicted gameplay is complete: missing switch/door and enemy
+behavior still changes the route. Original state and full-frame comparisons record these
+failures in `../flashback-re/docs/floppy-demo.md`.
+
 ```sh
 zig build --prefix /tmp/flashback/modern/out --cache-dir /tmp/flashback/modern/cache
 /tmp/flashback/modern/out/bin/flashbackz-sdl ../disk1.img ../disk2.img

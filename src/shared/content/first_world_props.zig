@@ -1,4 +1,4 @@
-//! Recover the holocube and its floor switch as item/visual/circuit definitions. Source
+//! Discover supported collectible and pressure-switch families in level data. Source
 //! IDs and rule layouts stop here; the world owns ordinary objects and named effects.
 const std = @import("std");
 const placement = @import("placement.zig");
@@ -8,21 +8,22 @@ const world = @import("../world_props.zig");
 const geometry = @import("../geometry.zig");
 const strings = @import("string_table.zig");
 
+// Import-only endpoints let other content importers bind the same opaque circuit.
+pub const Connection = struct { circuit: world.CircuitId, recipient: u16, message: i16 };
 pub const Assets = struct {
     allocator: std.mem.Allocator,
-    clips: [3]animation.OwnedClip,
+    clips: []animation.OwnedClip,
     definitions: []world.Definition,
-    item: equipment.Definition,
+    items: []equipment.Definition,
+    connections: []Connection,
     hint_icon: @import("../motion.zig").VisualId,
-    pub fn takeItem(self: *Assets) equipment.Definition {
-        const item = self.item;
-        self.item.label = &.{};
-        return item;
-    }
     pub fn deinit(self: *Assets) void {
         self.allocator.free(self.definitions);
-        for (&self.clips) |*clip| clip.deinit();
-        self.allocator.free(self.item.label);
+        self.allocator.free(self.connections);
+        for (self.clips) |*clip| clip.deinit();
+        self.allocator.free(self.clips);
+        for (self.items) |item| self.allocator.free(item.label);
+        self.allocator.free(self.items);
         self.* = undefined;
     }
 };
@@ -42,37 +43,84 @@ fn firstRule(bytes: []const u8, group: u16, state: u16) ![]const u8 {
     }
     return error.MissingPropRule;
 }
-pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []const u8, rules: []const u8, names: []const u8, room_ids: *const [64]geometry.RoomId, item: equipment.ItemHandle, resolver: anytype) !Assets {
-    const cube = try table.record(2);
-    const plate = try table.record(3);
-    if (cube.initial_state != 328 or cube.kind != 3 or cube.room >= 64 or cube.initially_active == 0 or cube.minimum_difficulty != 0 or cube.contact_icon != 1 or plate.initial_state != 307 or plate.kind != 7 or plate.room >= 64 or plate.initially_active == 0 or plate.parameters[0] != 4) return error.UnsupportedInitialProps;
-    const pickup = try firstRule(rules, cube.rule_group, cube.initial_state);
-    if (std.mem.readInt(u16, pickup[4..6], .little) != 315 or pickup[7] != 34 or pickup[6] != 90 or pickup[9] != 48 or std.mem.readInt(u16, pickup[12..14], .little) != 30 or std.mem.readInt(u16, pickup[14..16], .little) != 1 or std.mem.readInt(u16, pickup[16..18], .little) != 0) return error.UnsupportedPickupRule;
-    const use = try firstRule(rules, cube.rule_group, 315);
-    if (std.mem.readInt(u16, use[4..6], .little) != 315 or use[7] != 34 or use[6] != 90 or use[9] != 0 or std.mem.readInt(u16, use[12..14], .little) != 102 or std.mem.readInt(u16, use[14..16], .little) != 17) return error.UnsupportedItemUse;
-    const press = try firstRule(rules, plate.rule_group, plate.initial_state);
-    if (std.mem.readInt(u16, press[4..6], .little) != 306 or press[7] != 0 or press[6] != 61 or press[9] != 35 or std.mem.readInt(u16, press[16..18], .little) != 21) return error.UnsupportedFloorSwitch;
-    var clips: [3]animation.OwnedClip = undefined;
-    var loaded: usize = 0;
-    errdefer for (clips[0..loaded]) |*clip| clip.deinit();
-    for ([_]u16{ cube.initial_state, plate.initial_state, 306 }, 0..) |id, i| {
-        var source = try animation.decode(allocator, animations, id);
-        defer source.deinit();
-        for (source.frames) |frame| switch (frame) {
-            .hold => {},
-            .frame => |value| if (value.dx != 0 or value.dy != 0) return error.UnsupportedMovingProp,
-        };
-        clips[i] = try source.resolve(allocator, resolver);
-        loaded += 1;
+pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []const u8, rules: []const u8, names: []const u8, room_ids: *const [64]geometry.RoomId, first_item: equipment.ItemHandle, resolver: anytype) !Assets {
+    var clips: std.ArrayList(animation.OwnedClip) = .empty;
+    errdefer {
+        for (clips.items) |*clip| clip.deinit();
+        clips.deinit(allocator);
     }
-    const icon = try resolver.icon(cube.inventory_icon);
-    const hint = try resolver.icon(cube.contact_icon - 1);
-    const definitions = try allocator.alloc(world.Definition, 2);
-    errdefer allocator.free(definitions);
-    const label = try strings.copy(allocator, names, cube.text_id);
-    definitions[0..2].* = .{
-        .{ .footprint = .{ .room = room_ids[cube.room], .position = cube.position, .width = cube.collision_width }, .facing = if (cube.facing_right != 0) .right else .left, .palette_bank = @intCast(cube.visual_flags & 3), .layer = if (cube.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .behavior = .{ .collectible = .{ .item = item, .idle = clips[0].clip(), .pickup_movie = .holocube_pickup } } },
-        .{ .footprint = .{ .room = room_ids[plate.room], .position = plate.position, .width = plate.collision_width }, .facing = if (plate.facing_right != 0) .right else .left, .palette_bank = @intCast(plate.visual_flags & 3), .layer = if (plate.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .behavior = .{ .floor_switch = .{ .rest = clips[1].clip(), .press = clips[2].clip(), .circuit = @fromBackingInt(0) } } },
+    var definitions: std.ArrayList(world.Definition) = .empty;
+    errdefer definitions.deinit(allocator);
+    var items: std.ArrayList(equipment.Definition) = .empty;
+    errdefer {
+        for (items.items) |item| allocator.free(item.label);
+        items.deinit(allocator);
+    }
+    var connections: std.ArrayList(Connection) = .empty;
+    errdefer connections.deinit(allocator);
+    const hint = try resolver.icon(0);
+    for (0..table.count) |i| {
+        const record = try table.record(@intCast(i));
+        if (record.room >= room_ids.len) continue;
+        if (record.initial_state != 328 and record.initial_state != 307) continue;
+        const rule = try firstRule(rules, record.rule_group, record.initial_state);
+        var behavior: @FieldType(world.Definition, "behavior") = undefined;
+        if (record.initial_state == 328) {
+            if (record.kind != 3 or record.minimum_difficulty != 0 or record.contact_icon != 1) return error.UnsupportedHolocube;
+            if (word(rule, 4) != 315 or rule[7] != 34 or rule[6] != 90 or rule[9] != 48 or word(rule, 12) != 30 or word(rule, 14) != 1 or word(rule, 16) != 0) return error.UnsupportedPickupRule;
+            const use = try firstRule(rules, record.rule_group, 315);
+            if (word(use, 4) != 315 or use[7] != 34 or use[6] != 90 or use[9] != 0 or word(use, 12) != 102 or word(use, 14) != 17) return error.UnsupportedItemUse;
+            const idle = try appendClip(allocator, &clips, animations, record.initial_state, resolver);
+            const label = try strings.copy(allocator, names, record.text_id);
+            errdefer allocator.free(label);
+            const item: equipment.Definition = .{ .kind = .holocube, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label, .use_action = .{ .story = .holocube_recording } };
+            behavior = .{ .collectible = .{ .item = .{ .index = first_item.index + @as(u16, @intCast(items.items.len)), .generation = first_item.generation }, .idle = idle, .pickup_movie = .holocube_pickup } };
+            try items.append(allocator, item);
+        } else {
+            // The continuously active pressure family is already qualified. Other switch
+            // families need activation/sleep and interaction semantics before integration.
+            // Their instances and connections are reported by the mechanism survey.
+            const recovery = try firstRule(rules, record.rule_group, 306);
+            if (rule[7] != 0 or rule[6] != 61 or rule[9] != 35 or word(rule, 4) != 306 or recovery[9] != 0) continue;
+            if (record.kind != 7 or record.parameters[0] < 0 or record.parameters[0] >= table.count) return error.InvalidSwitchConnection;
+            const rest = try appendClip(allocator, &clips, animations, record.initial_state, resolver);
+            const press = try appendClip(allocator, &clips, animations, word(rule, 4), resolver);
+            const recipient: u16 = @intCast(record.parameters[0]);
+            const message: i16 = @bitCast(word(rule, 16));
+            const circuit = for (connections.items) |connection| {
+                if (connection.recipient == recipient and connection.message == message) break connection.circuit;
+            } else fresh: {
+                const id: world.CircuitId = @fromBackingInt(@as(u16, @intCast(connections.items.len)));
+                try connections.append(allocator, .{ .circuit = id, .recipient = recipient, .message = message });
+                break :fresh id;
+            };
+            behavior = .{ .floor_switch = .{ .rest = rest, .press = press, .circuit = circuit } };
+        }
+        try definitions.append(allocator, .{ .footprint = .{ .room = room_ids[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .palette_bank = @intCast(record.visual_flags & 3), .layer = if (record.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .behavior = behavior });
+    }
+    const owned_clips = try clips.toOwnedSlice(allocator);
+    errdefer {
+        for (owned_clips) |*clip| clip.deinit();
+        allocator.free(owned_clips);
+    }
+    const owned_definitions = try definitions.toOwnedSlice(allocator);
+    errdefer allocator.free(owned_definitions);
+    const owned_connections = try connections.toOwnedSlice(allocator);
+    errdefer allocator.free(owned_connections);
+    return .{ .allocator = allocator, .connections = owned_connections, .clips = owned_clips, .definitions = owned_definitions, .items = try items.toOwnedSlice(allocator), .hint_icon = hint };
+}
+fn word(bytes: []const u8, offset: usize) u16 {
+    return std.mem.readInt(u16, bytes[offset..][0..2], .little);
+}
+fn appendClip(allocator: std.mem.Allocator, clips: *std.ArrayList(animation.OwnedClip), animations: []const u8, id: u16, resolver: anytype) !@import("../motion.zig").Clip {
+    var source = try animation.decode(allocator, animations, id);
+    defer source.deinit();
+    for (source.frames) |frame| switch (frame) {
+        .hold => {},
+        .frame => |value| if (value.dx != 0 or value.dy != 0) return error.UnsupportedMovingProp,
     };
-    return .{ .allocator = allocator, .clips = clips, .definitions = definitions, .item = .{ .kind = .holocube, .icon = icon, .introduction_steps = null, .initial_quantity = cube.life, .label = label, .use_action = .{ .story = .holocube_recording } }, .hint_icon = hint };
+    var clip = try source.resolve(allocator, resolver);
+    errdefer clip.deinit();
+    try clips.append(allocator, clip);
+    return clip.clip();
 }

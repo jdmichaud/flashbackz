@@ -1,5 +1,6 @@
 //! Owned content for the current jungle development slice. Source identifiers and embedded
 //! palette locations are resolved here; the scene uses named motions and opaque art/room IDs.
+const level_mod = @import("level.zig");
 const std = @import("std");
 const platform = @import("../platform.zig");
 const motion = @import("../motion.zig");
@@ -39,12 +40,14 @@ pub const Pack = struct {
     world_props: prop_import.Assets,
     player_contact_width: u8,
     surfaces: []@import("../surface_reactions.zig").Definition,
-    forest_calls: [5]@import("../ambience.zig").Call,
+    forest_calls: []@import("../ambience.zig").Call,
     forest_quiet_steps: u16,
     casing_definition: @import("../pistol_casing.zig").Definition,
     pistol_range: u16,
     pistol_palette: u4,
     pistol_behind_player: bool,
+    initial_activity: conrad.Activity,
+    forest_enabled: bool,
     initial_pose: motion.Pose,
     initial_room: geometry.RoomId,
 
@@ -62,6 +65,7 @@ pub const Pack = struct {
         self.world_props.deinit();
         self.sounds.deinit();
         self.allocator.free(self.surfaces);
+        self.allocator.free(self.forest_calls);
         self.terrain.deinit();
         self.* = undefined;
     }
@@ -249,8 +253,12 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
 }
 
 pub fn loadWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSource, _: @import("../settings.zig").Difficulty) !Pack {
+    return loadLevel(allocator, source, .jungle);
+}
+
+pub fn loadLevel(allocator: std.mem.Allocator, source: platform.AssetSource, level: level_mod.Id) !Pack {
     const values = try floppy_interface.load(allocator, source);
-    return assemble(allocator, source, .{ .actor_colors = values.actor_colors, .text_colors = values.text_colors, .interface_colors = values.interface_colors, .level_label = &values.level_label });
+    return assembleLevel(allocator, source, level, .{ .actor_colors = values.actor_colors, .text_colors = values.text_colors, .interface_colors = values.interface_colors, .level_label = &values.level_label });
 }
 
 /// Decoded interface content supplied by an edition importer. No executable offsets enter
@@ -263,49 +271,63 @@ pub const Interface = struct {
 };
 
 pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, interface: Interface) !Pack {
-    var rooms = try RoomSource.open(source);
+    return assembleLevel(allocator, source, .jungle, interface);
+}
+
+fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, level: level_mod.Id, interface: Interface) !Pack {
+    const files = level_mod.files(level);
+    var rooms = try RoomSource.open(source, files);
     defer rooms.deinit();
-    var colors = try read(source, "DATA/LEVEL1.PAL", 8192);
+    var colors = try readLevel(source, files.rooms, "PAL", 8192);
     defer colors.deinit();
     var sprites = try read(source, "DATA/PERSO.SPR", 1024 * 1024);
     defer sprites.deinit();
     var offsets = try read(source, "DATA/PERSO.OFF", 32768);
     defer offsets.deinit();
-    var ani = try read(source, "DATA/LEVEL1.ANI", 65536);
+    var ani = try readLevel(source, files.actors, "ANI", 65536);
     defer ani.deinit();
-    var rules = try read(source, "DATA/LEVEL1.OBJ", 65536);
+    var rules = try readLevel(source, files.actors, "OBJ", 65536);
     defer rules.deinit();
-    var ct = try read(source, "DATA/LEVEL1.CT", 65536);
+    var ct = try readLevel(source, files.rooms, "CT", 65536);
     defer ct.deinit();
     var icons = try read(source, "DATA/GLOBAL.ICN", 32768);
     defer icons.deinit();
     var compositions = try read(source, "DATA/GLOBAL.SPC", 65536);
     defer compositions.deinit();
-    var banks_file = try read(source, "DATA/LEVEL1.MBK", 65536);
+    var banks_file = try readLevel(source, files.rooms, "MBK", 65536);
     defer banks_file.deinit();
-    var bindings = try read(source, "DATA/LEVEL1.RP", 256);
+    var bindings = try readLevel(source, files.rooms, "RP", 256);
     defer bindings.deinit();
     const banks = try art_bank.Archive.init(banks_file.bytes);
     var font_bytes = try read(source, "DATA/FB_TXT.FNT", 16384);
     defer font_bytes.deinit();
-    var names = try read(source, "DATA/LEVEL1.TBN", 16384);
+    var names = try readLevel(source, files.actors, "TBN", 16384);
     defer names.deinit();
     var sound_bytes = try read(source, "DATA/GLOBAL.FIB", 4 * 1024 * 1024);
     defer sound_bytes.deinit();
     var sounds = try @import("sound_effects.zig").decode(allocator, sound_bytes.bytes);
     errdefer sounds.deinit();
-    var placements = try read(source, "DATA/LEVEL1.PGE", 16384);
+    var placements = try readLevel(source, files.actors, "PGE", 16384);
     defer placements.deinit();
     const placement_table = try placement.Table.init(placements.bytes);
-    const forest_sources = [_]u16{ 1144, 1145, 1146, 1147, 1148 };
-    var forest_calls: [5]@import("../ambience.zig").Call = undefined;
-    for (forest_sources, &forest_calls, 0..) |state, *call, index| {
-        var clip = try animation.decode(allocator, ani.bytes, state);
-        defer clip.deinit();
-        call.* = .{ .sound = @fromBackingInt(clip.sound orelse return error.MissingForestSound), .duration = @intCast(clip.frames.len), .chance = if (index < 2) 20 else 10, .repeat_chance = if (index == 2 or index == 3) @as(u16, 2) else null };
+    const forest_enabled = forest: {
+        for (0..placement_table.count) |i| if ((try placement_table.record(@intCast(i))).initial_state == 1143) break :forest true;
+        break :forest false;
+    };
+    const forest_calls = try allocator.alloc(@import("../ambience.zig").Call, if (forest_enabled) 5 else 0);
+    errdefer allocator.free(forest_calls);
+    var forest_quiet_steps: u16 = 0;
+    if (forest_enabled) {
+        const forest_sources = [_]u16{ 1144, 1145, 1146, 1147, 1148 };
+        for (forest_sources, forest_calls, 0..) |state, *call, index| {
+            var clip = try animation.decode(allocator, ani.bytes, state);
+            defer clip.deinit();
+            call.* = .{ .sound = @fromBackingInt(clip.sound orelse return error.MissingForestSound), .duration = @intCast(clip.frames.len), .chance = if (index < 2) 20 else 10, .repeat_chance = if (index == 2 or index == 3) @as(u16, 2) else null };
+        }
+        var quiet = try animation.decode(allocator, ani.bytes, 1143);
+        defer quiet.deinit();
+        forest_quiet_steps = @intCast(quiet.frames.len);
     }
-    var forest_quiet = try animation.decode(allocator, ani.bytes, 1143);
-    defer forest_quiet.deinit();
     const player = try placement_table.record(0);
     if (player.parameters[0] < 0) return error.InvalidPistolBinding;
     const gun = try placement_table.record(@intCast(player.parameters[0]));
@@ -315,7 +337,7 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
     const casing = try placement_table.record(@intCast(shot.parameters[3]));
     if (casing.initial_state != 163) return error.UnsupportedCasingStart;
     if (gun.object_id != 2 or shot.parameters[0] < 1 or shot.parameters[0] > 64) return error.UnsupportedPistolDefinition;
-    if (player.initial_state != 99 or player.kind != 1 or player.room >= 64) return error.UnsupportedPlayerStart;
+    if ((player.initial_state != 99 and player.initial_state != 1) or player.kind != 1 or player.room >= 64) return error.UnsupportedPlayerStart;
     var inventory_art = try inventory_artwork.load(allocator, icons.bytes, font_bytes.bytes, interface.level_label);
     errdefer inventory_art.deinit();
     var room_ids: [64]geometry.RoomId = undefined;
@@ -356,8 +378,12 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
     errdefer starting_equipment.release(allocator, initial_items);
     var props = try prop_import.load(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &room_ids, .{ .index = @intCast(initial_items.len), .generation = 1 }, &resolver);
     errdefer props.deinit();
-    initial_items = try allocator.realloc(initial_items, initial_items.len + 1);
-    initial_items[initial_items.len - 1] = props.takeItem();
+    const supplied = initial_items.len;
+    initial_items = try allocator.realloc(initial_items, supplied + props.items.len);
+    for (props.items, initial_items[supplied..]) |*item, *destination| {
+        destination.* = item.*;
+        item.label = &.{};
+    }
     var room_art: std.ArrayList(RoomArt) = .empty;
     errdefer {
         for (room_art.items) |*room| room.artwork.deinit();
@@ -386,7 +412,7 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
         allocator.free(decoded_rooms);
     }
     const facing: motion.Facing = if (player.facing_right == 0) .left else .right;
-    const first_visual = switch (motions[@backingInt(Move.wake)].steps[0]) {
+    const first_visual = switch (motions[@backingInt(if (player.initial_state == 99) Move.wake else Move.stand)].steps[0]) {
         .frame => |frame| frame.visual,
         .hold => return error.UnsupportedPlayerStart,
     };
@@ -406,7 +432,7 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
         .surfaces = try surfaces.toOwnedSlice(allocator),
         .sounds = sounds,
         .forest_calls = forest_calls,
-        .forest_quiet_steps = @intCast(forest_quiet.frames.len),
+        .forest_quiet_steps = forest_quiet_steps,
         .casing_definition = .{
             .trajectories = .{ motions[@backingInt(Move.casing_stand_a)].clip(), motions[@backingInt(Move.casing_stand_b)].clip(), motions[@backingInt(Move.casing_crouch_a)].clip(), motions[@backingInt(Move.casing_crouch_b)].clip() },
             .initial_pose = .{ .position = casing.position, .facing = if (casing.facing_right != 0) .right else .left, .visual = .{ .id = @fromBackingInt(0) } },
@@ -420,6 +446,8 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
         .pistol_behind_player = shot.visual_flags & 8 != 0,
         .player_contact_width = player.collision_width,
         .initial_room = room_ids[player.room],
+        .initial_activity = if (player.initial_state == 99) .waking else .standing,
+        .forest_enabled = forest_enabled,
         .initial_pose = .{ .position = player.position, .facing = facing, .visual = .{ .id = first_visual.id, .mirrored = first_visual.mirrored != (facing == .left) } },
     };
 }
@@ -427,14 +455,14 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
 /// Own whichever source representation the user supplied. Both yield ordinary artwork.
 const RoomSource = union(enum) {
     installed: platform.OwnedBytes,
-    compact: struct { rooms: platform.OwnedBytes, tiles: platform.OwnedBytes, background: platform.OwnedBytes },
-    fn open(source: platform.AssetSource) !RoomSource {
-        if (read(source, "DATA/LEVEL1.MAP", 8 * 1024 * 1024)) |file| return .{ .installed = file } else |err| if (err != error.NotFound) return err;
-        var rooms = try read(source, "DATA/LEVEL1.LEV", 1024 * 1024);
+    compact: struct { rooms: platform.OwnedBytes, tiles: platform.OwnedBytes, background: ?platform.OwnedBytes, tile_bias: u16 },
+    fn open(source: platform.AssetSource, files: level_mod.Files) !RoomSource {
+        if (readLevel(source, files.rooms, "MAP", 8 * 1024 * 1024)) |file| return .{ .installed = file } else |err| if (err != error.NotFound) return err;
+        var rooms = try readLevel(source, files.rooms, "LEV", 1024 * 1024);
         errdefer rooms.deinit();
-        var tiles = try read(source, "DATA/LEVEL1.BNQ", 1024 * 1024);
+        var tiles = try readLevel(source, files.rooms, "BNQ", 1024 * 1024);
         errdefer tiles.deinit();
-        return .{ .compact = .{ .rooms = rooms, .tiles = tiles, .background = try read(source, "DATA/LEVEL1.SGD", 1024 * 1024) } };
+        return .{ .compact = .{ .rooms = rooms, .tiles = tiles, .background = if (files.tile_bias != 0) try readLevel(source, files.rooms, "SGD", 1024 * 1024) else null, .tile_bias = files.tile_bias } };
     }
     fn deinit(self: *RoomSource) void {
         switch (self.*) {
@@ -442,14 +470,19 @@ const RoomSource = union(enum) {
             .compact => |*files| {
                 files.rooms.deinit();
                 files.tiles.deinit();
-                files.background.deinit();
+                if (files.background) |*background| background.deinit();
             },
         }
     }
     fn decode(self: *const RoomSource, allocator: std.mem.Allocator, colors: []const u8, room: u8) !artwork.Artwork {
         return switch (self.*) {
             .installed => |file| artwork.decode(allocator, file.bytes, colors, room),
-            .compact => |files| (floppy_rooms.Archive{ .rooms = files.rooms.bytes, .banks = files.tiles.bytes, .background = files.background.bytes, .tile_bias = 896 }).decode(allocator, colors, room),
+            .compact => |files| (floppy_rooms.Archive{ .rooms = files.rooms.bytes, .banks = files.tiles.bytes, .background = if (files.background) |background| background.bytes else &.{}, .tile_bias = files.tile_bias }).decode(allocator, colors, room),
         };
     }
 };
+
+fn readLevel(source: platform.AssetSource, basename: []const u8, extension: []const u8, limit: usize) !platform.OwnedBytes {
+    var path: [64]u8 = undefined;
+    return read(source, try std.fmt.bufPrint(&path, "DATA/{s}.{s}", .{ basename, extension }), limit);
+}

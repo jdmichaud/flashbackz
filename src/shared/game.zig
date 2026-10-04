@@ -169,6 +169,7 @@ pub const Game = struct {
     page: []u8,
     rgba: []u8,
     scene: Scene = .smoke,
+    demo_index: u2 = 0,
     difficulty: @import("settings.zig").Difficulty = .normal,
     story: ?story_mod.Story = null,
 
@@ -287,7 +288,25 @@ pub const Game = struct {
                 return .finished;
             }
             try front.update(p);
-            if (front.stage == .ready) {
+            if (front.stage == .demo_ready) {
+                if (self.demo_index == 3) {
+                    self.demo_index = 0;
+                    try front.intro();
+                } else {
+                    const recording = try @import("content/demo.zig").load(self.allocator, self.assets.?, self.demo_index);
+                    errdefer self.allocator.free(recording.controls);
+                    var next = try jungle_mod.Scene.loadLevel(self.allocator, self.assets.?, recording.descriptor.level, .normal);
+                    next.settings = self.preferences;
+                    next.replay = .{ .samples = recording.controls };
+                    if (recording.descriptor.start) |start| {
+                        next.pose.position = start.position;
+                        next.environment.room = start.room;
+                    }
+                    front.deinit();
+                    self.scene = .{ .jungle = next };
+                    self.demo_index += 1;
+                }
+            } else if (front.stage == .ready) {
                 var next = try jungle_mod.Scene.loadWithDifficulty(self.allocator, self.assets.?, front.difficulty);
                 next.settings = self.preferences;
                 self.difficulty = front.difficulty;
@@ -323,7 +342,7 @@ pub const Game = struct {
             if (scene.options) |*options| if (options.menu.free_memory_mb == null) {
                 if (p.availableMemory()) |bytes| options.menu.free_memory_mb = bytes / (1024 * 1024);
             };
-            if (scene.aborted) {
+            if (scene.aborted or (scene.defeated and scene.replay != null)) {
                 scene.stopAudio(p);
                 const art = (try menu_art.load(self.allocator, self.assets.?)) orelse return error.MissingMenu;
                 var next = front_end.Scene.init(self.allocator, self.assets.?, art);

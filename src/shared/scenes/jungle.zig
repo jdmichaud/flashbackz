@@ -50,6 +50,17 @@ pub const HeldInput = struct {
             else => {},
         }
     }
+    pub fn recorded(self: *HeldInput, sample: @import("../input_recording.zig").Sample) void {
+        self.left = sample.left;
+        self.right = sample.right;
+        self.up = sample.up;
+        self.down = sample.down;
+        self.left_action = sample.action;
+        self.right_action = false;
+        self.weapon = sample.weapon;
+        self.inventory = sample.inventory;
+        self.key(.enter, sample.use_item);
+    }
     pub fn consumeUse(self: *HeldInput) void {
         self.use_item = false;
         self.use_blocked = self.use_held;
@@ -117,6 +128,7 @@ pub const Scene = struct {
     pending: std.ArrayList(platform.Event) = .empty,
     clock: ?clock_mod.Clock = null,
     simulation_steps: u64 = 0,
+    replay: ?@import("../input_recording.zig").Playback = null,
     score: u32 = 0,
     inventory_cooldown: u8 = 0,
     menu_entries: []inventory_menu.Entry,
@@ -127,7 +139,11 @@ pub const Scene = struct {
     }
 
     pub fn loadWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSource, difficulty: @import("../settings.zig").Difficulty) !Scene {
-        var pack = try content.loadWithDifficulty(allocator, source, difficulty);
+        return loadLevel(allocator, source, .jungle, difficulty);
+    }
+
+    pub fn loadLevel(allocator: std.mem.Allocator, source: platform.AssetSource, level: @import("../content/level.zig").Id, _: @import("../settings.zig").Difficulty) !Scene {
+        var pack = try content.loadLevel(allocator, source, level);
         errdefer pack.deinit();
         var equipment = try equipment_mod.Loadout.init(allocator, pack.initial_items);
         errdefer equipment.deinit();
@@ -143,6 +159,7 @@ pub const Scene = struct {
         return .{
             .allocator = allocator,
             .content = pack,
+            .controller = .{ .activity = pack.initial_activity },
             .environment = .{ .map = terrain.map(), .room = pack.initial_room, .materials = terrain.view() },
             .terrain = terrain,
             .props = props,
@@ -192,11 +209,16 @@ pub const Scene = struct {
         self.allocator.free(self.received_items);
         self.allocator.free(self.menu_entries);
         self.pending.deinit(self.allocator);
+        if (self.replay) |replay| self.allocator.free(replay.samples);
         self.content.deinit();
         self.* = undefined;
     }
 
     pub fn enqueue(self: *Scene, event: platform.Event) !void {
+        if (self.replay != null) {
+            if (event.payload == .key_down and (event.payload.key_down.key == .escape or event.payload.key_down.key == .tab)) self.aborted = true;
+            return;
+        }
         switch (event.payload) {
             .key_down, .key_up, .focus_lost => {
                 if (self.pending.items.len == 256) return error.InputQueueFull;
@@ -207,7 +229,7 @@ pub const Scene = struct {
     }
 
     pub fn update(self: *Scene, now_ns: u64) !void {
-        if (self.defeated) return;
+        if (self.defeated or self.aborted) return;
         if (self.clock == null) self.clock = try clock_mod.Clock.init(clock_mod.jungle, now_ns);
         // Preserve remaining debt for the next host call instead of dropping simulation.
         var work: usize = 0;
@@ -241,6 +263,17 @@ pub const Scene = struct {
                         else => unreachable,
                     }
                 }
+                if (self.replay) |*replay| {
+                    const sample = replay.next() orelse {
+                        self.aborted = true;
+                        return;
+                    };
+                    dialog.keys.directions = .{ .left = sample.left, .right = sample.right, .up = sample.up, .down = sample.down };
+                    dialog.keys.left_shift = sample.action;
+                    dialog.keys.space = sample.weapon;
+                    dialog.keys.enter = sample.use_item;
+                    dialog.keys.tab = sample.inventory;
+                }
                 switch (dialog.menu.poll(dialog.keys.sample())) {
                     .stay => dialog.clock.consume(),
                     .choose => |index| {
@@ -266,7 +299,12 @@ pub const Scene = struct {
                 self.movie_intent = null;
                 break :blk latched;
             } else blk: {
-                try consumeInput(&self.pending, &self.input, deadline);
+                if (self.replay) |*replay| {
+                    self.input.recorded(replay.next() orelse {
+                        self.aborted = true;
+                        return;
+                    });
+                } else try consumeInput(&self.pending, &self.input, deadline);
                 break :blk try self.input.intent();
             };
             self.sound_event_count = 0;
@@ -282,7 +320,7 @@ pub const Scene = struct {
             try self.pistol.advance(self.content.pistolDefinition(), self.controller.shot_requested, self.pose, self.environment.room, self.terrain.view());
             self.casings.advance(self.content.casing_definition, self.controller.shot_requested, self.pose, self.environment.room, &self.random);
             try self.surfaces.advance(self.content.surfaces, self.content.surfaceClips(), self.terrain.map(), self.props.player_contact, try self.controller.disturbsSurface(self.content.controllerClips()), &self.random);
-            self.last_ambient = self.ambience.advance(.{ .quiet_steps = self.content.forest_quiet_steps, .calls = &self.content.forest_calls }, self.environment.room, &self.random);
+            self.last_ambient = if (self.content.forest_enabled) self.ambience.advance(.{ .quiet_steps = self.content.forest_quiet_steps, .calls = self.content.forest_calls }, self.environment.room, &self.random) else null;
             if (self.controller.fatal_landing) self.health = -1;
             if (self.death_wait == null) self.death_wait = self.controller.death_wait_requested;
             self.received_count = try self.equipment.advance(self.health, self.received_items);
@@ -420,7 +458,7 @@ pub const Scene = struct {
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(i16, self.health)));
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u16, self.death_wait orelse 0)));
         hash.update(&.{ @intFromBool(self.defeated), @intFromBool(self.aborted), self.settings.volume, @intFromBool(self.settings.sound_fx), @intFromBool(self.settings.music), @intFromBool(self.settings.joystick), @backingInt(self.settings.zoom), @intFromBool(self.options != null) });
-        if (self.options) |options| hash.update(&.{ @backingInt(options.menu.selection), @intFromBool(options.menu.settings.sound_fx), @intFromBool(options.menu.settings.music), @intFromBool(options.menu.settings.joystick), @backingInt(options.menu.settings.zoom) });
+        if (self.options) |options| hash.update(&.{ @backingInt(options.menu.selection), options.menu.settings.volume, @intFromBool(options.menu.settings.sound_fx), @intFromBool(options.menu.settings.music), @intFromBool(options.menu.settings.joystick), @backingInt(options.menu.settings.zoom) });
         self.equipment.hashInto(&hash);
         self.terrain.hashInto(&hash);
         self.pistol.hashInto(&hash);
@@ -429,6 +467,7 @@ pub const Scene = struct {
         for ([_]u32{ if (self.ambience.call) |call| @intCast(call + 1) else 0, self.ambience.elapsed, if (self.ambience.room) |room| @backingInt(room) else 0 }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, self.random.state)));
         self.props.hashInto(&hash);
+        if (self.replay) |replay| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, replay.cursor)));
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, self.score)));
         hash.update(&.{ self.inventory_cooldown, @intFromBool(self.input.inventory), @intFromBool(self.input.use_item), @intFromBool(self.input.use_held), @intFromBool(self.input.use_blocked), @intFromBool(self.dialog != null) });
         if (self.dialog) |dialog| {

@@ -31,3 +31,5 @@ test {
 }
 
 pub const sound_effects = @import("sound_effects.zig");
+pub const demo = @import("demo.zig");
+pub const level = @import("level.zig");

@@ -7,20 +7,33 @@ const animation = @import("animation.zig");
 const strings = @import("string_table.zig");
 
 pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animations: []const u8, rules: []const u8, names: []const u8, resolver: anytype) ![]equipment.Definition {
-    const Spec = struct { kind: equipment.Kind, index: u16, state: u16, target: u16, operations: [3]u8 };
+    const Spec = struct { kind: equipment.Kind, state: u16, target: u16, operations: [3]u8 };
     // Ascending source activation order determines simultaneous item-arrival order. The
     // result contains semantic kinds, resolved icons and durations, not source entity IDs.
     const specs = [_]Spec{
-        .{ .kind = .gun, .index = 1, .state = 327, .target = 314, .operations = .{ 0, 0, 48 } },
-        .{ .kind = .shield, .index = 48, .state = 322, .target = 321, .operations = .{ 89, 0, 48 } },
-        .{ .kind = .credits, .index = 65, .state = 329, .target = 330, .operations = .{ 0, 48, 67 } },
+        .{ .kind = .gun, .state = 327, .target = 314, .operations = .{ 0, 0, 48 } },
+        .{ .kind = .shield, .state = 322, .target = 321, .operations = .{ 89, 0, 48 } },
+        .{ .kind = .credits, .state = 329, .target = 330, .operations = .{ 0, 48, 67 } },
+        .{ .kind = .teleporter, .state = 331, .target = 332, .operations = .{ 48, 0, 67 } },
     };
-    const definitions = try allocator.alloc(equipment.Definition, specs.len);
+    var count: usize = 0;
+    for (0..placements.count) |i| {
+        const record = try placements.record(@intCast(i));
+        for (specs) |spec| if (record.initial_state == spec.state and record.initially_active != 0) {
+            count += 1;
+        };
+    }
+    const definitions = try allocator.alloc(equipment.Definition, count);
     errdefer allocator.free(definitions);
     var loaded: usize = 0;
     errdefer for (definitions[0..loaded]) |definition| allocator.free(definition.label);
-    for (specs, definitions) |spec, *definition| {
-        const source = try placements.record(spec.index);
+    for (0..placements.count) |i| {
+        const source = try placements.record(@intCast(i));
+        if (source.initially_active == 0) continue;
+        const spec = for (specs) |candidate| {
+            if (candidate.state == source.initial_state) break candidate;
+        } else continue;
+        const definition = &definitions[loaded];
         if (source.initial_state != spec.state or source.kind != 3 or source.minimum_difficulty != 0 or source.initially_active == 0)
             return error.UnsupportedStartingEquipment;
         const rule = try firstRule(rules, source.rule_group, source.initial_state);

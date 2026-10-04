@@ -9,7 +9,7 @@ const menu_mod = @import("menu.zig");
 const soundtrack = @import("../audio/soundtrack.zig");
 const vector_player = @import("vector_player.zig");
 pub const Difficulty = @import("../settings.zig").Difficulty;
-pub const Stage = enum { branding, introduction, awakening, menu, ready, quit };
+pub const Stage = enum { branding, introduction, awakening, menu, ready, demo_ready, quit };
 pub const View = enum { main, skill, info, password, unavailable };
 
 pub const Scene = struct {
@@ -216,10 +216,7 @@ pub const Scene = struct {
                         self.password_length = 0;
                         try self.show(.password, "MENU2");
                     },
-                    .demo => {
-                        self.notice = "DEMO IS NOT AVAILABLE YET";
-                        try self.show(.unavailable, "MENU2");
-                    },
+                    .demo => self.stage = .demo_ready,
                     .quit => self.stage = .quit,
                 };
             },
