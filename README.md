@@ -27,8 +27,11 @@ sound effects, exact presentation/audio synchronization, menu fades/blinking, pa
 Continue are still unfinished. Start plays the wake-up animation with music and enters the
 jungle. Turning, walking and the existing movement/inventory development slice are available;
 The holocube and floor plate animate; Shift collects the cube, plays its pickup movie, and
-adds it to inventory for selection. Recording playback, other actors/interactions and complete
-floppy behavior qualification remain unfinished. The startup error `FloppyCinematicsNotYetImplemented` has been removed
+adds it to inventory for selection. Tab opens inventory; Return uses the selected holocube
+and plays its recording with text and music. One press plays once, including when Return is
+held through completion. Other actors/interactions and complete floppy behavior qualification
+remain unfinished. The pickup matches all 35 original frames; recording has documented
+remaining differences in 11 of 377 frames. The startup error `FloppyCinematicsNotYetImplemented` has been removed
 from normal launch. `--scene menu` remains an optional development shortcut.
 
 ```sh

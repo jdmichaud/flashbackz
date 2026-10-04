@@ -48,6 +48,8 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
     if (cube.initial_state != 328 or cube.kind != 3 or cube.room >= 64 or cube.initially_active == 0 or cube.minimum_difficulty != 0 or cube.contact_icon != 1 or plate.initial_state != 307 or plate.kind != 7 or plate.room >= 64 or plate.initially_active == 0 or plate.parameters[0] != 4) return error.UnsupportedInitialProps;
     const pickup = try firstRule(rules, cube.rule_group, cube.initial_state);
     if (std.mem.readInt(u16, pickup[4..6], .little) != 315 or pickup[7] != 34 or pickup[6] != 90 or pickup[9] != 48 or std.mem.readInt(u16, pickup[12..14], .little) != 30 or std.mem.readInt(u16, pickup[14..16], .little) != 1 or std.mem.readInt(u16, pickup[16..18], .little) != 0) return error.UnsupportedPickupRule;
+    const use = try firstRule(rules, cube.rule_group, 315);
+    if (std.mem.readInt(u16, use[4..6], .little) != 315 or use[7] != 34 or use[6] != 90 or use[9] != 0 or std.mem.readInt(u16, use[12..14], .little) != 102 or std.mem.readInt(u16, use[14..16], .little) != 17) return error.UnsupportedItemUse;
     const press = try firstRule(rules, plate.rule_group, plate.initial_state);
     if (std.mem.readInt(u16, press[4..6], .little) != 306 or press[7] != 0 or press[6] != 61 or press[9] != 35 or std.mem.readInt(u16, press[16..18], .little) != 21) return error.UnsupportedFloorSwitch;
     var clips: [3]animation.OwnedClip = undefined;
@@ -72,5 +74,5 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
         .{ .footprint = .{ .room = room_ids[cube.room], .position = cube.position, .width = cube.collision_width }, .facing = if (cube.facing_right != 0) .right else .left, .palette_bank = @intCast(cube.visual_flags & 3), .layer = if (cube.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .behavior = .{ .collectible = .{ .item = item, .idle = clips[0].clip(), .pickup_movie = .holocube_pickup } } },
         .{ .footprint = .{ .room = room_ids[plate.room], .position = plate.position, .width = plate.collision_width }, .facing = if (plate.facing_right != 0) .right else .left, .palette_bank = @intCast(plate.visual_flags & 3), .layer = if (plate.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .behavior = .{ .floor_switch = .{ .rest = clips[1].clip(), .press = clips[2].clip(), .circuit = @fromBackingInt(0) } } },
     };
-    return .{ .allocator = allocator, .clips = clips, .definitions = definitions, .item = .{ .kind = .holocube, .icon = icon, .introduction_steps = null, .initial_quantity = cube.life, .label = label }, .hint_icon = hint };
+    return .{ .allocator = allocator, .clips = clips, .definitions = definitions, .item = .{ .kind = .holocube, .icon = icon, .introduction_steps = null, .initial_quantity = cube.life, .label = label, .use_action = .{ .story = .holocube_recording } }, .hint_icon = hint };
 }

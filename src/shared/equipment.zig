@@ -14,6 +14,7 @@ pub const Definition = struct {
     initial_quantity: i16,
     label: []const u8 = "",
     show_quantity: bool = false,
+    use_action: ?union(enum) { story: @import("story_cue.zig").Cue } = null,
 };
 pub const Item = struct {
     definition: Definition,

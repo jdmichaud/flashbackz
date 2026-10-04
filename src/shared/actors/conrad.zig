@@ -17,6 +17,7 @@ pub const WalkMotion = struct {
 
 pub const Clips = struct {
     wake: motion.Clip,
+    use_item: ?motion.Clip = null,
     stand: motion.Clip,
     turn_preparation: motion.Clip,
     turn_follow_through: motion.Clip,
@@ -37,6 +38,7 @@ pub const GaitPhase = union(enum) { starting, stride: usize };
 pub const Activity = union(enum) {
     waking,
     standing,
+    using_item,
     turning: TurnPhase,
     walking: GaitPhase,
     running: GaitPhase,
@@ -74,12 +76,15 @@ pub const Controller = struct {
     fatal_landing: bool = false,
     death_wait_requested: ?u16 = null,
     pickup_requested: bool = false,
+    use_requested: bool = false,
+    use_available: bool = false,
     pickup_available: bool = false,
 
     fn selectedClip(self: Controller, clips: Clips) !motion.Clip {
         return switch (self.activity) {
             .waking => clips.wake,
             .standing => clips.stand,
+            .using_item => clips.use_item orelse return error.MissingMotion,
             .turning => |phase| if (phase == .preparation) clips.turn_preparation else clips.turn_follow_through,
             .walking => |phase| blk: {
                 const gait = clips.walk orelse return error.MissingMotion;
@@ -133,6 +138,7 @@ pub const Controller = struct {
 
     pub fn advanceIn(self: *Controller, clips: Clips, intent: Intent, pose: *motion.Pose, environment: anytype) !Result {
         self.pickup_requested = false;
+        self.use_requested = false;
         self.fatal_landing = false;
         self.death_wait_requested = null;
         var clip = try self.selectedClip(clips);
@@ -140,8 +146,14 @@ pub const Controller = struct {
         if (self.playback.exhausted(clip)) {
             switch (self.activity) {
                 .waking => self.activity = .standing,
+                .using_item => {
+                    self.use_requested = true;
+                    self.activity = .standing;
+                },
                 .standing => {
-                    if (self.pickup_available and intent.action and intent.direction == null and intent.vertical == null) {
+                    if (self.use_available and intent.use_item and !intent.action and intent.direction == null and intent.vertical == null) {
+                        self.activity = .using_item;
+                    } else if (self.pickup_available and intent.action and intent.direction == null and intent.vertical == null) {
                         self.activity = .{ .crouching = .lowering };
                     } else if (intent.vertical) |vertical| {
                         if (vertical == .up) {
@@ -431,4 +443,20 @@ test "an exhausted ledge motion waits without replaying artwork or handing rooms
     try std.testing.expectEqualDeep(before, pose);
     try std.testing.expectEqual(@as(usize, 1), controller.playback.next_step);
     try std.testing.expectEqual(@as(usize, 0), ground.boundaries);
+}
+
+test "using an available item has its own motion boundary and does not request pickup" {
+    const steps = [_]motion.Step{.hold};
+    const clip: motion.Clip = .{ .steps = &steps };
+    const clips: Clips = .{ .wake = clip, .stand = clip, .turn_preparation = clip, .turn_follow_through = clip, .use_item = clip };
+    var actor: Controller = .{ .activity = .standing, .playback = .{ .next_step = 1 }, .use_available = true, .pickup_available = true };
+    var pose: motion.Pose = .{ .position = .{ .x = 32, .y = 70 }, .visual = .{ .id = @fromBackingInt(0) } };
+    _ = try actor.advance(clips, .{ .use_item = true }, &pose);
+    try std.testing.expectEqualDeep(Activity.using_item, actor.activity);
+    try std.testing.expect(!actor.use_requested and !actor.pickup_requested);
+    _ = try actor.advance(clips, .{}, &pose);
+    try std.testing.expectEqualDeep(Activity.standing, actor.activity);
+    try std.testing.expect(actor.use_requested and !actor.pickup_requested);
+    _ = try actor.advance(clips, .{}, &pose);
+    try std.testing.expect(!actor.use_requested);
 }

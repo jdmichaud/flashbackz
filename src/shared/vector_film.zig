@@ -2,11 +2,16 @@
 //! into pictures and holds; playback has no source commands, executable offsets or jump table.
 const std = @import("std");
 const shapes = @import("render/indexed_shapes.zig");
+const font_mod = @import("content/font.zig");
+const text_renderer = @import("render/text.zig");
 const palette = @import("content/palette.zig");
+
+pub const TextRun = struct { text: []const u8, x: i16, y: i16, foreground: u8 };
 
 pub const Drawing = struct {
     geometry: union(enum) {
         polygon: []const shapes.Point,
+        text: TextRun,
         ellipse: struct { center: shapes.Point, radius_x: u16, radius_y: u16 },
     },
     ink: shapes.Ink,
@@ -17,10 +22,13 @@ pub const Frame = struct {
     colors: palette.Palette,
     hold_ticks: u32,
     background: u8 = 0xc0,
+    captions: []const TextRun = &.{},
+    caption_band: bool = false,
 };
 
 pub const View = struct {
     frames: []const Frame,
+    font: ?font_mod.Font = null,
     width: u16 = 256,
     height: u16 = 224,
     viewport: shapes.Rect = .{ .x = 8, .y = 50, .width = 240, .height = 128 },
@@ -46,8 +54,19 @@ pub const View = struct {
         for (frame.drawings) |drawing| switch (drawing.geometry) {
             .polygon => |points| try canvas.draw(points, drawing.ink),
             .ellipse => |ellipse| try canvas.ellipse(ellipse.center, ellipse.radius_x, ellipse.radius_y, drawing.ink),
+            .text => |run| try self.drawText(pixels, run),
         };
+        if (frame.caption_band) {
+            const start = @min(pixels.len, @as(usize, self.width) * 178);
+            const end = @min(pixels.len, @as(usize, self.width) * 203);
+            @memset(pixels[start..end], 0xc0);
+        }
+        for (frame.captions) |run| try self.drawText(pixels, run);
         try palette.writeRgba(pixels, &frame.colors, rgba);
+    }
+    fn drawText(self: View, pixels: []u8, run: TextRun) !void {
+        const font = self.font orelse return error.MissingCinematicFont;
+        try text_renderer.draw(pixels, self.width, self.height, &font, run.text, run.x, run.y, .{ .foreground = run.foreground, .shadow = 0xe2, .palette_bank = 14 });
     }
 };
 

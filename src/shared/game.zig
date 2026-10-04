@@ -293,7 +293,7 @@ pub const Game = struct {
         if (self.jungle()) |scene| {
             const now = p.nowNs();
             if (self.story == null and scene.pending_movie != null and scene.needsCatchup(now)) {
-                self.story = try story_mod.Story.open(self.allocator, self.assets.?, scene.pending_movie.?, now, if (scene.input.left_action) .left_shift else if (scene.input.right_action) .right_shift else null);
+                self.story = try story_mod.Story.open(self.allocator, self.assets.?, scene.pending_movie.?, now, if (scene.input.use_held) .enter else if (scene.input.left_action) .left_shift else if (scene.input.right_action) .right_shift else null);
                 try scene.latchMovieInput();
                 scene.pending_movie = null;
             }

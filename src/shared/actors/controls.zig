@@ -5,4 +5,5 @@ pub const Intent = struct {
     direction: ?motion.Facing = null,
     vertical: ?Vertical = null,
     action: bool = false,
+    use_item: bool = false,
 };

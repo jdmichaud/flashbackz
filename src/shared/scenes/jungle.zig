@@ -24,6 +24,9 @@ pub const HeldInput = struct {
     left_action: bool = false,
     right_action: bool = false,
     inventory: bool = false,
+    use_item: bool = false,
+    use_held: bool = false,
+    use_blocked: bool = false,
     previous_direction: struct { horizontal: ?motion.Facing = null, vertical: ?controls.Vertical = null } = .{},
     pub fn key(self: *HeldInput, key_code: platform.Key, down: bool) void {
         switch (key_code) {
@@ -34,8 +37,17 @@ pub const HeldInput = struct {
             .left_shift => self.left_action = down,
             .right_shift => self.right_action = down,
             .tab => self.inventory = down,
+            .enter => {
+                self.use_held = down;
+                if (!down) self.use_blocked = false;
+                self.use_item = down and !self.use_blocked;
+            },
             else => {},
         }
+    }
+    pub fn consumeUse(self: *HeldInput) void {
+        self.use_item = false;
+        self.use_blocked = self.use_held;
     }
     pub fn intent(self: *HeldInput) !conrad.Intent {
         if ((self.left and self.right) or (self.up and self.down)) return error.UnverifiedOpposingDirections;
@@ -44,7 +56,7 @@ pub const HeldInput = struct {
         // Mixed axes retain the last accepted direction, while the action modifier remains
         // current. This is the original input arbitration, expressed without a DOS bitmask.
         if (horizontal == null or vertical == null) self.previous_direction = .{ .horizontal = horizontal, .vertical = vertical };
-        return .{ .direction = self.previous_direction.horizontal, .vertical = self.previous_direction.vertical, .action = self.left_action or self.right_action };
+        return .{ .direction = self.previous_direction.horizontal, .vertical = self.previous_direction.vertical, .action = self.left_action or self.right_action, .use_item = self.use_item };
     }
 };
 
@@ -55,7 +67,7 @@ fn consumeInput(pending: *std.ArrayList(platform.Event), held: *HeldInput, deadl
             .focus_lost => held.* = .{},
             .key_down => |key| {
                 switch (key.key) {
-                    .space, .left_ctrl, .right_ctrl, .enter, .p, .f1, .f2, .f3 => return error.UnimplementedJungleControl,
+                    .space, .left_ctrl, .right_ctrl, .p, .f1, .f2, .f3 => return error.UnimplementedJungleControl,
                     else => {},
                 }
                 held.*.key(key.key, true);
@@ -189,6 +201,8 @@ pub const Scene = struct {
             };
             try self.props.prepare(self.terrain.map(), &self.equipment, .{ .room = self.environment.room, .position = self.pose.position, .width = self.content.player_contact_width });
             self.controller.pickup_available = self.props.pickup_candidate != null;
+            const selected = try self.equipment.selected();
+            self.controller.use_available = if (selected) |item| item.definition.use_action != null else false;
             const result = try self.controller.advanceIn(self.content.controllerClips(), intent, &self.pose, &self.environment);
             if (result != .advanced) return error.UnimplementedMovementTransition;
             if (self.controller.fatal_landing) self.health = -1;
@@ -201,6 +215,13 @@ pub const Scene = struct {
                 self.received_count += 1;
             }
             if (self.props.movie) |movie| self.pending_movie = movie;
+            if (self.controller.use_requested) {
+                self.input.consumeUse();
+                const action = (selected orelse return error.MissingSelectedItem).definition.use_action orelse return error.MissingItemAction;
+                switch (action) {
+                    .story => |cue| self.pending_movie = cue,
+                }
+            }
             self.simulation_steps += 1;
             self.clock.?.consume();
             if (self.inventory_cooldown != 0) {
@@ -220,7 +241,10 @@ pub const Scene = struct {
 
     pub fn latchMovieInput(self: *Scene) !void {
         try consumeInput(&self.pending, &self.input, self.clock.?.deadline());
-        self.movie_intent = try self.input.intent();
+        var intent = try self.input.intent();
+        intent.use_item = false;
+        self.input.consumeUse();
+        self.movie_intent = intent;
     }
     pub fn resumeMovie(self: *Scene, paused_for: u64) !void {
         self.clock.?.origin_ns = try std.math.add(u64, self.clock.?.origin_ns, paused_for);
@@ -277,7 +301,7 @@ pub const Scene = struct {
         self.terrain.hashInto(&hash);
         self.props.hashInto(&hash);
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, self.score)));
-        hash.update(&.{ self.inventory_cooldown, @intFromBool(self.input.inventory), @intFromBool(self.dialog != null) });
+        hash.update(&.{ self.inventory_cooldown, @intFromBool(self.input.inventory), @intFromBool(self.input.use_item), @intFromBool(self.input.use_held), @intFromBool(self.input.use_blocked), @intFromBool(self.dialog != null) });
         if (self.dialog) |dialog| {
             for ([_]u64{ dialog.menu.cursor, dialog.menu.last_displayed, dialog.clock.next_tick, dialog.clock.origin_ns - self.clock.?.origin_ns }) |value|
                 hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
@@ -375,4 +399,17 @@ test "late host polling applies queued controls at simulation deadlines and focu
     try consumeInput(&events, &held, 30);
     try std.testing.expectEqualDeep(HeldInput{}, held);
     try std.testing.expectEqual(@as(usize, 0), events.items.len);
+}
+
+test "using an item consumes Return until a release and new press" {
+    var input: HeldInput = .{};
+    input.key(.enter, true);
+    try std.testing.expect((try input.intent()).use_item);
+    input.consumeUse();
+    try std.testing.expect(!(try input.intent()).use_item);
+    input.key(.enter, true); // A held key's repeat must not replay the recording.
+    try std.testing.expect(!(try input.intent()).use_item);
+    input.key(.enter, false);
+    input.key(.enter, true);
+    try std.testing.expect((try input.intent()).use_item);
 }

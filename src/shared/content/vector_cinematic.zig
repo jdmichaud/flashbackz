@@ -6,15 +6,18 @@ const film = @import("../vector_film.zig");
 const shapes = @import("../render/indexed_shapes.zig");
 const palette = @import("palette.zig");
 const transforms = @import("cinematic_transform.zig");
+const cinematic_text = @import("cinematic_text.zig");
+const font_mod = @import("font.zig");
 const Treatment = enum { placed, scaled, rotated };
 
 pub const OwnedFilm = struct {
     allocator: std.mem.Allocator,
     arena: *std.heap.ArenaAllocator,
     frames: []const film.Frame,
+    font: ?font_mod.Font = null,
 
     pub fn view(self: *const OwnedFilm) film.View {
-        return .{ .frames = self.frames };
+        return .{ .frames = self.frames, .font = self.font };
     }
     pub fn deinit(self: *OwnedFilm) void {
         self.arena.deinit();
@@ -75,6 +78,10 @@ fn mapPoint(scale: *?Scale, rotation: ?transforms.Projection, point: shapes.Poin
 const Builder = struct {
     allocator: std.mem.Allocator,
     geometry: []const u8,
+    source: ?platform.AssetSource = null,
+    text_assets: ?cinematic_text.Text = null,
+    captions: []const film.TextRun = &.{},
+    caption_band: bool = false,
     frames: std.ArrayList(film.Frame) = .empty,
     working: std.ArrayList(film.Drawing) = .empty,
     saved_background: []const film.Drawing = &.{},
@@ -92,6 +99,10 @@ const Builder = struct {
     }
     fn clear(self: *Builder) !void {
         self.working.clearRetainingCapacity();
+        if (self.background_mode != 0) {
+            self.captions = &.{};
+            self.caption_band = false;
+        }
         if (self.background_mode == 0) try self.working.appendSlice(self.allocator, self.saved_background);
     }
     fn present(self: *Builder, ticks: u32) !void {
@@ -100,7 +111,22 @@ const Builder = struct {
         previous.hold_ticks = try std.math.add(u32, previous.hold_ticks, try std.math.add(u32, self.wait_ticks, ticks));
         self.wait_ticks = 0;
         self.visible = try self.snapshot(self.working.items);
-        try self.frames.append(self.allocator, .{ .drawings = self.visible, .colors = self.colors, .hold_ticks = 0 });
+        try self.frames.append(self.allocator, .{ .drawings = self.visible, .colors = self.colors, .hold_ticks = 0, .captions = self.captions, .caption_band = self.caption_band });
+    }
+    fn textAssets(self: *Builder) !cinematic_text.Text {
+        if (self.text_assets == null) {
+            self.text_assets = try cinematic_text.load(self.allocator, self.source orelse return error.CinematicTextRequired);
+            @memcpy(self.colors[0xe0..0xf0], &self.text_assets.?.colors);
+        }
+        return self.text_assets.?;
+    }
+    fn caption(self: *Builder, reference: u16) !void {
+        self.caption_band = true;
+        self.captions = if (reference == 0xffff) &.{} else try (try self.textAssets()).layout(self.allocator, reference, 8, 179, 0xef, true);
+    }
+    fn positionedText(self: *Builder, reference: u16, x: u8, y: u8) !void {
+        const rows = try (try self.textAssets()).layout(self.allocator, reference & 0xfff, 8 + @as(i16, x) * 8, 50 + @as(i16, y) * 8, @intCast(0xd0 + (reference >> 12)), false);
+        for (rows) |run| try self.working.append(self.allocator, .{ .geometry = .{ .text = run }, .ink = .{ .color = run.foreground } });
     }
     fn setPalette(self: *Builder, bank: u8, destination: u8) !void {
         if (destination > 1) return error.InvalidCinematicPalette;
@@ -203,6 +229,10 @@ const Builder = struct {
 };
 
 pub fn compile(allocator: std.mem.Allocator, commands: []const u8, polygons: []const u8, entry: u16) !OwnedFilm {
+    return compileFrom(allocator, commands, polygons, entry, null);
+}
+
+fn compileFrom(allocator: std.mem.Allocator, commands: []const u8, polygons: []const u8, entry: u16, source: ?platform.AssetSource) !OwnedFilm {
     const arena = try allocator.create(std.heap.ArenaAllocator);
     arena.* = std.heap.ArenaAllocator.init(allocator);
     errdefer {
@@ -216,7 +246,7 @@ pub fn compile(allocator: std.mem.Allocator, commands: []const u8, polygons: []c
     const start: usize = (@as(usize, entries) + 1) * 2;
     if (start > commands.len) return error.TruncatedCinematic;
     var reader: Reader = .{ .bytes = commands, .at = start + if (entry == 0) @as(usize, 0) else try wordAt(commands, 2 + @as(usize, entry) * 2) };
-    var builder: Builder = .{ .allocator = content, .geometry = polygons };
+    var builder: Builder = .{ .allocator = content, .geometry = polygons, .source = source };
     try builder.frames.append(content, .{ .drawings = &.{}, .colors = builder.colors, .hold_ticks = 0 });
     var finished = false;
     for (0..100000) |_| {
@@ -238,7 +268,12 @@ pub fn compile(allocator: std.mem.Allocator, commands: []const u8, polygons: []c
             2 => builder.wait_ticks = try std.math.add(u32, builder.wait_ticks, @as(u32, try reader.byte()) * 4),
             3 => try builder.drawShape(&reader, .placed),
             4 => try builder.setPalette(try reader.byte(), try reader.byte()),
+            6 => try builder.caption(try reader.word()),
             7 => {},
+            13 => {
+                const reference = try reader.word();
+                if (reference != 0xffff) try builder.positionedText(reference, try reader.byte(), try reader.byte());
+            },
             8 => _ = try reader.take(3),
             10 => try builder.drawShape(&reader, .scaled),
             12 => {
@@ -265,7 +300,7 @@ pub fn compile(allocator: std.mem.Allocator, commands: []const u8, polygons: []c
     if (!finished) return error.CinematicTooLarge;
     builder.frames.items[builder.frames.items.len - 1].hold_ticks = builder.wait_ticks;
     const frames = try builder.frames.toOwnedSlice(content);
-    return .{ .allocator = allocator, .arena = arena, .frames = frames };
+    return .{ .allocator = allocator, .arena = arena, .frames = frames, .font = if (builder.text_assets) |assets| assets.font else null };
 }
 
 pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource, name: []const u8, entry: u16) !OwnedFilm {
@@ -274,7 +309,7 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource, name: []
     defer commands.deinit();
     var polygons = try source.readAll(try std.fmt.bufPrint(&path, "DATA/{s}.POL", .{name}), 65536);
     defer polygons.deinit();
-    return compile(allocator, commands.bytes, polygons.bytes, entry);
+    return compileFrom(allocator, commands.bytes, polygons.bytes, entry, source);
 }
 
 fn testGeometry() [66]u8 {
