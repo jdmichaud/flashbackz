@@ -13,6 +13,8 @@ const palette = @import("palette.zig");
 const placement = @import("placement.zig");
 const equipment = @import("../equipment.zig");
 const starting_equipment = @import("starting_equipment.zig");
+const floppy_rooms = @import("floppy_rooms.zig");
+const floppy_interface = @import("floppy_interface.zig");
 const inventory_artwork = @import("inventory_artwork.zig");
 
 const Move = enum { wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover, collision_impact, recoil_fall, recoil_confined, recoil_staggered, recoil_prone, recoil_pause_prone, recoil_pause_tight, recoil_rise, recoil_drop, fall_begin, fall_continue, fatal_land, ledge_lower, ledge_catch, ledge_grip, ledge_hang, ledge_reach, ledge_settle_grip, ledge_climb, ledge_stand, ledge_release, ledge_drop, ledge_turn_release, ledge_tumble_release, ledge_brace, ledge_braced_lower };
@@ -152,12 +154,13 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
     return loadWithDifficulty(allocator, source, .normal);
 }
 
-pub fn loadWithDifficulty(_: std.mem.Allocator, _: platform.AssetSource, _: @import("../settings.zig").Difficulty) !Pack {
-    return error.FloppyGameplayNotYetQualified;
+pub fn loadWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSource, _: @import("../settings.zig").Difficulty) !Pack {
+    const values = try floppy_interface.load(allocator, source);
+    return assemble(allocator, source, .{ .actor_colors = values.actor_colors, .text_colors = values.text_colors, .interface_colors = values.interface_colors, .level_label = &values.level_label });
 }
 
 /// Decoded interface content supplied by an edition importer. No executable offsets enter
-/// scene assembly. The floppy executable's palettes and labels still require qualification.
+/// scene assembly. Palette and label locations are isolated in the floppy edition importer.
 pub const Interface = struct {
     actor_colors: [2]palette.Bank,
     text_colors: palette.Bank,
@@ -166,8 +169,8 @@ pub const Interface = struct {
 };
 
 pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, interface: Interface) !Pack {
-    var map = try read(source, "DATA/LEVEL1.MAP", 8 * 1024 * 1024);
-    defer map.deinit();
+    var rooms = try RoomSource.open(source);
+    defer rooms.deinit();
     var colors = try read(source, "DATA/LEVEL1.PAL", 8192);
     defer colors.deinit();
     var sprites = try read(source, "DATA/PERSO.SPR", 1024 * 1024);
@@ -225,30 +228,27 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
         for (room_art.items) |*room| room.artwork.deinit();
         room_art.deinit(allocator);
     }
-    if (map.bytes.len < 384) return error.TruncatedRoomDirectory;
-    const first_offset = @abs(std.mem.readInt(i32, map.bytes[@as(usize, player.room) * 6 ..][0..4], .little));
-    if (first_offset == 0) return error.MissingRoomArtwork;
-    if (first_offset >= map.bytes.len or map.bytes.len - first_offset < 4) return error.InvalidRoomRange;
-    const reference_bank = map.bytes[first_offset + 2];
+    var first_room = try rooms.decode(allocator, colors.bytes, player.room);
+    defer first_room.deinit();
+    const reference_bank = first_room.palette_banks[2];
     const icon_colors = try palette.decodeLevelBank(colors.bytes, reference_bank);
     for (0..64) |index| {
-        var art = artwork.decode(allocator, map.bytes, colors.bytes, @intCast(index)) catch |err| switch (err) {
+        var art = rooms.decode(allocator, colors.bytes, @intCast(index)) catch |err| switch (err) {
             error.AbsentRoom => continue,
             else => return err,
         };
         errdefer art.deinit();
-        const offset = @abs(std.mem.readInt(i32, map.bytes[index * 6 ..][0..4], .little));
-        const alternate = map.bytes[offset + 2] != reference_bank;
+        const alternate = art.palette_banks[2] != reference_bank;
         @memcpy(art.colors[0x40..0x50], &interface.actor_colors[@intFromBool(alternate)]);
         @memcpy(art.colors[0xa0..0xb0], &icon_colors);
         @memcpy(art.colors[0xe0..0xf0], &interface.text_colors);
         @memcpy(art.colors[0xf0..0x100], &interface.interface_colors);
         try room_art.append(allocator, .{ .id = room_ids[index], .artwork = art });
     }
-    const rooms = try room_art.toOwnedSlice(allocator);
+    const decoded_rooms = try room_art.toOwnedSlice(allocator);
     errdefer {
-        for (rooms) |*room| room.artwork.deinit();
-        allocator.free(rooms);
+        for (decoded_rooms) |*room| room.artwork.deinit();
+        allocator.free(decoded_rooms);
     }
     const facing: motion.Facing = if (player.facing_right == 0) .left else .right;
     const first_visual = switch (motions[@backingInt(Move.wake)].steps[0]) {
@@ -258,7 +258,7 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
     const frames = try resolver.frames.toOwnedSlice(allocator);
     return .{
         .allocator = allocator,
-        .rooms = rooms,
+        .rooms = decoded_rooms,
         .frames = frames,
         .motions = motions,
         .walk_strides = walk,
@@ -271,3 +271,33 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
         .initial_pose = .{ .position = player.position, .facing = facing, .visual = .{ .id = first_visual.id, .mirrored = first_visual.mirrored != (facing == .left) } },
     };
 }
+
+/// Own whichever source representation the user supplied. Both yield ordinary artwork.
+const RoomSource = union(enum) {
+    installed: platform.OwnedBytes,
+    compact: struct { rooms: platform.OwnedBytes, tiles: platform.OwnedBytes, background: platform.OwnedBytes },
+    fn open(source: platform.AssetSource) !RoomSource {
+        if (read(source, "DATA/LEVEL1.MAP", 8 * 1024 * 1024)) |file| return .{ .installed = file } else |err| if (err != error.NotFound) return err;
+        var rooms = try read(source, "DATA/LEVEL1.LEV", 1024 * 1024);
+        errdefer rooms.deinit();
+        var tiles = try read(source, "DATA/LEVEL1.BNQ", 1024 * 1024);
+        errdefer tiles.deinit();
+        return .{ .compact = .{ .rooms = rooms, .tiles = tiles, .background = try read(source, "DATA/LEVEL1.SGD", 1024 * 1024) } };
+    }
+    fn deinit(self: *RoomSource) void {
+        switch (self.*) {
+            .installed => |*file| file.deinit(),
+            .compact => |*files| {
+                files.rooms.deinit();
+                files.tiles.deinit();
+                files.background.deinit();
+            },
+        }
+    }
+    fn decode(self: *const RoomSource, allocator: std.mem.Allocator, colors: []const u8, room: u8) !artwork.Artwork {
+        return switch (self.*) {
+            .installed => |file| artwork.decode(allocator, file.bytes, colors, room),
+            .compact => |files| (floppy_rooms.Archive{ .rooms = files.rooms.bytes, .banks = files.tiles.bytes, .background = files.background.bytes, .tile_bias = 896 }).decode(allocator, colors, room),
+        };
+    }
+};

@@ -14,6 +14,7 @@ const strip_size = pixel_count / 4;
 
 pub const Artwork = struct {
     image: bitmap.IndexedImage,
+    palette_banks: [4]u8,
     colors: palette.Palette,
     foreground: []bool,
 
@@ -69,7 +70,22 @@ pub fn decode(allocator: std.mem.Allocator, map: []const u8, color_file: []const
     }
     const foreground = try allocator.alloc(bool, pixel_count);
     for (image.pixels, foreground) |index, *covered| covered.* = index & 0x80 != 0;
-    return .{ .image = image, .colors = colors, .foreground = foreground };
+    return .{ .image = image, .palette_banks = payload[0..4].*, .colors = colors, .foreground = foreground };
+}
+
+/// Takes ownership of row-major pixels on success. Both installed and compact resources
+/// produce this same immutable artwork; no source layout reaches the renderer.
+pub fn fromPixels(allocator: std.mem.Allocator, pixels: []u8, color_file: []const u8, selectors: [4]u8) !Artwork {
+    if (pixels.len != pixel_count) return error.InvalidRoomSize;
+    var colors: palette.Palette = @splat(.{ .r = 0, .g = 0, .b = 0 });
+    for (selectors, 0..) |bank, slot| {
+        const decoded = try palette.decodeLevelBank(color_file, bank);
+        @memcpy(colors[slot * 16 ..][0..16], &decoded);
+        @memcpy(colors[(slot + 8) * 16 ..][0..16], &decoded);
+    }
+    const foreground = try allocator.alloc(bool, pixel_count);
+    for (pixels, foreground) |index, *covered| covered.* = index & 0x80 != 0;
+    return .{ .image = .{ .allocator = allocator, .width = width, .height = height, .pixels = pixels }, .palette_banks = selectors, .colors = colors, .foreground = foreground };
 }
 
 /// Nonnegative codes copy 1..128 literals; negative codes repeat the following byte

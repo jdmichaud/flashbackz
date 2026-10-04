@@ -9,7 +9,8 @@ have been removed.
 The supplied `disk1.img` and `disk2.img` form the complete English floppy set. The original
 installer completes successfully, and the original introduction and English menu run. Disk 1
 is identical to the now-removed `Flashback.ima`. Both native hosts accept the two image paths
-together, or extracted directories. Converting the installer’s level files is still pending.
+together, or extracted directories. Compact room artwork is decoded directly; all 193 rooms
+match the original installer’s pictures and palette selections.
 
 Code-wheel protection is excluded by the user's instruction. Modern Start will proceed
 directly to the game opening sequence.
@@ -22,8 +23,10 @@ under the user's preference for readability over pixel-specific fixes.
 
 AdLib music now plays through the logo, introduction and menu. Original musical ticks and
 register writes agree across 16,709 observations; native SDL output has been captured. Digital
-sound effects, exact presentation/audio synchronization, menu fades/blinking, gameplay entry,
-passwords and Continue are still unfinished. The startup error `FloppyCinematicsNotYetImplemented` has been removed
+sound effects, exact presentation/audio synchronization, menu fades/blinking, passwords and
+Continue are still unfinished. Start plays the wake-up animation with music and enters the
+jungle. Turning, walking and the existing movement/inventory development slice are available;
+other actors, interactions and complete floppy behavior qualification remain unfinished. The startup error `FloppyCinematicsNotYetImplemented` has been removed
 from normal launch. `--scene menu` remains an optional development shortcut.
 
 ```sh

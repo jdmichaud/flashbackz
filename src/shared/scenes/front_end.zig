@@ -9,7 +9,7 @@ const menu_mod = @import("menu.zig");
 const soundtrack = @import("../audio/soundtrack.zig");
 const vector_player = @import("vector_player.zig");
 pub const Difficulty = @import("../settings.zig").Difficulty;
-pub const Stage = enum { branding, introduction, menu, ready, quit };
+pub const Stage = enum { branding, introduction, awakening, menu, ready, quit };
 pub const View = enum { main, skill, info, password, unavailable };
 
 pub const Scene = struct {
@@ -20,7 +20,7 @@ pub const Scene = struct {
     menu: menu_mod.Menu = .{},
     player: ?vector_player.Player = null,
     music: ?soundtrack.Soundtrack = null,
-    music_cue: ?enum { branding, introduction, menu } = null,
+    music_cue: ?enum { branding, introduction, awakening, menu } = null,
     music_rate: ?u32 = null,
     introduction_part: enum { first, second } = .first,
     skip_requested: bool = false,
@@ -74,6 +74,7 @@ pub const Scene = struct {
         const cue: @TypeOf(self.music_cue) = switch (self.stage) {
             .branding => .branding,
             .introduction => .introduction,
+            .awakening => .awakening,
             .menu => .menu,
             else => {
                 self.stopAudio(p);
@@ -92,6 +93,7 @@ pub const Scene = struct {
             const name: []const u8 = switch (cue.?) {
                 .branding => "PRESENT3",
                 .introduction => "INTROL3",
+                .awakening => "REVEIL3",
                 .menu => "OPTION3",
             };
             const replacement = try soundtrack.Soundtrack.open(self.allocator, self.source, name, self.music_rate.?);
@@ -120,7 +122,11 @@ pub const Scene = struct {
         if (self.player) |*player| {
             const skipped = self.skip_requested;
             if (skipped or try player.update(p.nowNs())) {
-                if (self.stage == .branding) {
+                if (self.stage == .awakening) {
+                    player.deinit();
+                    self.player = null;
+                    self.stage = .ready;
+                } else if (self.stage == .branding) {
                     try self.play("INTRO1");
                     self.introduction_part = .first;
                     self.stage = .introduction;
@@ -155,8 +161,10 @@ pub const Scene = struct {
         self.menu.selected = .start;
     }
 
-    pub fn start(_: *Scene, _: ?platform.Key) !void {
-        return error.FloppyGameplayNotYetQualified;
+    pub fn start(self: *Scene, key: ?platform.Key) !void {
+        try self.play("DEBUT");
+        self.activation_key = key;
+        self.stage = .awakening;
     }
 
     pub fn gameOver(_: *Scene, _: ?platform.Key) !void {

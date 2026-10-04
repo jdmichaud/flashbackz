@@ -2,7 +2,7 @@
 const std = @import("std");
 const game = @import("flashbackz");
 
-test "floppy menu preview cannot silently skip missing introduction or enter CD gameplay" {
+test "floppy menu preview rejects missing introduction and wake-up resources" {
     const allocator = std.testing.allocator;
     var source = game.memory.MemoryAssetSource.init(allocator);
     defer source.deinit();
@@ -27,7 +27,7 @@ test "floppy menu preview cannot silently skip missing introduction or enter CD 
     try front.event(.{ .time_ns = 3, .payload = .{ .key_down = .{ .key = .enter } } });
     try std.testing.expectEqual(game.settings.Difficulty.easy, front.difficulty);
     try std.testing.expectEqual(game.front_end.View.main, front.view);
-    try std.testing.expectError(error.FloppyGameplayNotYetQualified, front.start(null));
+    try std.testing.expectError(error.NotFound, front.start(null));
 }
 
 test "normal startup completes three vector chapters and skipping introduction reaches menu" {
