@@ -70,6 +70,9 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   and damage through independent actor/combat components; qualify with quick native encounters.
   Include the robots and ceiling laser guns as distinct behavior families (user reminder);
   gunman completion alone does not close enemy coverage.
+- [ ] Shared key/card pickups and credential locks: match original item codes at contact,
+  consume successful uses, and route lock outputs through the normal door circuits.
+  Preserve pickup movies, sounds and data-defined activation order.
 - [ ] **Systematic mechanism import (user direction):** enumerate all level placements,
   shared rule groups and connections; classify behaviour families and translate them to typed
   definitions for shared switch/door/lift components. Gate: every instance is accounted for,
