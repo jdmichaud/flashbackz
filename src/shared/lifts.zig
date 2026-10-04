@@ -20,6 +20,7 @@ pub const StopPolicy = struct {
     has_floor: bool = true,
     floor_on_blocked_request: bool = false,
     sleep_when_empty: bool = true,
+    sleep_with_contacts: bool = false,
     release_passengers: bool = true,
     accepts_player: bool = true,
     refuses_unboarded_items: bool = true,
@@ -150,11 +151,16 @@ pub const Instance = struct {
                 var requested = if (target == .top) self.requests.up else self.requests.down;
                 const rider = policy.accepts_player and (if (target == .top) self.requests.rider_up else self.requests.rider_down);
                 requested = requested or rider;
-                if (policy.return_delay != null and !(policy.pause_return_outside_room and self.room != player_room)) {
+                var renewed = false;
+                if (policy.return_delay != null) {
                     // Original automatic returns test countdown before a same-step reset.
                     self.remaining -%= 1;
                     requested = requested or self.remaining == 0;
-                    if (!requested and self.requests.reset) self.remaining = policy.return_delay.?;
+                    const called_here = if (self.stop == .top) self.requests.up else self.requests.down;
+                    if (!requested and (self.requests.reset or called_here)) {
+                        self.remaining = policy.return_delay.?;
+                        renewed = true;
+                    }
                 }
                 if (requested and !(policy.refuses_unboarded_items and occupancy.unboarded_items)) {
                     self.destination = target;
@@ -164,9 +170,9 @@ pub const Instance = struct {
                     self.event = if (target == .top) .depart_up else .depart_down;
                 } else {
                     if (requested) self.invite_items = occupancy.unboarded_items;
-                    self.release_passengers = !requested and policy.release_passengers and occupancy.contacts;
+                    self.release_passengers = !requested and !renewed and policy.release_passengers and occupancy.contacts;
                     if (policy.has_floor and (!requested or policy.floor_on_blocked_request)) try self.support(definition, world);
-                    if (policy.sleep_when_empty and !occupancy.contacts and !requested) self.active = false;
+                    if (policy.sleep_when_empty and (!occupancy.contacts or policy.sleep_with_contacts) and !requested) self.active = false;
                 }
             },
             .departing => {

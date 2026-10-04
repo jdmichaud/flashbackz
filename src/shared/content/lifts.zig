@@ -1,4 +1,4 @@
-//! Translate manually called, two-stop lift families into platform trips. Recognition
+//! Translate command-operated and automatic-return lift families into platform trips. Recognition
 //! follows movement/arrival links and validates the full family; source states stay here.
 const std = @import("std");
 const runtime = @import("../lifts.zig");
@@ -16,14 +16,20 @@ const TripSpec = struct {
     arrival: ?u16,
     speed: i16,
     distance_parameter: u2,
-    player_message: i16,
-    call_message: i16,
+    player_message: ?i16,
+    call_message: ?i16,
     floor_on_blocked_request: bool,
     arrival_sound: ?motion.SoundId,
     start_output: ?rules.Operation,
     end_output: ?rules.Operation,
 };
-pub const Spec = struct { trips: [2]TripSpec, disabled: u16, enabled_stop: runtime.Stop, floor_row: i16 };
+pub const Spec = struct {
+    trips: [2]TripSpec,
+    disabled: ?u16,
+    enabled_stop: runtime.Stop,
+    floor_row: i16,
+    automatic_return: ?struct { stop: runtime.Stop, delay: i16, pause_outside_room: bool } = null,
+};
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -58,8 +64,9 @@ fn idle(group: rules.Group, state: u16) ?rules.Rule {
     return null;
 }
 pub fn recognize(group: rules.Group) ?Spec {
+    if (recognizeAutomatic(group)) |spec| return spec;
     // The command-operated graphs share a contact safety check and acknowledgement.
-    // Automatic returns and cinematic transfers require their own import policies.
+    // Cinematic transfers require a separate import policy.
     if (group.count() != 22 and group.count() != 24) return null;
     var trips: [2]?TripSpec = @splat(null);
     var row: ?i16 = null;
@@ -137,6 +144,41 @@ pub fn recognize(group: rules.Group) ?Spec {
     }
     return .{ .trips = complete, .disabled = disabled.?, .enabled_stop = enabled, .floor_row = row.? };
 }
+/// A pressure call lowers this platform; a resettable parked timer returns it upward.
+/// Every row is checked, while animation IDs, signal, timing and distance stay data values.
+fn recognizeAutomatic(group: rules.Group) ?Spec {
+    if (group.count() != 14) return null;
+    var r: [14]rules.Rule = undefined;
+    const codes = [_][3]u8{ .{ 77, 0, 0 }, .{ 63, 68, 78 }, .{ 34, 62, 54 }, .{ 0, 126, 54 }, .{ 0, 0, 54 }, .{ 34, 68, 0 }, .{ 67, 0, 54 }, .{ 63, 125, 54 }, .{ 0, 0, 78 }, .{ 63, 62, 54 }, .{ 0, 0, 78 }, .{ 0, 114, 78 }, .{ 0, 114, 78 }, .{ 0, 0, 0 } };
+    const next = [_]u16{ 0, 12, 0, 0, 0, 11, 5, 5, 7, 13, 9, 9, 7, 0 };
+    for (&r, codes, next, 0..) |*row, expected, target, i| {
+        row.* = group.at(i);
+        if (row.dx != 0 or row.dy != 0 or row.flags != 0 or row.next != target or row.target != group.at(target).source) return null;
+        const operations = [_]rules.Operation{ row.conditions[0], row.conditions[1], row.effect };
+        for (operations, expected) |operation, code| if (operation.code != code) return null;
+    }
+    for ([_]usize{ 1, 2, 3, 4 }) |i| if (r[i].source != r[0].source) return null;
+    if (r[6].source != r[5].source or r[8].source != r[7].source or r[10].source != r[9].source) return null;
+    if (r[0].source == r[5].source or r[7].source == r[9].source) return null;
+    const height = r[2].effect.argument;
+    for ([_]usize{ 3, 4, 6, 7, 9 }) |i| if (r[i].effect.argument != height) return null;
+    if (r[11].conditions[1].argument != height or r[12].conditions[1].argument != height) return null;
+    const parameter = r[1].conditions[1].argument;
+    if (parameter < 0 or parameter > 3 or r[5].conditions[1].argument != parameter) return null;
+    const delay = r[2].conditions[1].argument;
+    const signal = r[2].conditions[0].argument;
+    if (delay <= 0 or r[9].conditions[1].argument != delay or r[5].conditions[0].argument != signal) return null;
+    if (r[0].conditions[0].argument != 0 or r[1].conditions[0].argument != 0 or r[7].conditions[0].argument != 0 or r[9].conditions[0].argument != 0 or r[1].effect.argument != 0 or r[3].conditions[1].argument != 130) return null;
+    const up = r[8].effect.argument;
+    const down = r[10].effect.argument;
+    const sound = r[7].conditions[1].argument;
+    if (up >= 0 or down <= 0 or r[12].effect.argument != up or r[11].effect.argument != down or sound < 0 or sound >= 66) return null;
+    return .{ .trips = .{
+        .{ .parked = r[0].source, .departure = r[12].source, .movement = r[7].source, .arrival = null, .speed = up, .distance_parameter = @intCast(parameter), .player_message = null, .call_message = null, .floor_on_blocked_request = false, .arrival_sound = @fromBackingInt(@as(u8, @intCast(sound))), .start_output = null, .end_output = null },
+        .{ .parked = r[5].source, .departure = r[11].source, .movement = r[9].source, .arrival = r[13].source, .speed = down, .distance_parameter = @intCast(parameter), .player_message = null, .call_message = signal, .floor_on_blocked_request = false, .arrival_sound = null, .start_output = null, .end_output = null },
+    }, .disabled = null, .enabled_stop = .top, .floor_row = height, .automatic_return = .{ .stop = .bottom, .delay = delay, .pause_outside_room = true } };
+}
+
 fn resolve(allocator: std.mem.Allocator, animations: []const u8, state: u16, clips: *std.ArrayList(animation.OwnedClip), resolver: anytype) !motion.Clip {
     var source = try animation.decode(allocator, animations, state);
     defer source.deinit();
@@ -178,10 +220,23 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
             continue;
         };
         const profile_id = groups.get(record.rule_group) orelse fresh: {
-            var profile: runtime.Profile = .{ .stops = undefined, .trips = undefined, .enabled_stop = spec.enabled_stop, .disabled = try resolve(allocator, animations, spec.disabled, &clips, resolver) };
+            var profile: runtime.Profile = .{ .stops = undefined, .trips = undefined, .enabled_stop = spec.enabled_stop, .disabled = if (spec.disabled) |state| try resolve(allocator, animations, state, &clips, resolver) else null };
             for (spec.trips, 0..) |trip, index| {
                 profile.stops[1 - index] = .{ .idle = try resolve(allocator, animations, trip.parked, &clips, resolver), .floor_on_blocked_request = trip.floor_on_blocked_request };
                 profile.trips[index] = .{ .departure = try resolve(allocator, animations, trip.departure, &clips, resolver), .movement = try resolve(allocator, animations, trip.movement, &clips, resolver), .arrival = if (trip.arrival) |a| try resolve(allocator, animations, a, &clips, resolver) else null, .speed = trip.speed, .arrival_sound = trip.arrival_sound };
+            }
+            if (spec.automatic_return) |automatic| {
+                for (&profile.stops) |*policy| {
+                    policy.accepts_player = false;
+                    policy.refuses_unboarded_items = false;
+                }
+                const returning = &profile.stops[@backingInt(automatic.stop)];
+                returning.return_delay = automatic.delay;
+                returning.pause_return_outside_room = automatic.pause_outside_room;
+                returning.sleep_when_empty = false;
+                const resting = &profile.stops[1 - @backingInt(automatic.stop)];
+                resting.release_passengers = false;
+                resting.sleep_with_contacts = true;
             }
             const id = profiles.items.len;
             try profiles.append(allocator, profile);
@@ -221,7 +276,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         const spec = recognize(try rules.group(rule_bytes, record.rule_group)) orelse continue;
         for (routes.items) |route| {
             if (route.recipient != i) continue;
-            const action: runtime.Action = if (route.message == spec.trips[0].call_message or route.message == spec.trips[0].player_message) .go_up else if (route.message == spec.trips[1].call_message or route.message == spec.trips[1].player_message) .go_down else if (route.message == 30) .enable else .wake;
+            const action: runtime.Action = if (route.message == spec.trips[0].call_message or route.message == spec.trips[0].player_message) .go_up else if (route.message == spec.trips[1].call_message or route.message == spec.trips[1].player_message) .go_down else if (spec.disabled != null and route.message == 30) .enable else .wake;
             try bindings.append(allocator, .{ .circuit = route.circuit, .target = definition_index, .action = action, .next_step = route.sender >= i });
         }
         definition_index += 1;

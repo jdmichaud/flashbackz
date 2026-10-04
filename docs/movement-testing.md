@@ -122,5 +122,11 @@ boards; keeping the travel keys held submits the renewed request that carries bo
 and the stone. Other loose item families do not automatically board.
 
 The ordinary ride and armed room-crossing ride have focused original behavior comparisons;
-SDL input, presented poses and PCM output were checked. Automatic-return and cinematic
-transfer lifts, and some external call controllers, remain unfinished.
+SDL input, presented poses and PCM output were checked. Cinematic transfer lifts and some
+external call controllers remain unfinished.
+
+### Pressure-called lift return
+
+Stand on the pressure plate beside the automatic platform: it descends and stays down.
+Walk off the plate to let its timer expire and watch it return upward. This family responds
+to its plate; it does not acknowledge the ordinary Shift+Up/Down ride request.

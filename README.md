@@ -65,7 +65,8 @@ route through imported circuits. Ordinary keys can be collected with Shift, sele
 Tab/arrow keys, and used with Return at a matching lock. Successful use consumes the key.
 Ordinary lifts now carry Conrad and board stones through their original contact behavior.
 With the gun holstered, Shift+Up/Down requests a ride. Turning, crouching, drawing,
-shooting and holstering work while travelling. Automatic-return/cinematic lifts,
+shooting and holstering work while travelling. The jungle pressure-called lift now stays
+down while its plate is pressed, then returns automatically. Cinematic lifts,
 story-issued cards, other enemy families and the remaining mechanisms are
 still being implemented.
 
