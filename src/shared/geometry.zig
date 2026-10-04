@@ -4,6 +4,7 @@ const std = @import("std");
 const motion = @import("motion.zig");
 
 pub const RoomId = enum(u16) { _ };
+pub const CellAddress = struct { room: RoomId, column: u16, row: u16 };
 pub const Side = enum { left, right, up, down };
 pub const Edge = union(enum) { room: RoomId, blocked, unresolved };
 
@@ -44,6 +45,13 @@ pub const Map = struct {
     }
 
     pub fn blocked(self: Map, id: RoomId, column: i16, row: i16) !bool {
+        const address = try self.locate(id, column, row) orelse return true;
+        const target = try self.room(address.room);
+        return target.blocking[@as(usize, address.row) * target.columns + address.column];
+    }
+
+    /// Resolve one neighboring cell. A solid outer boundary has no material-bearing cell.
+    pub fn locate(self: Map, id: RoomId, column: i16, row: i16) !?CellAddress {
         const origin = try self.room(id);
         try origin.validate();
         var target = origin;
@@ -67,14 +75,14 @@ pub const Map = struct {
         }
         if (crossing) |side| switch (origin.edge(side)) {
             .room => |neighbor| target = try self.room(neighbor),
-            .blocked => return true,
+            .blocked => return null,
             .unresolved => return error.UnresolvedBoundary,
         };
         try target.validate();
         if (x < 0 or y < 0 or x >= target.columns or y >= target.rows) return error.QueryOutsideConnectedGrid;
         const index = @as(usize, @intCast(y)) * target.columns + @as(usize, @intCast(x));
         if (index >= target.blocking.len) return error.InvalidGeometry;
-        return target.blocking[index];
+        return .{ .room = target.id, .column = @intCast(x), .row = @intCast(y) };
     }
 
     /// Actor handoff is requested by the motion system at a transition, not after every

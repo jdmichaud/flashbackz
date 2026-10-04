@@ -101,7 +101,7 @@ pub const Scene = struct {
         return .{
             .allocator = allocator,
             .content = pack,
-            .environment = .{ .map = terrain.map(), .room = pack.initial_room },
+            .environment = .{ .map = terrain.map(), .room = pack.initial_room, .materials = terrain.view() },
             .terrain = terrain,
             .pose = pack.initial_pose,
             .health = pack.initial_health,

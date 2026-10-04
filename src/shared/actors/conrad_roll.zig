@@ -25,6 +25,9 @@ test "roll exit alignment is committed once before its recovery" {
         pub fn at(_: @This(), _: motion.Pose, height: anytype, _: i16) !bool {
             return height == .support;
         }
+        pub fn rollPassage(_: @This(), _: motion.Pose, _: i16) !bool {
+            return false;
+        }
         pub fn ledge(_: @This(), _: motion.Pose, _: anytype, _: i16, _: anytype) !bool {
             return false;
         }
@@ -67,11 +70,16 @@ pub const State = struct {
                 if (!try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .support, 1)) {
                     self.phase = .drop;
                 } else {
-                    if (try environment.at(pose.*, .torso, 1)) return .terrain_requested;
+                    const passage = try environment.rollPassage(pose.*, 0) or try environment.rollPassage(pose.*, 1);
+                    if (!passage and try environment.at(pose.*, .torso, 1)) return .terrain_requested;
                     self.phase = .tumble;
                 }
             },
             .tumble => {
+                if (try environment.rollPassage(pose.*, 1)) {
+                    self.phase = .exit;
+                    return .continued;
+                }
                 if (try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .torso, -1)) return .terrain_requested;
                 if (try environment.at(pose.*, .torso, 1) and !try environment.at(pose.*, .torso, 0)) {
                     shiftForward(pose, clips.alignment_forward);
@@ -79,8 +87,14 @@ pub const State = struct {
                 } else self.phase = if (try environment.at(pose.*, .support, 1)) .exit else .drop;
             },
             .exit => {
-                if (intent.vertical == .down) return .action_requested;
-                self.phase = if (try environment.at(pose.*, .support, 1)) .balance else .drop;
+                if (!try environment.at(pose.*, .support, 1)) {
+                    self.phase = .drop;
+                } else if (try environment.rollPassage(pose.*, 0)) {
+                    self.phase = .enter;
+                } else {
+                    if (intent.vertical == .down) return .action_requested;
+                    self.phase = .balance;
+                }
                 shiftForward(pose, clips.alignment_forward);
             },
             .balance => {

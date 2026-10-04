@@ -47,6 +47,10 @@ const NoEnvironment = struct {
         return error.EnvironmentRequired;
     }
     pub fn motionBoundary(_: @This(), _: *motion.Pose) !void {}
+    pub fn rollPassage(_: @This(), _: motion.Pose, _: i16) !bool {
+        return false;
+    }
+
     pub fn ledge(_: @This(), _: motion.Pose, _: anytype, _: i16, _: anytype) !bool {
         return error.EnvironmentRequired;
     }
@@ -281,6 +285,10 @@ test "walking commits a stride and requests room handoff only at its boundary" {
         pub fn motionBoundary(self: *@This(), _: *motion.Pose) !void {
             self.boundaries += 1;
         }
+        pub fn rollPassage(_: @This(), _: motion.Pose, _: i16) !bool {
+            return false;
+        }
+
         pub fn ledge(_: *@This(), _: motion.Pose, _: anytype, _: i16, _: anytype) !bool {
             return false;
         }

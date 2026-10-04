@@ -4,11 +4,28 @@ const std = @import("std");
 const geometry = @import("geometry.zig");
 
 pub const Material = enum { empty, solid, restricted };
-pub const Address = struct { room: geometry.RoomId, column: u16, row: u16 };
+pub const Address = geometry.CellAddress;
 pub const Reuse = enum { matching_origin, latest_only };
 pub const Span = struct { origin: Address, length: u16, history_weight: usize = 1, reuse: Reuse = .matching_origin };
 pub const Options = struct { history_limit: ?usize = null };
 const Snapshot = struct { offset: usize, saved_length: u16, restore_length: u16 };
+
+/// Read-only materials over the same room connectivity used by occupancy queries.
+/// Slices remain valid when the owning State value moves; edits are immediately visible.
+pub const View = struct {
+    geometry: geometry.Map,
+    materials: []const Material,
+
+    pub fn sample(self: View, room: geometry.RoomId, column: i16, row: i16) !Material {
+        const address = try self.geometry.locate(room, column, row) orelse return .solid;
+        var base: usize = 0;
+        for (self.geometry.rooms) |candidate| {
+            if (candidate.id == address.room) return self.materials[base + @as(usize, address.row) * candidate.columns + address.column];
+            base += candidate.blocking.len;
+        }
+        return error.UnknownRoom;
+    }
+};
 
 pub const State = struct {
     allocator: std.mem.Allocator,
@@ -65,6 +82,10 @@ pub const State = struct {
 
     pub fn map(self: *const State) geometry.Map {
         return .{ .rooms = self.rooms };
+    }
+
+    pub fn view(self: *const State) View {
+        return .{ .geometry = self.map(), .materials = self.materials };
     }
 
     fn offsetOf(self: *const State, address: Address, length: u16) !usize {
