@@ -66,6 +66,9 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   definitions for shared switch/door/lift components. Gate: every instance is accounted for,
   known families are imported without per-object special cases, and unknown rule patterns are
   reported explicitly. Keep original instruction dispatch out of the modern runtime.
+- [ ] Wire imported relay/pressure outputs to shared hazard consumers, preserving activation,
+  event ordering, animation, sound and contact consequences. Qualify disintegration and the
+  floppy Continue flow before exposing a hazard contact path that cannot return safely to play.
 - [ ] Connect pressure-plate signals to independently modeled gate animation and terrain
   changes. Recover startup gate/platform footprints as behavior, not permanent level edits.
   Gate: original floppy object transitions, signal order and complete collision-grid changes
