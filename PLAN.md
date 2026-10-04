@@ -17,7 +17,7 @@ The user permits small documented pixel differences when that avoids excessive c
 readability takes precedence over frame-specific repairs for isolated pixels.
 Browser/WebAssembly support is excluded by the user; native Linux is the current focus.
 
-- [ ] Remove the web host, browser assets and build/check targets. Gate: native builds and
+- [x] Remove the web host, browser assets and build/check targets. Gate: native builds and
   tests pass, and no browser target or host remains in the active implementation.
 - [x] Inventory FAT12 files and ABA archives; identify missing installation media, record
   provenance and reproduce floppy startup on disposable copies.

@@ -11,8 +11,6 @@ depends on the game, and the port builds it as its checks need (below).
 - The port's own suites, once it has them.
 - `zig build smoke` (the agent host for a few frames, with a save and a load) and `zig build
   verify` (the agent binary links no SDL).
-- `zig build web`: the browser build, with the check of its module's imports. When a helper of
-  the page changes, `zig build web-check` (it needs Node.js).
 - `zig fmt --check src build.zig`.
 
 The steps are listed at the top of `build.zig`; agents build into a prefix and a cache under
@@ -132,7 +130,5 @@ level differed and the rates agreed as a whole (chi-square p = 0.93).
 
 ## Other targets
 
-- **Windows under Wine.** `zig build test -Dtarget=x86_64-windows-gnu -fwine` runs most unit tests.
-  Wine has known limits (`docs/lessons.md`); the Windows gate needs Windows itself.
-- **Browsers.** Chromium and Firefox, headless for scripted checks, and with a real display for
-  input and audio.
+Windows compilation is deferred until Linux gameplay works. The user accepts Linux runtime
+verification plus a Windows cross-build when that phase resumes. Browser support is excluded.

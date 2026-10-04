@@ -172,6 +172,6 @@ are complementary. An incomplete subsystem is reported as incomplete, not hidden
 renderer or a build-only gate.
 
 The initial template program is explicitly a platform smoke placeholder. It establishes
-compilation, host/provider contracts, deterministic headless execution and browser linkage;
+compilation, host/provider contracts, deterministic headless execution and native SDL presentation;
 it is replaced as measured Flashback content and systems arrive. The final acceptance is the
 whole faithful, independently designed game, not this foundation or a single playable room.
