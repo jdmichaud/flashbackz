@@ -53,8 +53,9 @@ throws the selected stone; its data supplies the flight, rebounds and landing so
 Electrical hazards now respond to their switches and pressure plates, and contact plays
 disintegration before Continue. Jungle gunmen now share idle, walking, turning,
 awareness and aiming/firing animation. The stone-sensitive variant approaches loose stones;
-the other variant ignores them. Bullet damage, hit/death reactions, other enemy families
-and the remaining mechanisms are still being implemented.
+the other variant ignores them. Conrad's shots now damage and defeat gunmen, with directional
+knockdowns and score awards. Enemy bullets cannot harm Conrad yet; his hit reactions,
+other enemy families and the remaining mechanisms are still being implemented.
 
 DEMO plays the three original recorded input streams through normal gameplay, in the
 original jungle / alien surface / tower order. Escape or Tab returns to the title; select

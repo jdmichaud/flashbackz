@@ -125,7 +125,7 @@ fn discover(group: rules.Group) !?Sources {
     return sources;
 }
 
-fn profile(group: rules.Group, sources: Sources, clips: actor.Clips) !actor.Profile {
+fn profile(group: rules.Group, sources: Sources, clips: actor.Clips, reactions: [actor.action_count][4]?actor.Reaction, defeat: @import("../actors/gunman_defeat.zig").Definition) !actor.Profile {
     const ready = get(sources, .ready);
     const relaxed = get(sources, .relaxed);
     const aiming = get(sources, .aiming);
@@ -140,6 +140,8 @@ fn profile(group: rules.Group, sources: Sources, clips: actor.Clips) !actor.Prof
     if (recovery_target != get(sources, .crouched_aim) and recovery_target != get(sources, .rising)) return error.UnsupportedEnemyRecovery;
     return .{
         .clips = clips,
+        .reactions = reactions,
+        .defeat = defeat,
         .relaxed_front = try interest(group, relaxed, false),
         .relaxed_behind = try interest(group, relaxed, true),
         .fidget_front = try interest(group, get(sources, .leaned), false),
@@ -168,7 +170,7 @@ fn profile(group: rules.Group, sources: Sources, clips: actor.Clips) !actor.Prof
     };
 }
 
-pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []const u8, animations: []const u8, room_ids: *const [64]geometry.RoomId, difficulty: @import("../settings.zig").Difficulty, resolver: anytype) !Assets {
+pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []const u8, animations: []const u8, room_ids: *const [64]geometry.RoomId, difficulty: @import("../settings.zig").Difficulty, score_awards: [16]u16, resolver: anytype) !Assets {
     var definitions: std.ArrayList(actor.Definition) = .empty;
     errdefer definitions.deinit(allocator);
     var profiles: std.ArrayList(actor.Profile) = .empty;
@@ -200,7 +202,32 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
                 try clips.append(allocator, clip);
                 destination.* = clip.clip();
             }
-            const recovered = try profile(group, sources, resolved);
+            var reactions: [actor.action_count][4]?actor.Reaction = @splat(@splat(null));
+            var impacts: [2]?u16 = @splat(null);
+            for (sources, &reactions) |state, *responses| {
+                for (0..4) |slot| {
+                    const message: i16 = @intCast(slot + 1);
+                    for (0..group.count()) |j| {
+                        const rule = group.at(j);
+                        if (rule.source != state) continue;
+                        const op = rule.conditions[0];
+                        const accepts = (op.code == 34 and op.argument == message) or (op.code == 107 and (if (op.argument == 0) message <= 2 else message >= 3));
+                        if (!accepts) continue;
+                        if (rule.conditions[1].code != 0 or rule.effect.code != 0 or rule.flags & 12 != 0) return error.UnsupportedEnemyHit;
+                        const side: usize = if (slot < 2) 0 else 1;
+                        if (impacts[side] != null and impacts[side].? != rule.target) return error.UnsupportedEnemyHit;
+                        impacts[side] = rule.target;
+                        responses[slot] = .{ .forward = -@as(i16, rule.dx), .down = rule.dy, .turn = rule.flags & 1 != 0, .damage = @intFromBool(rule.flags & 2 != 0), .score = score_awards[rule.flags >> 4] + @as(u16, if (rule.flags & 2 != 0) 100 else 0) };
+                        break;
+                    }
+                }
+            }
+            const defeat_import = @import("gunman_defeat.zig");
+            const defeat: @import("../actors/gunman_defeat.zig").Definition = .{
+                .forward = try defeat_import.track(allocator, group, animations, impacts[0] orelse return error.MissingEnemyHit, false, &clips, resolver),
+                .backward = try defeat_import.track(allocator, group, animations, impacts[1] orelse return error.MissingEnemyHit, true, &clips, resolver),
+            };
+            const recovered = try profile(group, sources, resolved, reactions, defeat);
             const index = profiles.items.len;
             try profiles.append(allocator, recovered);
             imported[record.rule_group] = .{ .index = index, .sources = sources };
@@ -212,7 +239,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         const aim_param = argument(try required(group, get(family.sources, .raising_aim), 68, 0), 68);
         const recovery_param = argument(try required(group, get(family.sources, .firing), 68, 0), 68);
         if (aim_param < 0 or aim_param > 3 or recovery_param < 0 or recovery_param > 3) return error.InvalidEnemyTimer;
-        try definitions.append(allocator, .{ .profile = family.index, .room = room_ids[record.room], .position = record.position, .facing = if (record.facing_right == 0) .left else .right, .initial_action = initial, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .behind_player = record.visual_flags & 8 != 0, .health = record.life, .aim_delay = record.parameters[@intCast(aim_param)], .recovery_delay = record.parameters[@intCast(recovery_param)] });
+        try definitions.append(allocator, .{ .profile = family.index, .room = room_ids[record.room], .position = record.position, .facing = if (record.facing_right == 0) .left else .right, .initial_action = initial, .contact_width = record.collision_width, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .behind_player = record.visual_flags & 8 != 0, .health = record.life, .aim_delay = record.parameters[@intCast(aim_param)], .recovery_delay = record.parameters[@intCast(recovery_param)] });
     }
     const owned_definitions = try definitions.toOwnedSlice(allocator);
     errdefer allocator.free(owned_definitions);

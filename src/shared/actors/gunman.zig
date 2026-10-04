@@ -4,6 +4,8 @@ const std = @import("std");
 const motion = @import("../motion.zig");
 const geometry = @import("../geometry.zig");
 const perception = @import("perception.zig");
+const combat = @import("../combat.zig");
+const defeat_mod = @import("gunman_defeat.zig");
 const Environment = @import("conrad_environment.zig").Environment;
 
 pub const Action = enum {
@@ -38,7 +40,10 @@ pub const Action = enum {
 pub const action_count = @typeInfo(Action).@"enum".field_names.len;
 pub const Clips = [action_count]motion.Clip;
 pub const Interest = struct { player: ?i16 = null, object: ?u8 = null };
+pub const Reaction = struct { forward: i16, down: i16, turn: bool, damage: u1, score: u16 };
 pub const Profile = struct {
+    reactions: [action_count][4]?Reaction,
+    defeat: defeat_mod.Definition,
     clips: Clips,
     relaxed_front: Interest,
     relaxed_behind: Interest,
@@ -72,6 +77,7 @@ pub const Definition = struct {
     position: motion.Position,
     facing: motion.Facing,
     initial_action: Action,
+    contact_width: u8,
     initially_active: bool,
     wake_nearby: bool,
     behind_player: bool,
@@ -88,7 +94,23 @@ pub const Actor = struct {
     health: i16,
     timer: i16 = 0,
     sound: ?motion.SoundId = null,
-    shot: ?enum { standing, crouched } = null,
+    shot: ?combat.Height = null,
+    defeat: ?defeat_mod.State = null,
+    pending_hit: ?combat.Impact = null,
+    contact: @import("../contacts.zig").Footprint,
+    lost: bool = false,
+
+    pub fn vulnerability(self: Actor, profile: Profile) combat.Vulnerability {
+        var result: combat.Vulnerability = .{};
+        if (self.defeat != null or self.lost) return result;
+        for (std.enums.values(combat.Impact), profile.reactions[@backingInt(self.action)]) |impact, reaction| if (reaction != null) {
+            result.set(impact);
+        };
+        return result;
+    }
+    fn clip(self: Actor, profile: Profile) motion.Clip {
+        return if (self.defeat) |state| state.clip(profile.defeat) else profile.clip(self.action);
+    }
 
     fn interested(awareness: perception.Awareness, interest: Interest, behind: bool) bool {
         return awareness.player(behind, interest.player) or awareness.object(behind, interest.object);
@@ -191,6 +213,7 @@ pub const Actor = struct {
 pub const World = struct {
     allocator: std.mem.Allocator,
     actors: []Actor,
+    score_requested: u32 = 0,
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition, profiles: []const Profile) !World {
         const actors = try allocator.alloc(Actor, definitions.len);
         errdefer allocator.free(actors);
@@ -200,7 +223,7 @@ pub const World = struct {
                 .frame => |f| f.visual,
                 .hold => return error.MissingEnemyVisual,
             };
-            actor.* = .{ .room = definition.room, .pose = .{ .position = definition.position, .facing = definition.facing, .visual = .{ .id = first.id, .mirrored = first.mirrored != (definition.facing == .left) } }, .action = definition.initial_action, .active = definition.initially_active, .health = definition.health };
+            actor.* = .{ .contact = .{ .room = definition.room, .position = definition.position, .width = definition.contact_width }, .room = definition.room, .pose = .{ .position = definition.position, .facing = definition.facing, .visual = .{ .id = first.id, .mirrored = first.mirrored != (definition.facing == .left) } }, .action = definition.initial_action, .active = definition.initially_active, .health = definition.health };
         }
         return .{ .allocator = allocator, .actors = actors };
     }
@@ -208,34 +231,65 @@ pub const World = struct {
         self.allocator.free(self.actors);
     }
 
+    pub fn prepare(self: *World) void {
+        for (self.actors) |*actor| actor.contact = .{ .room = actor.room, .position = actor.pose.position, .width = actor.contact.width };
+    }
     pub fn advance(self: *World, definitions: []const Definition, profiles: []const Profile, map: geometry.Map, player: @import("../contacts.zig").Footprint, distractions: []const @import("../contacts.zig").Footprint, random: anytype) !void {
+        self.score_requested = 0;
         const current = try map.room(player.room);
         for (self.actors, definitions) |*actor, definition| {
             actor.sound = null;
             actor.shot = null;
+            if (actor.lost) continue;
             const same_room = actor.room == player.room;
             var adjacent = same_room;
             for ([_]geometry.Edge{ current.edges.left, current.edges.right, current.edges.up, current.edges.down }) |edge| if (edge == .room and edge.room == actor.room) {
                 adjacent = true;
             };
-            if (definition.wake_nearby) {
+            if (definition.wake_nearby and actor.defeat == null) {
                 const above = current.edges.up == .room and current.edges.up.room == actor.room and actor.pose.position.y >= 48;
                 const below = current.edges.down == .room and current.edges.down.room == actor.room and actor.pose.position.y >= 176;
                 if (same_room or above or below) actor.active = true;
             }
             if (!actor.active) continue;
             const profile = profiles[definition.profile];
-            var clip = profile.clip(actor.action);
+            if (actor.pending_hit) |hit| {
+                actor.pending_hit = null;
+                if (actor.defeat == null) if (profile.reactions[@backingInt(actor.action)][@backingInt(hit)]) |reaction| {
+                    if (reaction.turn) actor.pose.facing = if (actor.pose.facing == .right) .left else .right;
+                    actor.moveAnchor(reaction.forward);
+                    actor.pose.position.y +%= reaction.down;
+                    actor.health -%= reaction.damage;
+                    actor.defeat = .{ .direction = if (hit == .front_high or hit == .front_low) .backward else .forward };
+                    actor.playback = .{};
+                    actor.sound = actor.clip(profile).sound;
+                    self.score_requested +%= reaction.score;
+                    _ = try map.handoff(&actor.room, &actor.pose.position);
+                };
+            }
+            var clip = actor.clip(profile);
             if (actor.playback.exhausted(clip)) {
-                if ((actor.action == .ready or actor.action == .relaxed) and !same_room) {
+                if (actor.defeat) |*state| {
+                    if (state.phase == .resting) {
+                        if (state.track(profile.defeat).mark_dead) actor.health = -1;
+                        actor.active = false;
+                    } else try state.advance(profile.defeat, &actor.pose, .{ .map = map, .room = actor.room });
+                } else if ((actor.action == .ready or actor.action == .relaxed) and !same_room) {
                     if (!definition.wake_nearby or !adjacent) actor.active = false;
                 } else {
                     const awareness = try perception.observe(map, .{ .room = actor.room, .pose = actor.pose }, player, distractions);
                     actor.action = try actor.choose(definition, profile, .{ .map = map, .room = actor.room }, awareness, random);
                 }
                 actor.playback = .{};
-                _ = try map.handoff(&actor.room, &actor.pose.position);
-                clip = profile.clip(actor.action);
+                _ = map.handoff(&actor.room, &actor.pose.position) catch |err| switch (err) {
+                    error.ExitWithoutDestination => {
+                        actor.lost = true;
+                        actor.active = false;
+                        continue;
+                    },
+                    else => return err,
+                };
+                clip = actor.clip(profile);
                 actor.sound = clip.sound;
             }
             _ = actor.playback.advance(clip, &actor.pose);
@@ -245,6 +299,8 @@ pub const World = struct {
         for (self.actors) |actor| {
             for ([_]i16{ actor.pose.position.x, actor.pose.position.y, actor.health, actor.timer }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(i16, value)));
             for ([_]u64{ @backingInt(actor.room), @backingInt(actor.action), actor.playback.next_step, @backingInt(actor.pose.visual.id) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+            hash.update(&.{ if (actor.pending_hit) |hit| @as(u8, @intCast(@backingInt(hit))) + 1 else 0, @intFromBool(actor.defeat != null), @intFromBool(actor.lost) });
+            if (actor.defeat) |state| hash.update(&.{ @backingInt(state.direction), @backingInt(state.phase), state.clearance });
             hash.update(&.{ @backingInt(actor.pose.facing), @intFromBool(actor.pose.visual.mirrored), @intFromBool(actor.active) });
         }
     }

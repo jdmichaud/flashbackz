@@ -1,6 +1,7 @@
 //! A pistol discharge owns its short flash and wall-impact effect. Authored motion
 //! supplies artwork; terrain queries resolve the shot without a moving bullet actor.
 const std = @import("std");
+const combat = @import("combat.zig");
 const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const terrain = @import("terrain.zig");
@@ -54,8 +55,13 @@ pub const State = struct {
     effect: ?Effect = null,
     shots_fired: u64 = 0,
     sound_requested: ?motion.SoundId = null,
+    hit_requested: ?combat.Hit = null,
     pub fn advance(self: *State, definition: Definition, shot: ?Height, pose: motion.Pose, room: geometry.RoomId, materials: terrain.View) !void {
+        return self.advanceWithTargets(definition, shot, pose, room, materials, &.{});
+    }
+    pub fn advanceWithTargets(self: *State, definition: Definition, shot: ?Height, pose: motion.Pose, room: geometry.RoomId, materials: terrain.View, targets: []const combat.Target) !void {
         self.sound_requested = null;
+        self.hit_requested = null;
         if (shot) |height| {
             self.shots_fired +%= 1;
             self.effect = .{ .pose = pose, .room = room, .height = height };
@@ -70,6 +76,11 @@ pub const State = struct {
                 if (effect.phase == .ignition and !try environment.at(effect.pose, .torso, 1)) {
                     effect.phase = .flash;
                 } else {
+                    if (try combat.trace(materials, effect.room, effect.pose, effect.height, definition.range_cells, targets)) |impact| {
+                        self.hit_requested = impact;
+                        self.effect = null;
+                        return;
+                    }
                     const hit = try traceWall(materials, effect.room, effect.pose, definition.range_cells) orelse {
                         self.effect = null;
                         return;

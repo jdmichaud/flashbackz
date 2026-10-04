@@ -62,5 +62,7 @@ The English floppy's first stone pickup has no separate cinematic.
 Enter rooms containing gunmen to see their idle, turn, walk, aim and firing animations.
 The same system drives every eligible jungle gunman, including rooms with several enemies.
 Standing in their forward view alerts them; throw stones to distract the responsive variant.
-Combat damage, hit/death reactions and crouching decisions remain unfinished, so this build
-still cannot be used to qualify a fight.
+Press **Space** to draw the gun, then **Shift** to shoot: gunmen now take hits, fall and
+award points. Their defeat trajectory accounts for walls, platform edges and room exits.
+Enemy shots cannot harm Conrad yet; his hit reactions and enemy crouching decisions remain
+unfinished, so this build still cannot be used to qualify a complete fight.

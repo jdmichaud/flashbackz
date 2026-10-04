@@ -279,7 +279,7 @@ pub fn loadLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
 
 pub fn loadLevelWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSource, level: level_mod.Id, difficulty: @import("../settings.zig").Difficulty) !Pack {
     const values = try floppy_interface.load(allocator, source);
-    return assembleLevel(allocator, source, level, difficulty, .{ .actor_colors = values.actor_colors, .actor_libraries = &values.actor_libraries, .text_colors = values.text_colors, .interface_colors = values.interface_colors, .level_label = &values.level_label });
+    return assembleLevel(allocator, source, level, difficulty, .{ .actor_colors = values.actor_colors, .actor_libraries = &values.actor_libraries, .score_awards = values.score_awards, .text_colors = values.text_colors, .interface_colors = values.interface_colors, .level_label = &values.level_label });
 }
 
 /// Decoded interface content supplied by an edition importer. No executable offsets enter
@@ -287,6 +287,7 @@ pub fn loadLevelWithDifficulty(allocator: std.mem.Allocator, source: platform.As
 pub const Interface = struct {
     actor_colors: [2]palette.Bank,
     actor_libraries: []const @import("actor_art.zig").Library,
+    score_awards: [16]u16,
     text_colors: palette.Bank,
     interface_colors: palette.Bank,
     level_label: []const u8,
@@ -417,7 +418,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     props.connections = combined_connections;
     var hazards = try @import("electrical_hazards.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, &resolver);
     errdefer hazards.deinit();
-    var gunmen = try @import("gunmen.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &resolver);
+    var gunmen = try @import("gunmen.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, interface.score_awards, &resolver);
     errdefer gunmen.deinit();
     const supplied = initial_items.len;
     initial_items = try allocator.realloc(initial_items, supplied + props.items.len);
