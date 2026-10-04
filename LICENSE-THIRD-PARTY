@@ -1,0 +1,28 @@
+Third-party code in this repository
+===================================
+
+src/shared/audio/opl.zig
+------------------------
+
+The FM synthesiser is a translation into Zig of the OPL2/OPL3 emulation library of DOSBox 0.73
+(`src/hardware/opl.cpp`, Ken Silverman's ADLIBEMU lineage). The algorithm, the tables and the
+arithmetic are that library's; the translation is a derivative work of it and carries its
+licence.
+
+  Copyright (C) 2002-2009  The DOSBox Team
+  OPL2/OPL3 emulation library
+
+  This library is free software; you can redistribute it and/or modify it under the terms of the
+  GNU Lesser General Public License as published by the Free Software Foundation; either version
+  2.1 of the License, or (at your option) any later version.
+
+  This library is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+  without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
+  the GNU Lesser General Public License for more details.
+
+  You should have received a copy of the GNU Lesser General Public License along with this
+  library; if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+  Boston, MA 02110-1301 USA.
+
+Reused from vpoolz commit 9459fb3a8695eb8b8af451711b2351c849924a87.
+Full LGPL 2.1 text: LICENSES/LGPL-2.1.txt. The original notice permits later LGPL versions.

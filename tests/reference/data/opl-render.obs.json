@@ -1,0 +1,314 @@
+{
+ "schema": "vpoolz-observations/1",
+ "producer": {
+  "tool": "tools/audio/opl_oracle.c over a C build of DOSBox 0.73's ADLIBEMU, built by tools/audio/build_oracle.sh",
+  "script": "tests/reference/data/opl-script.txt",
+  "script_sha256": "8a92eff1bbf3eed765b66d59906a2f2d9ab564377ddd3ecf1e85fa13de54c910",
+  "state": "a fresh chip at 44100 Hz, driven by the register script and rendered in the blocks the script asks for",
+  "what": "a digest of the samples of every render call, the frames it produced and the status register afterwards",
+  "why": "PLAN.md item 15. The synthesiser is DOSBox 0.73's ADLIBEMU (LGPL 2.1), which this port translates to Zig; the expectation pins that the translation is the same chip, sample for sample",
+  "content": "digests of synthesised audio, no original content of any kind"
+ },
+ "observations": [
+  {
+   "n": "render[0].frames",
+   "v": "u:32"
+  },
+  {
+   "n": "render[0].digest",
+   "v": "s:306c537b2ff38983"
+  },
+  {
+   "n": "render[0].status",
+   "v": "u:0"
+  },
+  {
+   "n": "render[1].frames",
+   "v": "u:64"
+  },
+  {
+   "n": "render[1].digest",
+   "v": "s:0c737317821b963f"
+  },
+  {
+   "n": "render[1].status",
+   "v": "u:0"
+  },
+  {
+   "n": "render[2].frames",
+   "v": "u:64"
+  },
+  {
+   "n": "render[2].digest",
+   "v": "s:945c03995e28164f"
+  },
+  {
+   "n": "render[2].status",
+   "v": "u:0"
+  },
+  {
+   "n": "render[3].frames",
+   "v": "u:64"
+  },
+  {
+   "n": "render[3].digest",
+   "v": "s:a4618aefbde5da47"
+  },
+  {
+   "n": "render[3].status",
+   "v": "u:0"
+  },
+  {
+   "n": "render[4].frames",
+   "v": "u:512"
+  },
+  {
+   "n": "render[4].digest",
+   "v": "s:9396de35988149df"
+  },
+  {
+   "n": "render[4].status",
+   "v": "u:0"
+  },
+  {
+   "n": "render[5].frames",
+   "v": "u:96"
+  },
+  {
+   "n": "render[5].digest",
+   "v": "s:fd3971aaae0ab8f3"
+  },
+  {
+   "n": "render[5].status",
+   "v": "u:0"
+  },
+  {
+   "n": "render[6].frames",
+   "v": "u:96"
+  },
+  {
+   "n": "render[6].digest",
+   "v": "s:5db836e41ce47ccf"
+  },
+  {
+   "n": "render[6].status",
+   "v": "u:0"
+  },
+  {
+   "n": "render[7].frames",
+   "v": "u:96"
+  },
+  {
+   "n": "render[7].digest",
+   "v": "s:78ba1c5424e1c60b"
+  },
+  {
+   "n": "render[7].status",
+   "v": "u:0"
+  },
+  {
+   "n": "render[8].frames",
+   "v": "u:256"
+  },
+  {
+   "n": "render[8].digest",
+   "v": "s:308177a85f4502ab"
+  },
+  {
+   "n": "render[8].status",
+   "v": "u:0"
+  },
+  {
+   "n": "render[9].frames",
+   "v": "u:128"
+  },
+  {
+   "n": "render[9].digest",
+   "v": "s:51d437c23cca353f"
+  },
+  {
+   "n": "render[9].status",
+   "v": "u:0"
+  },
+  {
+   "n": "render[10].frames",
+   "v": "u:64"
+  },
+  {
+   "n": "render[10].digest",
+   "v": "s:b6afb8be5801f183"
+  },
+  {
+   "n": "render[10].status",
+   "v": "u:0"
+  },
+  {
+   "n": "render[11].frames",
+   "v": "u:256"
+  },
+  {
+   "n": "render[11].digest",
+   "v": "s:44d4b7a56373adf3"
+  },
+  {
+   "n": "render[11].status",
+   "v": "u:192"
+  },
+  {
+   "n": "render[12].frames",
+   "v": "u:256"
+  },
+  {
+   "n": "render[12].digest",
+   "v": "s:49590ccaa10efebb"
+  },
+  {
+   "n": "render[12].status",
+   "v": "u:192"
+  },
+  {
+   "n": "render[13].frames",
+   "v": "u:64"
+  },
+  {
+   "n": "render[13].digest",
+   "v": "s:4099d69be9bf76a7"
+  },
+  {
+   "n": "render[13].status",
+   "v": "u:192"
+  },
+  {
+   "n": "render[14].frames",
+   "v": "u:64"
+  },
+  {
+   "n": "render[14].digest",
+   "v": "s:f40f381f4e20d478"
+  },
+  {
+   "n": "render[14].status",
+   "v": "u:192"
+  },
+  {
+   "n": "render[15].frames",
+   "v": "u:64"
+  },
+  {
+   "n": "render[15].digest",
+   "v": "s:5ee283506b2e2213"
+  },
+  {
+   "n": "render[15].status",
+   "v": "u:192"
+  },
+  {
+   "n": "render[16].frames",
+   "v": "u:64"
+  },
+  {
+   "n": "render[16].digest",
+   "v": "s:8d02fc55c4aab056"
+  },
+  {
+   "n": "render[16].status",
+   "v": "u:192"
+  },
+  {
+   "n": "render[17].frames",
+   "v": "u:512"
+  },
+  {
+   "n": "render[17].digest",
+   "v": "s:70ca343ffbe5378f"
+  },
+  {
+   "n": "render[17].status",
+   "v": "u:224"
+  },
+  {
+   "n": "render[18].frames",
+   "v": "u:256"
+  },
+  {
+   "n": "render[18].digest",
+   "v": "s:4b6a635f5ed4ba55"
+  },
+  {
+   "n": "render[18].status",
+   "v": "u:224"
+  },
+  {
+   "n": "render[19].frames",
+   "v": "u:128"
+  },
+  {
+   "n": "render[19].digest",
+   "v": "s:2121cb390f6dc966"
+  },
+  {
+   "n": "render[19].status",
+   "v": "u:224"
+  },
+  {
+   "n": "render[20].frames",
+   "v": "u:96"
+  },
+  {
+   "n": "render[20].digest",
+   "v": "s:dc3570a5e266a568"
+  },
+  {
+   "n": "render[20].status",
+   "v": "u:224"
+  },
+  {
+   "n": "render[21].frames",
+   "v": "u:96"
+  },
+  {
+   "n": "render[21].digest",
+   "v": "s:ce8b05bbfbe8d286"
+  },
+  {
+   "n": "render[21].status",
+   "v": "u:224"
+  },
+  {
+   "n": "render[22].frames",
+   "v": "u:96"
+  },
+  {
+   "n": "render[22].digest",
+   "v": "s:b1d0002e160ec336"
+  },
+  {
+   "n": "render[22].status",
+   "v": "u:224"
+  },
+  {
+   "n": "render[23].frames",
+   "v": "u:1024"
+  },
+  {
+   "n": "render[23].digest",
+   "v": "s:d10673ec630822bc"
+  },
+  {
+   "n": "render[23].status",
+   "v": "u:224"
+  },
+  {
+   "n": "renders",
+   "v": "u:24"
+  },
+  {
+   "n": "digest",
+   "v": "s:b06f96ad0d13afc2"
+  },
+  {
+   "n": "sample_rate",
+   "v": "u:44100"
+  }
+ ]
+}

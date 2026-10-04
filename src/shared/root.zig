@@ -1,6 +1,7 @@
 //! The shared module: the platform boundary, the in-memory providers and the game. It links
 //! nothing and needs no libc, so the same code builds for the native hosts and for the browser
 //! (wasm32-freestanding).
+pub const opl = @import("audio/opl.zig");
 pub const platform = @import("platform.zig");
 pub const memory = @import("memory.zig");
 pub const version = @import("version.zig");
