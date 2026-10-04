@@ -7,7 +7,10 @@ the research. Unknown original behavior is not replaced by guessed rules.
 
 ## 1. Requirements
 
-Exact observable behavior and maintainable architecture are separate acceptance criteria.
+Faithful observable behavior and maintainable architecture are separate acceptance criteria.
+On 2026-10-04 the user permitted small pixel differences when exact matching would create
+excessive complexity. Keep general rendering algorithms and record any accepted differences;
+do not add frame-specific pixel repairs.
 Original code-wheel/copy protection is excluded by explicit user instruction (2026-10-04).
 The modern Start flow proceeds directly to the game opening sequence without that prompt.
 Movement, animation, collisions, combat, inventory, enemies, puzzles, room transitions, menus,

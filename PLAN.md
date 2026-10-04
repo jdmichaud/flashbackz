@@ -13,6 +13,8 @@ is excluded by explicit user instruction (2026-10-04); it is not a fidelity gate
 completes successfully; original startup reaches the code-wheel protection prompt.
 Windows compilation is deferred until Linux gameplay works, per the user’s 2026-10-04
 priority update. Preserve portability while concentrating implementation and testing on Linux.
+The user permits small documented pixel differences when that avoids excessive complexity;
+readability takes precedence over frame-specific repairs for isolated pixels.
 
 - [x] Inventory FAT12 files and ABA archives; identify missing installation media, record
   provenance and reproduce floppy startup on disposable copies.
@@ -24,7 +26,8 @@ priority update. Preserve portability while concentrating implementation and tes
   installer's level expansion without a runtime dependency on DOS. Gate: all installed file
   bytes match the original installer's output, including all five generated level maps.
 - [ ] Reproduce title, vector introduction and original scene order. Gate: exact original
-  presented frames, palette changes, timing and input behavior; no approximate substitutes.
+  presented-frame comparisons, palette changes, timing and input behavior. Small documented
+  pixel differences may be accepted to avoid excessive renderer complexity (user decision).
 - [ ] Recover floppy music/effects sequencing and integrate AdLib plus PCM. Gate: exact event
   timing and sound comparisons against the pinned original execution profile.
 - [ ] Requalify gameplay imports and executable-backed metadata against this release before

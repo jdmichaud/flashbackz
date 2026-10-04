@@ -43,3 +43,8 @@ Rules:
 - Windows compilation is deferred until Linux gameplay is working (user priority, 2026-10-04).
   Focus validation on Linux while preserving portable boundaries and avoiding obvious Windows
   incompatibilities; do not run Windows cross-builds during this phase.
+
+- The user permits small pixel differences when exact matching would add undue complexity
+  (2026-10-04). Prefer readable, general rendering rules over frame-specific pixel fixes.
+  Keep exact comparison reports and document accepted differences; never alter the reference
+  or silently treat a broad visual mismatch as acceptable.
