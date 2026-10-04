@@ -31,6 +31,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
 - [ ] Reproduce title, vector introduction and original scene order. Gate: exact original
   presented-frame comparisons, palette changes, timing and input behavior. Small documented
   pixel differences may be accepted to avoid excessive renderer complexity (user decision).
+- [ ] Import Flashback MIDI/PRF/INS music into named parts, instruments and scheduled events;
+  verify malformed inputs, profile bindings, loops and note adjustments without game fixtures.
+- [ ] Compare the music driver's timed register output against the original, then connect
+  startup/menu sound to the existing chip and native PCM queue. Preserve scene stop/skip order.
 - [ ] Recover floppy music/effects sequencing and integrate AdLib plus PCM. Gate: exact event
   timing and sound comparisons against the pinned original execution profile.
 - [ ] Requalify gameplay imports and executable-backed metadata against this release before
