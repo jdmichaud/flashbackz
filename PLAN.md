@@ -45,6 +45,11 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   inventory transfer and recording playback, with explicit scene pause/resume. Gate: original
   floppy observations agree on object visibility, action/transfer order and cinematic selection;
   native input can collect and use the item from direct disk images.
+- [ ] **Current user priority: complete Conrad movement before further world mechanisms.**
+  Cover walk/run blends and reversals, running jumps and edge departures, jump landings and
+  catches, crouch/roll chaining, ledge movement, falls/recovery, room handoffs and input
+  combinations; include locomotion with the weapon drawn. Gate: original floppy comparisons
+  cover each transition, and native exploration no longer terminates on valid movement input.
 - [ ] Connect pressure-plate signals to independently modeled gate animation and terrain
   changes. Recover startup gate/platform footprints as behavior, not permanent level edits.
   Gate: original floppy object transitions, signal order and complete collision-grid changes
