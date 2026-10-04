@@ -41,3 +41,5 @@ pub const electrical_hazards = @import("electrical_hazards.zig");
 pub const pressure_controls = @import("pressure_controls.zig");
 
 pub const thrown_item = @import("thrown_item.zig");
+
+pub const gunmen = @import("gunmen.zig");

@@ -40,6 +40,7 @@ pub const Pack = struct {
     world_props: prop_import.Assets,
     controls: @import("operated_controls.zig").Assets,
     hazards: @import("electrical_hazards.zig").Assets,
+    gunmen: @import("gunmen.zig").Assets,
     player_contact_width: u8,
     surfaces: []@import("../surface_reactions.zig").Definition,
     forest_calls: []@import("../ambience.zig").Call,
@@ -67,6 +68,7 @@ pub const Pack = struct {
         self.world_props.deinit();
         self.controls.deinit();
         self.hazards.deinit();
+        self.gunmen.deinit();
         self.sounds.deinit();
         self.allocator.free(self.surfaces);
         self.allocator.free(self.forest_calls);
@@ -216,6 +218,7 @@ const Resolver = struct {
     allocator: std.mem.Allocator,
     sprites: []const u8,
     offsets: []const u8,
+    extra_art: @import("actor_art.zig").Catalog,
     icons: []const u8,
     compositions: []const u8,
     bindings: []const u8,
@@ -227,18 +230,26 @@ const Resolver = struct {
         for (self.frames.items) |*frame| frame.deinit();
         self.frames.deinit(self.allocator);
         self.ids.deinit();
+        self.extra_art.deinit();
     }
 
     pub fn resolve(self: *Resolver, kind: animation.VisualKind, index: u15) !motion.VisualId {
         const key: u16 = @as(u16, index) | if (kind == .composition) @as(u16, 0x8000) else 0;
         if (self.ids.get(key)) |id| return id;
-        var frame = if (kind == .sprite) try sprite.fromArchive(self.allocator, self.sprites, self.offsets, index) else try object_art.fromArchive(self.allocator, self.compositions, self.bindings, self.banks, index);
+        var frame = if (kind == .sprite) try self.spriteFrame(index) else try object_art.fromArchive(self.allocator, self.compositions, self.bindings, self.banks, index);
         errdefer frame.deinit();
         try self.frames.ensureUnusedCapacity(self.allocator, 1);
         const id: motion.VisualId = @fromBackingInt(@as(u32, @intCast(self.frames.items.len)));
         try self.ids.put(key, id);
         self.frames.appendAssumeCapacity(frame);
         return id;
+    }
+
+    fn spriteFrame(self: *Resolver, index: u16) !sprite.Frame {
+        return sprite.fromArchive(self.allocator, self.sprites, self.offsets, index) catch |err| switch (err) {
+            error.MissingSprite => self.extra_art.resolve(self.allocator, index),
+            else => err,
+        };
     }
 
     pub fn icon(self: *Resolver, index: u16) !motion.VisualId {
@@ -268,13 +279,14 @@ pub fn loadLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
 
 pub fn loadLevelWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSource, level: level_mod.Id, difficulty: @import("../settings.zig").Difficulty) !Pack {
     const values = try floppy_interface.load(allocator, source);
-    return assembleLevel(allocator, source, level, difficulty, .{ .actor_colors = values.actor_colors, .text_colors = values.text_colors, .interface_colors = values.interface_colors, .level_label = &values.level_label });
+    return assembleLevel(allocator, source, level, difficulty, .{ .actor_colors = values.actor_colors, .actor_libraries = &values.actor_libraries, .text_colors = values.text_colors, .interface_colors = values.interface_colors, .level_label = &values.level_label });
 }
 
 /// Decoded interface content supplied by an edition importer. No executable offsets enter
 /// scene assembly. Palette and label locations are isolated in the floppy edition importer.
 pub const Interface = struct {
     actor_colors: [2]palette.Bank,
+    actor_libraries: []const @import("actor_art.zig").Library,
     text_colors: palette.Bank,
     interface_colors: palette.Bank,
     level_label: []const u8,
@@ -354,7 +366,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     for (&room_ids, 0..) |*id, i| id.* = @fromBackingInt(@as(u16, @intCast(i)) + 1);
     var terrain = try collision.decode(allocator, ct.bytes, &room_ids);
     errdefer terrain.deinit();
-    var resolver: Resolver = .{ .allocator = allocator, .sprites = sprites.bytes, .offsets = offsets.bytes, .icons = icons.bytes, .compositions = compositions.bytes, .bindings = bindings.bytes, .banks = banks, .ids = std.AutoHashMap(u16, motion.VisualId).init(allocator) };
+    var resolver: Resolver = .{ .allocator = allocator, .sprites = sprites.bytes, .offsets = offsets.bytes, .extra_art = .{ .source = source, .libraries = interface.actor_libraries }, .icons = icons.bytes, .compositions = compositions.bytes, .bindings = bindings.bytes, .banks = banks, .ids = std.AutoHashMap(u16, motion.VisualId).init(allocator) };
     defer resolver.deinit();
     var surfaces: std.ArrayList(@import("../surface_reactions.zig").Definition) = .empty;
     errdefer surfaces.deinit(allocator);
@@ -405,6 +417,8 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     props.connections = combined_connections;
     var hazards = try @import("electrical_hazards.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, &resolver);
     errdefer hazards.deinit();
+    var gunmen = try @import("gunmen.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &resolver);
+    errdefer gunmen.deinit();
     const supplied = initial_items.len;
     initial_items = try allocator.realloc(initial_items, supplied + props.items.len);
     for (props.items, initial_items[supplied..]) |*item, *destination| {
@@ -428,6 +442,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         errdefer art.deinit();
         const alternate = art.palette_banks[2] != reference_bank;
         @memcpy(art.colors[0x40..0x50], &interface.actor_colors[@intFromBool(alternate)]);
+        if (gunmen.definitions.len != 0) @memcpy(art.colors[0x50..0x60], &interface.actor_libraries[0].colors);
         @memcpy(art.colors[0xa0..0xb0], &icon_colors);
         @memcpy(art.colors[0xe0..0xf0], &interface.text_colors);
         @memcpy(art.colors[0xf0..0x100], &interface.interface_colors);
@@ -458,6 +473,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .world_props = props,
         .controls = operated,
         .hazards = hazards,
+        .gunmen = gunmen,
         .surfaces = try surfaces.toOwnedSlice(allocator),
         .sounds = sounds,
         .forest_calls = forest_calls,

@@ -7,6 +7,7 @@ pub const Values = struct {
     continue_labels: [5][48]u8,
     demos: [3]@import("demo.zig").Descriptor,
     actor_colors: [2]palette.Bank,
+    actor_libraries: [4]@import("actor_art.zig").Library,
     text_colors: palette.Bank,
     interface_colors: palette.Bank,
     level_label: [6]u8,
@@ -92,7 +93,17 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
         const length = std.mem.indexOfScalar(u8, data[offset..][0..48], 0) orelse return error.InvalidContinueLabel;
         @memcpy(label[0..length], data[offset..][0..length]);
     }
+    var actor_libraries: [4]@import("actor_art.zig").Library = undefined;
+    for (&actor_libraries, 0..) |*library, i| {
+        const name = word(data, 0xe42 + i * 2);
+        const length = std.mem.indexOfScalar(u8, data[name..][0..12], 0) orelse return error.InvalidActorLibrary;
+        library.name = @splat(0);
+        for (data[name..][0..length], library.name[0..length]) |character, *out| out.* = std.ascii.toUpper(character);
+        const colors = word(data, 0xea9 + i * 2);
+        library.colors = try palette.decodeActorBank(data[colors..][0..32]);
+    }
     return .{
+        .actor_libraries = actor_libraries,
         .continue_labels = continue_labels,
         .demos = demos,
         .actor_colors = .{ try palette.decodeActorBank(data[0xf31..0xf51]), try palette.decodeActorBank(data[0xf51..0xf71]) },

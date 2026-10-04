@@ -53,4 +53,14 @@ as the connected hazard are still pending, so this does not certify the resultin
 Hold **Shift** beside a stone to pick it up. Open **Tab**, select **STONE** with the
 arrow keys, close inventory with **Tab**, then press **Return** while standing to throw.
 The throw uses the original motion data, including wall rebounds, drops and landing sound.
-Settled stones remain available to pick up again. Enemy responses to the impact remain open.
+Settled stones remain available to pick up again. The jungle gunmen whose original profile
+reacts to loose objects now turn and approach them; the other profile ignores stones.
+The English floppy's first stone pickup has no separate cinematic.
+
+### Jungle gunmen (first behavior increment)
+
+Enter rooms containing gunmen to see their idle, turn, walk, aim and firing animations.
+The same system drives every eligible jungle gunman, including rooms with several enemies.
+Standing in their forward view alerts them; throw stones to distract the responsive variant.
+Combat damage, hit/death reactions and crouching decisions remain unfinished, so this build
+still cannot be used to qualify a fight.
