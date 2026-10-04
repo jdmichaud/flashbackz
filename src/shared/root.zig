@@ -45,3 +45,5 @@ pub const pistol_casing = @import("pistol_casing.zig");
 pub const random = @import("random.zig");
 
 pub const sound_effects_player = @import("audio/effects.zig");
+
+pub const output_gain = @import("audio/output_gain.zig");

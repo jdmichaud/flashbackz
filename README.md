@@ -39,6 +39,13 @@ Current priority is completing Conrad movement. Walk/run blends, running turns, 
 jumps, wall stops, automatic running ledge grabs, running rolls and weapon-drawn
 movement (including quick draws after climbing/landing and armed roll recovery) are ready for testing; see [movement names and controls](docs/movement-testing.md).
 
+Escape opens Game Options and pauses the world. Up/Down selects a row; Left/Right changes
+its value. Escape or an action key applies settings and resumes; select Abort Game to return
+to the title. The added Volume row adjusts music and effects from 0–100% in 10% steps.
+Settings persist during the current application session. Free memory is displayed in MB.
+Manual Zoom doubles a cropped view and switches off on a room change. Automatic combat
+zoom and the joystick option are not connected yet.
+
 ```sh
 zig build --prefix /tmp/flashback/modern/out --cache-dir /tmp/flashback/modern/cache
 /tmp/flashback/modern/out/bin/flashbackz-sdl ../disk1.img ../disk2.img

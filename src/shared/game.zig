@@ -162,6 +162,7 @@ pub const Game = struct {
     saves_written: u32 = 0,
     loads_done: u32 = 0,
     audio: ?platform.AudioFormat = null,
+    preferences: @import("scenes/game_options.zig").Settings = .{},
     /// The samples of the current click still to queue, and the phase of its square wave.
     click_left: u32 = 0,
     click_phase: u32 = 0,
@@ -278,6 +279,8 @@ pub const Game = struct {
         }
         if (self.scene == .menu) {
             const front = &self.scene.menu;
+            front.music_enabled = self.preferences.music;
+            front.volume = self.preferences.volume;
             if (front.stage == .quit) {
                 front.stopAudio(p);
                 self.phase = .finished;
@@ -285,13 +288,15 @@ pub const Game = struct {
             }
             try front.update(p);
             if (front.stage == .ready) {
-                const next = try jungle_mod.Scene.loadWithDifficulty(self.allocator, self.assets.?, front.difficulty);
+                var next = try jungle_mod.Scene.loadWithDifficulty(self.allocator, self.assets.?, front.difficulty);
+                next.settings = self.preferences;
                 self.difficulty = front.difficulty;
                 front.deinit();
                 self.scene = .{ .jungle = next };
             }
         }
         if (self.jungle()) |scene| {
+            self.preferences = scene.settings;
             const now = p.nowNs();
             if (self.story == null and scene.pending_movie != null and scene.needsCatchup(now)) {
                 scene.stopAudio(p);
@@ -300,6 +305,8 @@ pub const Game = struct {
                 scene.pending_movie = null;
             }
             if (self.story) |*story| {
+                story.music_enabled = self.preferences.music;
+                story.music.volume = self.preferences.volume;
                 if (try story.update(p)) {
                     const paused = now - story.started_ns;
                     story.stopAudio(p);
@@ -312,7 +319,19 @@ pub const Game = struct {
                 }
             }
             try scene.update(now);
-            if (scene.defeated) {
+            self.preferences = scene.settings;
+            if (scene.options) |*options| if (options.menu.free_memory_mb == null) {
+                if (p.availableMemory()) |bytes| options.menu.free_memory_mb = bytes / (1024 * 1024);
+            };
+            if (scene.aborted) {
+                scene.stopAudio(p);
+                const art = (try menu_art.load(self.allocator, self.assets.?)) orelse return error.MissingMenu;
+                var next = front_end.Scene.init(self.allocator, self.assets.?, art);
+                next.difficulty = self.difficulty;
+                next.music_enabled = self.preferences.music;
+                scene.deinit();
+                self.scene = .{ .menu = next };
+            } else if (scene.defeated) {
                 scene.stopAudio(p);
                 const next = try continue_mod.Scene.init(self.allocator, self.assets.?, scene.score);
                 scene.deinit();
@@ -368,11 +387,6 @@ pub const Game = struct {
                 if (self.jungle()) |scene| {
                     switch (event.payload) {
                         .quit => self.phase = .finished,
-                        .key_down => |key| if (key.key == .escape) {
-                            self.phase = .finished;
-                        } else {
-                            try scene.enqueue(event);
-                        },
                         else => try scene.enqueue(event),
                     }
                     continue;

@@ -136,6 +136,10 @@ pub const SdlBackend = struct {
         return .{ .context = self, .vtable = &vtable };
     }
 
+    fn availableMemory(_: *anyopaque) ?u64 {
+        return @import("memory.zig").availableBytes();
+    }
+
     const vtable = platform.Platform.VTable{
         .start = start,
         .set_resolution = setResolution,
@@ -143,6 +147,7 @@ pub const SdlBackend = struct {
         .poll_events = pollEvents,
         .now_ns = nowNs,
         .audio_open = audioOpen,
+        .available_memory = availableMemory,
         .audio_queue = audioQueue,
         .audio_status = audioStatus,
         .audio_clear = audioClear,

@@ -247,6 +247,7 @@ pub const Platform = struct {
         audio_clear: *const fn (*anyopaque) void,
         audio_close: *const fn (*anyopaque) void,
         set_relative_mouse: *const fn (*anyopaque, bool) PlatformError!void,
+        available_memory: ?*const fn (*anyopaque) ?u64 = null,
     };
 
     pub fn start(p: *Platform) PlatformError!Capabilities {
@@ -266,6 +267,10 @@ pub const Platform = struct {
     pub fn nowNs(p: *Platform) u64 {
         return p.vtable.now_ns(p.context);
     }
+    pub fn availableMemory(p: *Platform) ?u64 {
+        return if (p.vtable.available_memory) |query| query(p.context) else null;
+    }
+
     pub fn audioOpen(p: *Platform, requested: AudioFormat) PlatformError!AudioFormat {
         return p.vtable.audio_open(p.context, requested);
     }

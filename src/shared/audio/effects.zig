@@ -73,6 +73,7 @@ pub const Output = struct {
     opened: bool = false,
     started: bool = false,
     rate: u32 = 44100,
+    volume: u8 = 100,
     pending: [2048]i16 = undefined,
     begin: usize = 0,
     end: usize = 0,
@@ -101,7 +102,7 @@ pub const Output = struct {
                 self.end = frames * 2;
                 self.mixer.render(bank, self.pending[0..self.end], self.rate);
             }
-            const accepted = try p.audioQueue(self.pending[self.begin..self.end]);
+            const accepted = try @import("output_gain.zig").queue(p, self.pending[self.begin..self.end], self.volume);
             self.begin += accepted * 2;
             if (accepted == 0) return;
         }

@@ -22,6 +22,8 @@ pub const Scene = struct {
     music: ?soundtrack.Soundtrack = null,
     music_cue: ?enum { branding, introduction, awakening, menu } = null,
     music_rate: ?u32 = null,
+    music_enabled: bool = true,
+    volume: u8 = 100,
     introduction_part: enum { first, second } = .first,
     skip_requested: bool = false,
     stage: Stage = .menu,
@@ -71,6 +73,10 @@ pub const Scene = struct {
     }
 
     fn updateMusic(self: *Scene, p: *platform.Platform) !void {
+        if (!self.music_enabled) {
+            self.stopAudio(p);
+            return;
+        }
         const cue: @TypeOf(self.music_cue) = switch (self.stage) {
             .branding => .branding,
             .introduction => .introduction,
@@ -102,7 +108,10 @@ pub const Scene = struct {
             self.music = replacement;
             self.music_cue = cue;
         }
-        if (self.music) |*music| try music.pump(p);
+        if (self.music) |*music| {
+            music.volume = self.volume;
+            try music.pump(p);
+        }
     }
 
     pub fn stateHash(self: *const Scene) u64 {

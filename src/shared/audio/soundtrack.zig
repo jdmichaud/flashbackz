@@ -8,6 +8,7 @@ const music = @import("music_player.zig");
 pub const Soundtrack = struct {
     owned: score.Owned,
     player: music.Player,
+    volume: u8 = 100,
     pending: [2048]i16 = undefined,
     pending_start: usize = 0,
     pending_end: usize = 0,
@@ -31,7 +32,7 @@ pub const Soundtrack = struct {
                 self.pending_end = frames * 2;
                 self.player.render(self.pending[0..self.pending_end]);
             }
-            const accepted = try p.audioQueue(self.pending[self.pending_start..self.pending_end]);
+            const accepted = try @import("output_gain.zig").queue(p, self.pending[self.pending_start..self.pending_end], self.volume);
             self.pending_start += accepted * 2;
             if (accepted == 0) return;
         }

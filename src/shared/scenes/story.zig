@@ -10,6 +10,7 @@ pub const Story = struct {
     music: audio.Soundtrack,
     started_ns: u64,
     audio_open: bool = false,
+    music_enabled: bool = true,
     skip: bool = false,
     activation_key: ?platform.Key,
 
@@ -36,6 +37,10 @@ pub const Story = struct {
     }
     pub fn update(self: *Story, p: *platform.Platform) !bool {
         if (self.skip or try self.player.update(p.nowNs())) return true;
+        if (!self.music_enabled) {
+            self.stopAudio(p);
+            return false;
+        }
         if (!self.audio_open) {
             const format = try p.audioOpen(.{ .channels = 2, .sample_rate = 44100 });
             if (format.channels != 2 or format.sample_rate != 44100) {

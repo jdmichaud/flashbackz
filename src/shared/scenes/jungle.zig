@@ -14,6 +14,7 @@ const equipment_mod = @import("../equipment.zig");
 const inventory_menu = @import("inventory_menu.zig");
 const props_mod = @import("../world_props.zig");
 const text_renderer = @import("../render/text.zig");
+const options_mod = @import("game_options.zig");
 const terrain_mod = @import("../terrain.zig");
 
 pub const HeldInput = struct {
@@ -25,6 +26,7 @@ pub const HeldInput = struct {
     right_action: bool = false,
     weapon: bool = false,
     inventory: bool = false,
+    options: bool = false,
     use_item: bool = false,
     use_held: bool = false,
     use_blocked: bool = false,
@@ -39,6 +41,7 @@ pub const HeldInput = struct {
             .right_shift => self.right_action = down,
             .space => self.weapon = down,
             .tab => self.inventory = down,
+            .escape => self.options = down,
             .enter => {
                 self.use_held = down;
                 if (!down) self.use_blocked = false;
@@ -102,6 +105,11 @@ pub const Scene = struct {
     health: i16,
     death_wait: ?u16 = null,
     defeated: bool = false,
+    aborted: bool = false,
+    settings: options_mod.Settings = .{},
+    zoom: @import("zoom_camera.zig").Camera = .{},
+    zoom_room: ?@import("../geometry.zig").RoomId = null,
+    options: ?struct { menu: options_mod.Menu, clock: clock_mod.Clock } = null,
     equipment: equipment_mod.Loadout,
     received_items: []equipment_mod.Received,
     received_count: usize = 0,
@@ -162,9 +170,14 @@ pub const Scene = struct {
         const event: @import("../audio/effects.zig").Event = .{ .sound = sound, .attenuation = attenuation };
         self.sound_events[self.sound_event_count] = event;
         self.sound_event_count += 1;
-        self.effects.submit(self.content.sounds, event);
+        if (self.settings.sound_fx) self.effects.submit(self.content.sounds, event);
     }
     pub fn pumpAudio(self: *Scene, p: *platform.Platform) !void {
+        self.effects.volume = self.settings.volume;
+        if (self.options != null or !self.settings.sound_fx) {
+            self.effects.stop(p);
+            return;
+        }
         try self.effects.pump(self.content.sounds, p);
     }
     pub fn stopAudio(self: *Scene, p: *platform.Platform) void {
@@ -199,6 +212,24 @@ pub const Scene = struct {
         // Preserve remaining debt for the next host call instead of dropping simulation.
         var work: usize = 0;
         while (self.needsCatchup(now_ns) and work < 8) : (work += 1) {
+            if (self.options) |*options| {
+                const deadline = options.clock.deadline();
+                while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
+                    const event = self.pending.orderedRemove(0);
+                    if (event.payload == .key_down) options.menu.key(event.payload.key_down.key);
+                }
+                if (options.menu.outcome) |outcome| {
+                    self.settings = options.menu.settings;
+                    self.zoom.setActive(self.settings.zoom == .on, self.pose);
+                    self.options = null;
+                    self.input = .{};
+                    self.aborted = outcome == .abort_game;
+                    try self.clock.?.resumeAfterPause(deadline);
+                    return;
+                }
+                options.clock.consume();
+                continue;
+            }
             if (self.dialog) |*dialog| {
                 const deadline = dialog.clock.deadline();
                 while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
@@ -274,7 +305,16 @@ pub const Scene = struct {
                 }
             }
             self.simulation_steps += 1;
+            if (self.zoom_room != null and self.zoom_room.? != self.environment.room and self.settings.zoom == .on) self.settings.zoom = .off;
+            self.zoom_room = self.environment.room;
+            self.zoom.setActive(self.settings.zoom == .on, self.pose);
+            self.zoom.advance(self.pose);
             self.clock.?.consume();
+            if (self.input.options) {
+                self.options = .{ .menu = .{ .settings = self.settings }, .clock = try clock_mod.Clock.init(clock_mod.inventory, deadline) };
+                self.input = .{};
+                return;
+            }
             if (self.inventory_cooldown != 0) {
                 self.inventory_cooldown -= 1;
             } else if (self.input.inventory and self.health > 0 and self.equipment.inventory.items().len != 0) {
@@ -302,12 +342,13 @@ pub const Scene = struct {
     }
 
     pub fn nextDeadline(self: *const Scene) ?u64 {
+        if (self.options) |options| return options.clock.deadline();
         if (self.dialog) |dialog| return dialog.clock.deadline();
         return if (self.clock) |clock| clock.deadline() else null;
     }
 
     pub fn needsCatchup(self: *const Scene, now_ns: u64) bool {
-        if (self.defeated) return false;
+        if (self.defeated or self.aborted) return false;
         return if (self.nextDeadline()) |time| now_ns >= time else false;
     }
 
@@ -335,7 +376,9 @@ pub const Scene = struct {
             const label = item.definition.label;
             try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, label, @divTrunc(176 - @as(i32, @intCast(label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
         }
+        try self.zoom.draw(indices, rgba);
         if (self.dialog) |dialog| try dialog.menu.draw(self.content.inventory_art.artwork(), self.menu_entries[0..dialog.menu.count], self.score, indices, room.image.width, room.image.height);
+        if (self.options) |options| try options.menu.draw(indices, &self.content.inventory_art.font);
         try palette.writeRgba(indices, &room.colors, rgba);
     }
 
@@ -376,7 +419,8 @@ pub const Scene = struct {
         var hash = std.hash.Wyhash.init(0);
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(i16, self.health)));
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u16, self.death_wait orelse 0)));
-        hash.update(&.{@intFromBool(self.defeated)});
+        hash.update(&.{ @intFromBool(self.defeated), @intFromBool(self.aborted), self.settings.volume, @intFromBool(self.settings.sound_fx), @intFromBool(self.settings.music), @intFromBool(self.settings.joystick), @backingInt(self.settings.zoom), @intFromBool(self.options != null) });
+        if (self.options) |options| hash.update(&.{ @backingInt(options.menu.selection), @intFromBool(options.menu.settings.sound_fx), @intFromBool(options.menu.settings.music), @intFromBool(options.menu.settings.joystick), @backingInt(options.menu.settings.zoom) });
         self.equipment.hashInto(&hash);
         self.terrain.hashInto(&hash);
         self.pistol.hashInto(&hash);
@@ -396,6 +440,7 @@ pub const Scene = struct {
             for ([_]bool{ keys.directions.right, keys.directions.left, keys.directions.up, keys.directions.down, keys.previous.right, keys.previous.left, keys.previous.up, keys.previous.down, keys.left_shift, keys.right_shift, keys.space, keys.enter, keys.tab }) |value| hash.update(&.{@intFromBool(value)});
         }
         hash.update(&.{ @intFromBool(self.input.weapon), @intFromBool(self.weapon_toggle.desired), @backingInt(self.weapon_toggle.phase), @intFromBool(self.controller.weapon_desired) });
+        for ([_]u32{ @intFromBool(self.zoom.active), @as(u16, @bitCast(self.zoom.origin.x)), @as(u16, @bitCast(self.zoom.origin.y)) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
         const activity: u32 = @backingInt(std.meta.activeTag(self.controller.activity));
         const phase: u32 = switch (self.controller.activity) {
             .armed => |p| @backingInt(p.phase),
