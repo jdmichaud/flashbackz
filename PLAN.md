@@ -61,7 +61,8 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   initial state, input cadence, interruption and completion. Use the three original recordings
   as regression drivers; report divergences and resolve missing features through shared,
   data-imported systems, never recording-specific behavior.
-- [ ] Shared collectible pickup and throwable stones, imported by behavior family. Use the
+- [ ] Shared collectible pickup, credit grants to the existing purse, and throwable stones,
+  imported by behavior family. Loose credit pickups also participate in enemy distraction. Use the
   original demo to expose the next missing interaction; validate increments with quick native
   play checks, per the user's iteration preference.
 - [ ] Shared enemy families: import every matching placement, animation library and behavior
