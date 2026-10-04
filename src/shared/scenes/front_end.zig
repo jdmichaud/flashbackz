@@ -1,4 +1,4 @@
-//! Floppy title preview. Cinematic and game entry require new edition qualification.
+//! Floppy startup presentation, title menu and game-entry transitions.
 //! Scene transitions own their resources; inputs are never forwarded into a new scene.
 const std = @import("std");
 const platform = @import("../platform.zig");
@@ -6,8 +6,9 @@ const menu_art = @import("../content/menu_artwork.zig");
 const palette = @import("../content/palette.zig");
 const text = @import("../render/text.zig");
 const menu_mod = @import("menu.zig");
+const vector_player = @import("vector_player.zig");
 pub const Difficulty = @import("../settings.zig").Difficulty;
-pub const Stage = enum { menu, ready, quit };
+pub const Stage = enum { branding, introduction, menu, ready, quit };
 pub const View = enum { main, skill, info, password, unavailable };
 
 pub const Scene = struct {
@@ -16,6 +17,9 @@ pub const Scene = struct {
     assets: menu_art.Assets,
     page_assets: ?menu_art.Assets = null,
     menu: menu_mod.Menu = .{},
+    player: ?vector_player.Player = null,
+    introduction_part: enum { first, second } = .first,
+    skip_requested: bool = false,
     stage: Stage = .menu,
     view: View = .main,
     difficulty: Difficulty = .normal,
@@ -30,15 +34,24 @@ pub const Scene = struct {
     }
 
     pub fn intro(self: *Scene) !void {
-        var commands = self.source.readAll("DATA/INTRO1.CMD", 65536) catch |err| switch (err) {
-            error.NotFound => return error.MissingFloppyIntroduction,
-            else => return err,
-        };
-        defer commands.deinit();
-        return error.FloppyCinematicsNotYetImplemented;
+        for ([_][]const u8{ "DATA/INTRO1.CMD", "DATA/INTRO1.POL", "DATA/INTRO2.CMD", "DATA/INTRO2.POL" }) |path| {
+            const asset = try self.source.open(path);
+            self.source.close(asset.handle);
+        }
+        try self.play("LOGOS");
+        self.stage = .branding;
+    }
+
+    fn play(self: *Scene, name: []const u8) !void {
+        const next = try vector_player.Player.open(self.allocator, self.source, name, 0);
+        if (self.player) |*previous| previous.deinit();
+        self.player = next;
+        self.skip_requested = false;
+        self.activation_key = null;
     }
 
     pub fn deinit(self: *Scene) void {
+        if (self.player) |*player| player.deinit();
         if (self.page_assets) |*assets| assets.deinit();
         self.assets.deinit();
         self.* = undefined;
@@ -50,6 +63,8 @@ pub const Scene = struct {
         var hash = std.hash.Wyhash.init(0);
         hash.update(&.{ @backingInt(self.stage), @backingInt(self.view), @backingInt(self.menu.selected), @backingInt(self.difficulty), @backingInt(self.pending_difficulty) });
         hash.update(self.password[0..self.password_length]);
+        hash.update(&.{@backingInt(self.introduction_part)});
+        if (self.player) |player| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, player.playback.frame)));
         return hash.final();
     }
 
@@ -57,9 +72,28 @@ pub const Scene = struct {
         return .{ .width = 256, .height = 224 };
     }
 
-    pub fn update(_: *Scene, _: *platform.Platform) !void {}
-    pub fn needsCatchup(_: *const Scene, _: u64) bool {
-        return false;
+    pub fn update(self: *Scene, p: *platform.Platform) !void {
+        if (self.player) |*player| {
+            const skipped = self.skip_requested;
+            if (skipped or try player.update(p.nowNs())) {
+                if (self.stage == .branding) {
+                    try self.play("INTRO1");
+                    self.introduction_part = .first;
+                    self.stage = .introduction;
+                } else if (!skipped and self.introduction_part == .first) {
+                    try self.play("INTRO2");
+                    self.introduction_part = .second;
+                } else {
+                    player.deinit();
+                    self.player = null;
+                    self.skip_requested = false;
+                    self.stage = .menu;
+                }
+            }
+        }
+    }
+    pub fn needsCatchup(self: *const Scene, now: u64) bool {
+        return if (self.player) |*player| player.needsCatchup(now) else false;
     }
 
     fn show(self: *Scene, view: View, picture: []const u8) !void {
@@ -98,6 +132,10 @@ pub const Scene = struct {
         const press = input.payload.key_down;
         const key = press.key;
         const confirm = key == .enter or key == .space or key == .left_shift or key == .right_shift;
+        if (self.player != null) {
+            if (!press.repeat and (key == .tab or key == .escape or confirm)) self.skip_requested = true;
+            return;
+        }
         if (self.stage != .menu) return;
         switch (self.view) {
             .main => {
@@ -158,6 +196,7 @@ pub const Scene = struct {
     }
 
     pub fn draw(self: *const Scene, indices: []u8, rgba: []u8) !void {
+        if (self.player) |*player| return player.draw(indices, rgba);
         if (self.view == .main) return self.menu.draw(self.assets.artwork(), .{}, indices, rgba);
         const assets = &(self.page_assets orelse return error.MissingMenuPage);
         @memcpy(indices, assets.background.pixels);

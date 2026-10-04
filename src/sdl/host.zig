@@ -102,8 +102,8 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, environ: *const std.process.Envir
     if (options.event_log_ns != null) backend.event_log = out;
 
     var game = flashbackz.Game.initWithEntry(gpa, providers.assetSource(), providers.storage(), options.providers.entry) catch |e| {
-        if (e == error.MissingFloppyIntroduction) {
-            std.log.err("the floppy set is incomplete: INTRO1.CMD is missing; supply the remaining disks. --scene menu opens the available title preview", .{});
+        if (e == error.NotFound) {
+            std.log.err("a required game resource is missing; supply both disk1.img and disk2.img, or a complete extracted directory", .{});
         } else std.log.err("cannot load game: {s}", .{@errorName(e)});
         return 1;
     };
@@ -125,7 +125,7 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, environ: *const std.process.Envir
         // A window that never painted looks the same as a window whose frames do not reach the
         // display. The renderer's name and the first frame tell them apart.
         if (!announced_first_frame and game.frames_presented > 0) {
-            if (game.sceneKind() == .menu) c.SDL_SetWindowTitle(backend.window.?, "flashbackz — menu preview");
+            if (game.sceneKind() == .menu) c.SDL_SetWindowTitle(backend.window.?, "flashbackz");
             if (game.sceneKind() == .jungle) c.SDL_SetWindowTitle(backend.window.?, "flashbackz — jungle development");
             announced_first_frame = true;
             const size = backend.window_size;

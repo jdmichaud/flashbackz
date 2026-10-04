@@ -1,5 +1,7 @@
 //! Validated content importers. File layouts stop at this boundary; engine users see images,
 //! palettes and glyphs. No executable instructions or game-memory layout enter the runtime.
+pub const cinematic_transform = @import("cinematic_transform.zig");
+pub const vector_cinematic = @import("vector_cinematic.zig");
 pub const bitmap = @import("bitmap.zig");
 pub const font = @import("font.zig");
 pub const palette = @import("palette.zig");

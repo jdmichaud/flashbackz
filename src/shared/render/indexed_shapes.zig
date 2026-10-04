@@ -19,27 +19,88 @@ pub const Canvas = struct {
         }
     }
 
-    fn line(self: Canvas, a: Point, b: Point, ink: Ink) void {
+    fn line(self: Canvas, first: Point, second: Point, ink: Ink) void {
+        const a = if (first.y <= second.y) first else second;
+        const b = if (first.y <= second.y) second else first;
         var x: i32 = a.x;
         var y: i32 = a.y;
         const dx: i32 = @intCast(@abs(@as(i32, b.x) - x));
-        const dy: i32 = -@as(i32, @intCast(@abs(@as(i32, b.y) - y)));
+        const dy: i32 = @intCast(@abs(@as(i32, b.y) - y));
         const sx: i32 = if (x < b.x) 1 else -1;
         const sy: i32 = if (y < b.y) 1 else -1;
-        var balance = dx + dy;
-        while (true) {
-            self.plot(x, y, ink);
-            if (x == b.x and y == b.y) return;
-            const twice = balance * 2;
-            if (twice >= dy) {
-                balance += dy;
-                x += sx;
+        const steep = dy > dx;
+        const major = if (steep) dy else dx;
+        const minor = if (steep) dx else dy;
+        var balance = 2 * minor - major;
+        self.plot(x, y, ink);
+        var remaining = major;
+        while (remaining > 0) : (remaining -= 1) {
+            if (balance >= 0) {
+                if (steep) x += sx else y += sy;
+                balance -= 2 * major;
             }
-            if (twice <= dx) {
-                balance += dx;
-                y += sy;
+            if (steep) y += sy else x += sx;
+            balance += 2 * minor;
+            self.plot(x, y, ink);
+        }
+    }
+
+    fn ellipseSpan(self: Canvas, center: Point, row: i32, radius: i32, ink: Ink) void {
+        const left = @max(@as(i32, center.x) - radius, self.clip.x);
+        const right = @min(@as(i32, center.x) + radius, @as(i32, self.clip.x) + self.clip.width - 1);
+        var x = left;
+        while (x <= right) : (x += 1) {
+            self.plot(x, @as(i32, center.y) + row, ink);
+            if (row != 0) self.plot(x, @as(i32, center.y) - row, ink);
+        }
+    }
+
+    /// Integer boundary traversal with explicit tie rules. Scanline spans are emitted once,
+    /// then clipped by the canvas, so indexed tinting cannot accumulate through overdraw.
+    pub fn ellipse(self: Canvas, center: Point, radius_x: u16, radius_y: u16, ink: Ink) !void {
+        if (self.pixels.len != @as(usize, self.width) * self.height) return error.InvalidVectorShape;
+        if (radius_x > 1024 or radius_y > 1024) return error.UnsupportedVectorExtent;
+        const xx: i64 = @as(i64, radius_x) * radius_x;
+        const yy: i64 = @as(i64, radius_y) * radius_y;
+        var x: i32 = radius_x;
+        var y: i32 = 0;
+        // The source rasterizer combines the words of 2*ry² before this multiplication.
+        // Keep that measured arithmetic at this compatibility-sensitive raster boundary.
+        const initial = @as(i64, radius_x) * ((2 * yy & 65535) + (2 * yy >> 16));
+        var horizontal_slope = 2 * initial;
+        var vertical_slope: i64 = 0;
+        var horizontal_error = 2 * xx - initial + yy;
+        var vertical_error = 2 * yy - horizontal_slope + xx;
+        while (vertical_error < 0) {
+            if (x != 0) self.ellipseSpan(center, y, x, ink);
+            y += 1;
+            vertical_slope += 4 * xx;
+            if (horizontal_error < 0) {
+                horizontal_error += vertical_slope + 2 * xx;
+                vertical_error += vertical_slope;
+            } else {
+                x -= 1;
+                horizontal_slope -= 4 * yy;
+                horizontal_error += vertical_slope + 2 * xx - horizontal_slope;
+                vertical_error += vertical_slope + 2 * yy - horizontal_slope;
             }
         }
+        var row_written = false;
+        while (x >= 0) : (x -= 1) {
+            if (!row_written and x != 0) {
+                self.ellipseSpan(center, y, x, ink);
+                row_written = true;
+            }
+            horizontal_slope -= 4 * yy;
+            if (vertical_error < 0) {
+                y += 1;
+                row_written = false;
+                vertical_slope += 4 * xx;
+                vertical_error += vertical_slope - horizontal_slope + 2 * yy;
+            } else vertical_error += 2 * yy - horizontal_slope;
+        }
+        if (row_written) y += 1;
+        while (y <= radius_y) : (y += 1) self.ellipseSpan(center, y, 0, ink);
     }
 
     /// Clockwise illustrations with one filled span per row. The picture importer rejects unsupported
@@ -55,57 +116,141 @@ pub const Canvas = struct {
             return;
         }
         var top: i32 = points[0].y;
+        var top_index: usize = 0;
         var bottom = top;
-        for (points) |point| {
-            top = @min(top, point.y);
+        var min_x: i32 = points[0].x;
+        var max_x = min_x;
+        for (points, 0..) |point, i| {
+            if (point.x < -4096 or point.x > 4096 or point.y < -4096 or point.y > 4096) return error.UnsupportedVectorExtent;
+            if (point.y < top) {
+                top = point.y;
+                top_index = i;
+            }
             bottom = @max(bottom, point.y);
+            min_x = @min(min_x, point.x);
+            max_x = @max(max_x, point.x);
         }
-        for (points) |point| if (point.x < -4096 or point.x > 4096 or point.y < -4096 or point.y > 4096) return error.UnsupportedVectorExtent;
+        if (top == bottom) {
+            var x = @max(min_x, self.clip.x);
+            while (x <= @min(max_x, @as(i32, self.clip.x) + self.clip.width - 1)) : (x += 1) self.plot(x, top, ink);
+            return;
+        }
+        var left_storage: [64]Edge = undefined;
+        var right_storage: [64]Edge = undefined;
+        const left_edges = try edges(points, top_index, bottom, true, &left_storage);
+        const right_edges = try edges(points, top_index, bottom, false, &right_storage);
+        var left_index: usize = 0;
+        var right_index: usize = 0;
         var y = @max(top, self.clip.y);
         while (y <= @min(bottom, @as(i32, self.clip.y) + self.clip.height - 1)) : (y += 1) {
-            var left: i32 = std.math.maxInt(i32);
-            var right: i32 = std.math.minInt(i32);
-            for (points, 0..) |a, index| {
-                const b = points[(index + 1) % points.len];
-                if (a.y == b.y) {
-                    if (y == a.y) {
-                        left = @min(left, @min(a.x, b.x));
-                        right = @max(right, @max(a.x, b.x));
-                    }
-                    continue;
+            while (left_index + 1 < left_edges.len and y >= left_edges[left_index].end.y) left_index += 1;
+            while (right_index + 1 < right_edges.len and y >= right_edges[right_index].end.y) right_index += 1;
+            const left = left_edges[left_index];
+            const right = right_edges[right_index];
+            var first = left.at(y, self.clip.y, true);
+            var last = right.at(y, self.clip.y, false);
+            if (y == bottom) {
+                // The closing row uses endpoint caps, not another interpolated edge step.
+                first = @as(i32, left.end.x) * 65536;
+                if (left.step >= 65536) first -= @divTrunc(left.step, 2);
+                var closing_x = right.end.x;
+                if (right.end_index != left.end_index) {
+                    var closing = (right.end_index + 1) % points.len;
+                    while (closing != left.end_index) : (closing = (closing + 1) % points.len) closing_x = points[closing].x;
                 }
-                if (y < @min(a.y, b.y) or y >= @max(a.y, b.y)) continue;
-                const is_left = b.y < a.y;
-                const high = if (is_left) b else a;
-                const low = if (is_left) a else b;
-                const step = @divTrunc((@as(i32, low.x) - high.x) * 256, @as(i32, low.y) - high.y) * 256;
-                const elapsed = y - high.y;
-                var x = @as(i32, high.x) * 65536;
-                const half = if (step >= -65536 and step < 0) @as(i32, 32768) else @divTrunc(step, 2);
-                if (high.y < self.clip.y) {
-                    x = (@as(i32, high.x) - @divTrunc((@as(i32, high.y) - self.clip.y) * (@as(i32, low.x) - high.x), @as(i32, low.y) - high.y)) * 65536;
-                    const magnitude: i32 = @intCast(@abs(step));
-                    x += if (is_left) -@divTrunc(if (magnitude < 65536) @as(i32, -65536) else magnitude, 2) else @divTrunc(@max(magnitude, 65536), 2);
-                    x += step * (y - self.clip.y);
-                } else if (is_left) {
-                    if (step < 0) x += half + step * elapsed else if (elapsed > 0) x += @divTrunc(@max(step, 65536), 2) + step * (elapsed - 1);
-                } else {
-                    if (step >= 0) x += @divTrunc(@max(step, 65536), 2) + step * elapsed else if (elapsed > 0) x += half + step * (elapsed - 1);
-                }
-                x >>= 16;
-                left = @min(left, x);
-                right = @max(right, x);
+                last = @as(i32, closing_x) * 65536;
+                if (right.step < 0) last -= @divTrunc(right.step, 2);
             }
-            var x = @max(left, self.clip.x);
-            const end = @min(right, @as(i32, self.clip.x) + self.clip.width - 1);
+            var x = @max(first >> 16, self.clip.x);
+            const end = @min(last >> 16, @as(i32, self.clip.x) + self.clip.width - 1);
             while (x <= end) : (x += 1) self.plot(x, y, ink);
         }
     }
 };
+
+/// A contour is converted to two downward edge chains. A short upward notch advances its
+/// horizontal origin without rewinding the scanline. This preserves the source's one-span
+/// coverage for its slightly concave illustrations, while keeping edge traversal explicit.
+const Edge = struct {
+    start: Point,
+    end: Point,
+    step: i32,
+    end_index: usize,
+    fn outwardHalf(step: i32) i32 {
+        // This boundary compares the integer part of a positive slope with one. Thus
+        // slopes in [1,2) retain a half-pixel bias instead of a half-slope bias.
+        return if (step < 131072) 32768 else @divTrunc(step, 2);
+    }
+    fn at(self: Edge, y: i32, clip_top: i32, left: bool) i32 {
+        const step = self.step;
+        const elapsed = y - self.start.y;
+        var x = @as(i32, self.start.x) * 65536;
+        const half = if (step >= -65536 and step < 0) @as(i32, 32768) else @divTrunc(step, 2);
+        if (self.start.y < clip_top) {
+            x = (@as(i32, self.start.x) - @divTrunc((@as(i32, self.start.y) - clip_top) * (@as(i32, self.end.x) - self.start.x), @as(i32, self.end.y) - self.start.y)) * 65536;
+            const magnitude: i32 = @intCast(@abs(step));
+            x += if (left) -@divTrunc(if (magnitude < 65536) @as(i32, -65536) else magnitude, 2) else @divTrunc(@max(magnitude, 65536), 2);
+            return x + step * (y - clip_top);
+        }
+        if (left) {
+            if (step < 0) x += half + step * elapsed else if (elapsed > 0) x += outwardHalf(step) + step * (elapsed - 1);
+        } else {
+            if (step >= 0) x += outwardHalf(step) + step * elapsed else if (elapsed > 0) x += half + step * (elapsed - 1);
+        }
+        return x;
+    }
+};
+
+fn edges(points: []const Point, first: usize, bottom: i32, reverse: bool, buffer: []Edge) ![]const Edge {
+    var index = first;
+    var used: usize = 0;
+    var traversed: usize = 0;
+    while (points[index].y < bottom) {
+        var start = points[index];
+        while (true) {
+            index = if (reverse) (index + points.len - 1) % points.len else (index + 1) % points.len;
+            traversed += 1;
+            if (traversed > points.len or used == buffer.len) return error.InvalidVectorShape;
+            const end = points[index];
+            if (end.y > start.y) {
+                const step = @divTrunc((@as(i32, end.x) - start.x) * 256, @as(i32, end.y) - start.y) * 256;
+                buffer[used] = .{ .start = start, .end = end, .step = step, .end_index = index };
+                used += 1;
+                break;
+            }
+            start.x = end.x;
+        }
+    }
+    if (used == 0) return error.InvalidVectorShape;
+    return buffer[0..used];
+}
 
 test "indexed shading preserves underlying inks and clips each edge" {
     var pixels: [16]u8 = @splat(2);
     const canvas: Canvas = .{ .pixels = &pixels, .width = 4, .height = 4, .clip = .{ .x = 1, .y = 1, .width = 2, .height = 2 } };
     try canvas.draw(&.{ .{ .x = 0, .y = 1 }, .{ .x = 3, .y = 1 }, .{ .x = 3, .y = 3 }, .{ .x = 0, .y = 3 } }, .{ .mask = 8 });
     try std.testing.expectEqualSlices(u8, &.{ 2, 2, 2, 2, 2, 10, 10, 2, 2, 10, 10, 2, 2, 2, 2, 2 }, &pixels);
+}
+
+test "closing edge caps retain the covered corner of a one-row sloped trapezoid" {
+    var pixels: [30]u8 = @splat(0);
+    const canvas: Canvas = .{ .pixels = &pixels, .width = 10, .height = 3, .clip = .{ .x = 0, .y = 0, .width = 10, .height = 3 } };
+    try canvas.draw(&.{ .{ .x = 0, .y = 0 }, .{ .x = 8, .y = 0 }, .{ .x = 8, .y = 1 }, .{ .x = 1, .y = 1 } }, .{ .color = 3 });
+    for (0..2) |y| {
+        for (pixels[y * 10 ..][0..9]) |pixel| try std.testing.expectEqual(@as(u8, 3), pixel);
+        try std.testing.expectEqual(@as(u8, 0), pixels[y * 10 + 9]);
+    }
+    for (pixels[20..]) |pixel| try std.testing.expectEqual(@as(u8, 0), pixel);
+}
+
+test "ellipse clipping and indexed tint preserve the surrounding page" {
+    var pixels: [81]u8 = @splat(2);
+    const canvas: Canvas = .{ .pixels = &pixels, .width = 9, .height = 9, .clip = .{ .x = 2, .y = 2, .width = 5, .height = 5 } };
+    try canvas.ellipse(.{ .x = 4, .y = 4 }, 2, 2, .{ .mask = 8 });
+    try std.testing.expectEqual(@as(u8, 10), pixels[4 * 9 + 4]);
+    try std.testing.expectEqual(@as(u8, 2), pixels[0]);
+    try std.testing.expectEqual(@as(u8, 2), pixels[2 * 9 + 2]);
+    for (0..9) |y| for (0..9) |x| if (x < 2 or y < 2 or x > 6 or y > 6) {
+        try std.testing.expectEqual(@as(u8, 2), pixels[y * 9 + x]);
+    };
 }

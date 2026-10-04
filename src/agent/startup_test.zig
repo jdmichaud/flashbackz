@@ -16,7 +16,7 @@ test "floppy menu preview cannot silently skip missing introduction or enter CD 
     try source.add("DATA/MENU3.MAP", pixels);
     try source.add("DATA/MENU3.PAL", &palette);
     try source.add("DATA/FB_TXT.FNT", &font);
-    try std.testing.expectError(error.MissingFloppyIntroduction, game.Game.init(allocator, source.assetSource(), null));
+    try std.testing.expectError(error.NotFound, game.Game.init(allocator, source.assetSource(), null));
     var preview = try game.Game.initWithEntry(allocator, source.assetSource(), null, .menu_development);
     defer preview.deinit();
     const front = &preview.scene.menu;
@@ -28,4 +28,55 @@ test "floppy menu preview cannot silently skip missing introduction or enter CD 
     try std.testing.expectEqual(game.settings.Difficulty.easy, front.difficulty);
     try std.testing.expectEqual(game.front_end.View.main, front.view);
     try std.testing.expectError(error.FloppyGameplayNotYetQualified, front.start(null));
+}
+
+test "normal startup completes three vector chapters and skipping introduction reaches menu" {
+    const allocator = std.testing.allocator;
+    var source = game.memory.MemoryAssetSource.init(allocator);
+    defer source.deinit();
+    const pixels = try allocator.alloc(u8, 57344);
+    defer allocator.free(pixels);
+    @memset(pixels, 0);
+    const palette: [768]u8 = @splat(0);
+    const font: [3360]u8 = @splat(0);
+    try source.add("DATA/MENU1.MAP", pixels);
+    try source.add("DATA/MENU1.PAL", &palette);
+    try source.add("DATA/FB_TXT.FNT", &font);
+    const commands = [_]u8{ 0, 0, 0, 255 };
+    const polygons: [20]u8 = @splat(0);
+    try source.add("DATA/LOGOS.CMD", &commands);
+    try source.add("DATA/LOGOS.POL", &polygons);
+    try source.add("DATA/INTRO1.CMD", &commands);
+    try source.add("DATA/INTRO1.POL", &polygons);
+    try source.add("DATA/INTRO2.CMD", &commands);
+    try source.add("DATA/INTRO2.POL", &polygons);
+    const Backend = @import("backend.zig").AgentBackend;
+    var backend = Backend.init(allocator, .{});
+    defer backend.deinit();
+    var platform = backend.asPlatform();
+    var app = try game.Game.init(allocator, source.assetSource(), null);
+    defer app.deinit();
+    var first = false;
+    var second = false;
+    for (0..20) |_| {
+        _ = try app.update(&platform);
+        if (app.scene.menu.stage == .introduction) {
+            if (app.scene.menu.introduction_part == .first) first = true else second = true;
+        }
+        backend.advance(100_000_000);
+    }
+    try std.testing.expect(first and second);
+    try std.testing.expectEqual(game.front_end.Stage.menu, app.scene.menu.stage);
+    try app.scene.menu.intro();
+    _ = try app.update(&platform);
+    try backend.inject(.{ .time_ns = backend.clock_ns, .payload = .{ .key_down = .{ .key = .tab } } });
+    _ = try app.update(&platform);
+    try std.testing.expectEqual(game.front_end.Stage.introduction, app.scene.menu.stage);
+    try backend.inject(.{ .time_ns = backend.clock_ns, .payload = .{ .key_down = .{ .key = .tab, .repeat = true } } });
+    _ = try app.update(&platform);
+    try std.testing.expectEqual(game.front_end.Stage.introduction, app.scene.menu.stage);
+    try backend.inject(.{ .time_ns = backend.clock_ns, .payload = .{ .key_up = .{ .key = .tab } } });
+    try backend.inject(.{ .time_ns = backend.clock_ns, .payload = .{ .key_down = .{ .key = .tab } } });
+    _ = try app.update(&platform);
+    try std.testing.expectEqual(game.front_end.Stage.menu, app.scene.menu.stage);
 }
