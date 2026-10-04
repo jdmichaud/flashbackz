@@ -59,7 +59,11 @@ knockdowns and score awards. Enemy bullets now hurt Conrad, with posture-sensiti
 brief blinking protection, and Continue on defeat. Gunmen can crouch and fire low in
 response to Conrad's posture. Ground robots now deploy, pursue, strike and can be destroyed with low shots, including
 their overload/explosion sequence and sounds. Ceiling laser guns now use their original pressure-plate/detector connections, firing
-profiles, effects and damage. Other enemy families and the remaining mechanisms are
+profiles, effects and damage. Doors now use shared opening/closing tracks and change
+collision at the authored animation steps. Pressure plates, switches and credential locks
+route through imported circuits. Ordinary keys can be collected with Shift, selected with
+Tab/arrow keys, and used with Return at a matching lock. Successful use consumes the key.
+Story-issued cards, lifts, other enemy families and the remaining mechanisms are
 still being implemented.
 
 DEMO plays the three original recorded input streams through normal gameplay, in the

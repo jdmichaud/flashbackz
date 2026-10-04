@@ -34,7 +34,7 @@ pub const ImpactSet = struct {
         }
     }
 };
-pub const Category = enum { player, enemy, civilian };
+pub const Category = enum { player, enemy, civilian, mechanism };
 pub const Target = struct { id: Id, footprint: contacts.Footprint, facing: motion.Facing, vulnerable: Vulnerability, active: bool = true, category: Category = .enemy };
 pub const Hit = struct { target: Id, impact: Impact, sender_room: geometry.RoomId };
 

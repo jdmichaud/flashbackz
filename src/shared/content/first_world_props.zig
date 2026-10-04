@@ -16,11 +16,14 @@ pub const Assets = struct {
     definitions: []world.Definition,
     items: []equipment.Definition,
     connections: []Connection,
+    /// Import-only item provenance for binding item-to-mechanism delivery order.
+    item_sources: []u16,
     hint_icon: @import("../motion.zig").VisualId,
     pub fn deinit(self: *Assets) void {
         releaseThrows(self.allocator, self.definitions);
         self.allocator.free(self.definitions);
         self.allocator.free(self.connections);
+        self.allocator.free(self.item_sources);
         for (self.clips) |*clip| clip.deinit();
         self.allocator.free(self.clips);
         for (self.items) |item| self.allocator.free(item.label);
@@ -68,6 +71,8 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
         for (items.items) |item| allocator.free(item.label);
         items.deinit(allocator);
     }
+    var item_sources: std.ArrayList(u16) = .empty;
+    errdefer item_sources.deinit(allocator);
     var connections: std.ArrayList(Connection) = .empty;
     errdefer connections.deinit(allocator);
     const hint = try resolver.icon(0);
@@ -81,7 +86,8 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
         if (record.kind == 3) {
             const stone = isThrowablePickup(rules, record.rule_group, record.initial_state, rule);
             const credit = @import("credit_pickups.zig").recognize(try @import("rule_table.zig").group(rules, record.rule_group));
-            if (record.initial_state != 328 and !stone and credit == null) continue;
+            const key = @import("key_pickups.zig").recognize(try @import("rule_table.zig").group(rules, record.rule_group));
+            if (record.initial_state != 328 and !stone and credit == null and key == null) continue;
             if (credit) |spec| {
                 if (record.initial_state != spec.idle or record.contact_icon != 1) return error.UnsupportedCreditPickup;
                 const recipient = record.parameters[spec.target_parameter];
@@ -97,6 +103,16 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
                 errdefer allocator.free(label);
                 const item: equipment.Definition = .{ .kind = .credits, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = amount, .label = label };
                 behavior = .{ .collectible = .{ .item = .{ .index = first_item.index + @as(u16, @intCast(items.items.len)), .generation = first_item.generation }, .idle = idle, .pickup_movie = .credits_pickup, .quantity_grant = .{ .target = target, .amount = amount } } };
+                try items.append(allocator, item);
+            } else if (key) |spec| {
+                if (record.initial_state != spec.idle or record.contact_icon != 1 or record.parameters[0] != 5) return error.UnsupportedKeyPickup;
+                const idle = try appendClip(allocator, &clips, animations, spec.idle, resolver);
+                var use = try animation.decode(allocator, animations, spec.using);
+                defer use.deinit();
+                const label = try strings.copy(allocator, names, record.text_id);
+                errdefer allocator.free(label);
+                const item: equipment.Definition = .{ .kind = .key, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label, .use_action = .{ .unlock = .{ .credential = record.life, .consume_after_steps = @intCast(use.frames.len) } } };
+                behavior = .{ .collectible = .{ .item = .{ .index = first_item.index + @as(u16, @intCast(items.items.len)), .generation = first_item.generation }, .idle = idle, .pickup_movie = .key_pickup } };
                 try items.append(allocator, item);
             } else if (stone) {
                 if (record.contact_icon != 1 or record.object_id != 1) return error.UnsupportedThrowableItem;
@@ -139,6 +155,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
             behavior = .{ .floor_switch = .{ .rest = rest, .press = press, .circuit = circuit, .accepts_objects = !pressure.player_only, .initially_active = record.initially_active != 0, .wake_on_contact = record.flags & 2 != 0, .sleep_after_press = pressure.sleep_after_press } };
         }
         if (behavior == .collectible) {
+            try item_sources.append(allocator, @intCast(i));
             behavior.collectible.initially_active = record.initially_active != 0;
             behavior.collectible.wake_nearby = record.flags & 4 != 0;
         }
@@ -159,7 +176,9 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
     }
     const owned_connections = try connections.toOwnedSlice(allocator);
     errdefer allocator.free(owned_connections);
-    return .{ .allocator = allocator, .connections = owned_connections, .clips = owned_clips, .definitions = owned_definitions, .items = try items.toOwnedSlice(allocator), .hint_icon = hint };
+    const owned_sources = try item_sources.toOwnedSlice(allocator);
+    errdefer allocator.free(owned_sources);
+    return .{ .allocator = allocator, .item_sources = owned_sources, .connections = owned_connections, .clips = owned_clips, .definitions = owned_definitions, .items = try items.toOwnedSlice(allocator), .hint_icon = hint };
 }
 fn word(bytes: []const u8, offset: usize) u16 {
     return std.mem.readInt(u16, bytes[offset..][0..2], .little);

@@ -5,7 +5,7 @@ const std = @import("std");
 const inventory = @import("inventory.zig");
 const motion = @import("motion.zig");
 pub const ItemHandle = @import("identity.zig").ItemHandle;
-pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone };
+pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone, key };
 pub const Definition = struct {
     kind: Kind,
     icon: motion.VisualId,
@@ -14,12 +14,13 @@ pub const Definition = struct {
     initial_quantity: i16,
     label: []const u8 = "",
     show_quantity: bool = false,
-    use_action: ?union(enum) { story: @import("story_cue.zig").Cue, throw_item } = null,
+    use_action: ?union(enum) { story: @import("story_cue.zig").Cue, throw_item, unlock: struct { credential: i16, consume_after_steps: u16 } } = null,
 };
 pub const Item = struct {
     definition: Definition,
     state: union(enum) { introducing: u16, available, carried, consumed },
     quantity: i16,
+    consume_in: ?u16 = null,
 };
 pub const Received = struct { item: ItemHandle, kind: Kind };
 
@@ -73,6 +74,11 @@ pub const Loadout = struct {
         self.entries[pickup.index].state = .consumed;
     }
 
+    pub fn consumeAfter(self: *Loadout, handle: ItemHandle, steps: u16) !void {
+        if ((try self.item(handle)).state != .carried) return error.ItemNotCarried;
+        self.entries[handle.index].consume_in = steps;
+    }
+
     pub fn carries(self: *const Loadout, kind: Kind) bool {
         for (self.entries) |entry| if (entry.state == .carried and entry.definition.kind == kind) return true;
         return false;
@@ -103,6 +109,14 @@ pub const Loadout = struct {
                 .available, .consumed => continue,
                 .carried => {},
             }
+            if (entry.consume_in) |remaining| {
+                if (remaining <= 1) {
+                    const handle: ItemHandle = .{ .index = @intCast(index), .generation = 1 };
+                    if (!self.inventory.remove(handle)) return error.ItemNotCarried;
+                    entry.state = .consumed;
+                    entry.consume_in = null;
+                } else entry.consume_in = remaining - 1;
+            }
             if (entry.definition.kind == .shield) entry.quantity = shieldCharge(health);
         }
         return count;
@@ -116,7 +130,7 @@ pub const Loadout = struct {
                 .available => std.math.maxInt(u32),
                 .consumed => std.math.maxInt(u32) - 1,
             };
-            for ([_]u32{ @backingInt(entry.definition.kind), @as(u16, @bitCast(entry.quantity)), pending }) |value|
+            for ([_]u32{ @backingInt(entry.definition.kind), @as(u16, @bitCast(entry.quantity)), pending, if (entry.consume_in) |steps| @as(u32, steps) + 1 else 0 }) |value|
                 hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
         }
         for (self.inventory.items()) |handle| {

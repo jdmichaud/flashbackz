@@ -39,9 +39,11 @@ pub const Pack = struct {
     inventory_art: inventory_artwork.Assets,
     world_props: prop_import.Assets,
     controls: @import("operated_controls.zig").Assets,
+    locks: @import("key_locks.zig").Assets,
     hazards: @import("electrical_hazards.zig").Assets,
     detectors: @import("detectors.zig").Assets,
     ceiling_guns: @import("ceiling_guns.zig").Assets,
+    doors: @import("doors.zig").Assets,
     gunmen: @import("gunmen.zig").Assets,
     robots: @import("ground_robots.zig").Assets,
     wounds: @import("conrad_wound.zig").Assets,
@@ -71,9 +73,11 @@ pub const Pack = struct {
         self.inventory_art.deinit();
         self.world_props.deinit();
         self.controls.deinit();
+        self.locks.deinit();
         self.hazards.deinit();
         self.detectors.deinit();
         self.ceiling_guns.deinit();
+        self.doors.deinit();
         self.gunmen.deinit();
         self.robots.deinit();
         self.wounds.deinit();
@@ -427,6 +431,8 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer operated.deinit();
     var detectors = try @import("detectors.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
     errdefer detectors.deinit();
+    var locks = try @import("key_locks.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, &resolver);
+    errdefer locks.deinit();
     const combined_connections = try connections.toOwnedSlice(allocator);
     allocator.free(props.connections);
     props.connections = combined_connections;
@@ -434,6 +440,8 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer hazards.deinit();
     var ceiling_guns = try @import("ceiling_guns.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, &resolver);
     errdefer ceiling_guns.deinit();
+    var doors = try @import("doors.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, @intCast(gun.parameters[0]), &resolver);
+    errdefer doors.deinit();
     var gunmen = try @import("gunmen.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, interface.score_awards, &resolver);
     errdefer gunmen.deinit();
     var robots = try @import("ground_robots.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &resolver);
@@ -491,9 +499,11 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .inventory_art = inventory_art,
         .world_props = props,
         .controls = operated,
+        .locks = locks,
         .hazards = hazards,
         .detectors = detectors,
         .ceiling_guns = ceiling_guns,
+        .doors = doors,
         .gunmen = gunmen,
         .robots = robots,
         .wounds = wounds,

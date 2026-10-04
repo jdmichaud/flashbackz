@@ -48,3 +48,8 @@ pub const ground_robots = @import("ground_robots.zig");
 
 pub const detectors = @import("detectors.zig");
 pub const ceiling_guns = @import("ceiling_guns.zig");
+
+pub const doors = @import("doors.zig");
+
+pub const key_locks = @import("key_locks.zig");
+pub const key_pickups = @import("key_pickups.zig");
