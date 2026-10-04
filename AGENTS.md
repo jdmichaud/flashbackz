@@ -1,5 +1,5 @@
 Purpose: reimplement Flashback DOS in modern, readable, extensible code with exact fidelity to
-the supplied CD edition. Research and tools live in the sibling flashback-re repository.
+the supplied floppy edition. Research and tools live in the sibling flashback-re repository.
 
 Rules:
 - Read README.md and PLAN.md first. Follow game-port-template's platform contracts and process.

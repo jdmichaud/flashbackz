@@ -1,7 +1,7 @@
 # Flashbackz design
 
 Initial design, 2026-10-03. This is an independently organized game, verified against the supplied
-Flashback DOS CD edition. The implementation goal authorizes this initial design. Changes to the
+Flashback DOS floppy edition. The implementation goal authorizes this initial design. Changes to the
 established contracts require the user's approval; measured content and port maps evolve with
 the research. Unknown original behavior is not replaced by guessed rules.
 
@@ -12,16 +12,16 @@ Movement, animation, collisions, combat, inventory, enemies, puzzles, room trans
 cinematics, drawing and audio must match the reference. A faithful translation of the original
 program does not satisfy the architecture requirement.
 
-The reference is the supplied `FLASH_OEM` CD, SHA-256
-`3326ae0e8823e307f660e80371f360357bc1f4d15d1839b078d368fbcf80db32`. English is the first
-content path; all five language overlays remain in scope. Research lives in `flashback-re`.
+The user authorized the floppy edition pivot on 2026-10-04. The supplied first disk is
+`Flashback.ima`, SHA-256 `3ff964a76e90f3c25489334db38bde021d0c7632f7fa2b90ba234312c1d1272f`.
+The complete media set and language coverage remain to be established. Research lives in `flashback-re`.
 There is no mandatory remaster and no runtime dependency on an emulator, decompiler, original
 executable's instructions, research tool or sibling repository.
 
 Linux/SDL, a deterministic headless host, Windows/SDL and WebAssembly share the same game.
 The user accepts Linux runtime verification plus a Windows cross-build for Windows. Browser
 acceptance includes browser execution. Network play is excluded. Audio acceptance is AdLib FM
-plus the game's digital samples and movie audio; MT-32 device ROMs are not required.
+plus the game's digital samples; MT-32 device ROMs are not required.
 
 ## 2. Ownership and boundaries
 
@@ -58,7 +58,7 @@ loop and cleanup. The agent supplies a virtual clock and never links SDL.
 
 ## 3. Content import
 
-The compatibility boundary reads the user's extracted files or CD, validates ranges and formats,
+The compatibility boundary reads the user's extracted files or floppy images, validates ranges and formats,
 and produces meaningful typed content. The modern game never indexes an executable by address.
 Imported entity identifiers are mapped to semantic content identifiers and actor handles before
 the simulation starts. Original addresses and layouts remain in importers, provenance and port
@@ -128,7 +128,7 @@ menu/game content is 256 by 224 pixels; movies have their own measured dimension
 Audio sequencing and sample decoding are Flashback subsystems with measured priorities and
 timing. A generic OPL2/OPL3 synthesizer may be reused from vpoolz after its code, tests and
 attribution are reviewed. Virtual Pool's sequencer, driver, voice ownership and memory layout
-are not reused. AdLib output and game/movie PCM are mixed on a sample clock into bounded
+are not reused. AdLib output and game PCM are mixed on a sample clock into bounded
 interleaved samples; the host only plays them. Renderer refresh rate cannot set music tempo.
 
 ## 7. Extension examples and architecture gate

@@ -1,5 +1,29 @@
 # flashbackz implementation plan
 
+
+## Floppy edition pivot — user instruction, 2026-10-04
+
+The reference is now `Flashback.ima` (FAT12, SHA-256
+`3ff964a76e90f3c25489334db38bde021d0c7632f7fa2b90ba234312c1d1272f`).
+Earlier completed CD gates below are historical; they do not certify the floppy edition.
+The supplied image is an installation disk with incomplete game resources. Remaining disks
+are required for the introduction, sound and complete original startup qualification.
+
+- [ ] Inventory FAT12 files and ABA archives; identify missing installation media, record
+  provenance and reproduce floppy startup on disposable copies.
+- [ ] Remove CD filesystem/track and SEQ playback from the modern game. Preserve historical
+  research and shelved generic work; retain independent reusable systems for requalification.
+- [ ] Support direct IMA input and bounded ABA decompression, with malformed-input tests and
+  independent extraction comparison. Support extracted floppy content through the same API.
+- [ ] Reproduce title, vector introduction and original scene order. Gate: exact original
+  presented frames, palette changes, timing and input behavior; no approximate substitutes.
+- [ ] Recover floppy music/effects sequencing and integrate AdLib plus PCM. Gate: exact event
+  timing and sound comparisons against the pinned original execution profile.
+- [ ] Requalify gameplay imports and executable-backed metadata against this release before
+  claiming that earlier movement, scene or inventory evidence applies.
+
+## Historical CD implementation/research milestones
+
 The sibling flashback-re plan owns research. Exact fidelity and maintainability are independent
 gates. All runtime work uses the original as the reference; no approximate acceptance stage.
 
