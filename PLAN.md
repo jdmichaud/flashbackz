@@ -37,6 +37,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   startup/menu sound to the existing chip and native PCM queue. Preserve scene stop/skip order.
 - [ ] Recover floppy music/effects sequencing and integrate AdLib plus PCM. Gate: exact event
   timing and sound comparisons against the pinned original execution profile.
+- [ ] Import compact LEV/BNQ/SGD room descriptions directly into owned artwork for gameplay.
+  Gate: all decoded room pixels and palette selectors match the original installer’s five
+  MAP outputs. Preserve compact content boundaries; reproducing the installer’s compression
+  choices is unnecessary for runtime artwork.
 - [ ] Requalify gameplay imports and executable-backed metadata against this release before
   claiming that earlier movement, scene or inventory evidence applies.
 
