@@ -1,4 +1,4 @@
-//! Recover the shared gunman emitter's posture clips and impact placement.
+//! Recover animated hitscan emitters and their available firing postures.
 const std = @import("std");
 const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
@@ -21,14 +21,22 @@ pub fn load(allocator: std.mem.Allocator, record: @import("placement.zig").Recor
     var down: [2]i16 = undefined;
     for (0..2) |height| {
         const message: i16 = @intCast(40 + height);
-        const start = for (0..group.count()) |i| {
+        const start: ?u16 = for (0..group.count()) |i| {
             const rule = group.at(i);
             if (rule.source == record.initial_state and rule.conditions[0].code == 34 and rule.conditions[0].argument == message and rule.conditions[1].code == 96 and rule.conditions[1].argument == message) break rule.target;
-        } else return error.UnsupportedEnemyWeaponStart;
-        flashes[height] = try clip(allocator, animations, start, owned, resolver);
+        } else null;
+        if (start == null) {
+            if (height == 0) return error.UnsupportedWeaponStart;
+            flashes[height] = flashes[0];
+            impacts[height] = impacts[0];
+            forward[height] = forward[0];
+            down[height] = down[0];
+            continue;
+        }
+        flashes[height] = try clip(allocator, animations, start.?, owned, resolver);
         const impact = for (0..group.count()) |i| {
             const rule = group.at(i);
-            if (rule.source == start and rule.conditions[1].code == 95) break rule;
+            if (rule.source == start.? and rule.conditions[1].code == 95) break rule;
         } else return error.UnsupportedEnemyWeaponImpact;
         impacts[height] = try clip(allocator, animations, impact.target, owned, resolver);
         forward[height] = -@as(i16, impact.dx);

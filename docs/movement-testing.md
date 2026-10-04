@@ -89,3 +89,11 @@ that sequence. Closed robots and high shots retain the original immunity rules.
 All seven Normal-difficulty jungle placements use this shared family; the same import
 also covers twelve Earth-city and two spaceport placements. Native combat was checked
 in the jungle; this does not qualify those later levels or the ceiling-gun family.
+
+### Stone distraction in the jungle DEMO
+
+The gunman now investigates the loose credits before Conrad throws the stone, then turns
+and walks toward the landed stone. Both reactions use ordinary collectible perception.
+The missing credit pickups and shortened item-detection range have been corrected;
+this is not a movement scripted specifically for the recording. Hold **Shift** beside
+loose credits to collect them into the existing purse and play the original pickup movie.

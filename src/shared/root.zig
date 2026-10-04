@@ -1,6 +1,7 @@
 //! The shared module: the platform boundary, the in-memory providers and the game. It links
 //! nothing and needs no libc; native presentation and headless verification use the same game.
 pub const contacts = @import("contacts.zig");
+pub const perception = @import("actors/perception.zig");
 pub const world_props = @import("world_props.zig");
 pub const music_player = @import("audio/music_player.zig");
 pub const score = @import("audio/score.zig");

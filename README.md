@@ -48,7 +48,8 @@ Settings persist during the current application session. Free memory is displaye
 Manual Zoom doubles a cropped view and switches off on a room change. Automatic combat
 zoom and the joystick option are not connected yet.
 
-Stones can now be picked up with Shift and selected in inventory. Return while standing
+Loose credits can now be collected with Shift and added to the existing purse, with the
+original pickup movie. Stones can now be picked up with Shift and selected in inventory. Return while standing
 throws the selected stone; its data supplies the flight, rebounds and landing sound.
 Electrical hazards now respond to their switches and pressure plates, and contact plays
 disintegration before Continue. Jungle gunmen now share idle, walking, turning,

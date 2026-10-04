@@ -18,7 +18,7 @@ pub const Definition = struct {
 };
 pub const Item = struct {
     definition: Definition,
-    state: union(enum) { introducing: u16, available, carried },
+    state: union(enum) { introducing: u16, available, carried, consumed },
     quantity: i16,
 };
 pub const Received = struct { item: ItemHandle, kind: Kind };
@@ -64,6 +64,15 @@ pub const Loadout = struct {
         self.entries[handle.index].state = .available;
     }
 
+    /// Quantity pickups disappear into an existing possession rather than adding a
+    /// duplicate inventory slot. Consume the ground handle exactly once.
+    pub fn consumeInto(self: *Loadout, pickup: ItemHandle, target: ItemHandle, amount: i16) !void {
+        if ((try self.item(pickup)).state != .available) return error.ItemNotAvailable;
+        if ((try self.item(target)).state != .carried) return error.ItemNotCarried;
+        self.entries[target.index].quantity +%= amount;
+        self.entries[pickup.index].state = .consumed;
+    }
+
     pub fn carries(self: *const Loadout, kind: Kind) bool {
         for (self.entries) |entry| if (entry.state == .carried and entry.definition.kind == kind) return true;
         return false;
@@ -91,7 +100,7 @@ pub const Loadout = struct {
                     events[count] = .{ .item = handle, .kind = entry.definition.kind };
                     count += 1;
                 },
-                .available => continue,
+                .available, .consumed => continue,
                 .carried => {},
             }
             if (entry.definition.kind == .shield) entry.quantity = shieldCharge(health);
@@ -105,6 +114,7 @@ pub const Loadout = struct {
                 .introducing => |steps| @as(u32, steps) + 1,
                 .carried => 0,
                 .available => std.math.maxInt(u32),
+                .consumed => std.math.maxInt(u32) - 1,
             };
             for ([_]u32{ @backingInt(entry.definition.kind), @as(u16, @bitCast(entry.quantity)), pending }) |value|
                 hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
@@ -118,6 +128,24 @@ pub const Loadout = struct {
 
 pub fn shieldCharge(health: i16) i16 {
     return health -% 1;
+}
+
+test "quantity pickup updates the existing purse exactly once" {
+    const definitions = [_]Definition{
+        .{ .kind = .credits, .icon = @fromBackingInt(1), .introduction_steps = 0, .initial_quantity = 7 },
+        .{ .kind = .credits, .icon = @fromBackingInt(2), .introduction_steps = null, .initial_quantity = 100 },
+    };
+    var loadout = try Loadout.init(std.testing.allocator, &definitions);
+    defer loadout.deinit();
+    var received: [2]Received = undefined;
+    _ = try loadout.advance(5, &received);
+    const purse: ItemHandle = .{ .index = 0, .generation = 1 };
+    const ground: ItemHandle = .{ .index = 1, .generation = 1 };
+    try loadout.consumeInto(ground, purse, 100);
+    try std.testing.expectEqual(@as(i16, 107), (try loadout.item(purse)).quantity);
+    try std.testing.expectEqual(@as(usize, 1), loadout.inventory.items().len);
+    try std.testing.expect((try loadout.item(ground)).state == .consumed);
+    try std.testing.expectError(error.ItemNotAvailable, loadout.consumeInto(ground, purse, 100));
 }
 
 test "supplies arrive after their introductions and preserve simultaneous arrival order" {

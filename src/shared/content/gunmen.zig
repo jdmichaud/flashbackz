@@ -58,8 +58,8 @@ fn objectRange(group: rules.Group, state: u16, behind: bool) !?u8 {
         if (rule.conditions[0].code != 0 or rule.conditions[0].argument != 3) return error.UnsupportedEnemyDistraction;
         const value = rule.conditions[1].argument;
         if ((value < 0) != behind) continue;
-        // Each scanned cell consumes two units of the original search budget.
-        return @intCast(@min(@abs(value), 16) / 2 + 1);
+        // The range is counted in visited contact cells, capped to one room width.
+        return @intCast(@max(1, @min(@abs(value), 16)));
     }
     return null;
 }
@@ -177,7 +177,7 @@ fn profile(group: rules.Group, sources: Sources, clips: actor.Clips, hit_priorit
         .following_front = .{ .player = try distance(group, get(sources, .walk_finish), 120, 1), .object = following: {
             const state = get(sources, .walk_finish);
             const rule = find(group, state, 64, 1) orelse break :following null;
-            break :following @intCast(@min(@abs(argument(rule, 64)), 16) / 2 + 1);
+            break :following @intCast(@max(1, @min(@abs(argument(rule, 64)), 16)));
         } },
         .obstacle_object = try objectRange(group, get(sources, .blocked), false),
         .shoot_distance = (try distance(group, get(sources, .assessing), 120, 0)).?,
@@ -281,7 +281,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         if (endpoint < 0 or endpoint >= table.count) return error.InvalidEnemyWeaponBinding;
         const endpoint_index: usize = @intCast(endpoint);
         if (weapon_ids[endpoint_index] == null) {
-            const weapon = try @import("gunman_weapon.zig").load(allocator, try table.record(@intCast(endpoint)), rule_bytes, animations, &clips, resolver);
+            const weapon = try @import("weapon_effects.zig").load(allocator, try table.record(@intCast(endpoint)), rule_bytes, animations, &clips, resolver);
             const id = weapons.items.len;
             try weapons.append(allocator, weapon);
             weapon_ids[endpoint_index] = id;

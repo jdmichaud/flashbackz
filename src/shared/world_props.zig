@@ -14,7 +14,7 @@ pub const Definition = struct {
     palette_bank: u4,
     layer: Layer,
     behavior: union(enum) {
-        collectible: struct { item: equipment.ItemHandle, idle: motion.Clip, pickup_movie: ?Movie = null, throw_motion: ?@import("thrown_item.zig").Definition = null },
+        collectible: struct { item: equipment.ItemHandle, idle: motion.Clip, pickup_movie: ?Movie = null, throw_motion: ?@import("thrown_item.zig").Definition = null, quantity_grant: ?struct { target: equipment.ItemHandle, amount: i16 } = null, initially_active: bool = true, wake_nearby: bool = false },
         floor_switch: struct { rest: motion.Clip, press: motion.Clip, circuit: CircuitId, accepts_objects: bool = true, initially_active: bool = true, wake_on_contact: bool = true, sleep_after_press: bool = false },
     },
 };
@@ -56,7 +56,7 @@ pub const World = struct {
             };
             object.* = .{ .room = definition.footprint.room, .contact = definition.footprint, .active = switch (definition.behavior) {
                 .floor_switch => |plate| plate.initially_active,
-                .collectible => true,
+                .collectible => |item| item.initially_active,
             }, .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } } };
         }
         return .{ .allocator = allocator, .definitions = definitions, .objects = objects, .pressed_circuits = try allocator.alloc(CircuitId, definitions.len) };
@@ -84,6 +84,14 @@ pub const World = struct {
             object.contact.room = object.room;
             object.contact.position = object.pose.position;
             object.contact_present = try self.visible(index, items);
+            if (definition.behavior == .collectible) {
+                const item = definition.behavior.collectible;
+                if (!object.contact_present) object.active = false else if (item.wake_nearby) {
+                    const near = try @import("activation.zig").around(map, player.room, object.room, object.pose.position.y);
+                    if (near.wake) object.active = true;
+                    if (!near.near and object.flight == null) object.active = false;
+                }
+            }
             if (object.contact_present and object.flight == null and definition.behavior == .collectible) {
                 if (try layout.overlaps(map, player, object.contact)) self.pickup_candidate = definition.behavior.collectible.item;
             }
@@ -106,10 +114,15 @@ pub const World = struct {
         for (self.objects, self.definitions, 0..) |*object, definition, index| switch (definition.behavior) {
             .collectible => |item| {
                 if (pickup and self.pickup_candidate != null and self.pickup_candidate.?.eql(item.item) and (try items.item(item.item)).state == .available) {
-                    try items.acquire(item.item);
-                    self.acquired = item.item;
+                    if (item.quantity_grant) |grant| {
+                        try items.consumeInto(item.item, grant.target, grant.amount);
+                        self.acquired = grant.target;
+                    } else {
+                        try items.acquire(item.item);
+                        self.acquired = item.item;
+                    }
                     self.movie = item.pickup_movie;
-                } else if (try self.visible(index, items)) {
+                } else if (object.active and try self.visible(index, items)) {
                     if (object.flight) |*flight| {
                         const event = try flight.advance(item.throw_motion orelse return error.MissingThrowMotion, &object.playback, &object.pose, &object.room, map);
                         object.sound_requested = event.sound;
@@ -164,6 +177,7 @@ pub const World = struct {
             object.pose.facing = pose.facing;
             object.room = room;
             object.flight = .{};
+            object.active = true;
             object.playback = .{};
             object.lost = false;
             return;

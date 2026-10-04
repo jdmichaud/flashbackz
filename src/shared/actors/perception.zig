@@ -75,30 +75,79 @@ pub fn observe(map: geometry.Map, observer: Observer, player: contacts.Footprint
     }
     const room = try map.room(player.room);
     if (observer.room != player.room and !(room.edges.left == .room and room.edges.left.room == observer.room) and !(room.edges.right == .room and room.edges.right.room == observer.room)) return result;
-    result.object_front = try scanObjects(map, observer, objects, false);
-    result.object_behind = try scanObjects(map, observer, objects, true);
+    result.object_front = try scanObjects(map, player.room, observer, objects, false);
+    result.object_behind = try scanObjects(map, player.room, observer, objects, true);
     return result;
 }
 
-fn scanObjects(map: geometry.Map, observer: Observer, objects: []const contacts.Footprint, behind: bool) !?u8 {
+/// Search the contact view shared by the current room and its horizontal neighbors.
+/// Contact lookup and terrain lookup have different offsets in the original game.
+/// Keep their cursors explicit, including contact-row spill at a room seam.
+pub fn scanObjects(map: geometry.Map, view_room: geometry.RoomId, observer: Observer, objects: []const contacts.Footprint, behind: bool) !?u8 {
     if (objects.len == 0) return null;
+    const view = try map.room(view_room);
+    const rooms = [_]?geometry.RoomId{ if (view.edges.left == .room) view.edges.left.room else null, view_room, if (view.edges.right == .room) view.edges.right.room else null };
+    var slot: i16 = if (observer.room == view_room) 1 else if (rooms[0] != null and rooms[0].? == observer.room) 0 else if (rooms[2] != null and rooms[2].? == observer.room) 2 else return null;
+    const origin = try map.room(observer.room);
+    const columns = @divTrunc(origin.width, 16);
+    const bands = @divTrunc(origin.height, 72);
+    const cells_per_room = columns * bands;
     const left = (observer.pose.facing == .left) != behind;
-    const column = (observer.pose.position.x +% 8) >> 4;
+    var column = (observer.pose.position.x +% 8) >> 4;
     const band = @divTrunc(observer.pose.position.y, 72);
-    if (band < 0 or band > 2) return null;
+    if (band < 0 or band >= bands or cells_per_room <= 0) return null;
+    var terrain_room = observer.room;
+    var contact_index = slot * cells_per_room + band * columns + column + @as(i16, if (left) 0 else 1);
     const layout: contacts.Layout = .{};
-    // The original's contact scan is offset one extra cell when looking right. The
-    // wall sample remains at the nearer cell. Keep this quirk in one spatial query.
-    for (1..10) |step| {
-        const stride: i16 = @intCast(step);
-        const terrain_column = column + (if (left) -stride else stride - 1);
-        const contact_column = column + (if (left) -stride else stride + 1);
-        const location = try map.locate(observer.room, contact_column, band * 2 + 1) orelse return null;
-        for (objects) |object| for (0..object.width) |offset| {
-            const cell = try layout.cell(map, object.room, .{ .x = object.position.x +% @as(i16, @intCast(offset)) *% 16, .y = object.position.y }) orelse continue;
-            if (cell.room == location.room and cell.column == location.column and cell.row == band) return @intCast(step);
-        };
-        if (try map.blocked(observer.room, terrain_column, band * 2 + 1)) return null;
+    for (1..17) |step| {
+        column += if (left) @as(i16, -1) else 1;
+        if (column < 0) {
+            slot -= 1;
+            if (slot < 0) return null;
+            column += columns;
+            const edge = (try map.room(terrain_room)).edges.left;
+            terrain_room = if (edge == .room) edge.room else return null;
+            contact_index -= 2 * columns - 1;
+        } else if (column >= columns) {
+            slot += 1;
+            if (slot >= rooms.len) return null;
+            column -= columns;
+            const edge = (try map.room(terrain_room)).edges.right;
+            terrain_room = if (edge == .room) edge.room else return null;
+            contact_index += 2 * columns;
+        }
+        contact_index += if (left) @as(i16, -1) else 1;
+        if (contact_index >= 0 and contact_index < cells_per_room * @as(i16, rooms.len)) {
+            const contact_slot: usize = @intCast(@divTrunc(contact_index, cells_per_room));
+            const local = @mod(contact_index, cells_per_room);
+            if (rooms[contact_slot]) |room| for (objects) |object| for (0..object.width) |offset| {
+                const cell = try layout.cell(map, object.room, .{ .x = object.position.x +% @as(i16, @intCast(offset)) *% 16, .y = object.position.y }) orelse continue;
+                if (cell.room == room and cell.column == @mod(local, columns) and cell.row == @divTrunc(local, columns)) return @intCast(step);
+            };
+        }
+        if (try map.blocked(terrain_room, column, band * 2 + 1)) return null;
     }
     return null;
+}
+
+test "loose-item search retains the full range and tests the visited terrain cell" {
+    const std = @import("std");
+    const room: geometry.RoomId = @fromBackingInt(17);
+    var blocking: [16 * 7]bool = @splat(false);
+    const rooms = [_]geometry.Room{.{ .id = room, .width = 256, .height = 216, .columns = 16, .rows = 7, .blocking = &blocking, .edges = .{ .left = .blocked, .right = .blocked, .up = .blocked, .down = .blocked } }};
+    const map: geometry.Map = .{ .rooms = &rooms };
+    const observer: Observer = .{ .room = room, .pose = .{ .position = .{ .x = 224, .y = 214 }, .facing = .left, .visual = .{ .id = @fromBackingInt(0) } } };
+    var objects = [_]contacts.Footprint{.{ .room = room, .position = .{ .x = 64, .y = 214 } }};
+    try std.testing.expectEqual(@as(?u8, 10), try scanObjects(map, room, observer, &objects, false));
+    blocking[5 * 16 + 8] = true;
+    try std.testing.expect((try scanObjects(map, room, observer, &objects, false)) == null);
+    blocking[5 * 16 + 8] = false;
+    var right = observer;
+    right.pose.position.x = 32;
+    right.pose.facing = .right;
+    objects[0].position.x = 80;
+    blocking[5 * 16 + 2] = true; // The origin cell is behind the ray, so it does not obstruct it.
+    try std.testing.expectEqual(@as(?u8, 2), try scanObjects(map, room, right, &objects, false));
+    blocking[5 * 16 + 3] = true;
+    try std.testing.expect((try scanObjects(map, room, right, &objects, false)) == null);
 }

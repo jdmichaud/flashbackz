@@ -414,7 +414,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     for (run, 0..) |*clip, i| clip.* = motions[@backingInt(Move.run_a) + i].clip();
     var initial_items = try starting_equipment.recover(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &resolver);
     errdefer starting_equipment.release(allocator, initial_items);
-    var props = try prop_import.load(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &room_ids, difficulty, .{ .index = @intCast(initial_items.len), .generation = 1 }, &resolver);
+    var props = try prop_import.load(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &room_ids, difficulty, .{ .index = @intCast(initial_items.len), .generation = 1 }, initial_items, &resolver);
     errdefer props.deinit();
     var connections: std.ArrayList(prop_import.Connection) = .empty;
     defer connections.deinit(allocator);

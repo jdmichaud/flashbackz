@@ -44,7 +44,15 @@ fn firstRule(bytes: []const u8, group: u16, state: u16) ![]const u8 {
     }
     return error.MissingPropRule;
 }
-pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []const u8, rules: []const u8, names: []const u8, room_ids: *const [64]geometry.RoomId, difficulty: @import("../settings.zig").Difficulty, first_item: equipment.ItemHandle, resolver: anytype) !Assets {
+pub fn internConnection(allocator: std.mem.Allocator, routes: *std.ArrayList(Connection), sender: u16, recipient: u16, message: i16) !world.CircuitId {
+    for (routes.items) |route| if (route.sender == sender and route.recipient == recipient and route.message == message) return route.circuit;
+    if (routes.items.len > std.math.maxInt(u16)) return error.TooManyCircuitConnections;
+    const id: world.CircuitId = @fromBackingInt(@as(u16, @intCast(routes.items.len)));
+    try routes.append(allocator, .{ .circuit = id, .sender = sender, .recipient = recipient, .message = message });
+    return id;
+}
+
+pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []const u8, rules: []const u8, names: []const u8, room_ids: *const [64]geometry.RoomId, difficulty: @import("../settings.zig").Difficulty, first_item: equipment.ItemHandle, supplied_items: []const equipment.Definition, resolver: anytype) !Assets {
     var clips: std.ArrayList(animation.OwnedClip) = .empty;
     errdefer {
         for (clips.items) |*clip| clip.deinit();
@@ -71,8 +79,25 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
         var behavior: @FieldType(world.Definition, "behavior") = undefined;
         if (record.kind == 3) {
             const stone = isThrowablePickup(rules, record.rule_group, record.initial_state, rule);
-            if (record.initial_state != 328 and !stone) continue;
-            if (stone) {
+            const credit = @import("credit_pickups.zig").recognize(try @import("rule_table.zig").group(rules, record.rule_group));
+            if (record.initial_state != 328 and !stone and credit == null) continue;
+            if (credit) |spec| {
+                if (record.initial_state != spec.idle or record.contact_icon != 1) return error.UnsupportedCreditPickup;
+                const recipient = record.parameters[spec.target_parameter];
+                if (recipient < 0 or recipient >= table.count) return error.InvalidCreditRecipient;
+                const purse = try table.record(@intCast(recipient));
+                if (purse.kind != 3 or purse.object_id != 4 or purse.initially_active == 0) return error.UnsupportedCreditRecipient;
+                const target: equipment.ItemHandle = for (supplied_items, 0..) |item, index| {
+                    if (item.kind == .credits) break .{ .index = @intCast(index), .generation = 1 };
+                } else return error.MissingCreditPurse;
+                const idle = try appendClip(allocator, &clips, animations, record.initial_state, resolver);
+                const amount = record.parameters[spec.amount_parameter];
+                const label = try strings.copy(allocator, names, record.text_id);
+                errdefer allocator.free(label);
+                const item: equipment.Definition = .{ .kind = .credits, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = amount, .label = label };
+                behavior = .{ .collectible = .{ .item = .{ .index = first_item.index + @as(u16, @intCast(items.items.len)), .generation = first_item.generation }, .idle = idle, .pickup_movie = .credits_pickup, .quantity_grant = .{ .target = target, .amount = amount } } };
+                try items.append(allocator, item);
+            } else if (stone) {
                 if (record.contact_icon != 1 or record.object_id != 1) return error.UnsupportedThrowableItem;
                 const idle = try appendClip(allocator, &clips, animations, record.initial_state, resolver);
                 const trajectory = try @import("thrown_item.zig").load(allocator, try @import("rule_table.zig").group(rules, record.rule_group), record.initial_state, word(rule, 4), animations, &clips, resolver);
@@ -111,6 +136,10 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
                 break :fresh id;
             };
             behavior = .{ .floor_switch = .{ .rest = rest, .press = press, .circuit = circuit, .accepts_objects = !pressure.player_only, .initially_active = record.initially_active != 0, .wake_on_contact = record.flags & 2 != 0, .sleep_after_press = pressure.sleep_after_press } };
+        }
+        if (behavior == .collectible) {
+            behavior.collectible.initially_active = record.initially_active != 0;
+            behavior.collectible.wake_nearby = record.flags & 4 != 0;
         }
         errdefer if (behavior == .collectible) {
             if (behavior.collectible.throw_motion) |throw| allocator.free(throw.arc);
