@@ -51,3 +51,8 @@ Rules:
 - Browser/WebAssembly support is excluded by the user (2026-10-04). Keep native SDL and
   headless hosts only. Reuse established vpoolz/template infrastructure and focus new work
   on Flashback-specific content, music sequencing and gameplay.
+
+- REminiscence and other third-party Flashback reimplementations are forbidden as references
+  (explicit user instruction, 2026-10-04). Recover Flashback-specific behavior from the supplied
+  original executable and assets. Previously approved vpoolz/template infrastructure reuse
+  remains allowed. Prior external leads are not authority for new implementation work.
