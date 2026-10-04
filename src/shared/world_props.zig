@@ -14,12 +14,16 @@ pub const Definition = struct {
     palette_bank: u4,
     layer: Layer,
     behavior: union(enum) {
-        collectible: struct { item: equipment.ItemHandle, idle: motion.Clip, pickup_movie: ?Movie = null },
+        collectible: struct { item: equipment.ItemHandle, idle: motion.Clip, pickup_movie: ?Movie = null, throw_motion: ?@import("thrown_item.zig").Definition = null },
         floor_switch: struct { rest: motion.Clip, press: motion.Clip, circuit: CircuitId, accepts_objects: bool = true, initially_active: bool = true, wake_on_contact: bool = true, sleep_after_press: bool = false },
     },
 };
 pub const Object = struct {
     pose: motion.Pose,
+    room: geometry.RoomId,
+    contact: contacts.Footprint,
+    flight: ?@import("thrown_item.zig").State = null,
+    lost: bool = false,
     playback: motion.Playback = .{},
     pressing: bool = false,
     active: bool = true,
@@ -50,7 +54,7 @@ pub const World = struct {
                 .frame => |frame| frame.visual,
                 .hold => return error.MissingPropVisual,
             };
-            object.* = .{ .active = switch (definition.behavior) {
+            object.* = .{ .room = definition.footprint.room, .contact = definition.footprint, .active = switch (definition.behavior) {
                 .floor_switch => |plate| plate.initially_active,
                 .collectible => true,
             }, .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } } };
@@ -63,6 +67,7 @@ pub const World = struct {
         self.* = undefined;
     }
     pub fn visible(self: *const World, index: usize, items: *const equipment.Loadout) !bool {
+        if (self.objects[index].lost) return false;
         return switch (self.definitions[index].behavior) {
             .collectible => |value| (try items.item(value.item)).state == .available,
             .floor_switch => true,
@@ -75,19 +80,20 @@ pub const World = struct {
         self.pickup_candidate = null;
         const layout: contacts.Layout = .{};
         for (self.objects, self.definitions, 0..) |*object, definition, index| {
+            object.contact = definition.footprint;
+            object.contact.room = object.room;
+            object.contact.position = object.pose.position;
             object.contact_present = try self.visible(index, items);
-            if (object.contact_present and definition.behavior == .collectible) {
-                var footprint = definition.footprint;
-                footprint.position = object.pose.position;
-                if (try layout.overlaps(map, player, footprint)) self.pickup_candidate = definition.behavior.collectible.item;
+            if (object.contact_present and object.flight == null and definition.behavior == .collectible) {
+                if (try layout.overlaps(map, player, object.contact)) self.pickup_candidate = definition.behavior.collectible.item;
             }
         }
         for (self.objects, self.definitions, 0..) |*object, definition, index| {
             if (definition.behavior != .floor_switch or !definition.behavior.floor_switch.wake_on_contact) continue;
             if (try layout.overlaps(map, player, definition.footprint)) object.active = true;
-            for (self.objects, self.definitions, 0..) |other, other_definition, j| {
+            for (self.objects, 0..) |other, j| {
                 if (j == index or !other.active or !other.contact_present) continue;
-                if (try layout.overlaps(map, definition.footprint, other_definition.footprint)) object.active = true;
+                if (try layout.overlaps(map, definition.footprint, other.contact)) object.active = true;
             }
         }
     }
@@ -104,6 +110,13 @@ pub const World = struct {
                     self.acquired = item.item;
                     self.movie = item.pickup_movie;
                 } else if (try self.visible(index, items)) {
+                    if (object.flight) |*flight| {
+                        const event = try flight.advance(item.throw_motion orelse return error.MissingThrowMotion, &object.playback, &object.pose, &object.room, map);
+                        object.sound_requested = event.sound;
+                        object.lost = event.lost;
+                        if (event.settled) object.flight = null;
+                        continue;
+                    }
                     if (object.playback.exhausted(item.idle)) object.playback = .{};
                     object.sound_requested = object.playback.soundOnEntry(item.idle);
                     _ = object.playback.advance(item.idle, &object.pose);
@@ -124,7 +137,7 @@ pub const World = struct {
                                 .collectible => |value| value.idle,
                                 .floor_switch => |value| if (other.pressing) value.press else value.rest,
                             };
-                            if (other_clip.presses_floor_switches and try layout.overlaps(map, definition.footprint, other_definition.footprint)) occupied = true;
+                            if (other_clip.presses_floor_switches and try layout.overlaps(map, object.contact, other.contact)) occupied = true;
                         };
                         if (!occupied) {
                             object.active = false;
@@ -142,8 +155,34 @@ pub const World = struct {
             },
         };
     }
+    pub fn throwItem(self: *World, items: *equipment.Loadout, handle: equipment.ItemHandle, pose: motion.Pose, room: geometry.RoomId) !void {
+        for (self.objects, self.definitions) |*object, definition| {
+            if (definition.behavior != .collectible or !definition.behavior.collectible.item.eql(handle)) continue;
+            if (definition.behavior.collectible.throw_motion == null) return error.MissingThrowMotion;
+            try items.release(handle);
+            object.pose.position = pose.position;
+            object.pose.facing = pose.facing;
+            object.room = room;
+            object.flight = .{};
+            object.playback = .{};
+            object.lost = false;
+            return;
+        }
+        return error.MissingThrownItem;
+    }
+
     pub fn hashInto(self: *const World, hash: *std.hash.Wyhash) void {
         for (self.objects) |object| {
+            hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u16, @backingInt(object.room))));
+            hash.update(&.{ @intFromBool(object.lost), @intFromBool(object.flight != null) });
+            if (object.flight) |flight| {
+                hash.update(&.{@backingInt(std.meta.activeTag(flight.phase))});
+                const segment: u64 = switch (flight.phase) {
+                    .arc, .rebound => |i| i,
+                    else => 0,
+                };
+                hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, segment)));
+            }
             for ([_]u64{ @as(u16, @bitCast(object.pose.position.x)), @as(u16, @bitCast(object.pose.position.y)), @backingInt(object.pose.facing), @backingInt(object.pose.visual.id), @intFromBool(object.pose.visual.mirrored), object.playback.next_step, @intFromBool(object.pressing), @intFromBool(object.active), @intFromBool(object.contact_present) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
         }
     }

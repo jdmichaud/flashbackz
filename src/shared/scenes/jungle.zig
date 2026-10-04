@@ -325,6 +325,7 @@ pub const Scene = struct {
             self.controller.pickup_available = self.props.pickup_candidate != null;
             const selected = try self.equipment.selected();
             self.controller.use_available = if (selected) |item| item.definition.use_action != null else false;
+            self.controller.throw_available = if (selected) |item| if (item.definition.use_action) |action| action == .throw_item else false else false;
             self.controller.weapon_desired = self.weapon_toggle.desired;
             const result = try self.controller.advanceIn(self.content.controllerClips(), intent, &self.pose, &self.environment);
             if (result != .advanced) return error.UnimplementedMovementTransition;
@@ -337,6 +338,14 @@ pub const Scene = struct {
             if (self.controller.fatal_landing) self.health = -1;
             if (self.death_wait == null) self.death_wait = self.controller.death_wait_requested;
             self.received_count = try self.equipment.advance(self.health, self.received_items);
+            if (self.controller.use_requested) {
+                self.input.consumeUse();
+                const action = (selected orelse return error.MissingSelectedItem).definition.use_action orelse return error.MissingItemAction;
+                switch (action) {
+                    .story => |cue| self.pending_movie = cue,
+                    .throw_item => try self.props.throwItem(&self.equipment, self.equipment.inventory.selected().?, self.pose, self.environment.room),
+                }
+            }
             try self.props.advance(self.terrain.map(), &self.equipment, try self.controller.pressesFloorSwitches(self.content.controllerClips()), self.controller.pickup_requested);
             try self.operated_controls.advance(self.content.controls.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested);
             self.hazards.route(self.content.hazards.bindings, self.props.pressed_circuits[0..self.props.pressed_count]);
@@ -344,7 +353,7 @@ pub const Scene = struct {
             try self.hazards.advance(self.content.hazards.definitions, self.terrain.map(), self.environment.room, self.props.player_contact);
             for (self.hazards.instances, self.content.hazards.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (self.operated_controls.instances, self.content.controls.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
-            for (self.props.objects, self.props.definitions) |object, definition| if (object.sound_requested) |sound| try self.emitSound(sound, definition.footprint.room);
+            for (self.props.objects) |object| if (object.sound_requested) |sound| try self.emitSound(sound, object.room);
             if (self.pistol.sound_requested) |sound| try self.emitSound(sound, self.pistol.effect.?.room);
             for (self.surfaces.instances, self.content.surfaces) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             if (self.last_ambient) |event| try self.emitSound(event.sound, event.room);
@@ -354,13 +363,6 @@ pub const Scene = struct {
                 self.received_count += 1;
             }
             if (self.props.movie) |movie| self.pending_movie = movie;
-            if (self.controller.use_requested) {
-                self.input.consumeUse();
-                const action = (selected orelse return error.MissingSelectedItem).definition.use_action orelse return error.MissingItemAction;
-                switch (action) {
-                    .story => |cue| self.pending_movie = cue,
-                }
-            }
             if (self.hazards.defeat_requested) self.pending_movie = .disintegration;
             self.simulation_steps += 1;
             if (self.zoom_room != null and self.zoom_room.? != self.environment.room and self.settings.zoom == .on) self.settings.zoom = .off;
@@ -390,7 +392,10 @@ pub const Scene = struct {
 
     pub fn latchMovieInput(self: *Scene) !bool {
         if (self.replay) |*replay| {
-            self.input.recorded(replay.next() orelse { self.aborted = true; return false; });
+            self.input.recorded(replay.next() orelse {
+                self.aborted = true;
+                return false;
+            });
         } else try consumeInput(&self.pending, &self.input, self.clock.?.deadline());
         var intent = try self.input.intent();
         intent.use_item = false;
@@ -476,10 +481,9 @@ pub const Scene = struct {
     }
 
     fn drawProps(self: *const Scene, layer: props_mod.Layer, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8) !void {
-        // Each rendering layer retains content order; the current two objects occupy
-        // separate layers, with Conrad drawn between them.
+        // Keep content order within each layer, with Conrad drawn between layers.
         for (self.props.objects, self.props.definitions, 0..) |object, definition, index| {
-            if (definition.layer != layer or definition.footprint.room != self.environment.room or !try self.props.visible(index, &self.equipment)) continue;
+            if (definition.layer != layer or object.room != self.environment.room or !try self.props.visible(index, &self.equipment)) continue;
             const art = try self.content.frame(object.pose.visual.id);
             try sprite_renderer.draw(indices, room.image.width, room.image.height, art, @as(i32, object.pose.position.x) + 8, @as(i32, object.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (object.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
         }

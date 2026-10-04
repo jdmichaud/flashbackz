@@ -47,3 +47,10 @@ the activation while the animation finishes. This shared motion now drives the i
 repeatable relay-control family (seven enabled placements across the level data).
 The control artwork, hint and completion sound are implemented; signal consumers such
 as the connected hazard are still pending, so this does not certify the resulting puzzle.
+
+### Pick up and throw a stone
+
+Hold **Shift** beside a stone to pick it up. Open **Tab**, select **STONE** with the
+arrow keys, close inventory with **Tab**, then press **Return** while standing to throw.
+The throw uses the original motion data, including wall rebounds, drops and landing sound.
+Settled stones remain available to pick up again. Enemy responses to the impact remain open.

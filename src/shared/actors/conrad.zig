@@ -36,6 +36,7 @@ pub const Clips = struct {
     armed: ?armed.Clips = null,
     wake: motion.Clip,
     use_item: ?motion.Clip = null,
+    throw_item: ?motion.Clip = null,
     operate: ?struct { reach: motion.Clip, press: motion.Clip, recover: motion.Clip } = null,
     stand: motion.Clip,
     turn_preparation: motion.Clip,
@@ -62,6 +63,7 @@ pub const Activity = union(enum) {
     waking,
     standing,
     using_item,
+    throwing_item,
     operating: enum { reaching, pressing, recovering },
     turning: TurnPhase,
     walking: GaitPhase,
@@ -110,6 +112,7 @@ pub const Controller = struct {
     pickup_requested: bool = false,
     use_requested: bool = false,
     use_available: bool = false,
+    throw_available: bool = false,
     pickup_available: bool = false,
     control_available: bool = false,
     operate_requested: bool = false,
@@ -124,6 +127,7 @@ pub const Controller = struct {
             .waking => clips.wake,
             .standing => clips.stand,
             .using_item => clips.use_item orelse return error.MissingMotion,
+            .throwing_item => clips.throw_item orelse return error.MissingMotion,
             .operating => |phase| blk: {
                 const action = clips.operate orelse return error.MissingMotion;
                 break :blk switch (phase) {
@@ -237,15 +241,16 @@ pub const Controller = struct {
                 },
                 .waking => self.activity = .standing,
                 .using_item => {
-                    self.use_requested = true;
-                    self.activity = .standing;
+                    self.use_requested = self.use_available and intent.use_item and !intent.action and !intent.weapon and intent.neutralDirections();
+                    self.activity = if (self.use_requested and self.throw_available) .throwing_item else .standing;
                 },
+                .throwing_item => self.activity = .standing,
                 .standing => {
                     if (clips.descent != null and !try environment.at(pose.*, .support, 0)) {
                         self.activity = .{ .descending = .{ .phase = .unbalanced } };
                     } else if (self.weapon_desired) {
                         self.activity = .{ .armed = .{} };
-                    } else if (self.use_available and intent.use_item and !intent.action and intent.neutralDirections()) {
+                    } else if (self.use_available and intent.use_item and !intent.action and !intent.weapon and intent.neutralDirections()) {
                         self.activity = .using_item;
                     } else if (self.pickup_available and intent.action and intent.neutralDirections()) {
                         self.activity = .{ .crouching = .lowering };
@@ -654,7 +659,7 @@ test "using an available item has its own motion boundary and does not request p
     _ = try actor.advance(clips, .{ .use_item = true }, &pose);
     try std.testing.expectEqualDeep(Activity.using_item, actor.activity);
     try std.testing.expect(!actor.use_requested and !actor.pickup_requested);
-    _ = try actor.advance(clips, .{}, &pose);
+    _ = try actor.advance(clips, .{ .use_item = true }, &pose);
     try std.testing.expectEqualDeep(Activity.standing, actor.activity);
     try std.testing.expect(actor.use_requested and !actor.pickup_requested);
     _ = try actor.advance(clips, .{}, &pose);

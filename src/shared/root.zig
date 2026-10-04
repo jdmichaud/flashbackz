@@ -52,3 +52,5 @@ pub const input_recording = @import("input_recording.zig");
 pub const operated_controls = @import("operated_controls.zig");
 
 pub const electrical_hazards = @import("electrical_hazards.zig");
+
+pub const thrown_item = @import("thrown_item.zig");

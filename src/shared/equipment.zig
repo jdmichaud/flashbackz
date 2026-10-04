@@ -5,7 +5,7 @@ const std = @import("std");
 const inventory = @import("inventory.zig");
 const motion = @import("motion.zig");
 pub const ItemHandle = @import("identity.zig").ItemHandle;
-pub const Kind = enum { gun, shield, credits, holocube, teleporter };
+pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone };
 pub const Definition = struct {
     kind: Kind,
     icon: motion.VisualId,
@@ -14,7 +14,7 @@ pub const Definition = struct {
     initial_quantity: i16,
     label: []const u8 = "",
     show_quantity: bool = false,
-    use_action: ?union(enum) { story: @import("story_cue.zig").Cue } = null,
+    use_action: ?union(enum) { story: @import("story_cue.zig").Cue, throw_item } = null,
 };
 pub const Item = struct {
     definition: Definition,
@@ -56,6 +56,12 @@ pub const Loadout = struct {
         if (entry.state != .available) return error.ItemNotAvailable;
         try inventory.transfer(handle, null, &self.inventory);
         self.entries[handle.index].state = .carried;
+    }
+
+    pub fn release(self: *Loadout, handle: ItemHandle) !void {
+        if ((try self.item(handle)).state != .carried) return error.ItemNotCarried;
+        if (!self.inventory.remove(handle)) return error.ItemNotCarried;
+        self.entries[handle.index].state = .available;
     }
 
     pub fn carries(self: *const Loadout, kind: Kind) bool {
