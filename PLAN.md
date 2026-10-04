@@ -35,6 +35,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   verify malformed inputs, profile bindings, loops and note adjustments without game fixtures.
 - [ ] Compare the music driver's timed register output against the original, then connect
   startup/menu sound to the existing chip and native PCM queue. Preserve scene stop/skip order.
+- [ ] **Latest user priority: finish the casings, then complete gameplay sound throughout.**
+  Include forest ambience, movement, switches, weapons and every other original effect; bind
+  cues to original animation/interaction timing through one shared sound system. Do not stop
+  at gunfire. Keep missing world behavior and full movement coverage explicitly tracked.
 - [ ] Recover floppy music/effects sequencing and integrate AdLib plus PCM. Gate: exact event
   timing and sound comparisons against the pinned original execution profile.
 - [x] Import compact LEV/BNQ/SGD room descriptions directly into owned artwork for gameplay.
@@ -45,7 +49,7 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   inventory transfer and recording playback, with explicit scene pause/resume. Gate: original
   floppy observations agree on object visibility, action/transfer order and cinematic selection;
   native input can collect and use the item from direct disk images.
-- [ ] **Current user priority: complete Conrad movement before further world mechanisms.**
+- [ ] **Conrad movement pass: complete before further world mechanisms.**
   Cover walk/run blends and reversals, running jumps and edge departures, jump landings and
   catches, crouch/roll chaining, ledge movement, falls/recovery, room handoffs and input
   combinations; include locomotion with the weapon drawn. Gate: original floppy comparisons

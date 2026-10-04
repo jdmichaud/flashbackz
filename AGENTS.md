@@ -60,3 +60,8 @@ Rules:
 - Current user priority (2026-10-04): implement all Conrad movement before further world
   mechanisms, so the user can explore the level. Keep naming each movement delivered and
   provide its exact controls for direct testing; distinguish ready moves from remaining work.
+
+- Latest user priority (2026-10-04): after finishing ejected casings, implement all gameplay
+  sound, including forest ambience, movement, switches, weapons and other effects. Use shared
+  animation/interaction sound events; do not limit this work to gunfire. The movement and
+  whole-game goals remain open, and missing sound-producing world behavior must stay visible.
