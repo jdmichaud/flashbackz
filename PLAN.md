@@ -57,6 +57,8 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
 - [ ] Game Options: pause/resume, original settings and abort flow, host free memory in MB,
   plus user-requested master volume (0–100%). Gate: native menu input, pause behavior and
   both music/effect output levels are verified; original-only settings retain measured semantics.
+- [ ] Extend the existing native development scene shortcut to named levels so later-level
+  mechanisms can be checked in the actual executable without remapping original assets.
 - [ ] Original DEMO playback through the shared gameplay simulation: recover recording selection,
   initial state, input cadence, interruption and completion. Use the three original recordings
   as regression drivers; report divergences and resolve missing features through shared,
