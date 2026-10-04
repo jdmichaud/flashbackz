@@ -21,8 +21,8 @@ const art_bank = @import("art_bank.zig");
 const object_art = @import("object_artwork.zig");
 const inventory_artwork = @import("inventory_artwork.zig");
 
-const Move = enum { surface_rest, surface_burst, armed_clearing_draw, casing_stand_a, casing_stand_b, casing_crouch_a, casing_crouch_b, armed_roll_recovery, armed_drawing_after_climb, shot_ignition, shot_flash, shot_flash_low, shot_impact, shot_impact_low, armed_firing, armed_firing_crouched, armed_drawing_crouched, armed_draw_crouched_release, armed_draw_start, armed_drawing, armed_draw_release, armed_aiming, armed_lowering_aim, armed_standing, armed_walking, armed_turning, armed_holstering, armed_holstering_aim, armed_raising_aim, armed_crouching, armed_crouched, armed_turning_crouched, armed_rising, armed_holstering_crouched, armed_lowering_aim_crouched, armed_raising_aim_crouched, armed_aim_crouch_release, armed_aiming_crouched, armed_crouching_aim, armed_rising_aim, armed_turning_aim, armed_turning_aim_crouched, armed_stepping_down, armed_landing, roll_running_entry, roll_running_recovery, roll_jump_launch, run_wall_stop, run_stagger_stop, run_ledge_approach, run_ledge_reach, run_ledge_brace, jump_ledge_reach, run_drop, reverse_drop, unbalanced_drop, short_jump_drop, gliding_drop, vertical_drop, run_jump_takeoff, run_jump_ascent, run_jump_crest, run_jump_descent, run_jump_landing, run_jump_stand, run_jump_run, reverse_run, reverse_run_finish, accelerate_run, slow_to_walk, edge_stop, use_item, wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover, collision_impact, recoil_fall, recoil_confined, recoil_staggered, recoil_prone, recoil_pause_prone, recoil_pause_tight, recoil_rise, recoil_drop, fall_begin, fall_continue, fatal_land, ledge_lower, ledge_catch, ledge_grip, ledge_hang, ledge_reach, ledge_settle_grip, ledge_climb, ledge_stand, ledge_release, ledge_drop, ledge_turn_release, ledge_tumble_release, ledge_brace, ledge_braced_lower };
-const source_moves = [_]u16{ 565, 566, 77, 162, 163, 164, 165, 177, 174, 443, 414, 415, 411, 413, 58, 59, 160, 222, 182, 175, 223, 57, 55, 44, 45, 48, 52, 262, 54, 46, 50, 49, 51, 161, 53, 47, 224, 56, 71, 72, 76, 173, 166, 167, 33, 39, 40, 125, 67, 95, 121, 122, 32, 127, 129, 225, 63, 62, 41, 13, 21, 22, 23, 24, 31, 14, 10, 184, 11, 12, 30, 168, 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88, 263, 94, 85, 84, 83, 111, 74, 103, 86, 89, 90, 73, 15, 60, 61, 25, 101, 102, 16, 178, 91, 107, 123, 92, 104, 105 };
+const Move = enum { operate_reach, operate_press, operate_recover, surface_rest, surface_burst, armed_clearing_draw, casing_stand_a, casing_stand_b, casing_crouch_a, casing_crouch_b, armed_roll_recovery, armed_drawing_after_climb, shot_ignition, shot_flash, shot_flash_low, shot_impact, shot_impact_low, armed_firing, armed_firing_crouched, armed_drawing_crouched, armed_draw_crouched_release, armed_draw_start, armed_drawing, armed_draw_release, armed_aiming, armed_lowering_aim, armed_standing, armed_walking, armed_turning, armed_holstering, armed_holstering_aim, armed_raising_aim, armed_crouching, armed_crouched, armed_turning_crouched, armed_rising, armed_holstering_crouched, armed_lowering_aim_crouched, armed_raising_aim_crouched, armed_aim_crouch_release, armed_aiming_crouched, armed_crouching_aim, armed_rising_aim, armed_turning_aim, armed_turning_aim_crouched, armed_stepping_down, armed_landing, roll_running_entry, roll_running_recovery, roll_jump_launch, run_wall_stop, run_stagger_stop, run_ledge_approach, run_ledge_reach, run_ledge_brace, jump_ledge_reach, run_drop, reverse_drop, unbalanced_drop, short_jump_drop, gliding_drop, vertical_drop, run_jump_takeoff, run_jump_ascent, run_jump_crest, run_jump_descent, run_jump_landing, run_jump_stand, run_jump_run, reverse_run, reverse_run_finish, accelerate_run, slow_to_walk, edge_stop, use_item, wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover, collision_impact, recoil_fall, recoil_confined, recoil_staggered, recoil_prone, recoil_pause_prone, recoil_pause_tight, recoil_rise, recoil_drop, fall_begin, fall_continue, fatal_land, ledge_lower, ledge_catch, ledge_grip, ledge_hang, ledge_reach, ledge_settle_grip, ledge_climb, ledge_stand, ledge_release, ledge_drop, ledge_turn_release, ledge_tumble_release, ledge_brace, ledge_braced_lower };
+const source_moves = [_]u16{ 179, 181, 180, 565, 566, 77, 162, 163, 164, 165, 177, 174, 443, 414, 415, 411, 413, 58, 59, 160, 222, 182, 175, 223, 57, 55, 44, 45, 48, 52, 262, 54, 46, 50, 49, 51, 161, 53, 47, 224, 56, 71, 72, 76, 173, 166, 167, 33, 39, 40, 125, 67, 95, 121, 122, 32, 127, 129, 225, 63, 62, 41, 13, 21, 22, 23, 24, 31, 14, 10, 184, 11, 12, 30, 168, 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88, 263, 94, 85, 84, 83, 111, 74, 103, 86, 89, 90, 73, 15, 60, 61, 25, 101, 102, 16, 178, 91, 107, 123, 92, 104, 105 };
 pub const RoomArt = struct { id: geometry.RoomId, artwork: artwork.Artwork };
 
 pub const Pack = struct {
@@ -38,6 +38,7 @@ pub const Pack = struct {
     sounds: @import("sound_effects.zig").Bank,
     inventory_art: inventory_artwork.Assets,
     world_props: prop_import.Assets,
+    controls: @import("operated_controls.zig").Assets,
     player_contact_width: u8,
     surfaces: []@import("../surface_reactions.zig").Definition,
     forest_calls: []@import("../ambience.zig").Call,
@@ -63,6 +64,7 @@ pub const Pack = struct {
         starting_equipment.release(self.allocator, self.initial_items);
         self.inventory_art.deinit();
         self.world_props.deinit();
+        self.controls.deinit();
         self.sounds.deinit();
         self.allocator.free(self.surfaces);
         self.allocator.free(self.forest_calls);
@@ -121,6 +123,7 @@ pub const Pack = struct {
             },
             .wake = self.clip(.wake),
             .use_item = self.clip(.use_item),
+            .operate = .{ .reach = self.clip(.operate_reach), .press = self.clip(.operate_press), .recover = self.clip(.operate_recover) },
             .stand = self.clip(.stand),
             .turn_preparation = self.clip(.turn_prepare),
             .turn_follow_through = self.clip(.turn_finish),
@@ -252,13 +255,17 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
     return loadWithDifficulty(allocator, source, .normal);
 }
 
-pub fn loadWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSource, _: @import("../settings.zig").Difficulty) !Pack {
-    return loadLevel(allocator, source, .jungle);
+pub fn loadWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSource, difficulty: @import("../settings.zig").Difficulty) !Pack {
+    return loadLevelWithDifficulty(allocator, source, .jungle, difficulty);
 }
 
 pub fn loadLevel(allocator: std.mem.Allocator, source: platform.AssetSource, level: level_mod.Id) !Pack {
+    return loadLevelWithDifficulty(allocator, source, level, .normal);
+}
+
+pub fn loadLevelWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSource, level: level_mod.Id, difficulty: @import("../settings.zig").Difficulty) !Pack {
     const values = try floppy_interface.load(allocator, source);
-    return assembleLevel(allocator, source, level, .{ .actor_colors = values.actor_colors, .text_colors = values.text_colors, .interface_colors = values.interface_colors, .level_label = &values.level_label });
+    return assembleLevel(allocator, source, level, difficulty, .{ .actor_colors = values.actor_colors, .text_colors = values.text_colors, .interface_colors = values.interface_colors, .level_label = &values.level_label });
 }
 
 /// Decoded interface content supplied by an edition importer. No executable offsets enter
@@ -271,10 +278,10 @@ pub const Interface = struct {
 };
 
 pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, interface: Interface) !Pack {
-    return assembleLevel(allocator, source, .jungle, interface);
+    return assembleLevel(allocator, source, .jungle, .normal, interface);
 }
 
-fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, level: level_mod.Id, interface: Interface) !Pack {
+fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, level: level_mod.Id, difficulty: @import("../settings.zig").Difficulty, interface: Interface) !Pack {
     const files = level_mod.files(level);
     var rooms = try RoomSource.open(source, files);
     defer rooms.deinit();
@@ -286,7 +293,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     defer offsets.deinit();
     var ani = try readLevel(source, files.actors, "ANI", 65536);
     defer ani.deinit();
-    var rules = try readLevel(source, files.actors, "OBJ", 65536);
+    var rules = try readLevel(source, files.actors, "OBJ", 256 * 1024);
     defer rules.deinit();
     var ct = try readLevel(source, files.rooms, "CT", 65536);
     defer ct.deinit();
@@ -362,6 +369,13 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         allocator.free(motions);
     }
     for (source_moves, 0..) |index, i| {
+        // Unused animation slots can name another sprite bank in other levels. A
+        // feature without placed instances owns no clips and resolves no artwork.
+        if (surfaces.items.len == 0 and (i == @backingInt(Move.surface_rest) or i == @backingInt(Move.surface_burst))) {
+            motions[i] = .{ .allocator = allocator, .steps = try allocator.alloc(motion.Step, 0), .presses_floor_switches = false };
+            loaded += 1;
+            continue;
+        }
         var clip = try animation.decode(allocator, ani.bytes, index);
         defer clip.deinit();
         motions[i] = try clip.resolve(allocator, &resolver);
@@ -378,6 +392,14 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer starting_equipment.release(allocator, initial_items);
     var props = try prop_import.load(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &room_ids, .{ .index = @intCast(initial_items.len), .generation = 1 }, &resolver);
     errdefer props.deinit();
+    var connections: std.ArrayList(prop_import.Connection) = .empty;
+    defer connections.deinit(allocator);
+    try connections.appendSlice(allocator, props.connections);
+    var operated = try @import("operated_controls.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, &resolver);
+    errdefer operated.deinit();
+    const combined_connections = try connections.toOwnedSlice(allocator);
+    allocator.free(props.connections);
+    props.connections = combined_connections;
     const supplied = initial_items.len;
     initial_items = try allocator.realloc(initial_items, supplied + props.items.len);
     for (props.items, initial_items[supplied..]) |*item, *destination| {
@@ -429,6 +451,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .initial_health = player.life,
         .inventory_art = inventory_art,
         .world_props = props,
+        .controls = operated,
         .surfaces = try surfaces.toOwnedSlice(allocator),
         .sounds = sounds,
         .forest_calls = forest_calls,

@@ -36,6 +36,7 @@ pub const Clips = struct {
     armed: ?armed.Clips = null,
     wake: motion.Clip,
     use_item: ?motion.Clip = null,
+    operate: ?struct { reach: motion.Clip, press: motion.Clip, recover: motion.Clip } = null,
     stand: motion.Clip,
     turn_preparation: motion.Clip,
     turn_follow_through: motion.Clip,
@@ -61,6 +62,7 @@ pub const Activity = union(enum) {
     waking,
     standing,
     using_item,
+    operating: enum { reaching, pressing, recovering },
     turning: TurnPhase,
     walking: GaitPhase,
     running: GaitPhase,
@@ -109,6 +111,8 @@ pub const Controller = struct {
     use_requested: bool = false,
     use_available: bool = false,
     pickup_available: bool = false,
+    control_available: bool = false,
+    operate_requested: bool = false,
 
     fn wallAt(environment: anytype, pose: motion.Pose, ahead: i16) !bool {
         return try environment.at(pose, .torso, ahead) and !try environment.at(pose, .torso, ahead - 1);
@@ -120,6 +124,14 @@ pub const Controller = struct {
             .waking => clips.wake,
             .standing => clips.stand,
             .using_item => clips.use_item orelse return error.MissingMotion,
+            .operating => |phase| blk: {
+                const action = clips.operate orelse return error.MissingMotion;
+                break :blk switch (phase) {
+                    .reaching => action.reach,
+                    .pressing => action.press,
+                    .recovering => action.recover,
+                };
+            },
             .turning => |phase| if (phase == .preparation) clips.turn_preparation else clips.turn_follow_through,
             .walking => |phase| blk: {
                 const gait = clips.walk orelse return error.MissingMotion;
@@ -196,6 +208,7 @@ pub const Controller = struct {
         self.shot_requested = null;
         self.sound_requested = null;
         self.pickup_requested = false;
+        self.operate_requested = false;
         self.use_requested = false;
         self.fatal_landing = false;
         self.death_wait_requested = null;
@@ -214,6 +227,14 @@ pub const Controller = struct {
                     .fire_standing => self.shot_requested = .standing,
                     .fire_crouched => self.shot_requested = .crouched,
                 },
+                .operating => |phase| switch (phase) {
+                    .reaching => self.activity = .{ .operating = .pressing },
+                    .pressing => {
+                        self.operate_requested = self.control_available and intent.action and intent.neutralDirections() and !intent.weapon and !intent.use_item;
+                        self.activity = .{ .operating = .recovering };
+                    },
+                    .recovering => self.activity = .standing,
+                },
                 .waking => self.activity = .standing,
                 .using_item => {
                     self.use_requested = true;
@@ -228,6 +249,8 @@ pub const Controller = struct {
                         self.activity = .using_item;
                     } else if (self.pickup_available and intent.action and intent.neutralDirections()) {
                         self.activity = .{ .crouching = .lowering };
+                    } else if (self.control_available and intent.action and intent.neutralDirections() and !intent.weapon and !intent.use_item) {
+                        self.activity = .{ .operating = .reaching };
                     } else if (intent.vertical) |vertical| {
                         if (vertical == .up) {
                             if (!intent.action and try environment.ledge(pose.*, .head, 0, .ahead)) {
@@ -669,5 +692,25 @@ test "run startup respects close walls in both directions before entering a stri
             try std.testing.expectEqualDeep(Activity{ .stopping_run = if (distance == 1) .wall else .braking }, starting.activity);
             try std.testing.expectEqual(@as(i16, 96), pose.position.x);
         }
+    }
+}
+
+test "operating a control commits the reach but requires action at the press boundary" {
+    const still = [_]motion.Step{.hold};
+    const clip: motion.Clip = .{ .steps = &still };
+    const clips: Clips = .{ .wake = clip, .stand = clip, .turn_preparation = clip, .turn_follow_through = clip, .operate = .{ .reach = clip, .press = clip, .recover = clip } };
+    for ([_]bool{ false, true }) |keep_action| {
+        var actor: Controller = .{ .activity = .standing, .playback = .{ .next_step = 1 }, .control_available = true };
+        var pose: motion.Pose = .{ .position = .{ .x = 64, .y = 70 }, .facing = .left, .visual = .{ .id = @fromBackingInt(1) } };
+        _ = try actor.advance(clips, .{ .action = true }, &pose);
+        try std.testing.expectEqualDeep(Activity{ .operating = .reaching }, actor.activity);
+        _ = try actor.advance(clips, .{}, &pose);
+        try std.testing.expectEqualDeep(Activity{ .operating = .pressing }, actor.activity);
+        try std.testing.expect(!actor.operate_requested);
+        _ = try actor.advance(clips, .{ .action = keep_action }, &pose);
+        try std.testing.expectEqual(keep_action, actor.operate_requested);
+        _ = try actor.advance(clips, .{ .action = true }, &pose);
+        try std.testing.expectEqualDeep(Activity.standing, actor.activity);
+        try std.testing.expect(!actor.operate_requested);
     }
 }

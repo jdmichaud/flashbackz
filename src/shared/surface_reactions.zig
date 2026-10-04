@@ -11,7 +11,7 @@ pub const World = struct {
     allocator: std.mem.Allocator,
     instances: []Instance,
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition, clips: Clips) !World {
-        if (clips.resting.steps.len == 0 or clips.burst.steps.len == 0) return error.MissingSurfaceMotion;
+        if (definitions.len != 0 and (clips.resting.steps.len == 0 or clips.burst.steps.len == 0)) return error.MissingSurfaceMotion;
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);
         for (instances, definitions) |*instance, definition| {

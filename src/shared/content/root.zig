@@ -33,3 +33,6 @@ test {
 pub const sound_effects = @import("sound_effects.zig");
 pub const demo = @import("demo.zig");
 pub const level = @import("level.zig");
+
+pub const operated_controls = @import("operated_controls.zig");
+pub const rule_table = @import("rule_table.zig");

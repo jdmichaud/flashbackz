@@ -38,3 +38,12 @@ it held delays the gun-ready pose until release. Shift now plays standing/crouch
 and the measured flash/wall-impact effects, with animated casings. Forest ambience, movement,
 switch, gunshot and impact sounds use the shared digital-effect system. Enemy damage, further
 world behaviours and complete sound/terrain coverage remain in progress.
+
+### Operate a nearby control
+
+Stand beside a supported wall control and hold **Shift** without an arrow key. Conrad
+reaches out, presses, and withdraws his hand. Releasing Shift before the press cancels
+the activation while the animation finishes. This shared motion now drives the imported
+repeatable relay-control family (seven enabled placements across the level data).
+The control artwork, hint and completion sound are implemented; signal consumers such
+as the connected hazard are still pending, so this does not certify the resulting puzzle.

@@ -109,6 +109,7 @@ pub const Scene = struct {
     environment: environment_mod.Environment,
     terrain: terrain_mod.State,
     props: props_mod.World,
+    operated_controls: @import("../operated_controls.zig").World,
     surfaces: @import("../surface_reactions.zig").World,
     pending_movie: ?props_mod.Movie = null,
     movie_intent: ?controls.Intent = null,
@@ -142,8 +143,8 @@ pub const Scene = struct {
         return loadLevel(allocator, source, .jungle, difficulty);
     }
 
-    pub fn loadLevel(allocator: std.mem.Allocator, source: platform.AssetSource, level: @import("../content/level.zig").Id, _: @import("../settings.zig").Difficulty) !Scene {
-        var pack = try content.loadLevel(allocator, source, level);
+    pub fn loadLevel(allocator: std.mem.Allocator, source: platform.AssetSource, level: @import("../content/level.zig").Id, difficulty: @import("../settings.zig").Difficulty) !Scene {
+        var pack = try content.loadLevelWithDifficulty(allocator, source, level, difficulty);
         errdefer pack.deinit();
         var equipment = try equipment_mod.Loadout.init(allocator, pack.initial_items);
         errdefer equipment.deinit();
@@ -151,6 +152,8 @@ pub const Scene = struct {
         errdefer terrain.deinit();
         var props = try props_mod.World.init(allocator, pack.world_props.definitions);
         errdefer props.deinit();
+        var operated = try @import("../operated_controls.zig").World.init(allocator, pack.controls.definitions);
+        errdefer operated.deinit();
         var surfaces = try @import("../surface_reactions.zig").World.init(allocator, pack.surfaces, pack.surfaceClips());
         errdefer surfaces.deinit();
         const received_items = try allocator.alloc(equipment_mod.Received, pack.initial_items.len);
@@ -163,6 +166,7 @@ pub const Scene = struct {
             .environment = .{ .map = terrain.map(), .room = pack.initial_room, .materials = terrain.view() },
             .terrain = terrain,
             .props = props,
+            .operated_controls = operated,
             .surfaces = surfaces,
             .pose = pack.initial_pose,
             .health = pack.initial_health,
@@ -205,6 +209,7 @@ pub const Scene = struct {
         self.equipment.deinit();
         self.terrain.deinit();
         self.props.deinit();
+        self.operated_controls.deinit();
         self.surfaces.deinit();
         self.allocator.free(self.received_items);
         self.allocator.free(self.menu_entries);
@@ -309,6 +314,8 @@ pub const Scene = struct {
             };
             self.sound_event_count = 0;
             try self.props.prepare(self.terrain.map(), &self.equipment, .{ .room = self.environment.room, .position = self.pose.position, .width = self.content.player_contact_width });
+            try self.operated_controls.prepare(self.content.controls.definitions, self.terrain.map(), self.props.player_contact);
+            self.controller.control_available = self.operated_controls.candidate != null;
             self.controller.pickup_available = self.props.pickup_candidate != null;
             const selected = try self.equipment.selected();
             self.controller.use_available = if (selected) |item| item.definition.use_action != null else false;
@@ -325,6 +332,8 @@ pub const Scene = struct {
             if (self.death_wait == null) self.death_wait = self.controller.death_wait_requested;
             self.received_count = try self.equipment.advance(self.health, self.received_items);
             try self.props.advance(self.terrain.map(), &self.equipment, try self.controller.pressesFloorSwitches(self.content.controllerClips()), self.controller.pickup_requested);
+            try self.operated_controls.advance(self.content.controls.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested);
+            for (self.operated_controls.instances, self.content.controls.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (self.props.objects, self.props.definitions) |object, definition| if (object.sound_requested) |sound| try self.emitSound(sound, definition.footprint.room);
             if (self.pistol.sound_requested) |sound| try self.emitSound(sound, self.pistol.effect.?.room);
             for (self.surfaces.instances, self.content.surfaces) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
@@ -395,12 +404,14 @@ pub const Scene = struct {
         if (indices.len != room.image.pixels.len) return error.InvalidFrameLength;
         @memcpy(indices, room.image.pixels);
         try self.drawProps(.behind_player, room, indices);
+        try self.drawControls(.behind_player, room, indices);
         try self.drawShot(room, indices, true);
         try self.drawCasing(room, indices, true);
         try self.drawSurfaces(room, indices, true);
         const frame = try self.content.frame(self.pose.visual.id);
         try sprite_renderer.draw(indices, room.image.width, room.image.height, frame, @as(i32, self.pose.position.x) + 8, @as(i32, self.pose.position.y) + 2, .{ .palette_bank = 4, .facing = if (self.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
         try self.drawProps(.in_front_of_player, room, indices);
+        try self.drawControls(.in_front_of_player, room, indices);
         try self.drawShot(room, indices, false);
         try self.drawCasing(room, indices, false);
         try self.drawSurfaces(room, indices, false);
@@ -413,6 +424,11 @@ pub const Scene = struct {
             try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(self.content.world_props.hint_icon), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
             const label = item.definition.label;
             try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, label, @divTrunc(176 - @as(i32, @intCast(label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
+        }
+        if (self.operated_controls.candidate) |index| {
+            const control = self.content.controls.definitions[index];
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(control.hint), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
+            try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, control.label, @divTrunc(176 - @as(i32, @intCast(control.label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
         }
         try self.zoom.draw(indices, rgba);
         if (self.dialog) |dialog| try dialog.menu.draw(self.content.inventory_art.artwork(), self.menu_entries[0..dialog.menu.count], self.score, indices, room.image.width, room.image.height);
@@ -453,6 +469,13 @@ pub const Scene = struct {
         }
     }
 
+    fn drawControls(self: *const Scene, layer: props_mod.Layer, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8) !void {
+        for (self.operated_controls.instances, self.content.controls.definitions) |instance, definition| {
+            if (definition.layer != layer or definition.footprint.room != self.environment.room) continue;
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(instance.pose.visual.id), @as(i32, instance.pose.position.x) + 8, @as(i32, instance.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (instance.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        }
+    }
+
     pub fn stateHash(self: *const Scene) u64 {
         var hash = std.hash.Wyhash.init(0);
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(i16, self.health)));
@@ -467,6 +490,7 @@ pub const Scene = struct {
         for ([_]u32{ if (self.ambience.call) |call| @intCast(call + 1) else 0, self.ambience.elapsed, if (self.ambience.room) |room| @backingInt(room) else 0 }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, self.random.state)));
         self.props.hashInto(&hash);
+        self.operated_controls.hashInto(&hash);
         if (self.replay) |replay| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, replay.cursor)));
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, self.score)));
         hash.update(&.{ self.inventory_cooldown, @intFromBool(self.input.inventory), @intFromBool(self.input.use_item), @intFromBool(self.input.use_held), @intFromBool(self.input.use_blocked), @intFromBool(self.dialog != null) });
@@ -498,6 +522,7 @@ pub const Scene = struct {
             .rolling => |roll| @backingInt(roll.phase),
             .falling => |fall| @backingInt(fall.phase),
             .ledge => |state| @backingInt(state.phase),
+            .operating => |state| @backingInt(state),
             .dead => |phase| @backingInt(phase),
             .recoiling => |state| (@as(u32, @backingInt(std.meta.activeTag(state.phase))) << 8) | switch (state.phase) {
                 .settling, .resting => |landing| @as(u32, @backingInt(landing)),

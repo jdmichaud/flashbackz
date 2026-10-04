@@ -48,3 +48,5 @@ pub const sound_effects_player = @import("audio/effects.zig");
 
 pub const output_gain = @import("audio/output_gain.zig");
 pub const input_recording = @import("input_recording.zig");
+
+pub const operated_controls = @import("operated_controls.zig");
