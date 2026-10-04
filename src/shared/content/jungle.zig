@@ -40,6 +40,7 @@ pub const Pack = struct {
     world_props: prop_import.Assets,
     controls: @import("operated_controls.zig").Assets,
     locks: @import("key_locks.zig").Assets,
+    energy_stations: @import("energy_stations.zig").Assets,
     hazards: @import("electrical_hazards.zig").Assets,
     detectors: @import("detectors.zig").Assets,
     ceiling_guns: @import("ceiling_guns.zig").Assets,
@@ -77,6 +78,7 @@ pub const Pack = struct {
         self.world_props.deinit();
         self.controls.deinit();
         self.locks.deinit();
+        self.energy_stations.deinit();
         self.hazards.deinit();
         self.detectors.deinit();
         self.ceiling_guns.deinit();
@@ -438,6 +440,8 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer operated.deinit();
     var detectors = try @import("detectors.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
     errdefer detectors.deinit();
+    var energy_stations = try @import("energy_stations.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &resolver);
+    errdefer energy_stations.deinit();
     var locks = try @import("key_locks.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, &resolver);
     errdefer locks.deinit();
     var lifts = try @import("lifts.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
@@ -513,6 +517,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .world_props = props,
         .controls = operated,
         .locks = locks,
+        .energy_stations = energy_stations,
         .hazards = hazards,
         .detectors = detectors,
         .ceiling_guns = ceiling_guns,

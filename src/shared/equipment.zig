@@ -6,7 +6,15 @@ const inventory = @import("inventory.zig");
 const motion = @import("motion.zig");
 pub const ItemHandle = @import("identity.zig").ItemHandle;
 pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone, key };
+pub const Recharge = struct {
+    delay_steps: u16,
+    restore: union(enum) { player_health: i16, item_charge: i16 },
+    movie: @import("story_cue.zig").Cue,
+};
+pub const Recharged = struct { item: ItemHandle, health: ?i16, movie: @import("story_cue.zig").Cue };
 pub const Definition = struct {
+    recharge: ?Recharge = null,
+    use_motion: enum { direct, reach } = .direct,
     kind: Kind,
     icon: motion.VisualId,
     /// Null leaves the instance available for a world pickup.
@@ -21,6 +29,7 @@ pub const Item = struct {
     state: union(enum) { introducing: u16, available, carried, consumed },
     quantity: i16,
     consume_in: ?u16 = null,
+    recharge_in: ?u16 = null,
 };
 pub const Received = struct { item: ItemHandle, kind: Kind };
 
@@ -28,6 +37,7 @@ pub const Loadout = struct {
     allocator: std.mem.Allocator,
     entries: []Item,
     inventory: inventory.Inventory,
+    recharged: ?Recharged = null,
 
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !Loadout {
         if (definitions.len > 65535) return error.TooManyStartingItems;
@@ -74,6 +84,14 @@ pub const Loadout = struct {
         self.entries[pickup.index].state = .consumed;
     }
 
+    pub fn beginRecharge(self: *Loadout, handle: ItemHandle) !bool {
+        const entry = try self.item(handle);
+        const capability = entry.definition.recharge orelse return false;
+        if (entry.state != .carried or entry.recharge_in != null) return false;
+        self.entries[handle.index].recharge_in = capability.delay_steps;
+        return true;
+    }
+
     pub fn consumeAfter(self: *Loadout, handle: ItemHandle, steps: u16) !void {
         if ((try self.item(handle)).state != .carried) return error.ItemNotCarried;
         self.entries[handle.index].consume_in = steps;
@@ -93,6 +111,7 @@ pub const Loadout = struct {
     pub fn advance(self: *Loadout, health: i16, events: []Received) !usize {
         if (events.len < self.entries.len) return error.EventBufferTooSmall;
         var count: usize = 0;
+        self.recharged = null;
         for (self.entries, 0..) |*entry, index| {
             switch (entry.state) {
                 .introducing => |remaining| {
@@ -117,7 +136,20 @@ pub const Loadout = struct {
                     entry.consume_in = null;
                 } else entry.consume_in = remaining - 1;
             }
-            if (entry.definition.kind == .shield) entry.quantity = shieldCharge(health);
+            const charging = entry.recharge_in != null;
+            if (entry.recharge_in) |remaining| {
+                if (remaining <= 1) {
+                    const capability = entry.definition.recharge orelse return error.MissingRechargeCapability;
+                    var restored_health: ?i16 = null;
+                    switch (capability.restore) {
+                        .player_health => |value| restored_health = value,
+                        .item_charge => |value| entry.quantity = value,
+                    }
+                    self.recharged = .{ .item = .{ .index = @intCast(index), .generation = 1 }, .health = restored_health, .movie = capability.movie };
+                    entry.recharge_in = null;
+                } else entry.recharge_in = remaining - 1;
+            }
+            if (entry.definition.kind == .shield and !charging) entry.quantity = shieldCharge(health);
         }
         return count;
     }
@@ -130,7 +162,7 @@ pub const Loadout = struct {
                 .available => std.math.maxInt(u32),
                 .consumed => std.math.maxInt(u32) - 1,
             };
-            for ([_]u32{ @backingInt(entry.definition.kind), @as(u16, @bitCast(entry.quantity)), pending, if (entry.consume_in) |steps| @as(u32, steps) + 1 else 0 }) |value|
+            for ([_]u32{ @backingInt(entry.definition.kind), @as(u16, @bitCast(entry.quantity)), pending, if (entry.consume_in) |steps| @as(u32, steps) + 1 else 0, if (entry.recharge_in) |steps| @as(u32, steps) + 1 else 0 }) |value|
                 hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
         }
         for (self.inventory.items()) |handle| {

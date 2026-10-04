@@ -155,6 +155,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
             behavior = .{ .floor_switch = .{ .rest = rest, .press = press, .circuit = circuit, .accepts_objects = !pressure.player_only, .initially_active = record.initially_active != 0, .wake_on_contact = record.flags & 2 != 0, .sleep_after_press = pressure.sleep_after_press } };
         }
         if (behavior == .collectible) {
+            items.items[items.items.len - 1].use_motion = if (record.object_id == 3) .reach else .direct;
             try item_sources.append(allocator, @intCast(i));
             behavior.collectible.initially_active = record.initially_active != 0;
             behavior.collectible.wake_nearby = record.flags & 4 != 0;

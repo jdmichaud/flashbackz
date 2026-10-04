@@ -113,6 +113,7 @@ pub const Scene = struct {
     props: props_mod.World,
     operated_controls: @import("../operated_controls.zig").World,
     locks: @import("../key_locks.zig").World,
+    energy_stations: @import("../energy_stations.zig").World,
     hazards: @import("../electrical_hazards.zig").World,
     detectors: @import("../detectors.zig").World,
     ceiling_guns: @import("../ceiling_guns.zig").World,
@@ -171,6 +172,8 @@ pub const Scene = struct {
         errdefer operated.deinit();
         var locks = try @import("../key_locks.zig").World.init(allocator, pack.locks.definitions);
         errdefer locks.deinit();
+        var energy_stations = try @import("../energy_stations.zig").World.init(allocator, pack.energy_stations.definitions);
+        errdefer energy_stations.deinit();
         var hazards = try @import("../electrical_hazards.zig").World.init(allocator, pack.hazards.definitions);
         errdefer hazards.deinit();
         var gunmen = try @import("../actors/gunman.zig").World.init(allocator, pack.gunmen.definitions, pack.gunmen.profiles);
@@ -212,6 +215,7 @@ pub const Scene = struct {
             .props = props,
             .operated_controls = operated,
             .locks = locks,
+            .energy_stations = energy_stations,
             .hazards = hazards,
             .detectors = detectors,
             .ceiling_guns = ceiling_guns,
@@ -269,6 +273,7 @@ pub const Scene = struct {
         self.props.deinit();
         self.operated_controls.deinit();
         self.locks.deinit();
+        self.energy_stations.deinit();
         self.hazards.deinit();
         self.detectors.deinit();
         self.ceiling_guns.deinit();
@@ -404,10 +409,12 @@ pub const Scene = struct {
             self.controller.ride_available = self.passengers.candidate != null;
             self.controller.ride_acknowledged = self.passengers.acknowledged != null;
             self.controller.ride_arrived = self.passengers.arrival;
-            self.controller.control_available = self.operated_controls.candidate != null or self.locks.candidate != null;
+            try self.energy_stations.prepare(self.content.energy_stations.definitions, self.terrain.map(), self.props.player_contact);
+            self.controller.control_available = self.operated_controls.candidate != null or self.locks.candidate != null or self.energy_stations.candidate != null;
             self.controller.pickup_available = self.props.pickup_candidate != null;
             const selected = try self.equipment.selected();
-            self.controller.use_available = if (selected) |item| item.definition.use_action != null else false;
+            self.controller.use_available = if (selected) |item| item.definition.use_action != null or item.definition.recharge != null else false;
+            self.controller.use_reaches = if (selected) |item| item.definition.use_motion == .reach else false;
             self.controller.throw_available = if (selected) |item| if (item.definition.use_action) |action| action == .throw_item else false else false;
             self.controller.weapon_desired = self.weapon_toggle.desired;
             self.controller.health_before_step = self.health;
@@ -422,18 +429,32 @@ pub const Scene = struct {
             if (self.controller.fatal_landing) self.health = -1;
             if (self.death_wait == null) self.death_wait = self.controller.death_wait_requested;
             self.received_count = try self.equipment.advance(self.health, self.received_items);
+            if (self.equipment.recharged) |event| {
+                if (event.health) |health| self.health = health;
+                self.pending_movie = event.movie;
+            }
             if (self.controller.use_requested) {
-                self.input.consumeUse();
-                const action = (selected orelse return error.MissingSelectedItem).definition.use_action orelse return error.MissingItemAction;
-                switch (action) {
-                    .story => |cue| self.pending_movie = cue,
-                    .unlock => _ = try self.locks.useKey(self.content.locks.definitions, self.content.locks.bindings, &self.equipment, self.equipment.inventory.selected().?),
-                    .throw_item => try self.props.throwItem(&self.equipment, self.equipment.inventory.selected().?, self.pose, self.environment.room),
-                }
+                if (!self.controller.use_reaches) self.input.consumeUse();
+                const item = selected orelse return error.MissingSelectedItem;
+                const handle = self.equipment.inventory.selected() orelse return error.MissingSelectedItem;
+                var handled = false;
+                if (item.definition.use_action) |action| switch (action) {
+                    .story => |cue| {
+                        self.pending_movie = cue;
+                        handled = true;
+                    },
+                    .unlock => handled = try self.locks.useKey(self.content.locks.definitions, self.content.locks.bindings, &self.equipment, handle),
+                    .throw_item => {
+                        try self.props.throwItem(&self.equipment, handle, self.pose, self.environment.room);
+                        handled = true;
+                    },
+                };
+                if (!handled and self.energy_stations.candidate != null) _ = try self.equipment.beginRecharge(handle);
             }
             try self.props.advance(self.terrain.map(), &self.equipment, try self.controller.pressesFloorSwitches(self.content.controllerClips()), self.controller.pickup_requested);
             try self.operated_controls.advance(self.content.controls.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested);
             try self.locks.advance(self.content.locks.definitions, self.terrain.map(), self.environment.room);
+            try self.energy_stations.advance(self.content.energy_stations.definitions, self.terrain.map(), self.environment.room);
             self.lifts.route(self.content.lifts.bindings, self.props.pressed_circuits[0..self.props.pressed_count]);
             self.lifts.route(self.content.lifts.bindings, self.operated_controls.pulses[0..self.operated_controls.pulse_count]);
             self.lifts.route(self.content.lifts.bindings, self.locks.pulses[0..self.locks.pulse_count]);
@@ -530,6 +551,7 @@ pub const Scene = struct {
             for (self.detectors.instances, self.content.detectors.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.room);
             for (self.ceiling_guns.instances, self.content.ceiling_guns.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.room);
             for (self.hazards.instances, self.content.hazards.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
+            for (self.energy_stations.instances, self.content.energy_stations.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (self.locks.instances, self.content.locks.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (self.operated_controls.instances, self.content.controls.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (self.props.objects) |object| if (object.sound_requested) |sound| try self.emitSound(sound, object.room);
@@ -581,7 +603,8 @@ pub const Scene = struct {
         } else try consumeInput(&self.pending, &self.input, self.clock.?.deadline());
         var intent = try self.input.intent();
         intent.use_item = false;
-        self.input.consumeUse();
+        // Reach-to-use items keep their held command; direct-use items consume one press.
+        if (!self.controller.use_reaches) self.input.consumeUse();
         self.movie_intent = intent;
         return true;
     }
@@ -650,6 +673,15 @@ pub const Scene = struct {
             try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(lock.hint), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
             try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, lock.label, @divTrunc(176 - @as(i32, @intCast(lock.label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
         }
+        if (self.props.pickup_candidate == null and self.operated_controls.candidate == null and self.locks.candidate == null) {
+            if (self.energy_stations.candidate) |index| {
+                const station = self.content.energy_stations.definitions[index];
+                if (station.hint) |hint| {
+                    try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(hint), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
+                    try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, station.label, @divTrunc(176 - @as(i32, @intCast(station.label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
+                }
+            }
+        }
         try self.zoom.draw(indices, rgba);
         if (self.dialog) |dialog| try dialog.menu.draw(self.content.inventory_art.artwork(), self.menu_entries[0..dialog.menu.count], self.score, indices, room.image.width, room.image.height);
         if (self.options) |options| try options.menu.draw(indices, &self.content.inventory_art.font);
@@ -712,6 +744,7 @@ pub const Scene = struct {
     fn drawControls(self: *const Scene, layer: props_mod.Layer, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8) !void {
         try self.drawControlSet(self.operated_controls.instances, self.content.controls.definitions, layer, room, indices);
         try self.drawControlSet(self.locks.instances, self.content.locks.definitions, layer, room, indices);
+        try self.drawControlSet(self.energy_stations.instances, self.content.energy_stations.definitions, layer, room, indices);
     }
 
     fn drawControlSet(self: *const Scene, instances: anytype, definitions: anytype, layer: props_mod.Layer, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8) !void {
@@ -782,6 +815,7 @@ pub const Scene = struct {
         self.props.hashInto(&hash);
         self.operated_controls.hashInto(&hash);
         self.locks.hashInto(&hash);
+        self.energy_stations.hashInto(&hash);
         self.hazards.hashInto(&hash);
         self.detectors.hashInto(&hash);
         self.ceiling_guns.hashInto(&hash);

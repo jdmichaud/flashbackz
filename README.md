@@ -62,7 +62,9 @@ their overload/explosion sequence and sounds. Ceiling laser guns now use their o
 profiles, effects and damage. Doors now use shared opening/closing tracks and change
 collision at the authored animation steps. Pressure plates, switches and credential locks
 route through imported circuits. Ordinary keys can be collected with Shift, selected with
-Tab/arrow keys, and used with Return at a matching lock. Successful use consumes the key.
+Tab/arrow keys, and used by holding Return through Conrad's hand press at a matching lock.
+Successful use consumes the key. Select SHIELD and hold Return near an energy generator to
+recharge it, with the original animation and music. Releasing Return before the press cancels.
 Ordinary lifts now carry Conrad and board stones through their original contact behavior.
 With the gun holstered, Shift+Up/Down requests a ride. Turning, crouching, drawing,
 shooting and holstering work while travelling. The jungle pressure-called lift now stays

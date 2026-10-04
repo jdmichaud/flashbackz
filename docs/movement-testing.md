@@ -131,3 +131,11 @@ some external call controllers remain unfinished.
 Stand on the pressure plate beside the automatic platform: it descends and stays down.
 Walk off the plate to let its timer expire and watch it return upward. This family responds
 to its plate; it does not acknowledge the ordinary Shift+Up/Down ride request.
+
+
+### Reach to use a key or recharge the shield
+
+Select the item with **Tab + arrows**, then close inventory. At a matching lock, or at an
+energy generator with **SHIELD** selected, **hold Return** until Conrad presses with his hand.
+Releasing Return during the reach cancels the effect. The shield's recharge film restores its
+charge; **Tab** skips the film. The holocube keeps its existing single-press use behavior.

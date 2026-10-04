@@ -49,6 +49,8 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
             .frame => |value| if (value.dx != 0 or value.dy != 0) return error.UnsupportedEquipmentIntroduction,
         };
         definition.* = .{
+            .recharge = if (spec.kind == .shield) try shieldRecharge(allocator, source, rules, animations) else null,
+            .use_motion = if (source.object_id == 3) .reach else .direct,
             .kind = spec.kind,
             .icon = try resolver.icon(source.inventory_icon),
             .introduction_steps = @as(u16, @intCast(introduction.frames.len)),
@@ -59,6 +61,29 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
         loaded += 1;
     }
     return definitions;
+}
+
+fn shieldRecharge(allocator: std.mem.Allocator, record: placement.Record, rule_bytes: []const u8, animations: []const u8) !equipment.Recharge {
+    const table = @import("rule_table.zig");
+    const group = try table.group(rule_bytes, record.rule_group);
+    if (group.count() != 4) return error.UnsupportedShieldRecharge;
+    const intro = group.at(0);
+    const use = group.at(1);
+    const idle = group.at(2);
+    const complete = group.at(3);
+    for ([_]table.Rule{ intro, use, idle, complete }) |r| if (r.dx != 0 or r.dy != 0 or r.flags != 0) return error.UnsupportedShieldRecharge;
+    if (use.source != intro.target or idle.source != use.source or idle.target != use.source or complete.source != use.target or complete.target != use.source or intro.next != 1 or use.next != 3 or idle.next != 1 or complete.next != 1) return error.UnsupportedShieldRecharge;
+    if (use.conditions[0].code != 34 or use.conditions[0].argument != 102 or use.conditions[1].code != 84 or use.conditions[1].argument != 9 or use.effect.code != 0) return error.UnsupportedShieldRecharge;
+    if (idle.conditions[0].code != 89 or idle.conditions[0].argument != 0 or idle.conditions[1].code != 0 or idle.effect.code != 0) return error.UnsupportedShieldRecharge;
+    if (complete.conditions[0].code != 90 or complete.conditions[0].argument != 5 or complete.conditions[1].code != 0 or complete.effect.code != 88 or complete.effect.argument != 0) return error.UnsupportedShieldRecharge;
+    var clip = try animation.decode(allocator, animations, use.target);
+    defer clip.deinit();
+    if (clip.sound != null) return error.UnsupportedShieldRechargeSound;
+    for (clip.frames) |frame| switch (frame) {
+        .hold => {},
+        .frame => |value| if (value.dx != 0 or value.dy != 0) return error.MovingShieldRecharge,
+    };
+    return .{ .delay_steps = @intCast(clip.frames.len), .restore = .{ .player_health = record.parameters[0] }, .movie = .shield_recharge };
 }
 
 pub fn release(allocator: std.mem.Allocator, definitions: []equipment.Definition) void {

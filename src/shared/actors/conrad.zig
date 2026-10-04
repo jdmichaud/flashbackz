@@ -131,6 +131,7 @@ pub const Controller = struct {
     ride_boarded: bool = false,
     ride_left: bool = false,
     use_available: bool = false,
+    use_reaches: bool = false,
     throw_available: bool = false,
     pickup_available: bool = false,
     control_available: bool = false,
@@ -333,14 +334,20 @@ pub const Controller = struct {
                     .reaching => self.activity = .{ .operating = .pressing },
                     .pressing => {
                         self.operate_requested = self.control_available and intent.action and intent.neutralDirections() and !intent.weapon and !intent.use_item;
+                        self.use_requested = self.use_available and intent.use_item and !intent.action and !intent.weapon and intent.neutralDirections();
                         self.activity = .{ .operating = .recovering };
                     },
                     .recovering => self.activity = .standing,
                 },
                 .waking => self.activity = .standing,
                 .using_item => {
-                    self.use_requested = self.use_available and intent.use_item and !intent.action and !intent.weapon and intent.neutralDirections();
-                    self.activity = if (self.use_requested and self.throw_available) .throwing_item else .standing;
+                    const use = self.use_available and intent.use_item and !intent.action and !intent.weapon and intent.neutralDirections();
+                    if (use and self.use_reaches) {
+                        self.activity = .{ .operating = .reaching };
+                    } else {
+                        self.use_requested = use;
+                        self.activity = if (use and self.throw_available) .throwing_item else .standing;
+                    }
                 },
                 .throwing_item => self.activity = .standing,
                 .standing => {
