@@ -53,3 +53,5 @@ pub const doors = @import("doors.zig");
 
 pub const key_locks = @import("key_locks.zig");
 pub const key_pickups = @import("key_pickups.zig");
+
+pub const lifts = @import("lifts.zig");
