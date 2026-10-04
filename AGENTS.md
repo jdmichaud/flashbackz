@@ -65,3 +65,8 @@ Rules:
   sound, including forest ambience, movement, switches, weapons and other effects. Use shared
   animation/interaction sound events; do not limit this work to gunfire. The movement and
   whole-game goals remain open, and missing sound-producing world behavior must stay visible.
+
+- Mechanisms must be handled systematically from original data (user clarification). Discover
+  instances, behaviour families and links across levels; import typed definitions for shared
+  components. Do not hand-code each switch or door, and do not introduce a legacy script VM
+  into the modern engine. Reference scenarios qualify families, not individual hard-coded IDs.

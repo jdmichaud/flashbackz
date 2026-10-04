@@ -54,6 +54,11 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   catches, crouch/roll chaining, ledge movement, falls/recovery, room handoffs and input
   combinations; include locomotion with the weapon drawn. Gate: original floppy comparisons
   cover each transition, and native exploration no longer terminates on valid movement input.
+- [ ] **Systematic mechanism import (user direction):** enumerate all level placements,
+  shared rule groups and connections; classify behaviour families and translate them to typed
+  definitions for shared switch/door/lift components. Gate: every instance is accounted for,
+  known families are imported without per-object special cases, and unknown rule patterns are
+  reported explicitly. Keep original instruction dispatch out of the modern runtime.
 - [ ] Connect pressure-plate signals to independently modeled gate animation and terrain
   changes. Recover startup gate/platform footprints as behavior, not permanent level edits.
   Gate: original floppy object transitions, signal order and complete collision-grid changes
