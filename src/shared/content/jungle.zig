@@ -15,8 +15,8 @@ const equipment = @import("../equipment.zig");
 const starting_equipment = @import("starting_equipment.zig");
 const inventory_artwork = @import("inventory_artwork.zig");
 
-const Move = enum { wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover };
-const source_moves = [_]u16{ 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88 };
+const Move = enum { wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover, collision_impact, recoil_fall, recoil_confined, recoil_staggered, recoil_prone, recoil_pause_prone, recoil_pause_tight, recoil_rise, recoil_drop };
+const source_moves = [_]u16{ 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88, 263, 94, 85, 84, 83, 111, 74, 103, 86 };
 pub const RoomArt = struct { id: geometry.RoomId, artwork: artwork.Artwork };
 
 pub const Pack = struct {
@@ -67,6 +67,15 @@ pub const Pack = struct {
                 .forward = .{ .takeoff = self.clip(.jump_takeoff), .flight = self.clip(.jump_flight), .landing = self.clip(.jump_land), .recover = self.clip(.jump_finish) },
             },
             .crouch = .{ .lower = self.clip(.crouch_lower), .hold = self.clip(.crouch_hold), .rise = self.clip(.crouch_rise), .turn = self.clip(.crouch_turn) },
+            .recoil = .{
+                .impact = self.clip(.collision_impact),
+                .fall = self.clip(.recoil_fall),
+                .drop = self.clip(.recoil_drop),
+                .confined = .{ .settle = self.clip(.recoil_confined), .rest = self.clip(.recoil_pause_tight) },
+                .staggered = .{ .settle = self.clip(.recoil_staggered), .rest = self.clip(.recoil_pause_tight) },
+                .prone = .{ .settle = self.clip(.recoil_prone), .rest = self.clip(.recoil_pause_prone) },
+                .rise = self.clip(.recoil_rise),
+            },
             .roll = .{ .enter = self.clip(.roll_enter), .tumble = self.clip(.roll_tumble), .exit = self.clip(.roll_exit), .balance = self.clip(.roll_balance), .rise = self.clip(.roll_rise), .drop = self.clip(.roll_drop), .recover = self.clip(.roll_recover), .upright_landing = self.clip(.land) },
         };
     }

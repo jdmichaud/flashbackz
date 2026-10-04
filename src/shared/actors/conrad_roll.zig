@@ -42,7 +42,7 @@ test "roll exit alignment is committed once before its recovery" {
     try std.testing.expectEqual(.standing, try state.finishPhase(clips, .{}, &pose, Ground{}));
     try std.testing.expectEqual(@as(i16, 16), pose.position.x);
 }
-pub const Boundary = enum { continued, standing, turning, terrain_requested, action_requested };
+pub const Boundary = enum { continued, standing, turning, wall_collision, terrain_requested, action_requested };
 
 pub fn shiftForward(pose: *motion.Pose, amount: i16) void {
     pose.position.x +%= if (pose.facing == .right) amount else -%amount;
@@ -71,7 +71,7 @@ pub const State = struct {
                     self.phase = .drop;
                 } else {
                     const passage = try environment.rollPassage(pose.*, 0) or try environment.rollPassage(pose.*, 1);
-                    if (!passage and try environment.at(pose.*, .torso, 1)) return .terrain_requested;
+                    if (!passage and try environment.at(pose.*, .torso, 1)) return .wall_collision;
                     self.phase = .tumble;
                 }
             },
@@ -80,7 +80,7 @@ pub const State = struct {
                     self.phase = .exit;
                     return .continued;
                 }
-                if (try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .torso, -1)) return .terrain_requested;
+                if (try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .torso, -1)) return .wall_collision;
                 if (try environment.at(pose.*, .torso, 1) and !try environment.at(pose.*, .torso, 0)) {
                     shiftForward(pose, clips.alignment_forward);
                     self.phase = .balance;

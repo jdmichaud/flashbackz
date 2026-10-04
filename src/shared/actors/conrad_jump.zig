@@ -9,7 +9,7 @@ pub const ForwardClips = struct { takeoff: motion.Clip, flight: motion.Clip, lan
 pub const Clips = struct { upward: VerticalClips, low_clearance: VerticalClips, forward: ForwardClips };
 pub const Kind = enum { upward, low_clearance, forward };
 pub const Phase = enum { takeoff, flight, landing, recovery };
-pub const Boundary = enum { continued, finished, terrain_requested };
+pub const Boundary = enum { continued, finished, wall_collision, terrain_requested };
 
 pub const State = struct {
     kind: Kind,
@@ -39,8 +39,12 @@ pub const State = struct {
         }
         switch (self.phase) {
             .takeoff, .flight => {
-                if ((try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .torso, -1)) or
-                    (try environment.at(pose.*, .torso, 1) and !try environment.at(pose.*, .torso, 0))) return .terrain_requested;
+                if (try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .torso, -1)) return .wall_collision;
+                if (try environment.at(pose.*, .torso, 1) and !try environment.at(pose.*, .torso, 0)) {
+                    const shift = clips.forward.landing_forward_shift;
+                    pose.position.x +%= if (pose.facing == .right) shift else -%shift;
+                    return .wall_collision;
+                }
                 if (self.phase == .takeoff) {
                     self.phase = .flight;
                 } else {

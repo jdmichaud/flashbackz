@@ -230,6 +230,10 @@ pub const Scene = struct {
             .jumping => |jump| (@as(u32, @backingInt(jump.kind)) << 8) | @backingInt(jump.phase),
             .crouching => |p| @backingInt(p),
             .rolling => |roll| @backingInt(roll.phase),
+            .recoiling => |state| (@as(u32, @backingInt(std.meta.activeTag(state.phase))) << 8) | switch (state.phase) {
+                .settling, .resting => |landing| @as(u32, @backingInt(landing)),
+                else => @as(u32, 0),
+            },
             else => 0,
         };
         for ([_]u32{ @backingInt(self.environment.room), @as(u16, @bitCast(self.pose.position.x)), @as(u16, @bitCast(self.pose.position.y)), @backingInt(self.pose.facing), @backingInt(self.pose.visual.id), @intFromBool(self.pose.visual.mirrored), activity, phase, @intCast(self.controller.playback.next_step) }) |value|

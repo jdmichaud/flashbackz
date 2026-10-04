@@ -3,6 +3,7 @@
 const std = @import("std");
 const motion = @import("../motion.zig");
 const jumping = @import("conrad_jump.zig");
+const recoil = @import("conrad_recoil.zig");
 const rolling = @import("conrad_roll.zig");
 pub const Intent = @import("controls.zig").Intent;
 
@@ -23,6 +24,7 @@ pub const Clips = struct {
     jumps: ?jumping.Clips = null,
     crouch: ?struct { lower: motion.Clip, hold: motion.Clip, rise: motion.Clip, turn: motion.Clip } = null,
     roll: ?rolling.Clips = null,
+    recoil: ?recoil.Clips = null,
 };
 
 pub const TurnPhase = enum { preparation, follow_through };
@@ -39,6 +41,7 @@ pub const Activity = union(enum) {
     jumping: jumping.State,
     crouching: enum { lowering, holding, rising, turning },
     rolling: rolling.State,
+    recoiling: recoil.State,
 };
 pub const Result = enum { advanced, locomotion_requested, terrain_transition_requested };
 
@@ -96,6 +99,7 @@ pub const Controller = struct {
                 };
             },
             .rolling => |roll| roll.clip(clips.roll orelse return error.MissingMotion),
+            .recoiling => |state| state.clip(clips.recoil orelse return error.MissingMotion),
         };
     }
 
@@ -201,6 +205,7 @@ pub const Controller = struct {
                 .jumping => |*jump| switch (try jump.finishPhase(clips.jumps orelse return error.MissingMotion, intent, pose, environment)) {
                     .continued => {},
                     .finished => self.activity = .standing,
+                    .wall_collision => self.activity = .{ .recoiling = .{} },
                     .terrain_requested => return .terrain_transition_requested,
                 },
                 .crouching => |phase| switch (phase) {
@@ -218,7 +223,7 @@ pub const Controller = struct {
                                 const roll = clips.roll orelse return .locomotion_requested;
                                 if (!try environment.at(pose.*, .support, 1)) {
                                     self.activity = .{ .rolling = .{ .phase = .drop } };
-                                } else if (!try environment.at(pose.*, .torso, 1)) {
+                                } else if (try environment.rollPassage(pose.*, 1) or !try environment.at(pose.*, .torso, 1)) {
                                     rolling.shiftForward(pose, roll.alignment_forward);
                                     self.activity = .{ .rolling = .{} };
                                 } else self.activity = .{ .crouching = .rising };
@@ -226,10 +231,17 @@ pub const Controller = struct {
                         } else self.activity = .{ .crouching = .rising };
                     },
                 },
+                .recoiling => |*state| switch (try state.finishPhase(clips.recoil orelse return error.MissingMotion, intent, pose, environment)) {
+                    .continued => {},
+                    .standing => self.activity = .standing,
+                    .low_recovery => self.activity = .{ .rolling = .{ .phase = .recover } },
+                    .terrain_requested => return .terrain_transition_requested,
+                },
                 .rolling => |*roll| switch (try roll.finishPhase(clips.roll orelse return error.MissingMotion, intent, pose, environment)) {
                     .continued => {},
                     .standing => self.activity = .standing,
                     .turning => self.activity = .{ .turning = .preparation },
+                    .wall_collision => self.activity = .{ .recoiling = .{} },
                     .terrain_requested => return .terrain_transition_requested,
                     .action_requested => return .locomotion_requested,
                 },
@@ -304,4 +316,34 @@ test "walking commits a stride and requests room handoff only at its boundary" {
     _ = try controller.advanceIn(clips, .{}, &pose, &ground);
     try std.testing.expectEqualDeep(@as(Activity, .standing), controller.activity);
     try std.testing.expectEqual(@as(usize, 2), ground.boundaries);
+}
+
+test "a low passage permits crouch-to-roll while an equally occupied solid wall does not" {
+    const geometry = @import("../geometry.zig");
+    const terrain = @import("../terrain.zig");
+    const Environment = @import("conrad_environment.zig").Environment;
+    const id: geometry.RoomId = @fromBackingInt(30);
+    const blocking: [18]bool = @splat(false);
+    const rooms = [_]geometry.Room{.{ .id = id, .columns = 6, .rows = 3, .width = 96, .height = 72, .blocking = &blocking, .edges = .{ .left = .blocked, .right = .blocked, .up = .blocked, .down = .blocked } }};
+    const hold = [_]motion.Step{.hold};
+    const clip: motion.Clip = .{ .steps = &hold };
+    const clips: Clips = .{ .wake = clip, .stand = clip, .turn_preparation = clip, .turn_follow_through = clip, .crouch = .{ .lower = clip, .hold = clip, .rise = clip, .turn = clip }, .roll = .{ .enter = clip, .tumble = clip, .exit = clip, .balance = clip, .rise = clip, .drop = clip, .recover = clip, .upright_landing = clip } };
+    for ([_]terrain.Material{ .solid, .restricted }) |material| {
+        var cells: [18]terrain.Material = @splat(.empty);
+        @memset(cells[12..], .solid);
+        cells[6 + 3] = material;
+        var world = try terrain.State.init(std.testing.allocator, .{ .rooms = &rooms }, &cells, .{});
+        defer world.deinit();
+        var environment: Environment = .{ .map = world.map(), .materials = world.view(), .room = id };
+        var pose: motion.Pose = .{ .position = .{ .x = 24, .y = 70 }, .facing = .right, .visual = .{ .id = @fromBackingInt(0) } };
+        var controller: Controller = .{ .activity = .{ .crouching = .holding }, .playback = .{ .next_step = 1 } };
+        try std.testing.expectEqual(.advanced, try controller.advanceIn(clips, .{ .direction = .right }, &pose, &environment));
+        if (material == .restricted) {
+            try std.testing.expectEqualDeep(Activity{ .rolling = .{} }, controller.activity);
+            try std.testing.expectEqual(@as(i16, 40), pose.position.x);
+        } else {
+            try std.testing.expectEqualDeep(Activity{ .crouching = .rising }, controller.activity);
+            try std.testing.expectEqual(@as(i16, 24), pose.position.x);
+        }
+    }
 }

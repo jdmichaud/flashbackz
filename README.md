@@ -31,6 +31,8 @@ scheduling is not accepted yet. One alternate sprite encoding also remains unres
 The scene now owns reversible terrain edits independently of immutable level content.
 Overlapping edits, restoration and history exhaustion match original routine comparisons.
 Rolling now uses material-specific clearance to continue through low passages.
+Rolling and forward-jump wall collisions now play the backward fall and get-up sequence,
+with unchanged health in the verified cases. Crouching can also start a roll into a low passage.
 Gate/lift behavior and their triggers still need integration.
 
 The content library covers all 193 room backgrounds, 1,284 packed sprite frames, icons, palettes,
