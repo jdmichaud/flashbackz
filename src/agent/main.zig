@@ -17,8 +17,8 @@ const usage =
     \\                   frame FRAME; the option repeats
     \\  --key-down F:KEY hold KEY from host frame F
     \\  --key-up F:KEY   release KEY at host frame F
-    \\  --scene jungle   enter the jungle development slice directly
-    \\  ASSET_PATH       an ISO/BIN image or directory of original files
+    \\  --scene menu     open the title preview while floppy startup is being recovered
+    \\  ASSET_PATH       a FAT12 IMA image or directory of original floppy files
     \\  --saves DIR      where saves are kept
     \\
 ;

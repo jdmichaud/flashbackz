@@ -11,9 +11,9 @@ are required for the introduction, sound and complete original startup qualifica
 
 - [ ] Inventory FAT12 files and ABA archives; identify missing installation media, record
   provenance and reproduce floppy startup on disposable copies.
-- [ ] Remove CD filesystem/track and SEQ playback from the modern game. Preserve historical
+- [x] Remove CD filesystem/track and SEQ playback from the modern game. Preserve historical
   research and shelved generic work; retain independent reusable systems for requalification.
-- [ ] Support direct IMA input and bounded ABA decompression, with malformed-input tests and
+- [x] Support direct IMA input and bounded ABA decompression, with malformed-input tests and
   independent extraction comparison. Support extracted floppy content through the same API.
 - [ ] Reproduce title, vector introduction and original scene order. Gate: exact original
   presented frames, palette changes, timing and input behavior; no approximate substitutes.

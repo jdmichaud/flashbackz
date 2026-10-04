@@ -152,7 +152,20 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
     return loadWithDifficulty(allocator, source, .normal);
 }
 
-pub fn loadWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSource, difficulty_setting: @import("../settings.zig").Difficulty) !Pack {
+pub fn loadWithDifficulty(_: std.mem.Allocator, _: platform.AssetSource, _: @import("../settings.zig").Difficulty) !Pack {
+    return error.FloppyGameplayNotYetQualified;
+}
+
+/// Decoded interface content supplied by an edition importer. No executable offsets enter
+/// scene assembly. The floppy executable's palettes and labels still require qualification.
+pub const Interface = struct {
+    actor_colors: [2]palette.Bank,
+    text_colors: palette.Bank,
+    interface_colors: palette.Bank,
+    level_label: []const u8,
+};
+
+pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, interface: Interface) !Pack {
     var map = try read(source, "DATA/LEVEL1.MAP", 8 * 1024 * 1024);
     defer map.deinit();
     var colors = try read(source, "DATA/LEVEL1.PAL", 8192);
@@ -178,33 +191,7 @@ pub fn loadWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSo
     const placement_table = try placement.Table.init(placements.bytes);
     const player = try placement_table.record(0);
     if (player.initial_state != 99 or player.kind != 1 or player.room >= 64) return error.UnsupportedPlayerStart;
-    var executable = try read(source, "GAME_E.OVL", 1024 * 1024);
-    defer executable.deinit();
-    var digest: [32]u8 = undefined;
-    std.crypto.hash.sha2.Sha256.hash(executable.bytes, &digest, .{});
-    var expected: [32]u8 = undefined;
-    _ = try std.fmt.hexToBytes(&expected, "bf6cef92ae8606180b907c4f901734470699b9bb999fed23a744e27eb19644ea");
-    if (!std.mem.eql(u8, &digest, &expected)) return error.UnsupportedGameEdition;
-    const palette_offset = 5632 + 0x1a680 + 0xf61;
-    const actor_colors = [_]palette.Bank{
-        try palette.decodeActorBank(executable.bytes[palette_offset..][0..32]),
-        try palette.decodeActorBank(executable.bytes[palette_offset + 32 ..][0..32]),
-    };
-    const text_colors = try palette.decodeActorBank(executable.bytes[palette_offset + 64 ..][0..32]);
-    var interface_colors: palette.Bank = undefined;
-    for (&interface_colors, 0..) |*color, i| {
-        const rgb = executable.bytes[palette_offset + 96 + i * 3 ..][0..3];
-        color.* = .{ .r = palette.expandComponent(rgb[0]), .g = palette.expandComponent(rgb[1]), .b = palette.expandComponent(rgb[2]) };
-    }
-    // Difficulty selection supplies the original inventory label. UI labels
-    // come from the checked English overlay; executable offsets stay at this boundary.
-    const data_base: usize = 5632 + 0x1a680;
-    const difficulty_offset = std.mem.readInt(u16, executable.bytes[data_base + 0x1841 + 2 * @as(usize, @backingInt(difficulty_setting)) ..][0..2], .little);
-    const difficulty = try embeddedLabel(executable.bytes, data_base + difficulty_offset);
-    const level_prefix = try embeddedLabel(executable.bytes, data_base + 0x186a);
-    const level_label = try std.mem.concat(allocator, u8, &.{ level_prefix, difficulty });
-    defer allocator.free(level_label);
-    var inventory_art = try inventory_artwork.load(allocator, icons.bytes, font_bytes.bytes, level_label);
+    var inventory_art = try inventory_artwork.load(allocator, icons.bytes, font_bytes.bytes, interface.level_label);
     errdefer inventory_art.deinit();
     var room_ids: [64]geometry.RoomId = undefined;
     for (&room_ids, 0..) |*id, i| id.* = @fromBackingInt(@as(u16, @intCast(i)) + 1);
@@ -252,10 +239,10 @@ pub fn loadWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSo
         errdefer art.deinit();
         const offset = @abs(std.mem.readInt(i32, map.bytes[index * 6 ..][0..4], .little));
         const alternate = map.bytes[offset + 2] != reference_bank;
-        @memcpy(art.colors[0x40..0x50], &actor_colors[@intFromBool(alternate)]);
+        @memcpy(art.colors[0x40..0x50], &interface.actor_colors[@intFromBool(alternate)]);
         @memcpy(art.colors[0xa0..0xb0], &icon_colors);
-        @memcpy(art.colors[0xe0..0xf0], &text_colors);
-        @memcpy(art.colors[0xf0..0x100], &interface_colors);
+        @memcpy(art.colors[0xe0..0xf0], &interface.text_colors);
+        @memcpy(art.colors[0xf0..0x100], &interface.interface_colors);
         try room_art.append(allocator, .{ .id = room_ids[index], .artwork = art });
     }
     const rooms = try room_art.toOwnedSlice(allocator);
@@ -283,11 +270,4 @@ pub fn loadWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSo
         .initial_room = room_ids[player.room],
         .initial_pose = .{ .position = player.position, .facing = facing, .visual = .{ .id = first_visual.id, .mirrored = first_visual.mirrored != (facing == .left) } },
     };
-}
-
-fn embeddedLabel(bytes: []const u8, offset: usize) ![]const u8 {
-    if (offset >= bytes.len) return error.InvalidInterfaceLabel;
-    const tail = bytes[offset..@min(bytes.len, offset + 257)];
-    const length = std.mem.indexOfScalar(u8, tail, 0) orelse return error.InvalidInterfaceLabel;
-    return tail[0..length];
 }

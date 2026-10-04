@@ -23,7 +23,7 @@ const program_name = "flashbackz-sdl";
 
 pub const usage =
     \\usage: flashbackz-sdl [OPTIONS] [ASSET_PATH]
-    \\  ASSET_PATH           an ISO/BIN image or directory of original files
+    \\  ASSET_PATH           a FAT12 IMA image or directory of original floppy files
     \\  --scene jungle       enter the jungle development slice directly
     \\  --help, -h           show this help
     \\  --scale N            window scale, 1 to 64 (default 3)
@@ -101,7 +101,12 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, environ: *const std.process.Envir
     defer out.flush() catch {};
     if (options.event_log_ns != null) backend.event_log = out;
 
-    var game = try flashbackz.Game.initWithEntry(gpa, providers.assetSource(), providers.storage(), options.providers.entry);
+    var game = flashbackz.Game.initWithEntry(gpa, providers.assetSource(), providers.storage(), options.providers.entry) catch |e| {
+        if (e == error.MissingFloppyIntroduction) {
+            std.log.err("the floppy set is incomplete: INTRO1.CMD is missing; supply the remaining disks. --scene menu opens the available title preview", .{});
+        } else std.log.err("cannot load game: {s}", .{@errorName(e)});
+        return 1;
+    };
     defer game.deinit();
 
     var p = backend.asPlatform();
@@ -277,7 +282,7 @@ test "the host options are parsed, bounded and defaulted" {
             try std.testing.expectError(error.MissingAssets, result);
         } else try std.testing.expectError(error.BadArguments, result);
     }
-    const jungle_options = try parseArgs(SliceArgs{ .items = &.{ "flashbackz-sdl", "--scene", "jungle", "disc.iso" } });
+    const jungle_options = try parseArgs(SliceArgs{ .items = &.{ "flashbackz-sdl", "--scene", "jungle", "game.ima" } });
     try std.testing.expectEqual(flashbackz.game.Entry.jungle_development, jungle_options.providers.entry);
 }
 

@@ -1,89 +1,42 @@
 # flashbackz
 
-The modern Zig reimplementation of the supplied Flashback DOS CD edition. Both native hosts
-load an ISO, MODE1/2352 BIN or extracted game root directly. The default entry plays the CD intro with movie audio, opens the interactive title menu,
-and starts the jungle through the wake-up movie. `--scene jungle` opens the development slice
-directly; `--scene menu` skips the initial intro.
+A modern Zig reimplementation of the original DOS floppy edition of Flashback. The user
+changed the reference from the CD release on 2026-10-04. The runtime now reads FAT12 `.ima`
+images and extracted floppy directories, expands ABA installation archives, and uses the
+original title artwork. CD image loading, SEQ movies and CD executable metadata imports
+have been removed.
 
-Use Up/Down in the menu and Shift or Enter to select. Tab skips a movie. Skill selection,
-Info, password entry for the first level, and Quit work. Demo playback and passwords for
-later levels remain unfinished. Movie decoding and stable menu frames have exact comparisons;
-menu fades, cursor blinking, input-repeat timing and music still need implementation.
+The supplied `Flashback.ima` is an incomplete installation disk: 13 files and 31 archived
+resources. It contains the title artwork but lacks `INTRO1.CMD/POL`, `INTRO2.CMD/POL`, music
+resources and essential gameplay files. The remaining floppy disks or a complete installed
+copy are required. Normal startup reports the missing introduction explicitly.
 
-In that slice, Left/Right walk or turn, Shift with a direction runs, Up jumps in place,
-Shift+Up jumps forward from standing, Down crouches, and Escape exits.
-To roll, press forward while holding Down, then release Down while keeping forward held.
-Wake-up, committed steps, turns, braking, one room crossing and the first ledge landing have
-exact original state comparisons. Four actual SDL frame checkpoints match the original pixels.
-The scene uses shared content, input, controller and rendering code in both native hosts.
-
-Hold Shift+Down at an edge to lower over it. Release Down while keeping Shift held to hang;
-Shift+Up climbs, Shift with the backward direction releases and turns, and releasing Shift
-lets go. Holding Up beneath a reachable ledge jumps up and climbs onto it. Lowering, gripping,
-climbing, dropping and a transfer to a second ledge have original trace and native frame checks.
-
-The initial shield, gun and credits now enter the inventory at their original startup updates.
-The HUD uses the selected item's imported icon. Tab opens and closes inventory; arrows navigate.
-Hold Shift, Space or Enter to see the score panel. Closing selects the last displayed item.
-The inventory screen has exact original navigation and pixel comparisons. Item use, pickup/drop,
-menu sounds and exact menu entry/exit timing remain unfinished.
-
-This is not a complete game. Running jumps, remaining airborne/ledge variants, compound roll exits, combat, other actors, dynamic geometry,
-gameplay sound, later cinematics, saves and the remaining menu modes are unfinished. Unsupported controls/transitions
-report errors. The development clock has measured room-change discrepancies; full original
-scheduling is not accepted yet. One alternate sprite encoding also remains unresolved.
-
-The scene now owns reversible terrain edits independently of immutable level content.
-Overlapping edits, restoration and history exhaustion match original routine comparisons.
-Rolling now uses material-specific clearance to continue through low passages.
-Rolling and forward-jump wall collisions now play the backward fall and get-up sequence,
-with unchanged health in the verified cases. Crouching can also start a roll into a low passage.
-Long falls now include fatal landings and the Continue/Abort screen. Continue restarts the
-level through its wake-up movie; Abort, Escape or countdown expiry plays the game-over movie
-and returns to the title. Checkpoint restoration, void-room falls and further airborne variants remain open.
-Gate/lift behavior and their triggers still need integration.
-
-The content library covers all 193 room backgrounds, 1,284 packed sprite frames, icons, palettes,
-collision streams, object graphics banks and composed object frames. The latter match 4,964
-original drawing cases; object behaviors and scene integration are still unfinished.
-Imported motion steps match 59,964 original routine executions and use
-opaque art references in an independent playback API. Without content, the template's moving
-ball remains a platform smoke fixture.
-
-Build with Zig 0.17.0 and SDL2 2.32.4 on Linux. `zig build`, `zig build test`, `zig build smoke`,
-`zig build verify`, `zig build web` and `zig build web-check` are the foundation checks.
-`web-check` also needs Node.js. Windows is cross-built with
-`zig build -Dtarget=x86_64-windows-gnu`; its SDL2 dependency is pinned and built from source.
+The title preview supports navigation, Skill, Info and Quit. It has been exercised through
+actual SDL keyboard events and presented frames. It is silent; title timing, fades, music and
+the rotoscoped introduction are not implemented or certified pixel-perfect. Start, passwords,
+gameplay and Continue imports remain disabled pending floppy qualification. Earlier CD
+comparisons do not establish fidelity to this edition.
 
 ```sh
-zig build
-zig-out/bin/flashbackz-sdl "../Flashback CD.bin"
-zig-out/bin/flashbackz-sdl /path/to/flashback.iso
-zig-out/bin/flashbackz-sdl --scene jungle "../Flashback CD.bin"
-zig-out/bin/flashbackz-agent --frames 2 /path/to/flashback.iso --saves /tmp/flashback/saves
-zig-out/bin/flashbackz-agent --scene jungle --frames 180 --key-down 75:left --key-up 85:left /path/to/flashback.iso
+zig build --prefix /tmp/flashback/modern/out --cache-dir /tmp/flashback/modern/cache
+/tmp/flashback/modern/out/bin/flashbackz-sdl --scene menu ../Flashback.ima
+/tmp/flashback/modern/out/bin/flashbackz-agent --scene menu --frames 120 ../Flashback.ima
 ```
 
-Images are opened read-only and accessed by ranges, with no external extraction program or full
-image buffering. Use the BIN itself for the supplied raw track; CUE descriptors are not yet input
-paths. Asset lookup follows DOS case-insensitive names and removes ISO version suffixes.
+Images are opened read-only. The bounded FAT12 reader validates geometry, matching FAT copies,
+cluster chains and file sizes. It imports into owned assets, limited to 32 MiB in total. ABA
+archives validate extents, names, expansion sizes and compression checksums. No external
+extractor or emulator is used by the game. Supplied content never enters version control.
 
-The game will use the port template's Zig/platform foundation, with Linux/SDL, a deterministic
-headless host, Windows/SDL and WebAssembly sharing one game implementation. Its engine will
-describe game concepts with typed state and named content, independently of the DOS program's
-memory and control flow. Exact original behavior is the acceptance criterion from the outset.
+Build with Zig 0.17.0 and SDL2 2.32.4 on Linux. Foundation checks are `zig build test smoke
+verify web web-check` with scratch prefix/cache as above; `web-check` also needs Node.js.
+Windows is cross-built with `zig build -Dtarget=x86_64-windows-gnu`, using pinned SDL2 sources.
+Without content, the template smoke fixture remains available for platform testing.
 
-The user clarified on 2026-10-03 that the implementation must not be tethered to the original
-game code. Architecture, state models, algorithms, module boundaries and APIs are designed for
-readability and extensibility. Merely renaming a translation is insufficient. Original layouts
-remain in importers and research; fidelity tests compare observable outcomes through separate
-observers. Adding content or behavior must work through coherent systems and named definitions.
-Maintainability is an independent acceptance gate, even when fidelity comparisons pass.
+Independent scene, movement, terrain, inventory and rendering systems are retained for
+requalification. The modern engine must be readable and extensible, independent of the DOS
+program's architecture. Exact behavior, pixels, timing and audio are separate acceptance
+requirements. Linux, Windows and WebAssembly share the simulation; network play is excluded.
 
-The reference, format maps, tools and measurements live in `../flashback-re`. Any direct
-reconstruction lives in `../flashback-remaster`. Original game content is supplied by the user
-and kept out of this repository. Network play is out of scope.
-
-See [PLAN.md](PLAN.md) and [DESIGN.md](DESIGN.md). The initial architecture defines independent
-scene, world, content, rendering and audio boundaries. Original timings and gameplay rules are
-established from measurements before their implementation.
+Research and historical measurements live in `../flashback-re`; optional direct reconstruction
+belongs in `../flashback-remaster`. See [PLAN.md](PLAN.md) and [DESIGN.md](DESIGN.md).

@@ -1,9 +1,8 @@
-//! Application lifecycle checks using generated artwork and a one-frame synthetic movie.
+//! Incomplete floppy resources fail explicitly; menu preview remains independently usable.
 const std = @import("std");
 const game = @import("flashbackz");
-const AgentBackend = @import("backend.zig").AgentBackend;
 
-test "movies finish and close audio, and Start needs a new press to skip" {
+test "floppy menu preview cannot silently skip missing introduction or enter CD gameplay" {
     const allocator = std.testing.allocator;
     var source = game.memory.MemoryAssetSource.init(allocator);
     defer source.deinit();
@@ -14,43 +13,19 @@ test "movies finish and close audio, and Start needs a new press to skip" {
     const font: [3360]u8 = @splat(0);
     try source.add("DATA/MENU1.MAP", pixels);
     try source.add("DATA/MENU1.PAL", &palette);
+    try source.add("DATA/MENU3.MAP", pixels);
+    try source.add("DATA/MENU3.PAL", &palette);
     try source.add("DATA/FB_TXT.FNT", &font);
-    const seq = game.content.sequence;
-    const movie = try allocator.alloc(u8, 102 * seq.packet_size);
-    defer allocator.free(movie);
-    @memset(movie, 0);
-    for (1..102) |packet| movie[packet * seq.packet_size + 4] = 255;
-    const last = movie[101 * seq.packet_size ..];
-    std.mem.writeInt(u16, last[0..2], 16, .little);
-    for (0..seq.samples_per_frame) |i| std.mem.writeInt(i16, last[16 + i * 2 ..][0..2], -1234, .big);
-    try source.add("DATA/INTRO.SEQ", movie);
-    try source.add("DATA/WAKEUP.SEQ", movie);
-    var backend = AgentBackend.init(allocator, .{});
-    defer backend.deinit();
-    backend.audio.record = true;
-    var platform = backend.asPlatform();
-    _ = try platform.start();
-    var front = game.front_end.Scene.init(allocator, source.assetSource(), (try game.content.menu_artwork.load(allocator, source.assetSource())).?);
-    defer front.deinit();
-    try front.intro();
-    try front.update(&platform);
-    try std.testing.expectEqual(game.front_end.Stage.intro, front.stage);
-    try std.testing.expectEqual(@as(usize, seq.samples_per_frame), backend.audio.pcm.items.len);
-    for (backend.audio.pcm.items) |sample| try std.testing.expectEqual(@as(i16, -1234), sample);
-    backend.advance(seq.frame_ns - 1);
-    try front.update(&platform);
-    try std.testing.expectEqual(game.front_end.Stage.intro, front.stage);
-    backend.advance(1);
-    try front.update(&platform);
-    try std.testing.expectEqual(game.front_end.Stage.menu, front.stage);
-    try std.testing.expect(!backend.audio.open);
-    try front.event(.{ .time_ns = backend.clock_ns, .payload = .{ .key_down = .{ .key = .enter } } });
-    try front.event(.{ .time_ns = backend.clock_ns, .payload = .{ .key_down = .{ .key = .enter, .repeat = true } } });
-    try front.update(&platform);
-    try std.testing.expectEqual(game.front_end.Stage.wakeup, front.stage);
-    try front.event(.{ .time_ns = backend.clock_ns, .payload = .{ .key_up = .{ .key = .enter } } });
-    try front.event(.{ .time_ns = backend.clock_ns, .payload = .{ .key_down = .{ .key = .enter } } });
-    try front.update(&platform);
-    try std.testing.expectEqual(game.front_end.Stage.ready, front.stage);
-    try std.testing.expect(!backend.audio.open);
+    try std.testing.expectError(error.MissingFloppyIntroduction, game.Game.init(allocator, source.assetSource(), null));
+    var preview = try game.Game.initWithEntry(allocator, source.assetSource(), null, .menu_development);
+    defer preview.deinit();
+    const front = &preview.scene.menu;
+    try front.event(.{ .time_ns = 0, .payload = .{ .key_down = .{ .key = .down } } });
+    try front.event(.{ .time_ns = 1, .payload = .{ .key_down = .{ .key = .enter } } });
+    try std.testing.expectEqual(game.front_end.View.skill, front.view);
+    try front.event(.{ .time_ns = 2, .payload = .{ .key_down = .{ .key = .up } } });
+    try front.event(.{ .time_ns = 3, .payload = .{ .key_down = .{ .key = .enter } } });
+    try std.testing.expectEqual(game.settings.Difficulty.easy, front.difficulty);
+    try std.testing.expectEqual(game.front_end.View.main, front.view);
+    try std.testing.expectError(error.FloppyGameplayNotYetQualified, front.start(null));
 }

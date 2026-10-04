@@ -27,11 +27,6 @@ fn word(bytes: []const u8, at: usize) !u16 {
     if (at > bytes.len or bytes.len - at < 2) return error.TruncatedPicture;
     return std.mem.readInt(u16, bytes[at..][0..2], .big);
 }
-fn label(bytes: []const u8, offset: usize) ![]const u8 {
-    if (offset >= bytes.len) return error.InvalidLabel;
-    const end = std.mem.indexOfScalar(u8, bytes[offset..@min(bytes.len, offset + 80)], 0) orelse return error.InvalidLabel;
-    return bytes[offset..][0..end];
-}
 fn shape(pixels: []u8, pol: []const u8, index: u16, budget: *usize) !void {
     if (index & 0xf800 != 0) return error.UnsupportedPictureTransform;
     var at = @as(usize, try word(pol, 14)) + try word(pol, @as(usize, try word(pol, 2)) + @as(usize, index) * 2);
@@ -126,29 +121,8 @@ pub fn picture(cmd: []const u8, pol: []const u8, pixels: []u8, colors: *palette.
     }
     return error.MissingPictureEnd;
 }
-pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Assets {
-    var cmd = try source.readAll("DATA/SCORE.CMD", 65536);
-    defer cmd.deinit();
-    var pol = try source.readAll("DATA/SCORE.POL", 65536);
-    defer pol.deinit();
-    var fnt = try source.readAll("DATA/FB_TXT.FNT", 16384);
-    defer fnt.deinit();
-    var executable = try source.readAll("GAME_E.OVL", 1024 * 1024);
-    errdefer executable.deinit();
-    var hash: [32]u8 = undefined;
-    std.crypto.hash.sha2.Sha256.hash(executable.bytes, &hash, .{});
-    var expected: [32]u8 = undefined;
-    _ = try std.fmt.hexToBytes(&expected, "bf6cef92ae8606180b907c4f901734470699b9bb999fed23a744e27eb19644ea");
-    if (!std.mem.eql(u8, &hash, &expected)) return error.UnsupportedGameEdition;
-    const pixels = try allocator.alloc(u8, 256 * 224);
-    errdefer allocator.free(pixels);
-    var colors: palette.Palette = @splat(.{ .r = 0, .g = 0, .b = 0 });
-    try picture(cmd.bytes, pol.bytes, pixels, &colors);
-    const data: usize = 5632 + 0x1a680;
-    @memcpy(colors[0xe0..0xf0], &(try palette.decodeActorBank(executable.bytes[data + 0xfa1 ..][0..32])));
-    var font = try font_mod.decode(allocator, fnt.bytes);
-    errdefer font.deinit();
-    return .{ .allocator = allocator, .pixels = pixels, .colors = colors, .font = font, .executable = executable, .title = try label(executable.bytes, data + 0x25e7), .time = try label(executable.bytes, data + 0x2605), .retry = try label(executable.bytes, data + 0x260d), .abort = try label(executable.bytes, data + 0x2616), .score = try label(executable.bytes, data + 0x261c) };
+pub fn load(_: std.mem.Allocator, _: platform.AssetSource) !Assets {
+    return error.FloppyInterfaceNotYetQualified;
 }
 
 test "static picture import validates resources and resolves a synthetic point" {

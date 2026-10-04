@@ -1,4 +1,4 @@
-//! Normal application entry: original CD intro, title menu, wake-up movie and game entry.
+//! Floppy title preview. Cinematic and game entry require new edition qualification.
 //! Scene transitions own their resources; inputs are never forwarded into a new scene.
 const std = @import("std");
 const platform = @import("../platform.zig");
@@ -6,9 +6,8 @@ const menu_art = @import("../content/menu_artwork.zig");
 const palette = @import("../content/palette.zig");
 const text = @import("../render/text.zig");
 const menu_mod = @import("menu.zig");
-const cinematic = @import("cinematic.zig");
 pub const Difficulty = @import("../settings.zig").Difficulty;
-pub const Stage = enum { intro, menu, wakeup, game_over, ready, quit };
+pub const Stage = enum { menu, ready, quit };
 pub const View = enum { main, skill, info, password, unavailable };
 
 pub const Scene = struct {
@@ -17,12 +16,10 @@ pub const Scene = struct {
     assets: menu_art.Assets,
     page_assets: ?menu_art.Assets = null,
     menu: menu_mod.Menu = .{},
-    player: ?cinematic.Player = null,
     stage: Stage = .menu,
     view: View = .main,
     difficulty: Difficulty = .normal,
     pending_difficulty: Difficulty = .normal,
-    skip_requested: bool = false,
     activation_key: ?platform.Key = null,
     password: [6]u8 = @splat(0),
     password_length: usize = 0,
@@ -33,48 +30,36 @@ pub const Scene = struct {
     }
 
     pub fn intro(self: *Scene) !void {
-        self.player = try cinematic.Player.open(self.allocator, self.source, "DATA/INTRO.SEQ");
-        self.stage = .intro;
+        var commands = self.source.readAll("DATA/INTRO1.CMD", 65536) catch |err| switch (err) {
+            error.NotFound => return error.MissingFloppyIntroduction,
+            else => return err,
+        };
+        defer commands.deinit();
+        return error.FloppyCinematicsNotYetImplemented;
     }
 
     pub fn deinit(self: *Scene) void {
-        if (self.player) |*player| player.deinit();
         if (self.page_assets) |*assets| assets.deinit();
         self.assets.deinit();
         self.* = undefined;
     }
 
-    pub fn stopAudio(self: *Scene, p: *platform.Platform) void {
-        if (self.player) |*player| player.stopAudio(p);
-    }
+    pub fn stopAudio(_: *Scene, _: *platform.Platform) void {}
 
     pub fn stateHash(self: *const Scene) u64 {
         var hash = std.hash.Wyhash.init(0);
         hash.update(&.{ @backingInt(self.stage), @backingInt(self.view), @backingInt(self.menu.selected), @backingInt(self.difficulty), @backingInt(self.pending_difficulty) });
         hash.update(self.password[0..self.password_length]);
-        if (self.player) |*player| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, player.stream.frames)));
         return hash.final();
     }
 
-    pub fn resolution(self: *const Scene) platform.Size {
-        return if (self.player != null) .{ .width = 320, .height = 200 } else .{ .width = 256, .height = 224 };
+    pub fn resolution(_: *const Scene) platform.Size {
+        return .{ .width = 256, .height = 224 };
     }
 
-    pub fn update(self: *Scene, p: *platform.Platform) !void {
-        if (self.player) |*player| {
-            if (self.skip_requested or try player.update(p)) {
-                player.stopAudio(p);
-                player.deinit();
-                self.player = null;
-                self.skip_requested = false;
-                self.activation_key = null;
-                self.stage = if (self.stage == .intro or self.stage == .game_over) .menu else .ready;
-            }
-        }
-    }
-
-    pub fn needsCatchup(self: *const Scene, now: u64) bool {
-        return if (self.player) |*player| player.needsCatchup(now) else false;
+    pub fn update(_: *Scene, _: *platform.Platform) !void {}
+    pub fn needsCatchup(_: *const Scene, _: u64) bool {
+        return false;
     }
 
     fn show(self: *Scene, view: View, picture: []const u8) !void {
@@ -91,16 +76,12 @@ pub const Scene = struct {
         self.menu.selected = .start;
     }
 
-    pub fn start(self: *Scene, key: ?platform.Key) !void {
-        self.player = try cinematic.Player.open(self.allocator, self.source, "DATA/WAKEUP.SEQ");
-        self.stage = .wakeup;
-        self.activation_key = key;
+    pub fn start(_: *Scene, _: ?platform.Key) !void {
+        return error.FloppyGameplayNotYetQualified;
     }
 
-    pub fn gameOver(self: *Scene, key: ?platform.Key) !void {
-        self.player = try cinematic.Player.open(self.allocator, self.source, "DATA/GAMEOVER.SEQ");
-        self.stage = .game_over;
-        self.activation_key = key;
+    pub fn gameOver(_: *Scene, _: ?platform.Key) !void {
+        return error.FloppyCinematicsNotYetImplemented;
     }
 
     pub fn event(self: *Scene, input: platform.Event) !void {
@@ -117,10 +98,6 @@ pub const Scene = struct {
         const press = input.payload.key_down;
         const key = press.key;
         const confirm = key == .enter or key == .space or key == .left_shift or key == .right_shift;
-        if (self.player != null) {
-            if (!press.repeat and self.activation_key == null and (confirm or key == .tab or key == .escape)) self.skip_requested = true;
-            return;
-        }
         if (self.stage != .menu) return;
         switch (self.view) {
             .main => {
@@ -176,22 +153,11 @@ pub const Scene = struct {
         }
     }
 
-    fn submitPassword(self: *Scene, key: platform.Key) !void {
-        if (try @import("../content/passwords.zig").lookup(self.source, self.password[0..self.password_length])) |destination| {
-            if (destination.level == 0) {
-                self.difficulty = destination.difficulty;
-                try self.start(key);
-            } else {
-                self.notice = "THIS LEVEL IS NOT AVAILABLE YET";
-                self.view = .unavailable;
-            }
-            return;
-        }
-        self.mainMenu();
+    fn submitPassword(_: *Scene, _: platform.Key) !void {
+        return error.FloppyPasswordsNotYetQualified;
     }
 
     pub fn draw(self: *const Scene, indices: []u8, rgba: []u8) !void {
-        if (self.player) |*player| return player.draw(indices, rgba);
         if (self.view == .main) return self.menu.draw(self.assets.artwork(), .{}, indices, rgba);
         const assets = &(self.page_assets orelse return error.MissingMenuPage);
         @memcpy(indices, assets.background.pixels);
