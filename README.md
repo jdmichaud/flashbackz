@@ -6,21 +6,26 @@ images and extracted floppy directories, expands ABA installation archives, and 
 original title artwork. CD image loading, SEQ movies and CD executable metadata imports
 have been removed.
 
-The supplied `Flashback.ima` is an incomplete installation disk: 13 files and 31 archived
-resources. It contains the title artwork but lacks `INTRO1.CMD/POL`, `INTRO2.CMD/POL`, music
-resources and essential gameplay files. The remaining floppy disks or a complete installed
-copy are required. Normal startup reports the missing introduction explicitly.
+The supplied `disk1.img` and `disk2.img` form the complete English floppy set. The original
+installer completes successfully, and the original introduction and English menu run. Disk 1
+is identical to the now-removed `Flashback.ima`. The native host currently accepts one image
+or an extracted directory; combining both images and converting the installer’s level files
+are the next import steps.
+
+Code-wheel protection is excluded by the user's instruction. Modern Start will proceed
+directly to the game opening sequence.
 
 The title preview supports navigation, Skill, Info and Quit. It has been exercised through
-actual SDL keyboard events and presented frames. It is silent; title timing, fades, music and
-the rotoscoped introduction are not implemented or certified pixel-perfect. Start, passwords,
+actual SDL keyboard events and presented frames. The stable title checkpoint matches the original
+English executable exactly. The preview is silent; title timing, fades, music and the
+rotoscoped introduction remain unimplemented or unqualified. Start, passwords,
 gameplay and Continue imports remain disabled pending floppy qualification. Earlier CD
 comparisons do not establish fidelity to this edition.
 
 ```sh
 zig build --prefix /tmp/flashback/modern/out --cache-dir /tmp/flashback/modern/cache
-/tmp/flashback/modern/out/bin/flashbackz-sdl --scene menu ../Flashback.ima
-/tmp/flashback/modern/out/bin/flashbackz-agent --scene menu --frames 120 ../Flashback.ima
+/tmp/flashback/modern/out/bin/flashbackz-sdl --scene menu ../disk1.img
+/tmp/flashback/modern/out/bin/flashbackz-agent --scene menu --frames 120 ../disk1.img
 ```
 
 Images are opened read-only. The bounded FAT12 reader validates geometry, matching FAT copies,

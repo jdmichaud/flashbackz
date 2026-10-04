@@ -8,7 +8,8 @@ The reference is the complete English pair supplied on 2026-10-04:
 and `disk2.img` SHA-256 `ed9b9a5bef0b42d5c394d9b715f27b42edc388d17f243b12ae52f9d3c2e0f9b2`.
 Disk 1 is identical to the now-removed `Flashback.ima`. The Italian images previously supplied
 under these filenames were rejected by the user and are not the reference. Earlier completed
-CD gates below are historical and do not certify the floppy edition. The English installer
+CD gates below are historical and do not certify the floppy edition. Code-wheel protection
+is excluded by explicit user instruction (2026-10-04); it is not a fidelity gate. The English installer
 completes successfully; original startup reaches the code-wheel protection prompt.
 
 - [x] Inventory FAT12 files and ABA archives; identify missing installation media, record

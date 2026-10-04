@@ -36,3 +36,6 @@ Rules:
   to the original code structure fails acceptance, even if every fidelity test passes.
 - Once DESIGN.md is established, changes require explicit user approval. No design is approved
   merely by copying a template. Do not ask again for decisions already authorized in the session.
+
+- Original code-wheel/copy protection is explicitly excluded by the user (2026-10-04).
+  Do not port its prompts or checks; normal Start proceeds to the game opening sequence.
