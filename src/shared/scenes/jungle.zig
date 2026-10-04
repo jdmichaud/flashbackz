@@ -113,6 +113,10 @@ pub const Scene = struct {
     props: props_mod.World,
     operated_controls: @import("../operated_controls.zig").World,
     hazards: @import("../electrical_hazards.zig").World,
+    detectors: @import("../detectors.zig").World,
+    ceiling_guns: @import("../ceiling_guns.zig").World,
+    ceiling_fire: @import("../weapon_fire.zig").World,
+    sensed_contacts: []@import("../contacts.zig").Participant,
     gunmen: @import("../actors/gunman.zig").World,
     robots: @import("../actors/ground_robot.zig").World,
     distractions: []@import("../contacts.zig").Footprint,
@@ -169,6 +173,15 @@ pub const Scene = struct {
         errdefer robots.deinit();
         var enemy_fire = try @import("../weapon_fire.zig").World.init(allocator, pack.gunmen.weapons.len);
         errdefer enemy_fire.deinit();
+        const contact_capacity = pack.gunmen.definitions.len + pack.robots.definitions.len + pack.world_props.definitions.len + 1;
+        const sensed_contacts = try allocator.alloc(@import("../contacts.zig").Participant, contact_capacity);
+        errdefer allocator.free(sensed_contacts);
+        var detectors = try @import("../detectors.zig").World.init(allocator, pack.detectors.definitions, pack.detectors.profiles, contact_capacity);
+        errdefer detectors.deinit();
+        var ceiling_guns = try @import("../ceiling_guns.zig").World.init(allocator, pack.ceiling_guns.definitions, pack.ceiling_guns.profiles);
+        errdefer ceiling_guns.deinit();
+        var ceiling_fire = try @import("../weapon_fire.zig").World.init(allocator, pack.ceiling_guns.weapons.len);
+        errdefer ceiling_fire.deinit();
         const combat_targets = try allocator.alloc(@import("../combat.zig").Target, pack.gunmen.definitions.len + pack.robots.definitions.len + 1);
         errdefer allocator.free(combat_targets);
         const distractions = try allocator.alloc(@import("../contacts.zig").Footprint, pack.world_props.definitions.len);
@@ -187,6 +200,10 @@ pub const Scene = struct {
             .props = props,
             .operated_controls = operated,
             .hazards = hazards,
+            .detectors = detectors,
+            .ceiling_guns = ceiling_guns,
+            .ceiling_fire = ceiling_fire,
+            .sensed_contacts = sensed_contacts,
             .gunmen = gunmen,
             .robots = robots,
             .distractions = distractions,
@@ -236,6 +253,10 @@ pub const Scene = struct {
         self.props.deinit();
         self.operated_controls.deinit();
         self.hazards.deinit();
+        self.detectors.deinit();
+        self.ceiling_guns.deinit();
+        self.ceiling_fire.deinit();
+        self.allocator.free(self.sensed_contacts);
         self.gunmen.deinit();
         self.robots.deinit();
         self.enemy_fire.deinit();
@@ -345,6 +366,9 @@ pub const Scene = struct {
             };
             self.sound_event_count = 0;
             self.hazards.beginStep();
+            self.detectors.beginStep();
+            self.ceiling_guns.beginStep();
+            self.ceiling_fire.beginStep();
             self.gunmen.prepare();
             self.robots.prepare();
             self.enemy_fire.beginStep();
@@ -377,6 +401,30 @@ pub const Scene = struct {
             }
             try self.props.advance(self.terrain.map(), &self.equipment, try self.controller.pressesFloorSwitches(self.content.controllerClips()), self.controller.pickup_requested);
             try self.operated_controls.advance(self.content.controls.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested);
+            var sensed_count: usize = 1;
+            self.sensed_contacts[0] = .{ .footprint = self.props.player_contact, .kind = .player, .active = true };
+            for (self.gunmen.actors) |actor| {
+                self.sensed_contacts[sensed_count] = .{ .footprint = actor.contact, .kind = .enemy, .active = actor.active and !actor.lost };
+                sensed_count += 1;
+            }
+            for (self.robots.actors) |actor| {
+                self.sensed_contacts[sensed_count] = .{ .footprint = actor.contact, .kind = .enemy, .active = actor.active and !actor.removed };
+                sensed_count += 1;
+            }
+            for (self.props.objects, self.props.definitions, 0..) |object, definition, index| {
+                if (definition.behavior != .collectible) continue;
+                self.sensed_contacts[sensed_count] = .{ .footprint = object.contact, .kind = .item, .active = object.active and object.contact_present and try self.props.visible(index, &self.equipment) };
+                sensed_count += 1;
+            }
+            self.detectors.route(self.content.detectors.bindings, self.props.pressed_circuits[0..self.props.pressed_count]);
+            self.detectors.route(self.content.detectors.bindings, self.operated_controls.pulses[0..self.operated_controls.pulse_count]);
+            try self.detectors.advance(self.content.detectors.definitions, self.content.detectors.profiles, self.content.detectors.bindings, self.terrain.map(), .{ .room = self.environment.room, .position = self.pose.position }, self.sensed_contacts[0..sensed_count]);
+            self.ceiling_guns.route(self.content.ceiling_guns.bindings, self.props.pressed_circuits[0..self.props.pressed_count]);
+            self.ceiling_guns.route(self.content.ceiling_guns.bindings, self.operated_controls.pulses[0..self.operated_controls.pulse_count]);
+            self.ceiling_guns.route(self.content.ceiling_guns.bindings, self.detectors.pulses[0..self.detectors.pulse_count]);
+            try self.ceiling_guns.advance(self.content.ceiling_guns.definitions, self.content.ceiling_guns.profiles, self.terrain.map(), self.environment.room);
+            for (self.ceiling_guns.instances, self.content.ceiling_guns.definitions) |instance, definition| if (instance.fire) self.ceiling_fire.fire(definition.weapon, .{ .pose = instance.pose, .room = definition.room, .height = .standing }, definition.shot_next_step);
+            self.hazards.route(self.content.hazards.bindings, self.detectors.pulses[0..self.detectors.pulse_count]);
             self.hazards.route(self.content.hazards.bindings, self.props.pressed_circuits[0..self.props.pressed_count]);
             self.hazards.route(self.content.hazards.bindings, self.operated_controls.pulses[0..self.operated_controls.pulse_count]);
             try self.hazards.advance(self.content.hazards.definitions, self.terrain.map(), self.environment.room, self.props.player_contact);
@@ -406,12 +454,19 @@ pub const Scene = struct {
                 if (channel.state.hit_requested) |hit| self.deliverHit(hit);
                 if (channel.state.sound_requested) |sound| try self.emitSound(sound, channel.state.effect.?.room);
             }
+            try self.ceiling_fire.advance(self.content.ceiling_guns.weapons, self.terrain.view(), self.combat_targets);
+            for (self.ceiling_fire.channels) |channel| {
+                if (channel.state.hit_requested) |hit| self.deliverHit(hit);
+                if (channel.state.sound_requested) |sound| try self.emitSound(sound, channel.state.effect.?.room);
+            }
             self.casings.advance(self.content.casing_definition, self.controller.shot_requested, self.pose, self.environment.room, &self.random);
             try self.surfaces.advance(self.content.surfaces, self.content.surfaceClips(), self.terrain.map(), self.props.player_contact, try self.controller.disturbsSurface(self.content.controllerClips()), &self.random);
             self.last_ambient = if (self.content.forest_enabled) self.ambience.advance(.{ .quiet_steps = self.content.forest_quiet_steps, .calls = self.content.forest_calls }, self.environment.room, &self.random) else null;
             try self.robots.advance(self.content.robots.definitions, self.content.robots.profiles, self.terrain.view(), .{ .room = self.environment.room, .position = self.pose.position }, self.combat_targets, first_robot);
             for (self.robots.outgoing[0..self.robots.outgoing_count]) |hit| self.deliverHit(hit);
             for (self.robots.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
+            for (self.detectors.instances, self.content.detectors.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.room);
+            for (self.ceiling_guns.instances, self.content.ceiling_guns.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.room);
             for (self.hazards.instances, self.content.hazards.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (self.operated_controls.instances, self.content.controls.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (self.props.objects) |object| if (object.sound_requested) |sound| try self.emitSound(sound, object.room);
@@ -488,6 +543,8 @@ pub const Scene = struct {
         try self.drawHazards(.behind_player, room, indices);
         try self.drawGunmen(room, indices, true);
         try self.drawRobots(room, indices, true);
+        try self.drawStationary(self.detectors.instances, self.content.detectors.definitions, room, indices, true);
+        try self.drawStationary(self.ceiling_guns.instances, self.content.ceiling_guns.definitions, room, indices, true);
         try self.drawShot(room, indices, true);
         try self.drawCasing(room, indices, true);
         try self.drawSurfaces(room, indices, true);
@@ -498,6 +555,8 @@ pub const Scene = struct {
         try self.drawHazards(.in_front_of_player, room, indices);
         try self.drawGunmen(room, indices, false);
         try self.drawRobots(room, indices, false);
+        try self.drawStationary(self.detectors.instances, self.content.detectors.definitions, room, indices, false);
+        try self.drawStationary(self.ceiling_guns.instances, self.content.ceiling_guns.definitions, room, indices, false);
         try self.drawShot(room, indices, false);
         try self.drawCasing(room, indices, false);
         try self.drawSurfaces(room, indices, false);
@@ -537,6 +596,9 @@ pub const Scene = struct {
     fn drawShot(self: *const Scene, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8, behind_player: bool) !void {
         const definition = self.content.pistolDefinition();
         for (self.enemy_fire.channels, self.content.gunmen.weapons) |channel, weapon| if (weapon.behind_player == behind_player) {
+            if (channel.state.effect) |effect| if (effect.room == self.environment.room) try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(effect.pose.visual.id), @as(i32, effect.pose.position.x) + 8, @as(i32, effect.pose.position.y) + 2, .{ .palette_bank = weapon.palette_bank, .facing = if (effect.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        };
+        for (self.ceiling_fire.channels, self.content.ceiling_guns.weapons) |channel, weapon| if (weapon.behind_player == behind_player) {
             if (channel.state.effect) |effect| if (effect.room == self.environment.room) try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(effect.pose.visual.id), @as(i32, effect.pose.position.x) + 8, @as(i32, effect.pose.position.y) + 2, .{ .palette_bank = weapon.palette_bank, .facing = if (effect.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
         };
         if (definition.behind_player != behind_player) return;
@@ -597,6 +659,13 @@ pub const Scene = struct {
         }
     }
 
+    fn drawStationary(self: *const Scene, instances: anytype, definitions: anytype, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8, behind_player: bool) !void {
+        for (instances, definitions) |instance, definition| {
+            if (definition.room != self.environment.room or definition.behind_player != behind_player) continue;
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(instance.pose.visual.id), @as(i32, instance.pose.position.x) + 8, @as(i32, instance.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (instance.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        }
+    }
+
     pub fn stateHash(self: *const Scene) u64 {
         var hash = std.hash.Wyhash.init(0);
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(i16, self.health)));
@@ -616,6 +685,9 @@ pub const Scene = struct {
         self.props.hashInto(&hash);
         self.operated_controls.hashInto(&hash);
         self.hazards.hashInto(&hash);
+        self.detectors.hashInto(&hash);
+        self.ceiling_guns.hashInto(&hash);
+        self.ceiling_fire.hashInto(&hash);
         self.gunmen.hashInto(&hash);
         self.robots.hashInto(&hash);
         hash.update(&.{if (self.pending_movie) |movie| 1 + @as(u8, @backingInt(movie)) else 0});

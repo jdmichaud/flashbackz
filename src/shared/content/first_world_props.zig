@@ -74,7 +74,8 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
     for (0..table.count) |i| {
         const record = try table.record(@intCast(i));
         if (record.room >= room_ids.len or record.minimum_difficulty > @backingInt(difficulty)) continue;
-        if (record.kind != 3 and record.kind != 7) continue;
+        const pressure_spec = @import("pressure_controls.zig").recognize(try @import("rule_table.zig").group(rules, record.rule_group));
+        if (record.kind != 3 and pressure_spec == null) continue;
         const rule = try firstRule(rules, record.rule_group, record.initial_state);
         var behavior: @FieldType(world.Definition, "behavior") = undefined;
         if (record.kind == 3) {
@@ -120,7 +121,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
                 try items.append(allocator, item);
             }
         } else {
-            const pressure = @import("pressure_controls.zig").recognize(try @import("rule_table.zig").group(rules, record.rule_group)) orelse continue;
+            const pressure = pressure_spec orelse continue;
             if (record.initial_state != pressure.rest) return error.UnsupportedPressureStart;
             const target = record.parameters[pressure.target_parameter];
             if (target < 0 or target >= table.count) return error.InvalidSwitchConnection;

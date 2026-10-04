@@ -19,6 +19,7 @@ pub fn load(allocator: std.mem.Allocator, record: @import("placement.zig").Recor
     var impacts: [2]motion.Clip = undefined;
     var forward: [2]i16 = undefined;
     var down: [2]i16 = undefined;
+    var retrigger: ?bool = null;
     for (0..2) |height| {
         const message: i16 = @intCast(40 + height);
         const start: ?u16 = for (0..group.count()) |i| {
@@ -38,9 +39,15 @@ pub fn load(allocator: std.mem.Allocator, record: @import("placement.zig").Recor
             const rule = group.at(i);
             if (rule.source == start.? and rule.conditions[1].code == 95) break rule;
         } else return error.UnsupportedEnemyWeaponImpact;
+        const accepts = for (0..group.count()) |i| {
+            const rule = group.at(i);
+            if (rule.source == impact.target and rule.conditions[0].code == 34 and (rule.conditions[0].argument == 40 or rule.conditions[0].argument == 41)) break true;
+        } else false;
+        if (retrigger != null and retrigger.? != accepts) return error.UnsupportedMixedImpactRetrigger;
+        retrigger = accepts;
         impacts[height] = try clip(allocator, animations, impact.target, owned, resolver);
         forward[height] = -@as(i16, impact.dx);
         down[height] = -@as(i16, impact.dy);
     }
-    return .{ .initial_phase = .flash, .ignition = flashes[0], .standing_flash = flashes[0], .crouched_flash = flashes[1], .standing_impact = impacts[0], .crouched_impact = impacts[1], .range_cells = @intCast(record.parameters[0]), .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .impact_forward = forward, .impact_down = down };
+    return .{ .initial_phase = .flash, .retrigger_impact = retrigger.?, .ignition = flashes[0], .standing_flash = flashes[0], .crouched_flash = flashes[1], .standing_impact = impacts[0], .crouched_impact = impacts[1], .range_cells = @intCast(record.parameters[0]), .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .impact_forward = forward, .impact_down = down };
 }

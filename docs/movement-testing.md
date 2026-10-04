@@ -97,3 +97,12 @@ and walks toward the landed stone. Both reactions use ordinary collectible perce
 The missing credit pickups and shortened item-detection range have been corrected;
 this is not a movement scripted specifically for the recording. Hold **Shift** beside
 loose credits to collect them into the existing purse and play the original pickup movie.
+
+### Ceiling laser guns and detectors
+
+The ceiling guns now deploy and fire from their original trigger connections. Some repeat
+after a pressure-plate activation; others fire a detector-controlled burst and retract, or
+fire on each signal. The paired jungle guns retain their different delays. These guns are
+not ordinary shootable enemies. Their beams use the shared damage and injury system.
+All eight original Normal-difficulty placements and their input links are imported. The
+jungle detector encounter and paired-plate firing were checked; later levels remain to play.

@@ -10,6 +10,7 @@ const shift = @import("actors/conrad_roll.zig").shiftForward;
 pub const Height = @import("pistol_casing.zig").Height;
 pub const Definition = struct {
     initial_phase: Phase = .ignition,
+    retrigger_impact: bool = true,
     impact_forward: [2]i16 = .{ 3, 2 },
     impact_down: [2]i16 = .{ 5, 5 },
     ignition: motion.Clip,
@@ -65,7 +66,9 @@ pub const State = struct {
     pub fn advanceWithTargets(self: *State, definition: Definition, shot: ?Height, pose: motion.Pose, room: geometry.RoomId, materials: terrain.View, targets: []const combat.Target) !void {
         self.sound_requested = null;
         self.hit_requested = null;
-        if (shot) |height| {
+        const accepts = if (self.effect) |effect| effect.phase == .impact and definition.retrigger_impact else true;
+        if (shot != null and accepts) {
+            const height = shot.?;
             self.shots_fired +%= 1;
             self.effect = .{ .pose = pose, .room = room, .height = height, .phase = definition.initial_phase };
         }
@@ -125,4 +128,31 @@ test "shot wall search is inclusive, bounded and resolves a neighboring room" {
     const pose: motion.Pose = .{ .position = .{ .x = 240, .y = 70 }, .facing = .right, .visual = .{ .id = @fromBackingInt(0) } };
     try std.testing.expect((try traceWall(view, id, pose, 2)) == null);
     try std.testing.expectEqualDeep(@as(?Hit, .{ .room = neighbor, .x = 32 }), try traceWall(view, id, pose, 3));
+}
+
+test "a shared emitter ignores new requests during an unfinished flash" {
+    const id: geometry.RoomId = @fromBackingInt(1);
+    const empty: [48]bool = @splat(false);
+    const rooms = [_]geometry.Room{.{ .id = id, .columns = 16, .rows = 3, .width = 256, .height = 72, .blocking = &empty, .edges = .{ .left = .blocked, .right = .blocked, .up = .blocked, .down = .blocked } }};
+    const materials: [48]terrain.Material = @splat(.empty);
+    const view: terrain.View = .{ .geometry = .{ .rooms = &rooms }, .materials = &materials };
+    const frames = [_]motion.Step{ .hold, .hold, .hold };
+    const clip: motion.Clip = .{ .steps = &frames };
+    var definition: Definition = .{ .initial_phase = .flash, .retrigger_impact = false, .ignition = clip, .standing_flash = clip, .crouched_flash = clip, .standing_impact = clip, .crouched_impact = clip, .range_cells = 1, .palette_bank = 0, .behind_player = false };
+    const first: motion.Pose = .{ .position = .{ .x = 64, .y = 70 }, .facing = .right, .visual = .{ .id = @fromBackingInt(0) } };
+    var second = first;
+    second.position.x = 160;
+    var state: State = .{};
+    try state.advance(definition, .standing, first, id, view);
+    try state.advance(definition, .standing, second, id, view);
+    try std.testing.expectEqual(@as(u64, 1), state.shots_fired);
+    try std.testing.expectEqual(first.position, state.effect.?.pose.position);
+    try std.testing.expectEqual(@as(usize, 2), state.effect.?.playback.next_step);
+    state.effect.?.phase = .impact;
+    try state.advance(definition, .standing, second, id, view);
+    try std.testing.expectEqual(@as(u64, 1), state.shots_fired);
+    definition.retrigger_impact = true;
+    try state.advance(definition, .standing, second, id, view);
+    try std.testing.expectEqual(@as(u64, 2), state.shots_fired);
+    try std.testing.expectEqual(second.position, state.effect.?.pose.position);
 }

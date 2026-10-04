@@ -45,3 +45,6 @@ pub const thrown_item = @import("thrown_item.zig");
 pub const gunmen = @import("gunmen.zig");
 
 pub const ground_robots = @import("ground_robots.zig");
+
+pub const detectors = @import("detectors.zig");
+pub const ceiling_guns = @import("ceiling_guns.zig");
