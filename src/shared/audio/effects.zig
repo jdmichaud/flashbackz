@@ -25,12 +25,17 @@ pub const Mixer = struct {
         }
         if (free) |index| self.voices[index] = .{ .sound = event.sound, .attenuation = event.attenuation };
     }
-    fn fill(self: *Mixer, bank: sounds.Bank) void {
+    /// Produce the next hardware-sized source block, before host resampling.
+    pub fn mixBlock(self: *Mixer, bank: sounds.Bank) *const [70]i8 {
         var first = true;
         @memset(&self.block, 0);
         for (&self.voices) |*slot| if (slot.*) |*voice| {
             const pcm = bank.samples[@backingInt(voice.sound)].pcm;
-            const count = @min(self.block.len, pcm.len - voice.cursor);
+            // The first source block starts with an odd encoded remainder. Its final
+            // byte pair is deferred; a sample shorter than a block therefore ends two
+            // samples early and the first voice holds its last decoded amplitude.
+            const available = pcm.len - voice.cursor -| @as(usize, if (voice.cursor == 0) 2 else 0);
+            const count = @min(self.block.len, available);
             const shift: u3 = @as(u3, voice.attenuation) * 2;
             for (pcm[voice.cursor..][0..count], self.block[0..count]) |sample, *target| {
                 const value = sample >> shift;
@@ -42,12 +47,13 @@ pub const Mixer = struct {
             if (pcm.len - voice.cursor <= 4) slot.* = null;
         };
         self.cursor = 0;
+        return &self.block;
     }
     pub fn render(self: *Mixer, bank: sounds.Bank, output: []i16, rate: u32) void {
         std.debug.assert(output.len % 2 == 0 and rate >= 8000);
         var i: usize = 0;
         while (i < output.len) : (i += 2) {
-            if (self.cursor == self.block.len) self.fill(bank);
+            if (self.cursor == self.block.len) _ = self.mixBlock(bank);
             const value: i16 = @as(i16, self.block[self.cursor]) * 256;
             output[i] = value;
             output[i + 1] = value;
@@ -57,7 +63,7 @@ pub const Mixer = struct {
             while (self.fraction >= period) {
                 self.fraction -= period;
                 self.cursor += 1;
-                if (self.cursor == self.block.len) self.fill(bank);
+                if (self.cursor == self.block.len) _ = self.mixBlock(bank);
             }
         }
     }
@@ -119,4 +125,16 @@ test "effects mixer restarts identical cues and preserves wrapping byte mixing" 
     mixer.render(bank, &output, 44100);
     try std.testing.expectEqual(@as(i16, -56 * 256), output[0]);
     try std.testing.expectEqual(output[0], output[1]);
+}
+
+test "a short initial effect holds the original decoder's final available amplitude" {
+    var pcm = [_]i8{ 117, 117, 118, 120, 123, -112 };
+    var samples = [_]sounds.Sample{.{ .pcm = &pcm }};
+    const bank: sounds.Bank = .{ .allocator = std.testing.allocator, .samples = &samples };
+    var mixer: Mixer = .{};
+    mixer.start(bank, .{ .sound = @fromBackingInt(0) });
+    const block = mixer.mixBlock(bank);
+    try std.testing.expectEqualSlices(i8, &.{ 117, 117, 118, 120 }, block[0..4]);
+    for (block[4..]) |value| try std.testing.expectEqual(@as(i8, 120), value);
+    try std.testing.expect(mixer.voices[0] == null);
 }
