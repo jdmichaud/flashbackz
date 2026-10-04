@@ -59,10 +59,10 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         const target = record.parameters[relay.target_parameter];
         if (target < 0 or target >= table.count) return error.InvalidControlConnection;
         const circuit = for (connections.items) |connection| {
-            if (connection.recipient == target and connection.message == relay.signal) break connection.circuit;
+            if (connection.sender == i and connection.recipient == target and connection.message == relay.signal) break connection.circuit;
         } else fresh: {
             const id: @import("../world_props.zig").CircuitId = @fromBackingInt(@as(u16, @intCast(connections.items.len)));
-            try connections.append(allocator, .{ .circuit = id, .recipient = @intCast(target), .message = relay.signal });
+            try connections.append(allocator, .{ .circuit = id, .sender = @intCast(i), .recipient = @intCast(target), .message = relay.signal });
             break :fresh id;
         };
         var pair: [2]motion.Clip = undefined;

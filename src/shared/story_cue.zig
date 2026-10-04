@@ -1,2 +1,2 @@
 //! Story events shared by item definitions, world interactions and scene presentation.
-pub const Cue = enum { holocube_pickup, holocube_recording };
+pub const Cue = enum { holocube_pickup, holocube_recording, disintegration };

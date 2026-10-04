@@ -317,21 +317,25 @@ pub const Game = struct {
         if (self.jungle()) |scene| {
             self.preferences = scene.settings;
             const now = p.nowNs();
-            if (self.story == null and scene.pending_movie != null and scene.needsCatchup(now)) {
-                scene.stopAudio(p);
-                self.story = try story_mod.Story.open(self.allocator, self.assets.?, scene.pending_movie.?, now, if (scene.input.use_held) .enter else if (scene.input.left_action) .left_shift else if (scene.input.right_action) .right_shift else null);
-                try scene.latchMovieInput();
+            if (self.story == null and scene.options == null and scene.dialog == null and scene.pending_movie != null and scene.needsCatchup(now)) {
+                const movie = scene.pending_movie.?;
                 scene.pending_movie = null;
+                if (try scene.latchMovieInput()) {
+                    scene.stopAudio(p);
+                    self.story = try story_mod.Story.open(self.allocator, self.assets.?, movie, now, if (scene.input.use_held) .enter else if (scene.input.left_action) .left_shift else if (scene.input.right_action) .right_shift else null);
+                }
             }
             if (self.story) |*story| {
                 story.music_enabled = self.preferences.music;
                 story.music.volume = self.preferences.volume;
                 if (try story.update(p)) {
+                    const defeated = story.kind == .disintegration;
                     const paused = now - story.started_ns;
                     story.stopAudio(p);
                     story.deinit();
                     try scene.resumeMovie(paused);
                     self.story = null;
+                    if (defeated) scene.defeated = true;
                 } else {
                     try self.present(p);
                     return .running;

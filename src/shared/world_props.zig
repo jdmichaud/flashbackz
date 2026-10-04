@@ -15,13 +15,14 @@ pub const Definition = struct {
     layer: Layer,
     behavior: union(enum) {
         collectible: struct { item: equipment.ItemHandle, idle: motion.Clip, pickup_movie: ?Movie = null },
-        floor_switch: struct { rest: motion.Clip, press: motion.Clip, circuit: CircuitId },
+        floor_switch: struct { rest: motion.Clip, press: motion.Clip, circuit: CircuitId, accepts_objects: bool = true, initially_active: bool = true, wake_on_contact: bool = true, sleep_after_press: bool = false },
     },
 };
 pub const Object = struct {
     pose: motion.Pose,
     playback: motion.Playback = .{},
     pressing: bool = false,
+    active: bool = true,
     contact_present: bool = false,
     sound_requested: ?motion.SoundId = null,
 };
@@ -49,7 +50,10 @@ pub const World = struct {
                 .frame => |frame| frame.visual,
                 .hold => return error.MissingPropVisual,
             };
-            object.* = .{ .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } } };
+            object.* = .{ .active = switch (definition.behavior) {
+                .floor_switch => |plate| plate.initially_active,
+                .collectible => true,
+            }, .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } } };
         }
         return .{ .allocator = allocator, .definitions = definitions, .objects = objects, .pressed_circuits = try allocator.alloc(CircuitId, definitions.len) };
     }
@@ -78,6 +82,14 @@ pub const World = struct {
                 if (try layout.overlaps(map, player, footprint)) self.pickup_candidate = definition.behavior.collectible.item;
             }
         }
+        for (self.objects, self.definitions, 0..) |*object, definition, index| {
+            if (definition.behavior != .floor_switch or !definition.behavior.floor_switch.wake_on_contact) continue;
+            if (try layout.overlaps(map, player, definition.footprint)) object.active = true;
+            for (self.objects, self.definitions, 0..) |other, other_definition, j| {
+                if (j == index or !other.active or !other.contact_present) continue;
+                if (try layout.overlaps(map, definition.footprint, other_definition.footprint)) object.active = true;
+            }
+        }
     }
     pub fn advance(self: *World, map: geometry.Map, items: *equipment.Loadout, player_has_weight: bool, pickup: bool) !void {
         for (self.objects) |*object| object.sound_requested = null;
@@ -98,19 +110,26 @@ pub const World = struct {
                 }
             },
             .floor_switch => |plate| {
+                if (!object.active) continue;
                 var clip = if (object.pressing) plate.press else plate.rest;
                 if (object.playback.exhausted(clip)) {
-                    if (object.pressing) object.pressing = false else {
+                    if (object.pressing) {
+                        object.pressing = false;
+                        if (plate.sleep_after_press) object.active = false;
+                    } else {
                         var occupied = player_has_weight and try layout.overlaps(map, definition.footprint, self.player_contact);
-                        for (self.objects, self.definitions, 0..) |other, other_definition, j| {
+                        if (plate.accepts_objects) for (self.objects, self.definitions, 0..) |other, other_definition, j| {
                             if (j == index or !other.contact_present) continue;
                             const other_clip = switch (other_definition.behavior) {
                                 .collectible => |value| value.idle,
                                 .floor_switch => |value| if (other.pressing) value.press else value.rest,
                             };
                             if (other_clip.presses_floor_switches and try layout.overlaps(map, definition.footprint, other_definition.footprint)) occupied = true;
+                        };
+                        if (!occupied) {
+                            object.active = false;
+                            continue;
                         }
-                        if (!occupied) continue;
                         object.pressing = true;
                         self.pressed_circuits[self.pressed_count] = plate.circuit;
                         self.pressed_count += 1;
@@ -125,7 +144,7 @@ pub const World = struct {
     }
     pub fn hashInto(self: *const World, hash: *std.hash.Wyhash) void {
         for (self.objects) |object| {
-            for ([_]u64{ @as(u16, @bitCast(object.pose.position.x)), @as(u16, @bitCast(object.pose.position.y)), @backingInt(object.pose.facing), @backingInt(object.pose.visual.id), @intFromBool(object.pose.visual.mirrored), object.playback.next_step, @intFromBool(object.pressing), @intFromBool(object.contact_present) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+            for ([_]u64{ @as(u16, @bitCast(object.pose.position.x)), @as(u16, @bitCast(object.pose.position.y)), @backingInt(object.pose.facing), @backingInt(object.pose.visual.id), @intFromBool(object.pose.visual.mirrored), object.playback.next_step, @intFromBool(object.pressing), @intFromBool(object.active), @intFromBool(object.contact_present) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
         }
     }
 };

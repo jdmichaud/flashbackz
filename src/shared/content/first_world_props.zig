@@ -9,7 +9,7 @@ const geometry = @import("../geometry.zig");
 const strings = @import("string_table.zig");
 
 // Import-only endpoints let other content importers bind the same opaque circuit.
-pub const Connection = struct { circuit: world.CircuitId, recipient: u16, message: i16 };
+pub const Connection = struct { circuit: world.CircuitId, sender: u16, recipient: u16, message: i16 };
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     clips: []animation.OwnedClip,
@@ -43,7 +43,7 @@ fn firstRule(bytes: []const u8, group: u16, state: u16) ![]const u8 {
     }
     return error.MissingPropRule;
 }
-pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []const u8, rules: []const u8, names: []const u8, room_ids: *const [64]geometry.RoomId, first_item: equipment.ItemHandle, resolver: anytype) !Assets {
+pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []const u8, rules: []const u8, names: []const u8, room_ids: *const [64]geometry.RoomId, difficulty: @import("../settings.zig").Difficulty, first_item: equipment.ItemHandle, resolver: anytype) !Assets {
     var clips: std.ArrayList(animation.OwnedClip) = .empty;
     errdefer {
         for (clips.items) |*clip| clip.deinit();
@@ -61,8 +61,8 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
     const hint = try resolver.icon(0);
     for (0..table.count) |i| {
         const record = try table.record(@intCast(i));
-        if (record.room >= room_ids.len) continue;
-        if (record.initial_state != 328 and record.initial_state != 307) continue;
+        if (record.room >= room_ids.len or record.minimum_difficulty > @backingInt(difficulty)) continue;
+        if (record.initial_state != 328 and record.kind != 7) continue;
         const rule = try firstRule(rules, record.rule_group, record.initial_state);
         var behavior: @FieldType(world.Definition, "behavior") = undefined;
         if (record.initial_state == 328) {
@@ -77,24 +77,22 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
             behavior = .{ .collectible = .{ .item = .{ .index = first_item.index + @as(u16, @intCast(items.items.len)), .generation = first_item.generation }, .idle = idle, .pickup_movie = .holocube_pickup } };
             try items.append(allocator, item);
         } else {
-            // The continuously active pressure family is already qualified. Other switch
-            // families need activation/sleep and interaction semantics before integration.
-            // Their instances and connections are reported by the mechanism survey.
-            const recovery = try firstRule(rules, record.rule_group, 306);
-            if (rule[7] != 0 or rule[6] != 61 or rule[9] != 35 or word(rule, 4) != 306 or recovery[9] != 0) continue;
-            if (record.kind != 7 or record.parameters[0] < 0 or record.parameters[0] >= table.count) return error.InvalidSwitchConnection;
-            const rest = try appendClip(allocator, &clips, animations, record.initial_state, resolver);
-            const press = try appendClip(allocator, &clips, animations, word(rule, 4), resolver);
-            const recipient: u16 = @intCast(record.parameters[0]);
-            const message: i16 = @bitCast(word(rule, 16));
+            const pressure = @import("pressure_controls.zig").recognize(try @import("rule_table.zig").group(rules, record.rule_group)) orelse continue;
+            if (record.initial_state != pressure.rest) return error.UnsupportedPressureStart;
+            const target = record.parameters[pressure.target_parameter];
+            if (target < 0 or target >= table.count) return error.InvalidSwitchConnection;
+            const rest = try appendClip(allocator, &clips, animations, pressure.rest, resolver);
+            const press = try appendClip(allocator, &clips, animations, pressure.pressed, resolver);
+            const recipient: u16 = @intCast(target);
+            const message = pressure.message;
             const circuit = for (connections.items) |connection| {
-                if (connection.recipient == recipient and connection.message == message) break connection.circuit;
+                if (connection.sender == i and connection.recipient == recipient and connection.message == message) break connection.circuit;
             } else fresh: {
                 const id: world.CircuitId = @fromBackingInt(@as(u16, @intCast(connections.items.len)));
-                try connections.append(allocator, .{ .circuit = id, .recipient = recipient, .message = message });
+                try connections.append(allocator, .{ .circuit = id, .sender = @intCast(i), .recipient = recipient, .message = message });
                 break :fresh id;
             };
-            behavior = .{ .floor_switch = .{ .rest = rest, .press = press, .circuit = circuit } };
+            behavior = .{ .floor_switch = .{ .rest = rest, .press = press, .circuit = circuit, .accepts_objects = !pressure.player_only, .initially_active = record.initially_active != 0, .wake_on_contact = record.flags & 2 != 0, .sleep_after_press = pressure.sleep_after_press } };
         }
         try definitions.append(allocator, .{ .footprint = .{ .room = room_ids[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .palette_bank = @intCast(record.visual_flags & 3), .layer = if (record.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .behavior = behavior });
     }

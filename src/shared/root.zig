@@ -50,3 +50,5 @@ pub const output_gain = @import("audio/output_gain.zig");
 pub const input_recording = @import("input_recording.zig");
 
 pub const operated_controls = @import("operated_controls.zig");
+
+pub const electrical_hazards = @import("electrical_hazards.zig");

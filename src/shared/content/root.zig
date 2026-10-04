@@ -36,3 +36,6 @@ pub const level = @import("level.zig");
 
 pub const operated_controls = @import("operated_controls.zig");
 pub const rule_table = @import("rule_table.zig");
+
+pub const electrical_hazards = @import("electrical_hazards.zig");
+pub const pressure_controls = @import("pressure_controls.zig");

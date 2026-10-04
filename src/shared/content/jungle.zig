@@ -39,6 +39,7 @@ pub const Pack = struct {
     inventory_art: inventory_artwork.Assets,
     world_props: prop_import.Assets,
     controls: @import("operated_controls.zig").Assets,
+    hazards: @import("electrical_hazards.zig").Assets,
     player_contact_width: u8,
     surfaces: []@import("../surface_reactions.zig").Definition,
     forest_calls: []@import("../ambience.zig").Call,
@@ -65,6 +66,7 @@ pub const Pack = struct {
         self.inventory_art.deinit();
         self.world_props.deinit();
         self.controls.deinit();
+        self.hazards.deinit();
         self.sounds.deinit();
         self.allocator.free(self.surfaces);
         self.allocator.free(self.forest_calls);
@@ -390,7 +392,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     for (run, 0..) |*clip, i| clip.* = motions[@backingInt(Move.run_a) + i].clip();
     var initial_items = try starting_equipment.recover(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &resolver);
     errdefer starting_equipment.release(allocator, initial_items);
-    var props = try prop_import.load(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &room_ids, .{ .index = @intCast(initial_items.len), .generation = 1 }, &resolver);
+    var props = try prop_import.load(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &room_ids, difficulty, .{ .index = @intCast(initial_items.len), .generation = 1 }, &resolver);
     errdefer props.deinit();
     var connections: std.ArrayList(prop_import.Connection) = .empty;
     defer connections.deinit(allocator);
@@ -400,6 +402,8 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     const combined_connections = try connections.toOwnedSlice(allocator);
     allocator.free(props.connections);
     props.connections = combined_connections;
+    var hazards = try @import("electrical_hazards.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, &resolver);
+    errdefer hazards.deinit();
     const supplied = initial_items.len;
     initial_items = try allocator.realloc(initial_items, supplied + props.items.len);
     for (props.items, initial_items[supplied..]) |*item, *destination| {
@@ -452,6 +456,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .inventory_art = inventory_art,
         .world_props = props,
         .controls = operated,
+        .hazards = hazards,
         .surfaces = try surfaces.toOwnedSlice(allocator),
         .sounds = sounds,
         .forest_calls = forest_calls,
