@@ -105,7 +105,7 @@ pub const State = struct {
                     shiftForward(pose, clips.alignment_forward);
                     self.phase = .drop;
                 } else {
-                    if (intent.action or intent.vertical == .up) return .action_requested;
+                    if ((intent.action and !intent.directions_conflict) or intent.vertical == .up) return .action_requested;
                     self.phase = .rise;
                 }
             },

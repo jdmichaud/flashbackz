@@ -34,6 +34,9 @@ remain unfinished. The pickup matches all 35 original frames; recording has docu
 remaining differences in 11 of 377 frames. The startup error `FloppyCinematicsNotYetImplemented` has been removed
 from normal launch. `--scene menu` remains an optional development shortcut.
 
+Current priority is completing Conrad movement. New walk/run blends, running turns and
+running jumps are ready for testing; see [movement names and controls](docs/movement-testing.md).
+
 ```sh
 zig build --prefix /tmp/flashback/modern/out --cache-dir /tmp/flashback/modern/cache
 /tmp/flashback/modern/out/bin/flashbackz-sdl ../disk1.img ../disk2.img

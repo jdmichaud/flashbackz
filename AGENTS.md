@@ -56,3 +56,7 @@ Rules:
   (explicit user instruction, 2026-10-04). Recover Flashback-specific behavior from the supplied
   original executable and assets. Previously approved vpoolz/template infrastructure reuse
   remains allowed. Prior external leads are not authority for new implementation work.
+
+- Current user priority (2026-10-04): implement all Conrad movement before further world
+  mechanisms, so the user can explore the level. Keep naming each movement delivered and
+  provide its exact controls for direct testing; distinguish ready moves from remaining work.

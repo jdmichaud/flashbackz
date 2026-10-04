@@ -27,7 +27,7 @@ pub const HeldInput = struct {
     use_item: bool = false,
     use_held: bool = false,
     use_blocked: bool = false,
-    previous_direction: struct { horizontal: ?motion.Facing = null, vertical: ?controls.Vertical = null } = .{},
+    previous_direction: struct { horizontal: ?motion.Facing = null, vertical: ?controls.Vertical = null, conflict: bool = false } = .{},
     pub fn key(self: *HeldInput, key_code: platform.Key, down: bool) void {
         switch (key_code) {
             .left => self.left = down,
@@ -50,13 +50,12 @@ pub const HeldInput = struct {
         self.use_blocked = self.use_held;
     }
     pub fn intent(self: *HeldInput) !conrad.Intent {
-        if ((self.left and self.right) or (self.up and self.down)) return error.UnverifiedOpposingDirections;
-        const horizontal: ?motion.Facing = if (self.left) .left else if (self.right) .right else null;
-        const vertical: ?controls.Vertical = if (self.up) .up else if (self.down) .down else null;
+        const horizontal: ?motion.Facing = if (self.left and !self.right) .left else if (self.right and !self.left) .right else null;
+        const vertical: ?controls.Vertical = if (self.up and !self.down) .up else if (self.down and !self.up) .down else null;
         // Mixed axes retain the last accepted direction, while the action modifier remains
         // current. This is the original input arbitration, expressed without a DOS bitmask.
-        if (horizontal == null or vertical == null) self.previous_direction = .{ .horizontal = horizontal, .vertical = vertical };
-        return .{ .direction = self.previous_direction.horizontal, .vertical = self.previous_direction.vertical, .action = self.left_action or self.right_action, .use_item = self.use_item };
+        if (!(self.left or self.right) or !(self.up or self.down)) self.previous_direction = .{ .horizontal = horizontal, .vertical = vertical, .conflict = (self.left and self.right) or (self.up and self.down) };
+        return .{ .direction = self.previous_direction.horizontal, .vertical = self.previous_direction.vertical, .action = self.left_action or self.right_action, .use_item = self.use_item, .directions_conflict = self.previous_direction.conflict };
     }
 };
 
@@ -318,6 +317,9 @@ pub const Scene = struct {
                 .stride => |i| @intCast(i + 1),
             },
             .stopping_run => |p| @backingInt(p),
+            .changing_pace => |p| @backingInt(p),
+            .reversing_run => |p| @backingInt(p),
+            .running_jump => |p| @backingInt(p.phase),
             .jumping => |jump| (@as(u32, @backingInt(jump.kind)) << 8) | @backingInt(jump.phase),
             .crouching => |p| @backingInt(p),
             .rolling => |roll| @backingInt(roll.phase),
@@ -334,7 +336,7 @@ pub const Scene = struct {
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
         for ([_]u64{ self.simulation_steps, if (self.clock) |clock| clock.next_tick else 0 }) |value|
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
-        const held = [_]u8{ @intFromBool(self.input.left), @intFromBool(self.input.right), @intFromBool(self.input.up), @intFromBool(self.input.down), @intFromBool(self.input.left_action), @intFromBool(self.input.right_action), if (self.input.previous_direction.horizontal) |direction| 1 + @as(u8, @backingInt(direction)) else 0, if (self.input.previous_direction.vertical) |direction| 1 + @as(u8, @backingInt(direction)) else 0 };
+        const held = [_]u8{ @intFromBool(self.input.left), @intFromBool(self.input.right), @intFromBool(self.input.up), @intFromBool(self.input.down), @intFromBool(self.input.left_action), @intFromBool(self.input.right_action), if (self.input.previous_direction.horizontal) |direction| 1 + @as(u8, @backingInt(direction)) else 0, if (self.input.previous_direction.vertical) |direction| 1 + @as(u8, @backingInt(direction)) else 0, @intFromBool(self.input.previous_direction.conflict) };
         hash.update(&held);
         for (self.pending.items) |event| {
             const relative_time = event.time_ns -| (if (self.clock) |clock| clock.origin_ns else 0);
@@ -412,4 +414,21 @@ test "using an item consumes Return until a release and new press" {
     input.key(.enter, false);
     input.key(.enter, true);
     try std.testing.expect((try input.intent()).use_item);
+}
+
+test "overlapping directions retain ambiguous history until one axis is released" {
+    var input: HeldInput = .{};
+    input.key(.left, true);
+    input.key(.right, true);
+    var intent = try input.intent();
+    try std.testing.expect(intent.directions_conflict);
+    try std.testing.expect(intent.direction == null and !intent.neutralDirections());
+    input.key(.up, true);
+    input.key(.left, false);
+    intent = try input.intent();
+    try std.testing.expect(intent.directions_conflict and intent.vertical == null);
+    input.key(.right, false);
+    intent = try input.intent();
+    try std.testing.expect(!intent.directions_conflict);
+    try std.testing.expectEqual(controls.Vertical.up, intent.vertical.?);
 }

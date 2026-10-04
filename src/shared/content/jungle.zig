@@ -20,8 +20,8 @@ const art_bank = @import("art_bank.zig");
 const object_art = @import("object_artwork.zig");
 const inventory_artwork = @import("inventory_artwork.zig");
 
-const Move = enum { use_item, wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover, collision_impact, recoil_fall, recoil_confined, recoil_staggered, recoil_prone, recoil_pause_prone, recoil_pause_tight, recoil_rise, recoil_drop, fall_begin, fall_continue, fatal_land, ledge_lower, ledge_catch, ledge_grip, ledge_hang, ledge_reach, ledge_settle_grip, ledge_climb, ledge_stand, ledge_release, ledge_drop, ledge_turn_release, ledge_tumble_release, ledge_brace, ledge_braced_lower };
-const source_moves = [_]u16{ 168, 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88, 263, 94, 85, 84, 83, 111, 74, 103, 86, 89, 90, 73, 15, 60, 61, 25, 101, 102, 16, 178, 91, 107, 123, 92, 104, 105 };
+const Move = enum { run_jump_takeoff, run_jump_ascent, run_jump_crest, run_jump_descent, run_jump_landing, run_jump_stand, run_jump_run, reverse_run, reverse_run_finish, accelerate_run, slow_to_walk, edge_stop, use_item, wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover, collision_impact, recoil_fall, recoil_confined, recoil_staggered, recoil_prone, recoil_pause_prone, recoil_pause_tight, recoil_rise, recoil_drop, fall_begin, fall_continue, fatal_land, ledge_lower, ledge_catch, ledge_grip, ledge_hang, ledge_reach, ledge_settle_grip, ledge_climb, ledge_stand, ledge_release, ledge_drop, ledge_turn_release, ledge_tumble_release, ledge_brace, ledge_braced_lower };
+const source_moves = [_]u16{ 13, 21, 22, 23, 24, 31, 14, 10, 184, 11, 12, 30, 168, 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88, 263, 94, 85, 84, 83, 111, 74, 103, 86, 89, 90, 73, 15, 60, 61, 25, 101, 102, 16, 178, 91, 107, 123, 92, 104, 105 };
 pub const RoomArt = struct { id: geometry.RoomId, artwork: artwork.Artwork };
 
 pub const Pack = struct {
@@ -68,8 +68,27 @@ pub const Pack = struct {
             .turn_preparation = self.clip(.turn_prepare),
             .turn_follow_through = self.clip(.turn_finish),
             .walk = .{ .start = .{ .clip = self.clip(.walk_start) }, .strides = self.walk_strides },
-            .run = .{ .start = self.clip(.run_start), .strides = self.run_strides, .entry_stride = 3, .brake = self.clip(.brake), .settle = self.clip(.settle) },
+            .run = .{
+                .start = self.clip(.run_start),
+                .strides = self.run_strides,
+                .entry_stride = 3,
+                .brake = self.clip(.brake),
+                .settle = self.clip(.settle),
+                .accelerate = self.clip(.accelerate_run),
+                .walk_out = self.clip(.slow_to_walk),
+                .edge_stop = self.clip(.edge_stop),
+                .reverse = .{ .brake = self.clip(.reverse_run), .follow_through = self.clip(.reverse_run_finish) },
+            },
             .descend = .{ .step_off = self.clip(.step_off), .land = self.clip(.land) },
+            .running_jump = .{
+                .takeoff = self.clip(.run_jump_takeoff),
+                .ascending = self.clip(.run_jump_ascent),
+                .crest = self.clip(.run_jump_crest),
+                .descending = self.clip(.run_jump_descent),
+                .landing = self.clip(.run_jump_landing),
+                .standing_recovery = self.clip(.run_jump_stand),
+                .running_recovery = self.clip(.run_jump_run),
+            },
             .jumps = .{
                 .upward = .{ .rise = self.clip(.jump_up), .recover = self.clip(.jump_recover) },
                 .low_clearance = .{ .rise = self.clip(.jump_low), .recover = self.clip(.jump_low_recover) },
