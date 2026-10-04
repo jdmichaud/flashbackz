@@ -3,18 +3,23 @@
 
 ## Floppy edition pivot — user instruction, 2026-10-04
 
-The reference is now `Flashback.ima` (FAT12, SHA-256
-`3ff964a76e90f3c25489334db38bde021d0c7632f7fa2b90ba234312c1d1272f`).
-Earlier completed CD gates below are historical; they do not certify the floppy edition.
-The supplied image is an installation disk with incomplete game resources. Remaining disks
-are required for the introduction, sound and complete original startup qualification.
+The reference is the complete English pair supplied on 2026-10-04:
+`disk1.img` SHA-256 `3ff964a76e90f3c25489334db38bde021d0c7632f7fa2b90ba234312c1d1272f`
+and `disk2.img` SHA-256 `ed9b9a5bef0b42d5c394d9b715f27b42edc388d17f243b12ae52f9d3c2e0f9b2`.
+Disk 1 is identical to the now-removed `Flashback.ima`. The Italian images previously supplied
+under these filenames were rejected by the user and are not the reference. Earlier completed
+CD gates below are historical and do not certify the floppy edition. The English installer
+completes successfully; original startup reaches the code-wheel protection prompt.
 
-- [ ] Inventory FAT12 files and ABA archives; identify missing installation media, record
+- [x] Inventory FAT12 files and ABA archives; identify missing installation media, record
   provenance and reproduce floppy startup on disposable copies.
 - [x] Remove CD filesystem/track and SEQ playback from the modern game. Preserve historical
   research and shelved generic work; retain independent reusable systems for requalification.
 - [x] Support direct IMA input and bounded ABA decompression, with malformed-input tests and
   independent extraction comparison. Support extracted floppy content through the same API.
+- [ ] Import both floppy images together through native command-line input; recover the
+  installer's level expansion without a runtime dependency on DOS. Gate: all installed file
+  bytes match the original installer's output, including all five generated level maps.
 - [ ] Reproduce title, vector introduction and original scene order. Gate: exact original
   presented frames, palette changes, timing and input behavior; no approximate substitutes.
 - [ ] Recover floppy music/effects sequencing and integrate AdLib plus PCM. Gate: exact event

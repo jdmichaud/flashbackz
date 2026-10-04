@@ -12,9 +12,10 @@ Movement, animation, collisions, combat, inventory, enemies, puzzles, room trans
 cinematics, drawing and audio must match the reference. A faithful translation of the original
 program does not satisfy the architecture requirement.
 
-The user authorized the floppy edition pivot on 2026-10-04. The supplied first disk is
-`Flashback.ima`, SHA-256 `3ff964a76e90f3c25489334db38bde021d0c7632f7fa2b90ba234312c1d1272f`.
-The complete media set and language coverage remain to be established. Research lives in `flashback-re`.
+The user authorized the floppy edition pivot on 2026-10-04. The complete English reference is
+`disk1.img`, SHA-256 `3ff964a76e90f3c25489334db38bde021d0c7632f7fa2b90ba234312c1d1272f`,
+and `disk2.img`, SHA-256 `ed9b9a5bef0b42d5c394d9b715f27b42edc388d17f243b12ae52f9d3c2e0f9b2`.
+Disk 1 is identical to the initial, now-removed `Flashback.ima`. Research lives in `flashback-re`.
 There is no mandatory remaster and no runtime dependency on an emulator, decompiler, original
 executable's instructions, research tool or sibling repository.
 
