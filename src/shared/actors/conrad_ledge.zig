@@ -3,8 +3,9 @@
 const motion = @import("../motion.zig");
 const controls = @import("controls.zig");
 
-pub const Phase = enum { lowering, catching, gripping, hanging, reaching, settling_grip, climbing, standing_up, releasing, dropping, turning_release, tumbling_release, bracing, braced_lowering };
+pub const Phase = enum { running_approach, running_reach, running_brace, lowering, catching, gripping, hanging, reaching, settling_grip, climbing, standing_up, releasing, dropping, turning_release, tumbling_release, bracing, braced_lowering };
 pub const Clips = struct {
+    running: ?struct { approach: motion.Clip, reach: motion.Clip, brace: motion.Clip } = null,
     lower: motion.Clip,
     catch_fall: motion.Clip,
     grip: motion.Clip,
@@ -34,6 +35,9 @@ pub const State = struct {
 
     pub fn clip(self: State, clips: Clips) motion.Clip {
         return switch (self.phase) {
+            .running_approach => clips.running.?.approach,
+            .running_reach => clips.running.?.reach,
+            .running_brace => clips.running.?.brace,
             .lowering => clips.lower,
             .catching => clips.catch_fall,
             .gripping => clips.grip,
@@ -72,6 +76,11 @@ pub const State = struct {
         const backward = intent.action and intent.direction != null and intent.direction != pose.facing;
         const neutral = !intent.action and intent.direction == null and intent.vertical == null;
         switch (self.phase) {
+            .running_approach => self.phase = if (try environment.at(pose.*, .torso, 3)) .running_brace else .running_reach,
+            .running_reach => if (up) self.climb(pose, clips.extended_depth) else {
+                self.phase = .settling_grip;
+            },
+            .running_brace => self.phase = .hanging,
             .lowering, .braced_lowering => if (intent.action) {
                 pose.position.y +%= clips.grip_depth;
                 self.phase = .gripping;

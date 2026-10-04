@@ -2,6 +2,7 @@
 //! probes choose transitions, and room handoff occurs before the first frame of a new motion.
 const std = @import("std");
 const motion = @import("../motion.zig");
+const descent = @import("conrad_descent.zig");
 const running_jump = @import("conrad_running_jump.zig");
 const jumping = @import("conrad_jump.zig");
 const ledge = @import("conrad_ledge.zig");
@@ -22,6 +23,8 @@ pub const RunClips = struct {
     entry_stride: usize,
     brake: motion.Clip,
     settle: motion.Clip,
+    wall_stop: ?motion.Clip = null,
+    stagger_stop: ?motion.Clip = null,
     accelerate: ?motion.Clip = null,
     walk_out: ?motion.Clip = null,
     edge_stop: ?motion.Clip = null,
@@ -39,6 +42,8 @@ pub const Clips = struct {
     descend: ?struct { step_off: motion.Clip, land: motion.Clip } = null,
     jumps: ?jumping.Clips = null,
     running_jump: ?running_jump.Clips = null,
+    descent: ?descent.Clips = null,
+    low_landing: ?motion.Clip = null,
     crouch: ?struct { lower: motion.Clip, hold: motion.Clip, rise: motion.Clip, turn: motion.Clip } = null,
     roll: ?rolling.Clips = null,
     recoil: ?recoil.Clips = null,
@@ -56,13 +61,15 @@ pub const Activity = union(enum) {
     turning: TurnPhase,
     walking: GaitPhase,
     running: GaitPhase,
-    stopping_run: enum { braking, settling, edge },
+    stopping_run: enum { braking, settling, edge, wall, staggered },
     changing_pace: enum { accelerating, slowing },
     reversing_run: enum { braking, follow_through },
     stepping_down,
     landing,
     jumping: jumping.State,
     running_jump: running_jump.State,
+    descending: descent.State,
+    low_landing,
     crouching: enum { lowering, holding, rising, turning },
     rolling: rolling.State,
     recoiling: recoil.State,
@@ -97,6 +104,10 @@ pub const Controller = struct {
     use_available: bool = false,
     pickup_available: bool = false,
 
+    fn wallAt(environment: anytype, pose: motion.Pose, ahead: i16) !bool {
+        return try environment.at(pose, .torso, ahead) and !try environment.at(pose, .torso, ahead - 1);
+    }
+
     fn selectedClip(self: Controller, clips: Clips) !motion.Clip {
         return switch (self.activity) {
             .waking => clips.wake,
@@ -119,7 +130,13 @@ pub const Controller = struct {
             },
             .stopping_run => |phase| blk: {
                 const gait = clips.run orelse return error.MissingMotion;
-                break :blk if (phase == .braking) gait.brake else gait.settle;
+                break :blk switch (phase) {
+                    .braking => gait.brake,
+                    .settling => gait.settle,
+                    .edge => gait.edge_stop orelse return error.MissingMotion,
+                    .wall => gait.wall_stop orelse return error.MissingMotion,
+                    .staggered => gait.stagger_stop orelse return error.MissingMotion,
+                };
             },
             .reversing_run => |phase| blk: {
                 const reversal = (clips.run orelse return error.MissingMotion).reverse orelse return error.MissingMotion;
@@ -131,6 +148,8 @@ pub const Controller = struct {
             },
             .stepping_down => (clips.descend orelse return error.MissingMotion).step_off,
             .landing => (clips.descend orelse return error.MissingMotion).land,
+            .low_landing => clips.low_landing orelse return error.MissingMotion,
+            .descending => |drop| drop.clip(clips.descent orelse return error.MissingMotion),
             .running_jump => |jump| jump.clip(clips.running_jump orelse return error.MissingMotion),
             .jumping => |jump| jump.clip(clips.jumps orelse return error.MissingMotion),
             .crouching => |phase| blk: {
@@ -177,7 +196,9 @@ pub const Controller = struct {
                     self.activity = .standing;
                 },
                 .standing => {
-                    if (self.use_available and intent.use_item and !intent.action and intent.neutralDirections()) {
+                    if (clips.descent != null and !try environment.at(pose.*, .support, 0)) {
+                        self.activity = .{ .descending = .{ .phase = .unbalanced } };
+                    } else if (self.use_available and intent.use_item and !intent.action and intent.neutralDirections()) {
                         self.activity = .using_item;
                     } else if (self.pickup_available and intent.action and intent.neutralDirections()) {
                         self.activity = .{ .crouching = .lowering };
@@ -206,11 +227,11 @@ pub const Controller = struct {
                             if (clips.walk == null or (intent.action and clips.run == null)) return .locomotion_requested;
                             if (try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .torso, -1)) {
                                 // Already touching the blocked side of a wall edge.
-                            } else if (!intent.action and !try environment.at(pose.*, .support, 1)) {
+                            } else if (!try environment.at(pose.*, .support, 1)) {
                                 if (clips.descend == null) return .terrain_transition_requested;
                                 self.activity = .stepping_down;
                             } else if (!try environment.at(pose.*, .torso, 0) or !try environment.at(pose.*, .torso, 1)) {
-                                self.activity = if (intent.action) .{ .running = .starting } else .{ .walking = .starting };
+                                self.activity = if (intent.action and !try wallAt(environment, pose.*, 1)) .{ .running = .starting } else .{ .walking = .starting };
                             }
                         }
                     }
@@ -244,29 +265,46 @@ pub const Controller = struct {
                 },
                 .running => |phase| {
                     const gait = clips.run orelse return error.MissingMotion;
-                    if (phase != .starting and intent.action and intent.vertical == .down) return .locomotion_requested;
-                    if (!try environment.at(pose.*, .support, 1)) return .terrain_transition_requested;
-                    if (try environment.at(pose.*, .torso, 3) and !try environment.at(pose.*, .torso, 2)) return .terrain_transition_requested;
-                    if (phase == .starting and ((try environment.at(pose.*, .torso, 2) and !try environment.at(pose.*, .torso, 1)) or
-                        (try environment.at(pose.*, .torso, 1) and !try environment.at(pose.*, .torso, 0)))) return .terrain_transition_requested;
-                    if (phase != .starting and intent.action and intent.vertical == .up and !try environment.ledge(pose.*, .support, 2, .ahead)) {
+
+                    const backward = intent.direction != null and intent.direction != pose.facing;
+                    if (phase == .stride and phase.stride == 0 and intent.action and backward and try environment.at(pose.*, .torso, 2)) {
+                        self.activity = .{ .stopping_run = .braking };
+                    } else if (!try environment.at(pose.*, .support, 1) or (phase != .starting and intent.action and intent.vertical == .down and !try environment.at(pose.*, .support, 2))) {
+                        rolling.shiftForward(pose, 16);
+                        self.activity = .{ .descending = .{ .phase = .running } };
+                    } else if (phase == .starting and try wallAt(environment, pose.*, 1)) {
+                        self.activity = .{ .stopping_run = .wall };
+                    } else if (phase == .starting and (try wallAt(environment, pose.*, 2) or try wallAt(environment, pose.*, 3))) {
+                        self.activity = .{ .stopping_run = .braking };
+                    } else if (phase != .starting and intent.action and intent.vertical == .up and !try environment.ledge(pose.*, .support, 2, .ahead)) {
                         rolling.shiftForward(pose, 16);
                         self.activity = .{ .running_jump = .{} };
+                    } else if (phase != .starting and intent.action and intent.neutralDirections() and try environment.ledge(pose.*, .head, 4, .behind)) {
+                        rolling.shiftForward(pose, 16);
+                        self.activity = .{ .ledge = .{ .phase = .running_approach } };
                     } else {
                         const continue_running = if (phase == .starting) intent.action or intent.direction != null or intent.vertical != null or intent.directions_conflict else intent.action and (intent.neutralDirections() or intent.direction == pose.facing or intent.vertical == .up);
                         if (!continue_running) {
                             if (!try environment.at(pose.*, .support, 2)) {
                                 self.activity = .{ .stopping_run = .edge };
+                            } else if (intent.action and backward) {
+                                const leaves_edge = !try environment.at(pose.*, .support, 3);
+                                rolling.shiftForward(pose, 16);
+                                self.activity = if (leaves_edge) .{ .descending = .{ .phase = .reversing } } else .{ .reversing_run = .braking };
                             } else if (phase == .stride and phase.stride % 2 == 1 and intent.direction == pose.facing) {
                                 rolling.shiftForward(pose, 16);
                                 self.activity = .{ .changing_pace = .slowing };
-                            } else if (intent.direction != null and intent.direction != pose.facing and (intent.action or (phase == .stride and phase.stride == 3))) {
-                                if (intent.action) {
-                                    if (!try environment.at(pose.*, .support, 3)) return .terrain_transition_requested;
-                                    rolling.shiftForward(pose, 16);
-                                }
+                            } else if (phase == .stride and phase.stride == 3 and backward) {
                                 self.activity = .{ .reversing_run = .braking };
+                            } else if (intent.action and intent.vertical == .down) {
+                                self.activity = .{ .rolling = .{ .phase = .running_entry } };
+                            } else if (phase != .starting and try wallAt(environment, pose.*, 3)) {
+                                rolling.shiftForward(pose, 16);
+                                self.activity = .{ .stopping_run = .staggered };
                             } else self.activity = .{ .stopping_run = .braking };
+                        } else if (phase != .starting and try wallAt(environment, pose.*, 3)) {
+                            rolling.shiftForward(pose, 16);
+                            self.activity = .{ .stopping_run = .staggered };
                         } else {
                             if (gait.strides.len == 0 or gait.entry_stride >= gait.strides.len) return error.InvalidGait;
                             self.activity = .{ .running = .{ .stride = switch (phase) {
@@ -279,12 +317,12 @@ pub const Controller = struct {
                 .stopping_run => |phase| self.activity = if (phase == .braking) .{ .stopping_run = .settling } else .standing,
                 .reversing_run => |phase| {
                     if (phase == .braking) {
-                        if (!try environment.at(pose.*, .support, 0)) return .terrain_transition_requested;
+                        const unsupported = !try environment.at(pose.*, .support, 0);
                         pose.facing = if (pose.facing == .right) .left else .right;
-                        self.activity = .{ .reversing_run = .follow_through };
-                    } else if ((try environment.at(pose.*, .torso, 1) and !try environment.at(pose.*, .torso, 0)) or
-                        (try environment.at(pose.*, .torso, 2) and !try environment.at(pose.*, .torso, 1)))
-                    {
+                        self.activity = if (unsupported) .{ .descending = .{ .phase = .running } } else .{ .reversing_run = .follow_through };
+                    } else if (try wallAt(environment, pose.*, 2)) {
+                        self.activity = .{ .stopping_run = .wall };
+                    } else if (try wallAt(environment, pose.*, 3)) {
                         self.activity = .{ .stopping_run = .braking };
                     } else if (intent.direction == pose.facing and !intent.action) {
                         rolling.shiftForward(pose, 16);
@@ -293,7 +331,7 @@ pub const Controller = struct {
                         rolling.shiftForward(pose, 16);
                         self.activity = .{ .running_jump = .{} };
                     } else if (intent.action and intent.vertical == .down) {
-                        return .locomotion_requested;
+                        self.activity = .{ .rolling = .{ .phase = .running_entry } };
                     } else if (!try environment.at(pose.*, .support, 2)) self.activity = .{ .stopping_run = .edge } else if (intent.action and intent.direction != null and intent.direction != pose.facing) {
                         rolling.shiftForward(pose, 16);
                         self.activity = .{ .reversing_run = .braking };
@@ -303,14 +341,15 @@ pub const Controller = struct {
                     if (phase == .slowing) {
                         if (!try environment.at(pose.*, .support, 1) or intent.direction != pose.facing) self.activity = .standing else if (intent.action) self.activity = .{ .changing_pace = .accelerating } else self.activity = .{ .walking = .{ .stride = 1 } };
                     } else {
-                        if (!try environment.at(pose.*, .support, 1)) return .terrain_transition_requested;
-                        if (try environment.at(pose.*, .torso, 3) and !try environment.at(pose.*, .torso, 2)) return .terrain_transition_requested;
-                        if ((try environment.at(pose.*, .torso, 2) and !try environment.at(pose.*, .torso, 1)) or
-                            (try environment.at(pose.*, .torso, 1) and !try environment.at(pose.*, .torso, 0))) self.activity = .{ .stopping_run = .braking } else if (intent.direction == pose.facing and !intent.action)
-                        {
+                        if (!try environment.at(pose.*, .support, 1)) {
                             rolling.shiftForward(pose, 16);
-                            self.activity = .{ .changing_pace = .slowing };
-                        } else if (intent.direction == pose.facing and intent.action) self.activity = .{ .running = .{ .stride = 0 } } else if (intent.neutralDirections() and !intent.action and !try environment.at(pose.*, .support, 2)) self.activity = .{ .stopping_run = .edge } else self.activity = .{ .stopping_run = .braking };
+                            self.activity = .{ .descending = .{ .phase = .running } };
+                        } else {
+                            if (try wallAt(environment, pose.*, 1)) self.activity = .{ .stopping_run = .wall } else if (try wallAt(environment, pose.*, 2) or try wallAt(environment, pose.*, 3)) self.activity = .{ .stopping_run = .braking } else if (intent.direction == pose.facing and !intent.action) {
+                                rolling.shiftForward(pose, 16);
+                                self.activity = .{ .changing_pace = .slowing };
+                            } else if (intent.direction == pose.facing and intent.action) self.activity = .{ .running = .{ .stride = 0 } } else if (intent.neutralDirections() and !intent.action and !try environment.at(pose.*, .support, 2)) self.activity = .{ .stopping_run = .edge } else self.activity = .{ .stopping_run = .braking };
+                        }
                     }
                 },
                 .stepping_down => {
@@ -319,17 +358,27 @@ pub const Controller = struct {
                         self.activity = .{ .falling = .{} };
                     } else self.activity = .landing;
                 },
-                .landing => self.activity = .standing,
+                .landing, .low_landing => self.activity = .standing,
+                .descending => |*drop| switch (try drop.finishPhase(intent, pose, environment)) {
+                    .continued => {},
+                    .landing => self.activity = .landing,
+                    .low_landing => self.activity = .low_landing,
+                    .long_fall => self.activity = .{ .falling = .{} },
+                    .catch_ledge => self.activity = .{ .ledge = .{ .phase = .catching } },
+                },
                 .running_jump => |*jump| switch (try jump.finishPhase(clips.running_jump orelse return error.MissingMotion, intent, pose, environment)) {
                     .continued => {},
                     .standing => self.activity = .standing,
                     .resume_running => self.activity = .{ .running = .{ .stride = (clips.run orelse return error.MissingMotion).entry_stride } },
                     .reverse_run => self.activity = .{ .reversing_run = .braking },
                     .brake => self.activity = .{ .stopping_run = .braking },
+                    .wall_stop => self.activity = .{ .stopping_run = .wall },
                     .settle_running => self.activity = .{ .stopping_run = .settling },
                     .catch_ledge => self.activity = .{ .ledge = .{ .phase = .catching } },
                     .wall_collision => self.activity = .{ .recoiling = .{} },
-                    .fall_requested => return .terrain_transition_requested,
+                    .gliding_drop => self.activity = .{ .descending = .{ .phase = .gliding } },
+                    .vertical_drop => self.activity = .{ .descending = .{ .phase = .vertical } },
+                    .unbalanced_drop => self.activity = .{ .descending = .{ .phase = .unbalanced } },
                 },
                 .jumping => |*jump| switch (try jump.finishPhase(clips.jumps orelse return error.MissingMotion, intent, pose, environment)) {
                     .continued => {},
@@ -337,7 +386,8 @@ pub const Controller = struct {
                     .climb_ledge => self.activity = .{ .ledge = .{ .phase = .climbing } },
                     .grip_ledge => self.activity = .{ .ledge = .{ .phase = .gripping } },
                     .wall_collision => self.activity = .{ .recoiling = .{} },
-                    .terrain_requested => return .terrain_transition_requested,
+                    .fall_requested => self.activity = .{ .descending = .{ .phase = .short_jump } },
+                    .catch_ledge => self.activity = .{ .ledge = .{ .phase = .catching } },
                 },
                 .crouching => |phase| switch (phase) {
                     .lowering => self.activity = .{ .crouching = .holding },
@@ -399,9 +449,14 @@ pub const Controller = struct {
                     .turning => self.activity = .{ .turning = .preparation },
                     .wall_collision => self.activity = .{ .recoiling = .{} },
                     .long_fall => self.activity = .{ .falling = .{} },
-                    .terrain_requested => return .terrain_transition_requested,
                     .catch_ledge => self.activity = .{ .ledge = .{ .phase = .catching } },
-                    .action_requested => return .locomotion_requested,
+                    .running => self.activity = .{ .running = .{ .stride = 0 } },
+                    .running_jump => self.activity = .{ .running_jump = .{} },
+                    .jump_flight => self.activity = .{ .jumping = .{ .kind = .forward, .phase = .flight } },
+                    .running_drop => self.activity = .{ .descending = .{ .phase = .running } },
+                    .brake => self.activity = .{ .stopping_run = .braking },
+                    .wall_stop => self.activity = .{ .stopping_run = .wall },
+                    .stagger_stop => self.activity = .{ .stopping_run = .staggered },
                 },
             }
             self.playback = .{};
@@ -549,4 +604,38 @@ test "using an available item has its own motion boundary and does not request p
     try std.testing.expect(actor.use_requested and !actor.pickup_requested);
     _ = try actor.advance(clips, .{}, &pose);
     try std.testing.expect(!actor.use_requested);
+}
+
+test "run startup respects close walls in both directions before entering a stride" {
+    const held = [_]motion.Step{.hold};
+    const clip: motion.Clip = .{ .steps = &held };
+    const strides = [_]motion.Clip{clip};
+    const walks = [_]WalkMotion{.{ .clip = clip }};
+    const clips: Clips = .{ .wake = clip, .stand = clip, .turn_preparation = clip, .turn_follow_through = clip, .walk = .{ .start = .{ .clip = clip }, .strides = &walks }, .run = .{ .start = clip, .strides = &strides, .entry_stride = 0, .brake = clip, .settle = clip, .wall_stop = clip, .stagger_stop = clip } };
+    const Wall = struct {
+        distance: i16,
+        pub fn at(self: @This(), _: motion.Pose, height: anytype, ahead: i16) !bool {
+            return height == .support or (height == .torso and ahead >= self.distance);
+        }
+        pub fn motionBoundary(_: @This(), _: *motion.Pose) !void {}
+        pub fn rollPassage(_: @This(), _: motion.Pose, _: i16) !bool {
+            return false;
+        }
+        pub fn ledge(_: @This(), _: motion.Pose, _: anytype, _: i16, _: anytype) !bool {
+            return false;
+        }
+    };
+    for ([_]motion.Facing{ .left, .right }) |facing| {
+        var pose: motion.Pose = .{ .position = .{ .x = 96, .y = 142 }, .facing = facing, .visual = .{ .id = @fromBackingInt(0) } };
+        const intent: Intent = .{ .direction = facing, .action = true };
+        var standing: Controller = .{ .activity = .standing, .playback = .{ .next_step = 1 } };
+        _ = try standing.advanceIn(clips, intent, &pose, Wall{ .distance = 1 });
+        try std.testing.expectEqualDeep(Activity{ .walking = .starting }, standing.activity);
+        for ([_]i16{ 1, 2, 3 }) |distance| {
+            var starting: Controller = .{ .activity = .{ .running = .starting }, .playback = .{ .next_step = 1 } };
+            _ = try starting.advanceIn(clips, intent, &pose, Wall{ .distance = distance });
+            try std.testing.expectEqualDeep(Activity{ .stopping_run = if (distance == 1) .wall else .braking }, starting.activity);
+            try std.testing.expectEqual(@as(i16, 96), pose.position.x);
+        }
+    }
 }

@@ -320,6 +320,7 @@ pub const Scene = struct {
             .changing_pace => |p| @backingInt(p),
             .reversing_run => |p| @backingInt(p),
             .running_jump => |p| @backingInt(p.phase),
+            .descending => |p| @backingInt(p.phase),
             .jumping => |jump| (@as(u32, @backingInt(jump.kind)) << 8) | @backingInt(jump.phase),
             .crouching => |p| @backingInt(p),
             .rolling => |roll| @backingInt(roll.phase),

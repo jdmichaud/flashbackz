@@ -5,11 +5,11 @@ const controls = @import("controls.zig");
 const std = @import("std");
 
 pub const VerticalClips = struct { rise: motion.Clip, recover: motion.Clip };
-pub const ForwardClips = struct { takeoff: motion.Clip, flight: motion.Clip, landing: motion.Clip, recover: motion.Clip, landing_forward_shift: i16 = 16 };
+pub const ForwardClips = struct { takeoff: motion.Clip, flight: motion.Clip, landing: motion.Clip, recover: motion.Clip, ledge_reach: ?motion.Clip = null, landing_forward_shift: i16 = 16 };
 pub const Clips = struct { upward: VerticalClips, low_clearance: VerticalClips, forward: ForwardClips, ledge_height: i16 = 72, grip_lift: i16 = 24 };
 pub const Kind = enum { upward, low_clearance, forward };
-pub const Phase = enum { takeoff, flight, landing, recovery };
-pub const Boundary = enum { continued, finished, wall_collision, climb_ledge, grip_ledge, terrain_requested };
+pub const Phase = enum { takeoff, flight, landing, recovery, ledge_reach };
+pub const Boundary = enum { continued, finished, wall_collision, climb_ledge, grip_ledge, fall_requested, catch_ledge };
 
 pub const State = struct {
     kind: Kind,
@@ -26,6 +26,7 @@ pub const State = struct {
                 .flight => clips.forward.flight,
                 .landing => clips.forward.landing,
                 .recovery => clips.forward.recover,
+                .ledge_reach => clips.forward.ledge_reach.?,
             },
         };
     }
@@ -57,12 +58,22 @@ pub const State = struct {
                 if (self.phase == .takeoff) {
                     self.phase = .flight;
                 } else {
-                    if (!try environment.at(pose.*, .support, 2)) return .terrain_requested;
+                    const falls_short = !try environment.at(pose.*, .support, 0) and try environment.at(pose.*, .torso, 2);
+                    const catches = !falls_short and intent.action and try environment.ledge(pose.*, .support, 3, .behind);
+                    if (falls_short or catches or !try environment.at(pose.*, .support, 2)) {
+                        const shift = clips.forward.landing_forward_shift;
+                        pose.position.x +%= if (pose.facing == .right) shift else -%shift;
+                        if (!catches) return .fall_requested;
+                        if (clips.forward.ledge_reach == null) return error.MissingLedgeReach;
+                        self.phase = .ledge_reach;
+                        return .continued;
+                    }
                     self.phase = .landing;
                     const shift = clips.forward.landing_forward_shift;
                     pose.position.x +%= if (pose.facing == .right) shift else -%shift;
                 }
             },
+            .ledge_reach => return .catch_ledge,
             .landing => self.phase = .recovery,
             .recovery => return .finished,
         }

@@ -15,7 +15,7 @@ pub const Clips = struct {
     running_recovery: motion.Clip,
     alignment: i16 = 16,
 };
-pub const Boundary = enum { continued, standing, resume_running, reverse_run, brake, settle_running, catch_ledge, wall_collision, fall_requested };
+pub const Boundary = enum { continued, standing, resume_running, reverse_run, brake, wall_stop, settle_running, catch_ledge, wall_collision, gliding_drop, vertical_drop, unbalanced_drop };
 pub const State = struct {
     phase: Phase = .takeoff,
     pub fn clip(self: State, clips: Clips) motion.Clip {
@@ -79,8 +79,12 @@ pub const State = struct {
                 if (try environment.ledge(pose.*, .support, 1, .ahead)) {
                     shift(pose, clips.alignment);
                     self.phase = .standing_recovery;
-                } else if (!try environment.at(pose.*, .support, 1) or !try environment.at(pose.*, .support, 2)) {
-                    return .fall_requested;
+                } else if (!try environment.at(pose.*, .support, 1)) {
+                    pose.position.y +%= 8;
+                    return .gliding_drop;
+                } else if (!try environment.at(pose.*, .support, 2)) {
+                    pose.position.y +%= 8;
+                    return .vertical_drop;
                 } else if (try wall(environment, pose.*, 1) or try wall(environment, pose.*, 2)) {
                     shift(pose, clips.alignment);
                     self.phase = .standing_recovery;
@@ -92,11 +96,12 @@ pub const State = struct {
                 }
             },
             .standing_recovery => {
-                if (!try environment.at(pose.*, .support, 0)) return .fall_requested;
+                if (!try environment.at(pose.*, .support, 0)) return .unbalanced_drop;
                 return .standing;
             },
             .running_recovery => {
-                if (try wall(environment, pose.*, 1) or try wall(environment, pose.*, 2) or try wall(environment, pose.*, 3)) return .brake;
+                if (try wall(environment, pose.*, 1)) return .wall_stop;
+                if (try wall(environment, pose.*, 2) or try wall(environment, pose.*, 3)) return .brake;
                 if (intent.action and !intent.directions_conflict and intent.vertical != .down) {
                     if (intent.direction != null and intent.direction != pose.facing) return .reverse_run;
                     return .resume_running;
