@@ -70,3 +70,7 @@ Rules:
   instances, behaviour families and links across levels; import typed definitions for shared
   components. Do not hand-code each switch or door, and do not introduce a legacy script VM
   into the modern engine. Reference scenarios qualify families, not individual hard-coded IDs.
+
+- Latest user workflow preference: keep iteration fast. Launch the game and test the feature
+  directly, then move on when it works. Do not run broad regressions or lengthy qualification
+  for each increment. Investigate observed failures as needed; the original remains authority.
