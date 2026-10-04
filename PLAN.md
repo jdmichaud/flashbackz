@@ -41,6 +41,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   Gate: all decoded room pixels and palette selectors match the original installer’s five
   MAP outputs. Preserve compact content boundaries; reproducing the installer’s compression
   choices is unnecessary for runtime artwork.
+- [ ] Restore the jungle holocube as an animated world item: contact indication, pickup,
+  inventory transfer and recording playback, with explicit scene pause/resume. Gate: original
+  floppy observations agree on object visibility, action/transfer order and cinematic selection;
+  native input can collect and use the item from direct disk images.
 - [ ] Requalify gameplay imports and executable-backed metadata against this release before
   claiming that earlier movement, scene or inventory evidence applies.
 
