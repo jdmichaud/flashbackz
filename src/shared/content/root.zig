@@ -29,3 +29,5 @@ pub const jungle = @import("jungle.zig");
 test {
     @import("std").testing.refAllDecls(@This());
 }
+
+pub const sound_effects = @import("sound_effects.zig");

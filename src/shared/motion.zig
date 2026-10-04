@@ -2,6 +2,7 @@
 //! behaviors choose clips and transitions, while the renderer resolves opaque visual IDs.
 const std = @import("std");
 
+pub const SoundId = enum(u16) { _ };
 pub const VisualId = enum(u32) { _ };
 pub const Facing = enum { right, left };
 pub const Position = struct { x: i16, y: i16 };
@@ -21,10 +22,14 @@ pub const Step = union(enum) {
     },
 };
 
-pub const Clip = struct { steps: []const Step, presses_floor_switches: bool = false };
+pub const Clip = struct { steps: []const Step, presses_floor_switches: bool = false, sound: ?SoundId = null, disturbs_surface: bool = false };
 
 pub const Playback = struct {
     next_step: usize = 0,
+
+    pub fn soundOnEntry(self: Playback, clip: Clip) ?SoundId {
+        return if (self.next_step == 0) clip.sound else null;
+    }
 
     pub fn exhausted(self: Playback, clip: Clip) bool {
         return self.next_step >= clip.steps.len;
