@@ -8,9 +8,8 @@ have been removed.
 
 The supplied `disk1.img` and `disk2.img` form the complete English floppy set. The original
 installer completes successfully, and the original introduction and English menu run. Disk 1
-is identical to the now-removed `Flashback.ima`. The native host currently accepts one image
-or an extracted directory; combining both images and converting the installer’s level files
-are the next import steps.
+is identical to the now-removed `Flashback.ima`. Both native hosts accept the two image paths
+together, or extracted directories. Converting the installer’s level files is still pending.
 
 Code-wheel protection is excluded by the user's instruction. Modern Start will proceed
 directly to the game opening sequence.
@@ -24,8 +23,8 @@ comparisons do not establish fidelity to this edition.
 
 ```sh
 zig build --prefix /tmp/flashback/modern/out --cache-dir /tmp/flashback/modern/cache
-/tmp/flashback/modern/out/bin/flashbackz-sdl --scene menu ../disk1.img
-/tmp/flashback/modern/out/bin/flashbackz-agent --scene menu --frames 120 ../disk1.img
+/tmp/flashback/modern/out/bin/flashbackz-sdl --scene menu ../disk1.img ../disk2.img
+/tmp/flashback/modern/out/bin/flashbackz-agent --scene menu --frames 120 ../disk1.img ../disk2.img
 ```
 
 Images are opened read-only. The bounded FAT12 reader validates geometry, matching FAT copies,
@@ -35,7 +34,8 @@ extractor or emulator is used by the game. Supplied content never enters version
 
 Build with Zig 0.17.0 and SDL2 2.32.4 on Linux. Foundation checks are `zig build test smoke
 verify web web-check` with scratch prefix/cache as above; `web-check` also needs Node.js.
-Windows is cross-built with `zig build -Dtarget=x86_64-windows-gnu`, using pinned SDL2 sources.
+Windows builds are deferred until Linux gameplay is working; portable host boundaries remain.
+When that phase resumes, `zig build -Dtarget=x86_64-windows-gnu` uses pinned SDL2 sources.
 Without content, the template smoke fixture remains available for platform testing.
 
 Independent scene, movement, terrain, inventory and rendering systems are retained for

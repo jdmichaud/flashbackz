@@ -11,14 +11,14 @@ const agent = @import("agent");
 const native = @import("native");
 
 const usage =
-    \\usage: flashbackz-agent [--frames N] [--key FRAME:NAME]... [ASSET_PATH] [--saves DIR]
+    \\usage: flashbackz-agent [--frames N] [--key FRAME:NAME]... [ASSET_PATH...] [--saves DIR]
     \\  --frames N       run N frames (default 120)
     \\  --key FRAME:NAME press and release the key NAME (a platform.Key, as `f2` or `left`) at
     \\                   frame FRAME; the option repeats
     \\  --key-down F:KEY hold KEY from host frame F
     \\  --key-up F:KEY   release KEY at host frame F
     \\  --scene menu     open the title preview while floppy startup is being recovered
-    \\  ASSET_PATH       a FAT12 IMA image or directory of original floppy files
+    \\  ASSET_PATH       FAT12 images or extracted directories; repeat for all disks
     \\  --saves DIR      where saves are kept
     \\
 ;

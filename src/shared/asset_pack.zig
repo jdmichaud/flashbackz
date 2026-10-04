@@ -35,6 +35,10 @@ pub const Pack = struct {
         try self.source.add(key, value);
         self.total += bytes.len;
     }
+    /// Import another pack without borrowing its storage. Conflicting editions are errors.
+    pub fn merge(self: *Pack, other: *const Pack) !void {
+        for (other.source.entries.keys(), other.source.entries.values()) |name, bytes| try self.add(name, bytes);
+    }
     pub fn assetSource(self: *Pack) platform.AssetSource {
         return self.source.assetSource();
     }

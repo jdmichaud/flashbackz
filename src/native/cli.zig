@@ -1,7 +1,7 @@
 //! The command-line options that both native hosts take and open for the game: a positional
-//! asset path and `--saves <dir>`.
+//! asset paths and `--saves <dir>`.
 //!
-//! The asset path is a directory or a FAT12 floppy image. `--saves` defaults to the per-user application data directory, which
+//! Each asset path is a directory or a FAT12 floppy image. `--saves` defaults to the per-user application data directory, which
 //! is created on first use. The result is a bound `AssetSource` and `Storage`. The game uses
 //! them and does not know which kind of source it has.
 const std = @import("std");
@@ -13,20 +13,22 @@ const DirectoryStorage = @import("storage.zig").DirectoryStorage;
 const Pack = flashbackz.asset_pack.Pack;
 
 pub const usage =
-    \\  ASSET_PATH    a FAT12 IMA floppy image, or directory of original floppy files
+    \\  ASSET_PATH    FAT12 IMG/IMA images or extracted directories; repeat for all disks
     \\  --scene NAME   development shortcut: menu or jungle (default: normal startup)
     \\  --saves DIR    where saves are kept (default: the per-user application data directory)
     \\
 ;
 
-pub const TakeError = error{ MissingValue, DuplicateAssets, UnknownScene };
+pub const TakeError = error{ MissingValue, TooManyAssets, UnknownScene };
 
 pub const Options = struct {
     assets: ?[]const u8 = null,
+    additional_assets: [7][]const u8 = undefined,
+    additional_count: usize = 0,
     saves: ?[]const u8 = null,
     entry: flashbackz.game.Entry = .automatic,
 
-    /// Consumes `--saves` and the single positional asset path. Returns false for
+    /// Consumes `--saves` and positional asset paths. Returns false for
     /// any other argument. After `--`, an asset path can start with a dash.
     pub fn take(self: *Options, arg: []const u8, args: anytype) TakeError!bool {
         if (std.mem.eql(u8, arg, "--scene")) {
@@ -41,30 +43,36 @@ pub const Options = struct {
             return true;
         }
         if (std.mem.eql(u8, arg, "--")) {
-            while (args.next()) |path| try self.setAsset(path);
+            while (args.next()) |path| try self.addAsset(path);
             return true;
         }
         if (arg.len == 0 or arg[0] != '-') {
-            try self.setAsset(arg);
+            try self.addAsset(arg);
             return true;
         }
         return false;
     }
 
-    fn setAsset(self: *Options, path: []const u8) error{ MissingValue, DuplicateAssets }!void {
+    pub fn addAsset(self: *Options, path: []const u8) error{ MissingValue, TooManyAssets }!void {
         if (path.len == 0) return error.MissingValue;
-        if (self.assets != null) return error.DuplicateAssets;
-        self.assets = path;
+        if (self.assets == null) {
+            self.assets = path;
+        } else {
+            if (self.additional_count >= self.additional_assets.len) return error.TooManyAssets;
+            self.additional_assets[self.additional_count] = path;
+            self.additional_count += 1;
+        }
     }
 };
 
 /// The kind of asset source, for the host's start-up line and the agent's diagnostics.
-pub const AssetKind = enum { none, directory, floppy };
+pub const AssetKind = enum { none, directory, floppy, mixed };
 
 pub const OpenError = error{
     NotFound,
     NotADirectory,
     InvalidImage,
+    ConflictingAsset,
     AccessDenied,
     NoApplicationDirectory,
     Io,
@@ -100,10 +108,18 @@ pub const Providers = struct {
             try defaultSaveDirectory(allocator, environ);
         self.saves = try mapOpen(DirectoryStorage.open(allocator, io, self.saves_path, true));
         const path = options.assets orelse return;
-        if (DirectoryAssetSource.open(allocator, io, path)) |opened| {
+        if (options.additional_count > options.additional_assets.len) return error.InvalidImage;
+        self.content = Pack.init(allocator);
+        try self.importPath(io, path);
+        for (options.additional_assets[0..options.additional_count]) |additional| try self.importPath(io, additional);
+        flashbackz.content.archive.expandAll(&self.content.?) catch |err| return mapImportError(err);
+    }
+
+    fn importPath(self: *Providers, io: std.Io, path: []const u8) OpenError!void {
+        const allocator = self.allocator;
+        const kind: AssetKind = if (DirectoryAssetSource.open(allocator, io, path)) |opened| directory: {
             var directory = opened;
             defer directory.deinit();
-            self.content = Pack.init(allocator);
             const source = directory.assetSource();
             var listing = source.list("") catch return error.Io;
             defer listing.deinit();
@@ -112,17 +128,28 @@ pub const Providers = struct {
                 if (platform.assetNameEql(name, "GAME_E.OVL")) return error.InvalidImage;
                 var data = source.readAll(name, Pack.limit - self.content.?.total) catch return error.InvalidImage;
                 defer data.deinit();
-                self.content.?.add(name, data.bytes) catch return error.InvalidImage;
+                self.content.?.add(name, data.bytes) catch |err| return mapImportError(err);
             }
-            self.kind = .directory;
-        } else |err| {
+            break :directory .directory;
+        } else |err| image: {
             if (err != error.NotADirectory) return err;
-            const image = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(4 * 1024 * 1024)) catch return error.InvalidImage;
-            defer allocator.free(image);
-            self.content = flashbackz.floppy.load(allocator, image) catch return error.InvalidImage;
-            self.kind = .floppy;
-        }
-        flashbackz.content.archive.expandAll(&self.content.?) catch return error.InvalidImage;
+            const image_bytes = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(4 * 1024 * 1024)) catch return error.InvalidImage;
+            defer allocator.free(image_bytes);
+            var imported = flashbackz.floppy.load(allocator, image_bytes) catch |failure| return mapImportError(failure);
+            defer imported.deinit();
+            self.content.?.merge(&imported) catch |failure| return mapImportError(failure);
+            break :image .floppy;
+        };
+        self.kind = if (self.kind == .none or self.kind == kind) kind else .mixed;
+    }
+
+    fn mapImportError(err: anyerror) OpenError {
+        return switch (err) {
+            error.OutOfMemory => error.OutOfMemory,
+            error.Canceled => error.Canceled,
+            error.ConflictingAsset => error.ConflictingAsset,
+            else => error.InvalidImage,
+        };
     }
 
     fn mapOpen(result: anytype) OpenError!@typeInfo(@TypeOf(result)).error_union.payload {
@@ -294,4 +321,53 @@ test "the positional source reads a floppy through owned provider storage" {
     var content = try providers.assetSource().?.readAll("data/file.dat", 600);
     defer content.deinit();
     try std.testing.expectEqual(@as(usize, 600), content.bytes.len);
+}
+
+test "multiple disks merge files and conflicting editions fail without partial providers" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+    const image = try flashbackz.floppy.testImage(allocator);
+    defer allocator.free(image);
+    try tmp.dir.writeFile(io, .{ .sub_path = "first.img", .data = image });
+    @memcpy(image[33 * 512 ..][0..11], "SECOND  DAT");
+    try tmp.dir.writeFile(io, .{ .sub_path = "second.img", .data = image });
+    @memcpy(image[33 * 512 ..][0..11], "FILE    DAT");
+    image[35 * 512] = 'X';
+    try tmp.dir.writeFile(io, .{ .sub_path = "conflict.img", .data = image });
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const base = path_buffer[0..try tmp.dir.realPath(io, &path_buffer)];
+    var paths: [4][]u8 = undefined;
+    inline for (.{ "first.img", "second.img", "conflict.img", "saves" }, 0..) |name, i| {
+        paths[i] = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ base, name });
+    }
+    defer for (paths) |path| allocator.free(path);
+    var env = try testEnviron(allocator, &.{});
+    defer env.deinit();
+    var options: Options = .{ .saves = paths[3] };
+    try options.addAsset(paths[0]);
+    try options.addAsset(paths[1]);
+    {
+        var providers: Providers = .empty;
+        try providers.open(allocator, io, &env, options);
+        defer providers.deinit();
+        var names = try providers.assetSource().?.list("");
+        defer names.deinit();
+        try std.testing.expectEqual(@as(usize, 2), names.names.len);
+        try std.testing.expectEqualStrings("DATA/FILE.DAT", names.names[0]);
+        try std.testing.expectEqualStrings("DATA/SECOND.DAT", names.names[1]);
+        var first = try providers.assetSource().?.readAll(names.names[0], 600);
+        defer first.deinit();
+        var second = try providers.assetSource().?.readAll(names.names[1], 600);
+        defer second.deinit();
+        try std.testing.expectEqualSlices(u8, first.bytes, second.bytes);
+    }
+    try options.addAsset(paths[2]);
+    var failed: Providers = .empty;
+    try std.testing.expectError(error.ConflictingAsset, failed.open(allocator, io, &env, options));
+    try std.testing.expect(failed.content == null and failed.saves == null);
+    var bounded: Options = .{};
+    for (0..8) |_| try bounded.addAsset("disk.img");
+    try std.testing.expectError(error.TooManyAssets, bounded.addAsset("extra.img"));
 }

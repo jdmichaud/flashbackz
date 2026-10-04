@@ -22,8 +22,8 @@ pub const assets_required = false;
 const program_name = "flashbackz-sdl";
 
 pub const usage =
-    \\usage: flashbackz-sdl [OPTIONS] [ASSET_PATH]
-    \\  ASSET_PATH           a FAT12 IMA image or directory of original floppy files
+    \\usage: flashbackz-sdl [OPTIONS] [ASSET_PATH...]
+    \\  ASSET_PATH           FAT12 images or extracted directories; repeat for all disks
     \\  --scene jungle       enter the jungle development slice directly
     \\  --help, -h           show this help
     \\  --scale N            window scale, 1 to 64 (default 3)
@@ -273,7 +273,6 @@ test "the host options are parsed, bounded and defaulted" {
         &.{ "flashbackz-sdl", "--event-log", "-1" },
         &.{ "flashbackz-sdl", "--fps", "0" },
         &.{ "flashbackz-sdl", "--frobnicate" },
-        &.{ "flashbackz-sdl", "first", "second" },
         &.{ "flashbackz-sdl", "--scene", "jungle" },
         &.{ "flashbackz-sdl", "--scene", "unknown", "game" },
     }) |args| {
@@ -282,6 +281,10 @@ test "the host options are parsed, bounded and defaulted" {
             try std.testing.expectError(error.MissingAssets, result);
         } else try std.testing.expectError(error.BadArguments, result);
     }
+    const disks = try parseArgs(SliceArgs{ .items = &.{ "flashbackz-sdl", "disk1.img", "disk2.img" } });
+    try std.testing.expectEqualStrings("disk1.img", disks.providers.assets.?);
+    try std.testing.expectEqual(@as(usize, 1), disks.providers.additional_count);
+    try std.testing.expectEqualStrings("disk2.img", disks.providers.additional_assets[0]);
     const jungle_options = try parseArgs(SliceArgs{ .items = &.{ "flashbackz-sdl", "--scene", "jungle", "game.ima" } });
     try std.testing.expectEqual(flashbackz.game.Entry.jungle_development, jungle_options.providers.entry);
 }
