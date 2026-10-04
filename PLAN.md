@@ -64,6 +64,9 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
 - [ ] Shared collectible pickup and throwable stones, imported by behavior family. Use the
   original demo to expose the next missing interaction; validate increments with quick native
   play checks, per the user's iteration preference.
+- [ ] Shared enemy families: import every matching placement, animation library and behavior
+  profile from original data. Implement perception, stone distractions, locomotion, shooting
+  and damage through independent actor/combat components; qualify with quick native encounters.
 - [ ] **Systematic mechanism import (user direction):** enumerate all level placements,
   shared rule groups and connections; classify behaviour families and translate them to typed
   definitions for shared switch/door/lift components. Gate: every instance is accounted for,
