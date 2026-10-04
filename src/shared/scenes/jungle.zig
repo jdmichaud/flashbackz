@@ -99,6 +99,8 @@ pub const Scene = struct {
     controller: conrad.Controller = .{},
     weapon_toggle: conrad.armed.Toggle = .{},
     pistol: @import("../pistol_shot.zig").State = .{},
+    enemy_fire: @import("../weapon_fire.zig").World,
+    protection_steps: u8 = 0,
     effects: @import("../audio/effects.zig").Output = .{},
     sound_events: [16]@import("../audio/effects.zig").Event = undefined,
     sound_event_count: usize = 0,
@@ -162,7 +164,9 @@ pub const Scene = struct {
         errdefer hazards.deinit();
         var gunmen = try @import("../actors/gunman.zig").World.init(allocator, pack.gunmen.definitions, pack.gunmen.profiles);
         errdefer gunmen.deinit();
-        const combat_targets = try allocator.alloc(@import("../combat.zig").Target, pack.gunmen.definitions.len);
+        var enemy_fire = try @import("../weapon_fire.zig").World.init(allocator, pack.gunmen.weapons.len);
+        errdefer enemy_fire.deinit();
+        const combat_targets = try allocator.alloc(@import("../combat.zig").Target, pack.gunmen.definitions.len + 1);
         errdefer allocator.free(combat_targets);
         const distractions = try allocator.alloc(@import("../contacts.zig").Footprint, pack.world_props.definitions.len);
         errdefer allocator.free(distractions);
@@ -183,6 +187,7 @@ pub const Scene = struct {
             .gunmen = gunmen,
             .distractions = distractions,
             .combat_targets = combat_targets,
+            .enemy_fire = enemy_fire,
             .surfaces = surfaces,
             .pose = pack.initial_pose,
             .health = pack.initial_health,
@@ -228,6 +233,7 @@ pub const Scene = struct {
         self.operated_controls.deinit();
         self.hazards.deinit();
         self.gunmen.deinit();
+        self.enemy_fire.deinit();
         self.allocator.free(self.distractions);
         self.allocator.free(self.combat_targets);
         self.surfaces.deinit();
@@ -335,6 +341,8 @@ pub const Scene = struct {
             self.sound_event_count = 0;
             self.hazards.beginStep();
             self.gunmen.prepare();
+            self.enemy_fire.beginStep();
+            if (self.protection_steps != 0) self.protection_steps -= 1;
             try self.props.prepare(self.terrain.map(), &self.equipment, .{ .room = self.environment.room, .position = self.pose.position, .width = self.content.player_contact_width });
             try self.operated_controls.prepare(self.content.controls.definitions, self.terrain.map(), self.props.player_contact);
             self.controller.control_available = self.operated_controls.candidate != null;
@@ -343,8 +351,11 @@ pub const Scene = struct {
             self.controller.use_available = if (selected) |item| item.definition.use_action != null else false;
             self.controller.throw_available = if (selected) |item| if (item.definition.use_action) |action| action == .throw_item else false else false;
             self.controller.weapon_desired = self.weapon_toggle.desired;
+            self.controller.health_before_step = self.health;
             const result = try self.controller.advanceIn(self.content.controllerClips(), intent, &self.pose, &self.environment);
             if (result != .advanced) return error.UnimplementedMovementTransition;
+            self.health -%= self.controller.damage_requested;
+            if (self.controller.grant_protection) self.protection_steps = 60;
             self.weapon_toggle.advance(intent.weapon, self.equipment.carries(.gun));
             if (self.controller.sound_requested) |sound| try self.emitSound(sound, self.environment.room);
             if (self.controller.fatal_landing) self.health = -1;
@@ -370,16 +381,20 @@ pub const Scene = struct {
                 self.distractions[distraction_count] = object.contact;
                 distraction_count += 1;
             }
-            try self.gunmen.advance(self.content.gunmen.definitions, self.content.gunmen.profiles, self.terrain.map(), .{ .room = self.environment.room, .position = self.pose.position }, self.distractions[0..distraction_count], &self.random);
-            for (self.gunmen.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
-            self.score +%= self.gunmen.score_requested;
-            for (self.gunmen.actors, self.content.gunmen.definitions, self.combat_targets, 0..) |actor, definition, *target, index| {
+            self.combat_targets[0] = .{ .id = @fromBackingInt(0), .category = .player, .footprint = self.props.player_contact, .facing = self.pose.facing, .vulnerable = try self.controller.vulnerability(self.content.controllerClips()) };
+            for (self.gunmen.actors, self.content.gunmen.definitions, self.combat_targets[1..], 0..) |actor, definition, *target, index| {
                 target.* = .{ .id = @fromBackingInt(@as(u16, @intCast(index + 1))), .footprint = actor.contact, .facing = actor.pose.facing, .vulnerable = actor.vulnerability(self.content.gunmen.profiles[definition.profile]), .active = actor.active and !actor.lost };
             }
+            try self.gunmen.advance(self.content.gunmen.definitions, self.content.gunmen.profiles, self.terrain.map(), .{ .room = self.environment.room, .position = self.pose.position }, self.distractions[0..distraction_count], self.combat_targets, &self.random);
+            for (self.gunmen.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
+            self.score +%= self.gunmen.score_requested;
             try self.pistol.advanceWithTargets(self.content.pistolDefinition(), self.controller.shot_requested, self.pose, self.environment.room, self.terrain.view(), self.combat_targets);
-            if (self.pistol.hit_requested) |hit| {
-                const actor = &self.gunmen.actors[@backingInt(hit.target) - 1];
-                if (actor.room == hit.sender_room) actor.pending_hit = hit.impact;
+            if (self.pistol.hit_requested) |hit| self.deliverHit(hit);
+            for (self.gunmen.actors, self.content.gunmen.definitions) |actor, definition| if (actor.shot) |height| self.enemy_fire.fire(definition.weapon, .{ .pose = actor.pose, .room = actor.room, .height = height }, definition.shot_next_step);
+            try self.enemy_fire.advance(self.content.gunmen.weapons, self.terrain.view(), self.combat_targets);
+            for (self.enemy_fire.channels) |channel| {
+                if (channel.state.hit_requested) |hit| self.deliverHit(hit);
+                if (channel.state.sound_requested) |sound| try self.emitSound(sound, channel.state.effect.?.room);
             }
             self.casings.advance(self.content.casing_definition, self.controller.shot_requested, self.pose, self.environment.room, &self.random);
             try self.surfaces.advance(self.content.surfaces, self.content.surfaceClips(), self.terrain.map(), self.props.player_contact, try self.controller.disturbsSurface(self.content.controllerClips()), &self.random);
@@ -463,7 +478,7 @@ pub const Scene = struct {
         try self.drawCasing(room, indices, true);
         try self.drawSurfaces(room, indices, true);
         const frame = try self.content.frame(self.pose.visual.id);
-        try sprite_renderer.draw(indices, room.image.width, room.image.height, frame, @as(i32, self.pose.position.x) + 8, @as(i32, self.pose.position.y) + 2, .{ .palette_bank = 4, .facing = if (self.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        if (self.protection_steps & 1 == 0) try sprite_renderer.draw(indices, room.image.width, room.image.height, frame, @as(i32, self.pose.position.x) + 8, @as(i32, self.pose.position.y) + 2, .{ .palette_bank = 4, .facing = if (self.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
         try self.drawProps(.in_front_of_player, room, indices);
         try self.drawControls(.in_front_of_player, room, indices);
         try self.drawHazards(.in_front_of_player, room, indices);
@@ -492,8 +507,20 @@ pub const Scene = struct {
         try palette.writeRgba(indices, &room.colors, rgba);
     }
 
+    fn deliverHit(self: *Scene, hit: @import("../combat.zig").Hit) void {
+        if (@backingInt(hit.target) == 0) {
+            if (self.protection_steps == 0 and self.environment.room == hit.sender_room) self.controller.pending_hits.set(hit.impact);
+        } else {
+            const actor = &self.gunmen.actors[@backingInt(hit.target) - 1];
+            if (actor.room == hit.sender_room) actor.pending_hits.set(hit.impact);
+        }
+    }
+
     fn drawShot(self: *const Scene, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8, behind_player: bool) !void {
         const definition = self.content.pistolDefinition();
+        for (self.enemy_fire.channels, self.content.gunmen.weapons) |channel, weapon| if (weapon.behind_player == behind_player) {
+            if (channel.state.effect) |effect| if (effect.room == self.environment.room) try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(effect.pose.visual.id), @as(i32, effect.pose.position.x) + 8, @as(i32, effect.pose.position.y) + 2, .{ .palette_bank = weapon.palette_bank, .facing = if (effect.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        };
         if (definition.behind_player != behind_player) return;
         if (self.pistol.effect) |effect| if (effect.room == self.environment.room) {
             try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(effect.pose.visual.id), @as(i32, effect.pose.position.x) + 8, @as(i32, effect.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (effect.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
@@ -554,6 +581,9 @@ pub const Scene = struct {
         self.equipment.hashInto(&hash);
         self.terrain.hashInto(&hash);
         self.pistol.hashInto(&hash);
+        self.enemy_fire.hashInto(&hash);
+        const hits = self.controller.pending_hits;
+        hash.update(&.{ self.protection_steps, @intFromBool(self.controller.protection_pending), @intFromBool(hits.rear_high), @intFromBool(hits.rear_low), @intFromBool(hits.front_high), @intFromBool(hits.front_low) });
         self.casings.hashInto(&hash);
         self.surfaces.hashInto(&hash);
         for ([_]u32{ if (self.ambience.call) |call| @intCast(call + 1) else 0, self.ambience.elapsed, if (self.ambience.room) |room| @backingInt(room) else 0 }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
@@ -592,7 +622,8 @@ pub const Scene = struct {
             .jumping => |jump| (@as(u32, @backingInt(jump.kind)) << 8) | @backingInt(jump.phase),
             .crouching => |p| @backingInt(p),
             .rolling => |roll| @backingInt(roll.phase),
-            .falling => |fall| @backingInt(fall.phase),
+            .wounded => |state| @backingInt(state.phase),
+            .falling => |fall| @as(u32, @backingInt(fall.phase)) | (@as(u32, @intFromBool(fall.already_dead)) << 8),
             .ledge => |state| @backingInt(state.phase),
             .operating => |state| @backingInt(state),
             .dead => |phase| @backingInt(phase),

@@ -54,8 +54,10 @@ Electrical hazards now respond to their switches and pressure plates, and contac
 disintegration before Continue. Jungle gunmen now share idle, walking, turning,
 awareness and aiming/firing animation. The stone-sensitive variant approaches loose stones;
 the other variant ignores them. Conrad's shots now damage and defeat gunmen, with directional
-knockdowns and score awards. Enemy bullets cannot harm Conrad yet; his hit reactions,
-other enemy families and the remaining mechanisms are still being implemented.
+knockdowns and score awards. Enemy bullets now hurt Conrad, with posture-sensitive knockdowns, recovery,
+brief blinking protection, and Continue on defeat. Gunmen can crouch and fire low in
+response to Conrad's posture. Robots, ceiling laser guns, other enemy families and the
+remaining mechanisms are still being implemented.
 
 DEMO plays the three original recorded input streams through normal gameplay, in the
 original jungle / alien surface / tower order. Escape or Tab returns to the title; select

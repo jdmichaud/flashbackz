@@ -41,6 +41,7 @@ pub const Pack = struct {
     controls: @import("operated_controls.zig").Assets,
     hazards: @import("electrical_hazards.zig").Assets,
     gunmen: @import("gunmen.zig").Assets,
+    wounds: @import("conrad_wound.zig").Assets,
     player_contact_width: u8,
     surfaces: []@import("../surface_reactions.zig").Definition,
     forest_calls: []@import("../ambience.zig").Call,
@@ -69,6 +70,7 @@ pub const Pack = struct {
         self.controls.deinit();
         self.hazards.deinit();
         self.gunmen.deinit();
+        self.wounds.deinit();
         self.sounds.deinit();
         self.allocator.free(self.surfaces);
         self.allocator.free(self.forest_calls);
@@ -90,6 +92,7 @@ pub const Pack = struct {
 
     pub fn controllerClips(self: *const Pack) conrad.Clips {
         return .{
+            .wounds = self.wounds.definition(),
             .armed = .{
                 .clearing_draw = self.clip(.armed_clearing_draw),
                 .roll_recovery = self.clip(.armed_roll_recovery),
@@ -397,6 +400,9 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         motions[i] = try clip.resolve(allocator, &resolver);
         loaded += 1;
     }
+    var wounds = try @import("conrad_wound.zig").load(allocator, rules.bytes, player.rule_group, ani.bytes, &source_moves, &resolver);
+    errdefer wounds.deinit();
+    for (motions, 0..) |*clip, index| clip.hit_profile = @fromBackingInt(@as(u16, @intCast(index)));
     const walk = try allocator.alloc(conrad.WalkMotion, 2);
     errdefer allocator.free(walk);
     walk[0] = .{ .clip = motions[@backingInt(Move.walk_a)].clip(), .torso_clearance_ahead = 0 };
@@ -475,6 +481,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .controls = operated,
         .hazards = hazards,
         .gunmen = gunmen,
+        .wounds = wounds,
         .surfaces = try surfaces.toOwnedSlice(allocator),
         .sounds = sounds,
         .forest_calls = forest_calls,

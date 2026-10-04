@@ -46,6 +46,7 @@ pub const SourceClip = struct {
 };
 
 pub const OwnedClip = struct {
+    hit_profile: ?@import("../combat.zig").ProfileId = null,
     allocator: std.mem.Allocator,
     steps: []motion.Step,
     presses_floor_switches: bool,
@@ -58,7 +59,7 @@ pub const OwnedClip = struct {
     }
 
     pub fn clip(self: *const OwnedClip) motion.Clip {
-        return .{ .steps = self.steps, .presses_floor_switches = self.presses_floor_switches, .sound = self.sound, .disturbs_surface = self.disturbs_surface };
+        return .{ .hit_profile = self.hit_profile, .steps = self.steps, .presses_floor_switches = self.presses_floor_switches, .sound = self.sound, .disturbs_surface = self.disturbs_surface };
     }
 };
 

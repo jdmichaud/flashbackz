@@ -3,6 +3,39 @@
 const geometry = @import("../geometry.zig");
 const motion = @import("../motion.zig");
 const contacts = @import("../contacts.zig");
+const combat = @import("../combat.zig");
+
+pub const PostureSense = struct { category: combat.Category, same_facing: bool, impact: combat.Impact };
+
+/// Detect an exposed posture that cannot receive the selected kind of shot. Gunmen use
+/// this to lower their aim; this is a visibility query, not prediction of moving bullets.
+pub fn unhittableTarget(map: geometry.Map, observer: Observer, self_id: combat.Id, range: i16, targets: []const combat.Target, senses: []const ?PostureSense) !bool {
+    const band = @divTrunc(observer.pose.position.y, 72);
+    if (band < 0 or band > 2) return false;
+    const direction: i16 = if ((observer.pose.facing == .right) == (range > 0)) 1 else -1;
+    var column = (observer.pose.position.x +% 8) >> 4;
+    var room = observer.room;
+    const layout: contacts.Layout = .{};
+    for (0..@as(usize, @abs(range)) + 1) |_| {
+        const cell = try map.locate(room, column, band * 2 + 1) orelse return false;
+        for (targets) |target| {
+            if (target.id == self_id or !target.active) continue;
+            var selected = false;
+            for (senses) |optional| if (optional) |sense| {
+                if (target.category == sense.category and ((target.facing == observer.pose.facing) == sense.same_facing) and !target.vulnerable.accepts(sense.impact)) selected = true;
+            };
+            if (!selected) continue;
+            for (0..target.footprint.width) |offset| {
+                const contact = try layout.cell(map, target.footprint.room, .{ .x = target.footprint.position.x +% @as(i16, @intCast(offset)) *% 16, .y = target.footprint.position.y }) orelse continue;
+                if (contact.room == cell.room and contact.column == cell.column and contact.row == band) return true;
+            }
+        }
+        if (try map.blocked(room, column, band * 2 + 1)) return false;
+        room = cell.room;
+        column = @as(i16, @intCast(cell.column)) +% direction;
+    }
+    return false;
+}
 
 pub const Observer = struct { room: geometry.RoomId, pose: motion.Pose };
 pub const Awareness = struct {

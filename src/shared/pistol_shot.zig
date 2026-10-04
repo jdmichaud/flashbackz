@@ -9,6 +9,9 @@ const Environment = @import("actors/conrad_environment.zig").Environment;
 const shift = @import("actors/conrad_roll.zig").shiftForward;
 pub const Height = @import("pistol_casing.zig").Height;
 pub const Definition = struct {
+    initial_phase: Phase = .ignition,
+    impact_forward: [2]i16 = .{ 3, 2 },
+    impact_down: [2]i16 = .{ 5, 5 },
     ignition: motion.Clip,
     standing_flash: motion.Clip,
     crouched_flash: motion.Clip,
@@ -64,7 +67,7 @@ pub const State = struct {
         self.hit_requested = null;
         if (shot) |height| {
             self.shots_fired +%= 1;
-            self.effect = .{ .pose = pose, .room = room, .height = height };
+            self.effect = .{ .pose = pose, .room = room, .height = height, .phase = definition.initial_phase };
         }
         if (self.effect) |*effect| {
             if (effect.playback.exhausted(effect.clip(definition))) {
@@ -87,8 +90,8 @@ pub const State = struct {
                     };
                     effect.room = hit.room;
                     effect.pose.position.x = hit.x;
-                    shift(&effect.pose, if (effect.height == .standing) 3 else 2);
-                    effect.pose.position.y -%= if (effect.phase == .ignition) (if (effect.height == .standing) @as(i16, 35) else 22) else 5;
+                    shift(&effect.pose, definition.impact_forward[@backingInt(effect.height)]);
+                    effect.pose.position.y -%= if (effect.phase == .ignition) (if (effect.height == .standing) @as(i16, 35) else 22) else definition.impact_down[@backingInt(effect.height)];
                     effect.phase = .impact;
                 }
                 effect.playback = .{};

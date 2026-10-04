@@ -8,6 +8,8 @@ const running_jump = @import("conrad_running_jump.zig");
 const jumping = @import("conrad_jump.zig");
 const ledge = @import("conrad_ledge.zig");
 const falling = @import("conrad_fall.zig");
+const wounds = @import("conrad_wound.zig");
+const combat = @import("../combat.zig");
 const recoil = @import("conrad_recoil.zig");
 const rolling = @import("conrad_roll.zig");
 pub const Intent = @import("controls.zig").Intent;
@@ -33,6 +35,7 @@ pub const RunClips = struct {
 };
 
 pub const Clips = struct {
+    wounds: ?wounds.Definition = null,
     armed: ?armed.Clips = null,
     wake: motion.Clip,
     use_item: ?motion.Clip = null,
@@ -59,6 +62,7 @@ pub const Clips = struct {
 pub const TurnPhase = enum { preparation, follow_through };
 pub const GaitPhase = union(enum) { starting, stride: usize };
 pub const Activity = union(enum) {
+    wounded: wounds.State,
     armed: armed.State,
     waking,
     standing,
@@ -102,6 +106,12 @@ const NoEnvironment = struct {
 
 pub const Controller = struct {
     activity: Activity = .waking,
+    /// Session input and ordered consequences, reset at each movement step.
+    health_before_step: i16 = 5,
+    damage_requested: u8 = 0,
+    pending_hits: combat.ImpactSet = .{},
+    protection_pending: bool = false,
+    grant_protection: bool = false,
     weapon_desired: bool = false,
     sound_requested: ?motion.SoundId = null,
     shot_requested: ?@import("../pistol_shot.zig").Height = null,
@@ -123,6 +133,7 @@ pub const Controller = struct {
 
     fn selectedClip(self: Controller, clips: Clips) !motion.Clip {
         return switch (self.activity) {
+            .wounded => |state| state.clip(clips.wounds orelse return error.MissingInjuryMotion),
             .armed => |state| state.clip(clips.armed orelse return error.MissingMotion),
             .waking => clips.wake,
             .standing => clips.stand,
@@ -192,6 +203,36 @@ pub const Controller = struct {
         };
     }
 
+    pub fn vulnerability(self: Controller, clips: Clips) !combat.Vulnerability {
+        const definition = clips.wounds orelse return .{};
+        const id = (try self.selectedClip(clips)).hit_profile orelse return .{};
+        return definition.policies[@backingInt(id)].vulnerability();
+    }
+
+    fn receiveHit(self: *Controller, clips: Clips, pose: *motion.Pose, environment: anytype) !void {
+        const hits = self.pending_hits;
+        self.pending_hits = .{};
+        if (!hits.any() or self.health_before_step <= 0) return;
+        const definition = clips.wounds orelse return;
+        const id = (try self.selectedClip(clips)).hit_profile orelse return;
+        const policy = definition.policies[@backingInt(id)];
+        for (policy.priority) |impact| {
+            if (!hits.accepts(impact)) continue;
+            const entry = try policy.responses[@backingInt(impact)].select(pose.*, environment) orelse continue;
+            if (entry.turn) pose.facing = if (pose.facing == .right) .left else .right;
+            rolling.shiftForward(pose, entry.forward);
+            pose.position.y +%= entry.down;
+            if (entry.damage) {
+                self.damage_requested += 1;
+                self.protection_pending = true;
+            }
+            self.activity = .{ .wounded = .{ .phase = entry.phase } };
+            self.playback = .{};
+            try environment.motionBoundary(pose);
+            break;
+        }
+    }
+
     pub fn disturbsSurface(self: Controller, clips: Clips) !bool {
         return (try self.selectedClip(clips)).disturbs_surface;
     }
@@ -209,6 +250,8 @@ pub const Controller = struct {
     }
 
     pub fn advanceIn(self: *Controller, clips: Clips, intent: Intent, pose: *motion.Pose, environment: anytype) !Result {
+        self.damage_requested = 0;
+        self.grant_protection = false;
         self.shot_requested = null;
         self.sound_requested = null;
         self.pickup_requested = false;
@@ -216,10 +259,27 @@ pub const Controller = struct {
         self.use_requested = false;
         self.fatal_landing = false;
         self.death_wait_requested = null;
+        try self.receiveHit(clips, pose, environment);
         var clip = try self.selectedClip(clips);
         if (clip.steps.len == 0) return error.MissingMotion;
         if (self.playback.exhausted(clip)) {
             switch (self.activity) {
+                .wounded => |*state| {
+                    const outcome = try state.finish(self.health_before_step - self.damage_requested, self.weapon_desired, intent, pose, environment);
+                    if (outcome.damage) {
+                        self.damage_requested += 1;
+                        self.protection_pending = true;
+                    }
+                    switch (outcome.boundary) {
+                        .continued => {},
+                        .standing => self.activity = .standing,
+                        .armed => self.activity = .{ .armed = .{ .phase = .aiming } },
+                        .catch_ledge => self.activity = .{ .ledge = .{ .phase = .catching } },
+                        .long_fall => self.activity = .{ .falling = .{ .already_dead = self.health_before_step <= self.damage_requested } },
+                        .low_recovery => self.activity = .low_landing,
+                        .death_wait => self.death_wait_requested = (clips.wounds orelse return error.MissingInjuryMotion).death_wait_steps,
+                    }
+                },
                 .armed => |*state| switch (try state.finishPhase(intent, self.weapon_desired, pose, environment)) {
                     .continued => {},
                     .unarmed_standing => self.activity = .standing,
@@ -522,6 +582,10 @@ pub const Controller = struct {
             try environment.motionBoundary(pose);
             clip = try self.selectedClip(clips);
             if (clip.steps.len == 0) return error.MissingMotion;
+            if (self.protection_pending and (try self.vulnerability(clips)).any()) {
+                self.protection_pending = false;
+                self.grant_protection = true;
+            }
         }
         self.sound_requested = self.playback.soundOnEntry(clip);
         _ = self.playback.advance(clip, pose);

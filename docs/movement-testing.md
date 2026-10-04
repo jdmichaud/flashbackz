@@ -64,5 +64,13 @@ The same system drives every eligible jungle gunman, including rooms with severa
 Standing in their forward view alerts them; throw stones to distract the responsive variant.
 Press **Space** to draw the gun, then **Shift** to shoot: gunmen now take hits, fall and
 award points. Their defeat trajectory accounts for walls, platform edges and room exits.
-Enemy shots cannot harm Conrad yet; his hit reactions and enemy crouching decisions remain
-unfinished, so this build still cannot be used to qualify a complete fight.
+Enemy shots now hurt Conrad. You can test **backward knockdown from a front hit**,
+**forward knockdown from a rear hit**, and **getting up after a hit**. Press **Space** during
+recovery to request a gun-ready get-up. Conrad briefly blinks after recovery; those shots
+are absorbed without further damage. A fatal hit leads to Continue/Abort.
+
+Hold **Down** to crouch: high shots can pass over Conrad, and nearby gunmen can respond by
+**crouching and firing low**. Other gunmen can be hit by a shot that passes Conrad.
+The standing/rear recovery, low-aim response and combat defeat flow have native checks.
+Airborne/ledge injury combinations and complete encounter fidelity remain to qualify;
+robots and ceiling laser guns still require their own behavior families.

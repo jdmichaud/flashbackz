@@ -5,14 +5,19 @@ const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
 const terrain = @import("terrain.zig");
 pub const Id = enum(u16) { _ };
+pub const ProfileId = enum(u16) { _ };
 pub const Height = enum { standing, crouched };
 pub const Impact = enum { rear_high, rear_low, front_high, front_low };
-pub const Vulnerability = struct {
+pub const Vulnerability = ImpactSet;
+pub const ImpactSet = struct {
     rear_high: bool = false,
     rear_low: bool = false,
     front_high: bool = false,
     front_low: bool = false,
-    pub fn accepts(self: Vulnerability, impact: Impact) bool {
+    pub fn any(self: ImpactSet) bool {
+        return self.rear_high or self.rear_low or self.front_high or self.front_low;
+    }
+    pub fn accepts(self: ImpactSet, impact: Impact) bool {
         return switch (impact) {
             .rear_high => self.rear_high,
             .rear_low => self.rear_low,
@@ -20,7 +25,7 @@ pub const Vulnerability = struct {
             .front_low => self.front_low,
         };
     }
-    pub fn set(self: *Vulnerability, impact: Impact) void {
+    pub fn set(self: *ImpactSet, impact: Impact) void {
         switch (impact) {
             .rear_high => self.rear_high = true,
             .rear_low => self.rear_low = true,
@@ -29,7 +34,8 @@ pub const Vulnerability = struct {
         }
     }
 };
-pub const Target = struct { id: Id, footprint: contacts.Footprint, facing: motion.Facing, vulnerable: Vulnerability, active: bool = true };
+pub const Category = enum { player, enemy, civilian };
+pub const Target = struct { id: Id, footprint: contacts.Footprint, facing: motion.Facing, vulnerable: Vulnerability, active: bool = true, category: Category = .enemy };
 pub const Hit = struct { target: Id, impact: Impact, sender_room: geometry.RoomId };
 
 pub fn impactFor(direction: motion.Facing, target_facing: motion.Facing, height: Height) Impact {

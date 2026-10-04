@@ -15,10 +15,21 @@ pub const Clips = struct {
 pub const Boundary = enum { continued, fatal_landing, catch_ledge };
 pub const State = struct {
     phase: Phase = .initial,
+    already_dead: bool = false,
     pub fn clip(self: State, clips: Clips) motion.Clip {
         return if (self.phase == .initial) clips.initial else clips.continuing;
     }
     pub fn finishPhase(self: *State, clips: Clips, intent: controls.Intent, pose: *motion.Pose, environment: anytype) !Boundary {
+        if (self.already_dead) {
+            if (!try environment.ledge(pose.*, .support, 0, .behind) and try environment.at(pose.*, .support, 0)) {
+                pose.facing = if (pose.facing == .right) .left else .right;
+                pose.position.y +%= clips.landing_down;
+                return .fatal_landing;
+            }
+            pose.position.y +%= clips.descent_down;
+            self.phase = .continuing;
+            return .continued;
+        }
         if (intent.action) {
             if (try environment.ledge(pose.*, .support, 1, .behind)) {
                 pose.position.y +%= 32;
