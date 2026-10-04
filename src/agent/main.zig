@@ -51,7 +51,7 @@ pub fn main(init: std.process.Init) !void {
             return fail(io);
         }
     }
-    if (options.entry == .jungle_development and options.assets == null) return fail(io);
+    if ((options.entry == .jungle_development or options.entry == .level_development) and options.assets == null) return fail(io);
 
     // Real providers when the options name them, else in-memory ones. They outlive the game.
     var providers: native.cli.Providers = .empty;

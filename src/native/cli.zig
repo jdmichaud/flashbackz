@@ -14,7 +14,7 @@ const Pack = flashbackz.asset_pack.Pack;
 
 pub const usage =
     \\  ASSET_PATH    FAT12 IMG/IMA images or extracted directories; repeat for all disks
-    \\  --scene NAME   development shortcut: menu or jungle (default: normal startup)
+    \\  --scene NAME   development shortcut: menu or a level name (default: normal startup)
     \\  --saves DIR    where saves are kept (default: the per-user application data directory)
     \\
 ;
@@ -33,7 +33,7 @@ pub const Options = struct {
     pub fn take(self: *Options, arg: []const u8, args: anytype) TakeError!bool {
         if (std.mem.eql(u8, arg, "--scene")) {
             const value = args.next() orelse return error.MissingValue;
-            self.entry = if (std.mem.eql(u8, value, "jungle")) .jungle_development else if (std.mem.eql(u8, value, "menu")) .menu_development else return error.UnknownScene;
+            self.entry = if (std.mem.eql(u8, value, "jungle")) .jungle_development else if (std.mem.eql(u8, value, "menu")) .menu_development else if (std.meta.stringToEnum(flashbackz.content.level.Id, value)) |level| .{ .level_development = level } else return error.UnknownScene;
             return true;
         }
         if (std.mem.eql(u8, arg, "--saves")) {

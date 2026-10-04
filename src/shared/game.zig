@@ -8,7 +8,7 @@ const front_end = @import("scenes/front_end.zig");
 const continue_mod = @import("scenes/continue_game.zig");
 const story_mod = @import("scenes/story.zig");
 const jungle_mod = @import("scenes/jungle.zig");
-pub const Entry = enum { automatic, menu_development, jungle_development };
+pub const Entry = union(enum) { automatic, menu_development, jungle_development, level_development: @import("content/level.zig").Id };
 const Scene = union(enum) {
     smoke,
     menu: front_end.Scene,
@@ -182,8 +182,9 @@ pub const Game = struct {
         errdefer allocator.free(page);
         const rgba = try allocator.alloc(u8, page_width * page_height * platform.RgbaFrame.bytes_per_pixel);
         errdefer allocator.free(rgba);
-        if (entry == .jungle_development) {
-            const scene = try jungle_mod.Scene.load(allocator, assets orelse return error.OriginalContentRequired);
+        if (entry == .jungle_development or entry == .level_development) {
+            const level: @import("content/level.zig").Id = if (entry == .level_development) entry.level_development else .jungle;
+            const scene = try jungle_mod.Scene.loadLevel(allocator, assets orelse return error.OriginalContentRequired, level, .normal);
             return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .scene = .{ .jungle = scene } };
         }
         const original_menu = if (assets) |source| try menu_art.load(allocator, source) else null;
