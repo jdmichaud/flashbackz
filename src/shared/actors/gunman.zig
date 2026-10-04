@@ -265,6 +265,7 @@ pub const World = struct {
             if (actor.defeat == null) for (profile.hit_priority[@backingInt(actor.action)]) |hit| {
                 if (!hits.accepts(hit)) continue;
                 const reaction = profile.reactions[@backingInt(actor.action)][@backingInt(hit)] orelse continue;
+                actor.playback.completeDisplacement(actor.clip(profile), &actor.pose);
                 if (reaction.turn) actor.pose.facing = if (actor.pose.facing == .right) .left else .right;
                 actor.moveAnchor(reaction.forward);
                 actor.pose.position.y +%= reaction.down;

@@ -74,3 +74,7 @@ Hold **Down** to crouch: high shots can pass over Conrad, and nearby gunmen can 
 The standing/rear recovery, low-aim response and combat defeat flow have native checks.
 Airborne/ledge injury combinations and complete encounter fidelity remain to qualify;
 robots and ceiling laser guns still require their own behavior families.
+
+Airborne hit correction: incoming damage now completes the interrupted motion's remaining
+displacement before selecting the reaction. Running-jump descent hits no longer leave
+Conrad standing 12–16 pixels above the floor. The same interruption rule applies to enemies.

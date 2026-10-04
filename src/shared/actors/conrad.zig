@@ -212,10 +212,18 @@ pub const Controller = struct {
     fn receiveHit(self: *Controller, clips: Clips, pose: *motion.Pose, environment: anytype) !void {
         const hits = self.pending_hits;
         self.pending_hits = .{};
-        if (!hits.any() or self.health_before_step <= 0) return;
+        if (!hits.any()) return;
         const definition = clips.wounds orelse return;
-        const id = (try self.selectedClip(clips)).hit_profile orelse return;
+        const interrupted = try self.selectedClip(clips);
+        const id = interrupted.hit_profile orelse return;
         const policy = definition.policies[@backingInt(id)];
+        const vulnerable = policy.vulnerability();
+        const accepted = for (policy.priority) |impact| {
+            if (hits.accepts(impact) and vulnerable.accepts(impact)) break true;
+        } else false;
+        if (!accepted) return;
+        self.playback.completeDisplacement(interrupted, pose);
+        if (self.health_before_step <= 0) return;
         for (policy.priority) |impact| {
             if (!hits.accepts(impact)) continue;
             const entry = try policy.responses[@backingInt(impact)].select(pose.*, environment) orelse continue;

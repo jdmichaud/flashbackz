@@ -35,6 +35,21 @@ pub const Playback = struct {
         return self.next_step >= clip.steps.len;
     }
 
+    fn displace(pose: *Pose, forward: i16, down: i16) void {
+        const displacement: i32 = if (pose.facing == .left) -@as(i32, forward) else forward;
+        pose.position.x = @truncate(@as(i32, pose.position.x) + displacement);
+        pose.position.y +%= down;
+    }
+
+    /// An accepted interruption completes the current motion's displacement before the
+    /// reaction evaluates terrain. Unpresented frames change neither artwork nor sound.
+    pub fn completeDisplacement(self: *Playback, clip: Clip, pose: *Pose) void {
+        while (!self.exhausted(clip)) : (self.next_step += 1) switch (clip.steps[self.next_step]) {
+            .hold => {},
+            .frame => |frame| displace(pose, frame.forward, frame.down),
+        };
+    }
+
     /// The caller handles an exhausted clip before choosing the next step. End-of-clip
     /// never reads neighboring content or silently starts an unrelated movement.
     pub fn advance(self: *Playback, clip: Clip, pose: *Pose) enum { advanced, exhausted } {
@@ -42,9 +57,7 @@ pub const Playback = struct {
         switch (clip.steps[self.next_step]) {
             .hold => {},
             .frame => |frame| {
-                const displacement: i32 = if (pose.facing == .left) -@as(i32, frame.forward) else frame.forward;
-                pose.position.x = @truncate(@as(i32, pose.position.x) + displacement);
-                pose.position.y +%= frame.down;
+                displace(pose, frame.forward, frame.down);
                 pose.visual = .{ .id = frame.visual.id, .mirrored = frame.visual.mirrored != (pose.facing == .left) };
             },
         }
@@ -52,6 +65,27 @@ pub const Playback = struct {
         return .advanced;
     }
 };
+
+test "interruption completes only remaining displacement without presenting skipped frames" {
+    const frames = [_]Step{
+        .{ .frame = .{ .visual = .{ .id = @fromBackingInt(8) }, .forward = 7, .down = -16 } },
+        .hold,
+        .{ .frame = .{ .visual = .{ .id = @fromBackingInt(9) }, .forward = 5, .down = 16 } },
+    };
+    const clip: Clip = .{ .steps = &frames, .sound = @fromBackingInt(3) };
+    var pose: Pose = .{ .position = .{ .x = 100, .y = 70 }, .facing = .left, .visual = .{ .id = @fromBackingInt(0) } };
+    var playback: Playback = .{};
+    _ = playback.advance(clip, &pose);
+    const visible = pose.visual;
+    playback.completeDisplacement(clip, &pose);
+    try std.testing.expectEqualDeep(Position{ .x = 88, .y = 70 }, pose.position);
+    try std.testing.expectEqualDeep(visible, pose.visual);
+    try std.testing.expect(playback.exhausted(clip));
+    try std.testing.expect(playback.soundOnEntry(clip) == null);
+    const completed = pose;
+    playback.completeDisplacement(clip, &pose);
+    try std.testing.expectEqualDeep(completed, pose);
+}
 
 test "motion holds preserve the pose and clip completion is explicit" {
     const old_visual: VisualId = @fromBackingInt(7);
