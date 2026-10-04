@@ -8,6 +8,7 @@ const running_jump = @import("conrad_running_jump.zig");
 const jumping = @import("conrad_jump.zig");
 const ledge = @import("conrad_ledge.zig");
 const falling = @import("conrad_fall.zig");
+const riding = @import("conrad_lift.zig");
 const wounds = @import("conrad_wound.zig");
 const combat = @import("../combat.zig");
 const recoil = @import("conrad_recoil.zig");
@@ -35,6 +36,7 @@ pub const RunClips = struct {
 };
 
 pub const Clips = struct {
+    riding: ?riding.Clips = null,
     wounds: ?wounds.Definition = null,
     armed: ?armed.Clips = null,
     wake: motion.Clip,
@@ -62,6 +64,7 @@ pub const Clips = struct {
 pub const TurnPhase = enum { preparation, follow_through };
 pub const GaitPhase = union(enum) { starting, stride: usize };
 pub const Activity = union(enum) {
+    riding: riding.State,
     wounded: wounds.State,
     armed: armed.State,
     waking,
@@ -121,6 +124,12 @@ pub const Controller = struct {
     death_wait_requested: ?u16 = null,
     pickup_requested: bool = false,
     use_requested: bool = false,
+    ride_available: bool = false,
+    ride_acknowledged: bool = false,
+    ride_arrived: bool = false,
+    ride_requested: ?@import("../lifts.zig").Stop = null,
+    ride_boarded: bool = false,
+    ride_left: bool = false,
     use_available: bool = false,
     throw_available: bool = false,
     pickup_available: bool = false,
@@ -133,6 +142,7 @@ pub const Controller = struct {
 
     fn selectedClip(self: Controller, clips: Clips) !motion.Clip {
         return switch (self.activity) {
+            .riding => |state| state.clip(clips.riding orelse return error.MissingRidingMotion),
             .wounded => |state| state.clip(clips.wounds orelse return error.MissingInjuryMotion),
             .armed => |state| state.clip(clips.armed orelse return error.MissingMotion),
             .waking => clips.wake,
@@ -258,6 +268,9 @@ pub const Controller = struct {
     }
 
     pub fn advanceIn(self: *Controller, clips: Clips, intent: Intent, pose: *motion.Pose, environment: anytype) !Result {
+        self.ride_requested = null;
+        self.ride_boarded = false;
+        self.ride_left = false;
         self.damage_requested = 0;
         self.grant_protection = false;
         self.shot_requested = null;
@@ -270,8 +283,25 @@ pub const Controller = struct {
         try self.receiveHit(clips, pose, environment);
         var clip = try self.selectedClip(clips);
         if (clip.steps.len == 0) return error.MissingMotion;
+        if (self.activity == .riding and self.ride_arrived and self.activity.riding.acceptsArrival()) self.playback.completeDisplacement(clip, pose);
         if (self.playback.exhausted(clip)) {
             switch (self.activity) {
+                .riding => |*state| switch (state.finish(intent, self.weapon_desired, self.ride_acknowledged, self.ride_arrived, pose)) {
+                    .continued => {},
+                    .boarded => self.ride_boarded = true,
+                    .fire => |height| self.shot_requested = height,
+                    .leave => |ground| {
+                        self.ride_left = true;
+                        self.activity = switch (ground) {
+                            .standing => .standing,
+                            .crouched => .{ .crouching = .holding },
+                            .armed_standing => .{ .armed = .{ .phase = .standing } },
+                            .armed_aiming => .{ .armed = .{ .phase = .aiming } },
+                            .armed_crouched => .{ .armed = .{ .phase = .crouched } },
+                            .armed_aiming_crouched => .{ .armed = .{ .phase = .aiming_crouched } },
+                        };
+                    },
+                },
                 .wounded => |*state| {
                     const outcome = try state.finish(self.health_before_step - self.damage_requested, self.weapon_desired, intent, pose, environment);
                     if (outcome.damage) {
@@ -320,6 +350,9 @@ pub const Controller = struct {
                         self.activity = .{ .armed = .{} };
                     } else if (self.use_available and intent.use_item and !intent.action and !intent.weapon and intent.neutralDirections()) {
                         self.activity = .using_item;
+                    } else if (self.ride_available and intent.action and !intent.weapon and !intent.use_item and !intent.directions_conflict and intent.direction == null and intent.vertical != null) {
+                        self.ride_requested = if (intent.vertical == .up) .top else .bottom;
+                        self.activity = .{ .riding = .{} };
                     } else if (self.pickup_available and intent.action and intent.neutralDirections()) {
                         self.activity = .{ .crouching = .lowering };
                     } else if (self.control_available and intent.action and intent.neutralDirections() and !intent.weapon and !intent.use_item) {

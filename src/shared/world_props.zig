@@ -130,7 +130,10 @@ pub const World = struct {
                         if (event.settled) object.flight = null;
                         continue;
                     }
-                    if (object.playback.exhausted(item.idle)) object.playback = .{};
+                    if (object.playback.exhausted(item.idle)) {
+                        _ = try map.handoff(&object.room, &object.pose.position);
+                        object.playback = .{};
+                    }
                     object.sound_requested = object.playback.soundOnEntry(item.idle);
                     _ = object.playback.advance(item.idle, &object.pose);
                 }

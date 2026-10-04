@@ -44,6 +44,9 @@ pub const Pack = struct {
     detectors: @import("detectors.zig").Assets,
     ceiling_guns: @import("ceiling_guns.zig").Assets,
     doors: @import("doors.zig").Assets,
+    lifts: @import("lifts.zig").Assets,
+    lift_passengers: []@import("../lift_passengers.zig").Binding,
+    riding: @import("conrad_lift.zig").Assets,
     gunmen: @import("gunmen.zig").Assets,
     robots: @import("ground_robots.zig").Assets,
     wounds: @import("conrad_wound.zig").Assets,
@@ -78,6 +81,9 @@ pub const Pack = struct {
         self.detectors.deinit();
         self.ceiling_guns.deinit();
         self.doors.deinit();
+        self.lifts.deinit();
+        self.allocator.free(self.lift_passengers);
+        self.riding.deinit();
         self.gunmen.deinit();
         self.robots.deinit();
         self.wounds.deinit();
@@ -102,6 +108,7 @@ pub const Pack = struct {
 
     pub fn controllerClips(self: *const Pack) conrad.Clips {
         return .{
+            .riding = self.riding.definition,
             .wounds = self.wounds.definition(),
             .armed = .{
                 .clearing_draw = self.clip(.armed_clearing_draw),
@@ -433,6 +440,12 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer detectors.deinit();
     var locks = try @import("key_locks.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, &resolver);
     errdefer locks.deinit();
+    var lifts = try @import("lifts.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
+    errdefer lifts.deinit();
+    const lift_passengers = try @import("lift_passengers.zig").load(allocator, placement_table, rules.bytes, props, @intCast(initial_items.len), lifts.source_indices);
+    errdefer allocator.free(lift_passengers);
+    var riding = try @import("conrad_lift.zig").load(allocator, rules.bytes, player.rule_group, ani.bytes, &resolver);
+    errdefer riding.deinit();
     const combined_connections = try connections.toOwnedSlice(allocator);
     allocator.free(props.connections);
     props.connections = combined_connections;
@@ -504,6 +517,9 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .detectors = detectors,
         .ceiling_guns = ceiling_guns,
         .doors = doors,
+        .lifts = lifts,
+        .lift_passengers = lift_passengers,
+        .riding = riding,
         .gunmen = gunmen,
         .robots = robots,
         .wounds = wounds,

@@ -106,3 +106,21 @@ fire on each signal. The paired jungle guns retain their different delays. These
 not ordinary shootable enemies. Their beams use the shared damage and injury system.
 All eight original Normal-difficulty placements and their input links are imported. The
 jungle detector encounter and paired-plate firing were checked; later levels remain to play.
+
+
+### Ride an ordinary lift
+
+Stand on the platform with the gun holstered. **Shift+Up** requests upward travel;
+**Shift+Down** requests downward travel. During the ride:
+
+- **Opposite horizontal arrow** turns Conrad.
+- **Down** crouches; releasing it rises when unarmed. **Up** rises from crouched aim.
+- **Space** draws or holsters the gun; **Shift** fires in the current posture.
+
+Arrival restores normal ground movement. A loose stone initially blocks departure, then
+boards; keeping the travel keys held submits the renewed request that carries both Conrad
+and the stone. Other loose item families do not automatically board.
+
+The ordinary ride and armed room-crossing ride have focused original behavior comparisons;
+SDL input, presented poses and PCM output were checked. Automatic-return and cinematic
+transfer lifts, and some external call controllers, remain unfinished.

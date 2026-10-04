@@ -63,7 +63,10 @@ profiles, effects and damage. Doors now use shared opening/closing tracks and ch
 collision at the authored animation steps. Pressure plates, switches and credential locks
 route through imported circuits. Ordinary keys can be collected with Shift, selected with
 Tab/arrow keys, and used with Return at a matching lock. Successful use consumes the key.
-Story-issued cards, lifts, other enemy families and the remaining mechanisms are
+Ordinary lifts now carry Conrad and board stones through their original contact behavior.
+With the gun holstered, Shift+Up/Down requests a ride. Turning, crouching, drawing,
+shooting and holstering work while travelling. Automatic-return/cinematic lifts,
+story-issued cards, other enemy families and the remaining mechanisms are
 still being implemented.
 
 DEMO plays the three original recorded input streams through normal gameplay, in the

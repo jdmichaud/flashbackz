@@ -32,6 +32,7 @@ pub const Assets = struct {
     bindings: []runtime.Binding,
     /// Explicit coverage report for other lift graphs; no guessed behavior is substituted.
     unsupported: []u16,
+    source_indices: []u16,
     pub fn deinit(self: *Assets) void {
         for (self.definitions) |definition| self.allocator.free(definition.outputs);
         self.allocator.free(self.definitions);
@@ -40,6 +41,7 @@ pub const Assets = struct {
         self.allocator.free(self.clips);
         self.allocator.free(self.bindings);
         self.allocator.free(self.unsupported);
+        self.allocator.free(self.source_indices);
     }
 };
 fn op(value: rules.Operation, code: u8, argument: i16) bool {
@@ -164,6 +166,8 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
     errdefer bindings.deinit(allocator);
     var unsupported: std.ArrayList(u16) = .empty;
     errdefer unsupported.deinit(allocator);
+    var source_indices: std.ArrayList(u16) = .empty;
+    errdefer source_indices.deinit(allocator);
     var groups: std.AutoHashMap(u16, usize) = .init(allocator);
     defer groups.deinit();
     for (0..table.count) |i| {
@@ -204,6 +208,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
                 try outputs.append(allocator, .{ .event = if (event_index == 0) (if (index == 0) .depart_up else .depart_down) else (if (index == 0) .arrive_up else .arrive_down), .circuit = circuit });
             };
         }
+        try source_indices.append(allocator, @intCast(i));
         const owned_outputs = try outputs.toOwnedSlice(allocator);
         errdefer allocator.free(owned_outputs);
         try definitions.append(allocator, .{ .profile = profile_id, .room = rooms[record.room], .position = record.position, .facing = if (record.facing_right == 0) .left else .right, .width = record.collision_width, .floor_row_offset = spec.floor_row, .history_weight = collision.snapshotWeight(record.collision_width), .history_reuse = collision.snapshotReuse(record.collision_width, record.facing_right != 0), .travel_steps = durations, .initial_stop = stop, .initially_disabled = disabled, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .wake_on_contact = record.flags & 2 != 0, .accepts_signals = record.flags & 1 != 0, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .outputs = owned_outputs });
@@ -235,5 +240,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
     }
     const owned_bindings = try bindings.toOwnedSlice(allocator);
     errdefer allocator.free(owned_bindings);
-    return .{ .allocator = allocator, .definitions = owned_definitions, .profiles = owned_profiles, .clips = owned_clips, .bindings = owned_bindings, .unsupported = try unsupported.toOwnedSlice(allocator) };
+    const owned_sources = try source_indices.toOwnedSlice(allocator);
+    errdefer allocator.free(owned_sources);
+    return .{ .allocator = allocator, .source_indices = owned_sources, .definitions = owned_definitions, .profiles = owned_profiles, .clips = owned_clips, .bindings = owned_bindings, .unsupported = try unsupported.toOwnedSlice(allocator) };
 }
