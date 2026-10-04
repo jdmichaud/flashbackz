@@ -11,6 +11,8 @@ under these filenames were rejected by the user and are not the reference. Earli
 CD gates below are historical and do not certify the floppy edition. Code-wheel protection
 is excluded by explicit user instruction (2026-10-04); it is not a fidelity gate. The English installer
 completes successfully; original startup reaches the code-wheel protection prompt.
+Windows compilation is deferred until Linux gameplay works, per the user’s 2026-10-04
+priority update. Preserve portability while concentrating implementation and testing on Linux.
 
 - [x] Inventory FAT12 files and ABA archives; identify missing installation media, record
   provenance and reproduce floppy startup on disposable copies.

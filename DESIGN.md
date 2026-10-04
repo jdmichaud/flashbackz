@@ -22,7 +22,9 @@ There is no mandatory remaster and no runtime dependency on an emulator, decompi
 executable's instructions, research tool or sibling repository.
 
 Linux/SDL, a deterministic headless host, Windows/SDL and WebAssembly share the same game.
-The user accepts Linux runtime verification plus a Windows cross-build for Windows. Browser
+The user accepts Linux runtime verification plus a Windows cross-build for Windows. Windows
+compilation is deferred until Linux gameplay is working (user priority, 2026-10-04); portable
+host boundaries remain required. Browser
 acceptance includes browser execution. Network play is excluded. Audio acceptance is AdLib FM
 plus the game's digital samples; MT-32 device ROMs are not required.
 
