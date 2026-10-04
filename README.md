@@ -56,8 +56,9 @@ awareness and aiming/firing animation. The stone-sensitive variant approaches lo
 the other variant ignores them. Conrad's shots now damage and defeat gunmen, with directional
 knockdowns and score awards. Enemy bullets now hurt Conrad, with posture-sensitive knockdowns, recovery,
 brief blinking protection, and Continue on defeat. Gunmen can crouch and fire low in
-response to Conrad's posture. Robots, ceiling laser guns, other enemy families and the
-remaining mechanisms are still being implemented.
+response to Conrad's posture. Ground robots now deploy, pursue, strike and can be destroyed with low shots, including
+their overload/explosion sequence and sounds. Ceiling laser guns, other enemy families
+and the remaining mechanisms are still being implemented.
 
 DEMO plays the three original recorded input streams through normal gameplay, in the
 original jungle / alien surface / tower order. Escape or Tab returns to the title; select

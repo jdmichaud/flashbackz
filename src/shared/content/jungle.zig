@@ -41,6 +41,7 @@ pub const Pack = struct {
     controls: @import("operated_controls.zig").Assets,
     hazards: @import("electrical_hazards.zig").Assets,
     gunmen: @import("gunmen.zig").Assets,
+    robots: @import("ground_robots.zig").Assets,
     wounds: @import("conrad_wound.zig").Assets,
     player_contact_width: u8,
     surfaces: []@import("../surface_reactions.zig").Definition,
@@ -70,6 +71,7 @@ pub const Pack = struct {
         self.controls.deinit();
         self.hazards.deinit();
         self.gunmen.deinit();
+        self.robots.deinit();
         self.wounds.deinit();
         self.sounds.deinit();
         self.allocator.free(self.surfaces);
@@ -426,6 +428,8 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer hazards.deinit();
     var gunmen = try @import("gunmen.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, interface.score_awards, &resolver);
     errdefer gunmen.deinit();
+    var robots = try @import("ground_robots.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &resolver);
+    errdefer robots.deinit();
     const supplied = initial_items.len;
     initial_items = try allocator.realloc(initial_items, supplied + props.items.len);
     for (props.items, initial_items[supplied..]) |*item, *destination| {
@@ -481,6 +485,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .controls = operated,
         .hazards = hazards,
         .gunmen = gunmen,
+        .robots = robots,
         .wounds = wounds,
         .surfaces = try surfaces.toOwnedSlice(allocator),
         .sounds = sounds,

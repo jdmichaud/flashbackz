@@ -78,3 +78,14 @@ robots and ceiling laser guns still require their own behavior families.
 Airborne hit correction: incoming damage now completes the interrupted motion's remaining
 displacement before selecting the reaction. Running-jump descent hits no longer leave
 Conrad standing 12–16 pixels above the floor. The same interruption rule applies to enemies.
+
+### Deployable ground robots
+
+The small box robots now deploy when Conrad approaches, pursue him along supported ground,
+turn, retract and strike at close range. Their opened posture accepts **low shots**:
+press **Space** to draw, **Down** to crouch, and **Shift** to fire. A successful low hit
+starts collapse, overload and explosion; the robot then disappears. Keep clear during
+that sequence. Closed robots and high shots retain the original immunity rules.
+All seven Normal-difficulty jungle placements use this shared family; the same import
+also covers twelve Earth-city and two spaceport placements. Native combat was checked
+in the jungle; this does not qualify those later levels or the ceiling-gun family.

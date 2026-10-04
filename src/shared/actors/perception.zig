@@ -41,13 +41,16 @@ pub const Observer = struct { room: geometry.RoomId, pose: motion.Pose };
 pub const Awareness = struct {
     player_front: ?i16 = null,
     player_behind: ?i16 = null,
+    player_front_neighbor: bool = false,
+    player_behind_neighbor: bool = false,
     object_front: ?u8 = null,
     object_behind: ?u8 = null,
 
     pub fn player(self: Awareness, behind: bool, distance: ?i16) bool {
         const limit = distance orelse return false;
+        if (limit == 0 and (if (behind) self.player_behind_neighbor else self.player_front_neighbor)) return true;
         const actual = (if (behind) self.player_behind else self.player_front) orelse return false;
-        return limit == 0 or actual < limit;
+        return limit == 0 or (actual > 0 and actual < limit);
     }
     pub fn object(self: Awareness, behind: bool, cells: ?u8) bool {
         const limit = cells orelse return false;
@@ -61,7 +64,14 @@ pub fn observe(map: geometry.Map, observer: Observer, player: contacts.Footprint
     if (observer.room == player.room and @divTrunc(observer.pose.position.y, 72) == @divTrunc(player.position.y -% 8, 72)) {
         var distance = player.position.x -% observer.pose.position.x;
         if (observer.pose.facing == .left) distance = -%distance;
-        if (distance > 0) result.player_front = distance else if (distance < 0) result.player_behind = -%distance;
+        // The unlimited rear query includes equal X only for a left-facing observer.
+        if (distance > 0) result.player_front = distance else if (distance < 0) result.player_behind = -%distance else if (observer.pose.facing == .left) result.player_behind = 0;
+    } else if (@divTrunc(observer.pose.position.y, 72) == @divTrunc(player.position.y -% 8, 72)) {
+        const origin = try map.room(observer.room);
+        const ahead = if (observer.pose.facing == .left) origin.edges.left else origin.edges.right;
+        const behind = if (observer.pose.facing == .left) origin.edges.right else origin.edges.left;
+        result.player_front_neighbor = ahead == .room and ahead.room == player.room;
+        result.player_behind_neighbor = behind == .room and behind.room == player.room;
     }
     const room = try map.room(player.room);
     if (observer.room != player.room and !(room.edges.left == .room and room.edges.left.room == observer.room) and !(room.edges.right == .room and room.edges.right.room == observer.room)) return result;

@@ -114,6 +114,7 @@ pub const Scene = struct {
     operated_controls: @import("../operated_controls.zig").World,
     hazards: @import("../electrical_hazards.zig").World,
     gunmen: @import("../actors/gunman.zig").World,
+    robots: @import("../actors/ground_robot.zig").World,
     distractions: []@import("../contacts.zig").Footprint,
     combat_targets: []@import("../combat.zig").Target,
     surfaces: @import("../surface_reactions.zig").World,
@@ -164,9 +165,11 @@ pub const Scene = struct {
         errdefer hazards.deinit();
         var gunmen = try @import("../actors/gunman.zig").World.init(allocator, pack.gunmen.definitions, pack.gunmen.profiles);
         errdefer gunmen.deinit();
+        var robots = try @import("../actors/ground_robot.zig").World.init(allocator, pack.robots.definitions, pack.robots.profiles);
+        errdefer robots.deinit();
         var enemy_fire = try @import("../weapon_fire.zig").World.init(allocator, pack.gunmen.weapons.len);
         errdefer enemy_fire.deinit();
-        const combat_targets = try allocator.alloc(@import("../combat.zig").Target, pack.gunmen.definitions.len + 1);
+        const combat_targets = try allocator.alloc(@import("../combat.zig").Target, pack.gunmen.definitions.len + pack.robots.definitions.len + 1);
         errdefer allocator.free(combat_targets);
         const distractions = try allocator.alloc(@import("../contacts.zig").Footprint, pack.world_props.definitions.len);
         errdefer allocator.free(distractions);
@@ -185,6 +188,7 @@ pub const Scene = struct {
             .operated_controls = operated,
             .hazards = hazards,
             .gunmen = gunmen,
+            .robots = robots,
             .distractions = distractions,
             .combat_targets = combat_targets,
             .enemy_fire = enemy_fire,
@@ -233,6 +237,7 @@ pub const Scene = struct {
         self.operated_controls.deinit();
         self.hazards.deinit();
         self.gunmen.deinit();
+        self.robots.deinit();
         self.enemy_fire.deinit();
         self.allocator.free(self.distractions);
         self.allocator.free(self.combat_targets);
@@ -341,6 +346,7 @@ pub const Scene = struct {
             self.sound_event_count = 0;
             self.hazards.beginStep();
             self.gunmen.prepare();
+            self.robots.prepare();
             self.enemy_fire.beginStep();
             if (self.protection_steps != 0) self.protection_steps -= 1;
             try self.props.prepare(self.terrain.map(), &self.equipment, .{ .room = self.environment.room, .position = self.pose.position, .width = self.content.player_contact_width });
@@ -382,8 +388,12 @@ pub const Scene = struct {
                 distraction_count += 1;
             }
             self.combat_targets[0] = .{ .id = @fromBackingInt(0), .category = .player, .footprint = self.props.player_contact, .facing = self.pose.facing, .vulnerable = try self.controller.vulnerability(self.content.controllerClips()) };
-            for (self.gunmen.actors, self.content.gunmen.definitions, self.combat_targets[1..], 0..) |actor, definition, *target, index| {
+            for (self.gunmen.actors, self.content.gunmen.definitions, self.combat_targets[1 .. 1 + self.gunmen.actors.len], 0..) |actor, definition, *target, index| {
                 target.* = .{ .id = @fromBackingInt(@as(u16, @intCast(index + 1))), .footprint = actor.contact, .facing = actor.pose.facing, .vulnerable = actor.vulnerability(self.content.gunmen.profiles[definition.profile]), .active = actor.active and !actor.lost };
+            }
+            const first_robot = 1 + self.gunmen.actors.len;
+            for (self.robots.actors, self.combat_targets[first_robot..], 0..) |actor, *target, index| {
+                target.* = .{ .id = @fromBackingInt(@as(u16, @intCast(first_robot + index))), .footprint = actor.contact, .facing = actor.pose.facing, .vulnerable = actor.vulnerability(), .active = actor.active and !actor.removed };
             }
             try self.gunmen.advance(self.content.gunmen.definitions, self.content.gunmen.profiles, self.terrain.map(), .{ .room = self.environment.room, .position = self.pose.position }, self.distractions[0..distraction_count], self.combat_targets, &self.random);
             for (self.gunmen.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
@@ -399,6 +409,9 @@ pub const Scene = struct {
             self.casings.advance(self.content.casing_definition, self.controller.shot_requested, self.pose, self.environment.room, &self.random);
             try self.surfaces.advance(self.content.surfaces, self.content.surfaceClips(), self.terrain.map(), self.props.player_contact, try self.controller.disturbsSurface(self.content.controllerClips()), &self.random);
             self.last_ambient = if (self.content.forest_enabled) self.ambience.advance(.{ .quiet_steps = self.content.forest_quiet_steps, .calls = self.content.forest_calls }, self.environment.room, &self.random) else null;
+            try self.robots.advance(self.content.robots.definitions, self.content.robots.profiles, self.terrain.view(), .{ .room = self.environment.room, .position = self.pose.position }, self.combat_targets, first_robot);
+            for (self.robots.outgoing[0..self.robots.outgoing_count]) |hit| self.deliverHit(hit);
+            for (self.robots.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
             for (self.hazards.instances, self.content.hazards.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (self.operated_controls.instances, self.content.controls.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (self.props.objects) |object| if (object.sound_requested) |sound| try self.emitSound(sound, object.room);
@@ -474,6 +487,7 @@ pub const Scene = struct {
         try self.drawControls(.behind_player, room, indices);
         try self.drawHazards(.behind_player, room, indices);
         try self.drawGunmen(room, indices, true);
+        try self.drawRobots(room, indices, true);
         try self.drawShot(room, indices, true);
         try self.drawCasing(room, indices, true);
         try self.drawSurfaces(room, indices, true);
@@ -483,6 +497,7 @@ pub const Scene = struct {
         try self.drawControls(.in_front_of_player, room, indices);
         try self.drawHazards(.in_front_of_player, room, indices);
         try self.drawGunmen(room, indices, false);
+        try self.drawRobots(room, indices, false);
         try self.drawShot(room, indices, false);
         try self.drawCasing(room, indices, false);
         try self.drawSurfaces(room, indices, false);
@@ -510,8 +525,11 @@ pub const Scene = struct {
     fn deliverHit(self: *Scene, hit: @import("../combat.zig").Hit) void {
         if (@backingInt(hit.target) == 0) {
             if (self.protection_steps == 0 and self.environment.room == hit.sender_room) self.controller.pending_hits.set(hit.impact);
-        } else {
+        } else if (@backingInt(hit.target) <= self.gunmen.actors.len) {
             const actor = &self.gunmen.actors[@backingInt(hit.target) - 1];
+            if (actor.room == hit.sender_room) actor.pending_hits.set(hit.impact);
+        } else {
+            const actor = &self.robots.actors[@backingInt(hit.target) - 1 - self.gunmen.actors.len];
             if (actor.room == hit.sender_room) actor.pending_hits.set(hit.impact);
         }
     }
@@ -572,6 +590,13 @@ pub const Scene = struct {
         }
     }
 
+    fn drawRobots(self: *const Scene, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8, behind_player: bool) !void {
+        for (self.robots.actors, self.content.robots.definitions) |actor, definition| {
+            if (actor.removed or actor.room != self.environment.room or definition.behind_player != behind_player) continue;
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(actor.pose.visual.id), @as(i32, actor.pose.position.x) + 8, @as(i32, actor.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (actor.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        }
+    }
+
     pub fn stateHash(self: *const Scene) u64 {
         var hash = std.hash.Wyhash.init(0);
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(i16, self.health)));
@@ -592,6 +617,7 @@ pub const Scene = struct {
         self.operated_controls.hashInto(&hash);
         self.hazards.hashInto(&hash);
         self.gunmen.hashInto(&hash);
+        self.robots.hashInto(&hash);
         hash.update(&.{if (self.pending_movie) |movie| 1 + @as(u8, @backingInt(movie)) else 0});
         if (self.replay) |replay| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, replay.cursor)));
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, self.score)));
