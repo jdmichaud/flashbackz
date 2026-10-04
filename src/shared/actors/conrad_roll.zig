@@ -15,6 +15,7 @@ pub const Clips = struct {
     upright_landing: motion.Clip,
     alignment_forward: i16 = 16,
     landing_down: i16 = 8,
+    long_fall_down: i16 = 64,
 };
 
 test "roll exit alignment is committed once before its recovery" {
@@ -42,7 +43,7 @@ test "roll exit alignment is committed once before its recovery" {
     try std.testing.expectEqual(.standing, try state.finishPhase(clips, .{}, &pose, Ground{}));
     try std.testing.expectEqual(@as(i16, 16), pose.position.x);
 }
-pub const Boundary = enum { continued, standing, turning, wall_collision, terrain_requested, action_requested };
+pub const Boundary = enum { continued, standing, turning, wall_collision, long_fall, terrain_requested, action_requested };
 
 pub fn shiftForward(pose: *motion.Pose, amount: i16) void {
     pose.position.x +%= if (pose.facing == .right) amount else -%amount;
@@ -117,8 +118,10 @@ pub const State = struct {
             },
             .drop => {
                 if (intent.action and try environment.ledge(pose.*, .support, 0, .behind)) return .terrain_requested;
-                if (try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .support, -1)) return .terrain_requested;
-                if (!try environment.at(pose.*, .support, 0)) return .terrain_requested;
+                if ((try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .support, -1)) or !try environment.at(pose.*, .support, 0)) {
+                    pose.position.y +%= clips.long_fall_down;
+                    return .long_fall;
+                }
                 self.phase = if (try environment.at(pose.*, .torso, 0) or try environment.ledge(pose.*, .support, 0, .ahead)) .upright_landing else .recover;
                 pose.position.y +%= clips.landing_down;
             },

@@ -72,6 +72,8 @@ pub const Scene = struct {
     terrain: terrain_mod.State,
     pose: motion.Pose,
     health: i16,
+    death_wait: ?u16 = null,
+    defeated: bool = false,
     equipment: equipment_mod.Loadout,
     received_items: []equipment_mod.Received,
     received_count: usize = 0,
@@ -132,6 +134,7 @@ pub const Scene = struct {
     }
 
     pub fn update(self: *Scene, now_ns: u64) !void {
+        if (self.defeated) return;
         if (self.clock == null) self.clock = try clock_mod.Clock.init(clock_mod.jungle, now_ns);
         // Preserve remaining debt for the next host call instead of dropping simulation.
         var work: usize = 0;
@@ -161,9 +164,18 @@ pub const Scene = struct {
                 continue;
             }
             const deadline = self.clock.?.deadline();
+            if (self.death_wait) |remaining| {
+                if (remaining == 1) {
+                    self.defeated = true;
+                    return;
+                }
+                self.death_wait = remaining - 1;
+            }
             try consumeInput(&self.pending, &self.input, deadline);
             const result = try self.controller.advanceIn(self.content.controllerClips(), try self.input.intent(), &self.pose, &self.environment);
             if (result != .advanced) return error.UnimplementedMovementTransition;
+            if (self.controller.fatal_landing) self.health = -1;
+            if (self.death_wait == null) self.death_wait = self.controller.death_wait_requested;
             self.received_count = try self.equipment.advance(self.health, self.received_items);
             self.simulation_steps += 1;
             self.clock.?.consume();
@@ -187,6 +199,7 @@ pub const Scene = struct {
     }
 
     pub fn needsCatchup(self: *const Scene, now_ns: u64) bool {
+        if (self.defeated) return false;
         return if (self.nextDeadline()) |time| now_ns >= time else false;
     }
 
@@ -207,6 +220,8 @@ pub const Scene = struct {
     pub fn stateHash(self: *const Scene) u64 {
         var hash = std.hash.Wyhash.init(0);
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(i16, self.health)));
+        hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u16, self.death_wait orelse 0)));
+        hash.update(&.{@intFromBool(self.defeated)});
         self.equipment.hashInto(&hash);
         self.terrain.hashInto(&hash);
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, self.score)));
@@ -230,6 +245,8 @@ pub const Scene = struct {
             .jumping => |jump| (@as(u32, @backingInt(jump.kind)) << 8) | @backingInt(jump.phase),
             .crouching => |p| @backingInt(p),
             .rolling => |roll| @backingInt(roll.phase),
+            .falling => |fall| @backingInt(fall.phase),
+            .dead => |phase| @backingInt(phase),
             .recoiling => |state| (@as(u32, @backingInt(std.meta.activeTag(state.phase))) << 8) | switch (state.phase) {
                 .settling, .resting => |landing| @as(u32, @backingInt(landing)),
                 else => @as(u32, 0),

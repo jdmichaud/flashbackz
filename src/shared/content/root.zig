@@ -3,6 +3,7 @@
 pub const bitmap = @import("bitmap.zig");
 pub const font = @import("font.zig");
 pub const palette = @import("palette.zig");
+pub const continue_artwork = @import("continue_artwork.zig");
 pub const menu_artwork = @import("menu_artwork.zig");
 pub const room_artwork = @import("room_artwork.zig");
 pub const sprite = @import("sprite.zig");

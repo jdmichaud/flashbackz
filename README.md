@@ -33,6 +33,9 @@ Overlapping edits, restoration and history exhaustion match original routine com
 Rolling now uses material-specific clearance to continue through low passages.
 Rolling and forward-jump wall collisions now play the backward fall and get-up sequence,
 with unchanged health in the verified cases. Crouching can also start a roll into a low passage.
+Long falls now include fatal landings and the Continue/Abort screen. Continue restarts the
+level through its wake-up movie; Abort, Escape or countdown expiry plays the game-over movie
+and returns to the title. Checkpoint restoration, void-room falls and ledge catches remain open.
 Gate/lift behavior and their triggers still need integration.
 
 The content library covers all 193 room backgrounds, 1,284 packed sprite frames, icons, palettes,

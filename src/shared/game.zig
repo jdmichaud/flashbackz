@@ -5,12 +5,14 @@ const std = @import("std");
 const platform = @import("platform.zig");
 const menu_art = @import("content/menu_artwork.zig");
 const front_end = @import("scenes/front_end.zig");
+const continue_mod = @import("scenes/continue_game.zig");
 const jungle_mod = @import("scenes/jungle.zig");
 pub const Entry = enum { automatic, menu_development, jungle_development };
 const Scene = union(enum) {
     smoke,
     menu: front_end.Scene,
     jungle: jungle_mod.Scene,
+    continue_game: continue_mod.Scene,
 };
 
 pub const page_width: u32 = 320;
@@ -165,6 +167,7 @@ pub const Game = struct {
     page: []u8,
     rgba: []u8,
     scene: Scene = .smoke,
+    difficulty: @import("settings.zig").Difficulty = .normal,
 
     pub fn init(allocator: std.mem.Allocator, assets: ?platform.AssetSource, storage: ?platform.Storage) !Game {
         return initWithEntry(allocator, assets, storage, .automatic);
@@ -195,6 +198,7 @@ pub const Game = struct {
             .smoke => {},
             .menu => |*scene| scene.deinit(),
             .jungle => |*scene| scene.deinit(),
+            .continue_game => |*scene| scene.deinit(),
         }
         self.allocator.free(self.page);
         self.allocator.free(self.rgba);
@@ -208,6 +212,7 @@ pub const Game = struct {
     pub fn stateHash(self: *const Game) u64 {
         if (self.scene == .jungle) return self.scene.jungle.stateHash();
         if (self.scene == .menu) return self.scene.menu.stateHash();
+        if (self.scene == .continue_game) return self.scene.continue_game.stateHash();
         return self.state.hash();
     }
 
@@ -222,6 +227,7 @@ pub const Game = struct {
     pub fn needsCatchup(self: *const Game, now_ns: u64) bool {
         if (self.scene == .jungle) return self.scene.jungle.needsCatchup(now_ns);
         if (self.scene == .menu) return self.scene.menu.needsCatchup(now_ns);
+        if (self.scene == .continue_game) return self.scene.continue_game.needsCatchup(now_ns);
         return false;
     }
 
@@ -261,6 +267,7 @@ pub const Game = struct {
             try front.update(p);
             if (front.stage == .ready) {
                 const next = try jungle_mod.Scene.loadWithDifficulty(self.allocator, self.assets.?, front.difficulty);
+                self.difficulty = front.difficulty;
                 front.deinit();
                 self.scene = .{ .jungle = next };
             }
@@ -268,7 +275,24 @@ pub const Game = struct {
         if (self.jungle()) |scene| {
             const now = p.nowNs();
             try scene.update(now);
-            if (self.needsCatchup(now)) return .running;
+            if (scene.defeated) {
+                const next = try continue_mod.Scene.init(self.allocator, self.assets.?, scene.score);
+                scene.deinit();
+                self.scene = .{ .continue_game = next };
+            } else if (self.needsCatchup(now)) return .running;
+        }
+        if (self.scene == .continue_game) {
+            const dialog = &self.scene.continue_game;
+            try dialog.update(p.nowNs());
+            if (dialog.menu.outcome) |choice| {
+                const art = (try menu_art.load(self.allocator, self.assets.?)) orelse return error.MissingMenu;
+                var next = front_end.Scene.init(self.allocator, self.assets.?, art);
+                errdefer next.deinit();
+                next.difficulty = self.difficulty;
+                if (choice == .retry) try next.start(dialog.menu.activation_key) else try next.gameOver(dialog.menu.activation_key);
+                dialog.deinit();
+                self.scene = .{ .menu = next };
+            }
         }
         self.feedAudio(p);
         try self.present(p);
@@ -302,6 +326,10 @@ pub const Game = struct {
                         },
                         else => try scene.enqueue(event),
                     }
+                    continue;
+                }
+                if (self.scene == .continue_game) {
+                    if (event.payload == .quit) self.phase = .finished else try self.scene.continue_game.event(event);
                     continue;
                 }
                 if (self.scene == .menu) {
@@ -362,7 +390,7 @@ pub const Game = struct {
         return switch (self.scene) {
             .smoke => .{ .width = page_width, .height = page_height },
             .menu => |*front| front.resolution(),
-            .jungle => .{ .width = 256, .height = 224 },
+            .jungle, .continue_game => .{ .width = 256, .height = 224 },
         };
     }
 
@@ -375,6 +403,15 @@ pub const Game = struct {
             try scene.draw(indices, frame);
             self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
             try p.present(.{ .width = size.width, .height = size.height, .stride = size.width * 4, .pixels = frame });
+            self.frames_presented += 1;
+            return;
+        }
+        if (self.scene == .continue_game) {
+            const indices = self.page[0..57344];
+            const frame = self.rgba[0 .. 57344 * 4];
+            try self.scene.continue_game.draw(indices, frame);
+            self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
+            try p.present(.{ .width = 256, .height = 224, .stride = 256 * 4, .pixels = frame });
             self.frames_presented += 1;
             return;
         }

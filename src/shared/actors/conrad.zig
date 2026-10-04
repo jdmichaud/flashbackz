@@ -3,6 +3,7 @@
 const std = @import("std");
 const motion = @import("../motion.zig");
 const jumping = @import("conrad_jump.zig");
+const falling = @import("conrad_fall.zig");
 const recoil = @import("conrad_recoil.zig");
 const rolling = @import("conrad_roll.zig");
 pub const Intent = @import("controls.zig").Intent;
@@ -25,6 +26,8 @@ pub const Clips = struct {
     crouch: ?struct { lower: motion.Clip, hold: motion.Clip, rise: motion.Clip, turn: motion.Clip } = null,
     roll: ?rolling.Clips = null,
     recoil: ?recoil.Clips = null,
+    fall: ?falling.Clips = null,
+    walking_fall_down: i16 = 56,
 };
 
 pub const TurnPhase = enum { preparation, follow_through };
@@ -42,6 +45,8 @@ pub const Activity = union(enum) {
     crouching: enum { lowering, holding, rising, turning },
     rolling: rolling.State,
     recoiling: recoil.State,
+    falling: falling.State,
+    dead: enum { landing, resting },
 };
 pub const Result = enum { advanced, locomotion_requested, terrain_transition_requested };
 
@@ -62,6 +67,9 @@ const NoEnvironment = struct {
 pub const Controller = struct {
     activity: Activity = .waking,
     playback: motion.Playback = .{},
+    /// Ordered consequences of the latest step; the session applies them before equipment.
+    fatal_landing: bool = false,
+    death_wait_requested: ?u16 = null,
 
     fn selectedClip(self: Controller, clips: Clips) !motion.Clip {
         return switch (self.activity) {
@@ -100,6 +108,8 @@ pub const Controller = struct {
             },
             .rolling => |roll| roll.clip(clips.roll orelse return error.MissingMotion),
             .recoiling => |state| state.clip(clips.recoil orelse return error.MissingMotion),
+            .falling => |state| state.clip(clips.fall orelse return error.MissingMotion),
+            .dead => |phase| if (phase == .landing) (clips.fall orelse return error.MissingMotion).landing else (clips.fall orelse return error.MissingMotion).resting,
         };
     }
 
@@ -112,6 +122,8 @@ pub const Controller = struct {
     }
 
     pub fn advanceIn(self: *Controller, clips: Clips, intent: Intent, pose: *motion.Pose, environment: anytype) !Result {
+        self.fatal_landing = false;
+        self.death_wait_requested = null;
         var clip = try self.selectedClip(clips);
         if (clip.steps.len == 0) return error.MissingMotion;
         if (self.playback.exhausted(clip)) {
@@ -198,8 +210,10 @@ pub const Controller = struct {
                 },
                 .stopping_run => |phase| self.activity = if (phase == .braking) .{ .stopping_run = .settling } else .standing,
                 .stepping_down => {
-                    if (!try environment.at(pose.*, .support, 0)) return .terrain_transition_requested;
-                    self.activity = .landing;
+                    if (!try environment.at(pose.*, .support, 0)) {
+                        pose.position.y +%= clips.walking_fall_down;
+                        self.activity = .{ .falling = .{} };
+                    } else self.activity = .landing;
                 },
                 .landing => self.activity = .standing,
                 .jumping => |*jump| switch (try jump.finishPhase(clips.jumps orelse return error.MissingMotion, intent, pose, environment)) {
@@ -231,10 +245,24 @@ pub const Controller = struct {
                         } else self.activity = .{ .crouching = .rising };
                     },
                 },
+                .falling => |*state| switch (try state.finishPhase(clips.fall orelse return error.MissingMotion, intent, pose, environment)) {
+                    .continued => {},
+                    .fatal_landing => {
+                        self.fatal_landing = true;
+                        self.activity = .{ .dead = .landing };
+                    },
+                    .ledge_requested => return .terrain_transition_requested,
+                },
+                .dead => |phase| if (phase == .landing) {
+                    self.activity = .{ .dead = .resting };
+                } else {
+                    self.death_wait_requested = (clips.fall orelse return error.MissingMotion).death_wait_steps;
+                },
                 .recoiling => |*state| switch (try state.finishPhase(clips.recoil orelse return error.MissingMotion, intent, pose, environment)) {
                     .continued => {},
                     .standing => self.activity = .standing,
                     .low_recovery => self.activity = .{ .rolling = .{ .phase = .recover } },
+                    .long_fall => self.activity = .{ .falling = .{} },
                     .terrain_requested => return .terrain_transition_requested,
                 },
                 .rolling => |*roll| switch (try roll.finishPhase(clips.roll orelse return error.MissingMotion, intent, pose, environment)) {
@@ -242,6 +270,7 @@ pub const Controller = struct {
                     .standing => self.activity = .standing,
                     .turning => self.activity = .{ .turning = .preparation },
                     .wall_collision => self.activity = .{ .recoiling = .{} },
+                    .long_fall => self.activity = .{ .falling = .{} },
                     .terrain_requested => return .terrain_transition_requested,
                     .action_requested => return .locomotion_requested,
                 },

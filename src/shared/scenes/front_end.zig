@@ -8,7 +8,7 @@ const text = @import("../render/text.zig");
 const menu_mod = @import("menu.zig");
 const cinematic = @import("cinematic.zig");
 pub const Difficulty = @import("../settings.zig").Difficulty;
-pub const Stage = enum { intro, menu, wakeup, ready, quit };
+pub const Stage = enum { intro, menu, wakeup, game_over, ready, quit };
 pub const View = enum { main, skill, info, password, unavailable };
 
 pub const Scene = struct {
@@ -68,7 +68,7 @@ pub const Scene = struct {
                 self.player = null;
                 self.skip_requested = false;
                 self.activation_key = null;
-                self.stage = if (self.stage == .intro) .menu else .ready;
+                self.stage = if (self.stage == .intro or self.stage == .game_over) .menu else .ready;
             }
         }
     }
@@ -91,9 +91,15 @@ pub const Scene = struct {
         self.menu.selected = .start;
     }
 
-    fn start(self: *Scene, key: platform.Key) !void {
+    pub fn start(self: *Scene, key: ?platform.Key) !void {
         self.player = try cinematic.Player.open(self.allocator, self.source, "DATA/WAKEUP.SEQ");
         self.stage = .wakeup;
+        self.activation_key = key;
+    }
+
+    pub fn gameOver(self: *Scene, key: ?platform.Key) !void {
+        self.player = try cinematic.Player.open(self.allocator, self.source, "DATA/GAMEOVER.SEQ");
+        self.stage = .game_over;
         self.activation_key = key;
     }
 

@@ -18,6 +18,7 @@ pub const Clips = struct {
     lift: i16 = 16,
     drop_entry_down: i16 = 24,
     drop_landing_down: i16 = 16,
+    long_fall_down: i16 = 72,
 
     fn recovery(self: Clips, landing: Landing) Recovery {
         return switch (landing) {
@@ -27,7 +28,7 @@ pub const Clips = struct {
         };
     }
 };
-pub const Boundary = enum { continued, standing, low_recovery, terrain_requested };
+pub const Boundary = enum { continued, standing, low_recovery, long_fall, terrain_requested };
 
 pub const State = struct {
     phase: Phase = .impact,
@@ -68,7 +69,8 @@ pub const State = struct {
                     pose.position.y +%= clips.drop_landing_down;
                     return .low_recovery;
                 }
-                return .terrain_requested;
+                pose.position.y +%= clips.long_fall_down;
+                return .long_fall;
             },
             .settling => |landing| self.phase = .{ .resting = landing },
             .resting => self.phase = .rising,
