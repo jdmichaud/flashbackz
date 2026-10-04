@@ -67,6 +67,8 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
 - [ ] Shared enemy families: import every matching placement, animation library and behavior
   profile from original data. Implement perception, stone distractions, locomotion, shooting
   and damage through independent actor/combat components; qualify with quick native encounters.
+  Include the robots and ceiling laser guns as distinct behavior families (user reminder);
+  gunman completion alone does not close enemy coverage.
 - [ ] **Systematic mechanism import (user direction):** enumerate all level placements,
   shared rule groups and connections; classify behaviour families and translate them to typed
   definitions for shared switch/door/lift components. Gate: every instance is accounted for,
