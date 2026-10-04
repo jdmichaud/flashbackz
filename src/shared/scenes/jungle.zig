@@ -541,6 +541,9 @@ pub const Scene = struct {
                 self.received_items[self.received_count] = .{ .item = handle, .kind = item.definition.kind };
                 self.received_count += 1;
             }
+            for (self.lifts.instances) |instance| if (instance.movie) |movie| {
+                self.pending_movie = movie;
+            };
             if (self.props.movie) |movie| self.pending_movie = movie;
             if (self.hazards.defeat_requested) self.pending_movie = .disintegration;
             self.simulation_steps += 1;

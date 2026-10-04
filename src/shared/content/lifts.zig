@@ -10,6 +10,7 @@ const motion = @import("../motion.zig");
 const connections = @import("first_world_props.zig");
 const collision = @import("collision.zig");
 const TripSpec = struct {
+    transfer: ?runtime.Transfer = null,
     parked: u16,
     departure: u16,
     movement: u16,
@@ -65,8 +66,9 @@ fn idle(group: rules.Group, state: u16) ?rules.Rule {
 }
 pub fn recognize(group: rules.Group) ?Spec {
     if (recognizeAutomatic(group)) |spec| return spec;
+    if (recognizeCinematic(group)) |spec| return spec;
     // The command-operated graphs share a contact safety check and acknowledgement.
-    // Cinematic transfers require a separate import policy.
+    // Other command-operated graphs share the same safety and acknowledgement paths.
     if (group.count() != 22 and group.count() != 24) return null;
     var trips: [2]?TripSpec = @splat(null);
     var row: ?i16 = null;
@@ -179,6 +181,37 @@ fn recognizeAutomatic(group: rules.Group) ?Spec {
     }, .disabled = null, .enabled_stop = .top, .floor_row = height, .automatic_return = .{ .stop = .bottom, .delay = delay, .pause_outside_room = true } };
 }
 
+/// Long transit is represented by a cinematic between authored physical endpoints.
+/// The ordinary approach and passengers use the same motion system as every other lift.
+fn recognizeCinematic(group: rules.Group) ?Spec {
+    if (group.count() != 20) return null;
+    var r: [20]rules.Rule = undefined;
+    const codes = [_][3]u8{ .{ 127, 111, 68 }, .{ 127, 34, 68 }, .{ 34, 126, 0 }, .{ 34, 126, 0 }, .{ 0, 126, 54 }, .{ 67, 0, 54 }, .{ 127, 111, 68 }, .{ 127, 34, 68 }, .{ 34, 126, 0 }, .{ 34, 126, 0 }, .{ 0, 126, 54 }, .{ 67, 0, 54 }, .{ 63, 0, 54 }, .{ 0, 0, 78 }, .{ 63, 0, 54 }, .{ 0, 0, 78 }, .{ 68, 114, 78 }, .{ 68, 114, 78 }, .{ 0, 90, 78 }, .{ 0, 90, 78 } };
+    const next = [_]u16{ 17, 17, 0, 0, 0, 0, 16, 16, 6, 6, 6, 6, 19, 12, 18, 14, 14, 12, 0, 6 };
+    for (&r, codes, next, 0..) |*row, expected, target, i| {
+        row.* = group.at(i);
+        if (row.dx != 0 or row.dy != 0 or row.flags != 0 or row.next != target or row.target != group.at(target).source) return null;
+        for ([_]rules.Operation{ row.conditions[0], row.conditions[1], row.effect }, expected) |operation, code| if (operation.code != code) return null;
+    }
+    for ([_]usize{ 1, 2, 3, 4, 5 }) |i| if (r[i].source != r[0].source) return null;
+    for ([_]usize{ 7, 8, 9, 10, 11 }) |i| if (r[i].source != r[6].source) return null;
+    if (r[13].source != r[12].source or r[15].source != r[14].source or r[0].source == r[6].source) return null;
+    const height = r[4].effect.argument;
+    for ([_]usize{ 5, 10, 11, 12, 14 }) |i| if (r[i].effect.argument != height) return null;
+    for ([_]usize{ 16, 17 }) |i| if (r[i].conditions[1].argument != height or r[i].conditions[0].argument < 0 or r[i].conditions[0].argument > 3) return null;
+    for ([_]usize{ 0, 1, 6, 7 }) |i| if (r[i].effect.argument < 0 or r[i].effect.argument > 3) return null;
+    if (r[12].conditions[0].argument != 0 or r[14].conditions[0].argument != 0 or r[4].conditions[1].argument != 130 or r[10].conditions[1].argument != 130) return null;
+    for ([_]usize{ 2, 3, 8, 9 }) |i| if (r[i].conditions[1].argument != 132) return null;
+    if (r[2].conditions[0].argument != r[0].conditions[1].argument or r[3].conditions[0].argument != r[1].conditions[1].argument or r[8].conditions[0].argument != r[6].conditions[1].argument or r[9].conditions[0].argument != r[7].conditions[1].argument) return null;
+    if (r[13].effect.argument >= 0 or r[15].effect.argument <= 0 or r[17].effect.argument != r[13].effect.argument or r[16].effect.argument != r[15].effect.argument) return null;
+    // Immutable floppy movie directory: LIFT entry 0 ascends, entry 1 descends.
+    if (r[19].conditions[1].argument != 54 or r[18].conditions[1].argument != 55) return null;
+    return .{ .trips = .{
+        .{ .parked = r[0].source, .departure = r[17].source, .movement = r[12].source, .arrival = r[19].source, .speed = r[13].effect.argument, .distance_parameter = @intCast(r[17].conditions[0].argument), .player_message = r[0].conditions[1].argument, .call_message = r[1].conditions[1].argument, .floor_on_blocked_request = false, .arrival_sound = null, .start_output = null, .end_output = null, .transfer = .{ .movie = .lift_ascent, .displacement = r[19].effect.argument } },
+        .{ .parked = r[6].source, .departure = r[16].source, .movement = r[14].source, .arrival = r[18].source, .speed = r[15].effect.argument, .distance_parameter = @intCast(r[16].conditions[0].argument), .player_message = r[6].conditions[1].argument, .call_message = r[7].conditions[1].argument, .floor_on_blocked_request = false, .arrival_sound = null, .start_output = null, .end_output = null, .transfer = .{ .movie = .lift_descent, .displacement = r[18].effect.argument } },
+    }, .disabled = null, .enabled_stop = .top, .floor_row = height };
+}
+
 fn resolve(allocator: std.mem.Allocator, animations: []const u8, state: u16, clips: *std.ArrayList(animation.OwnedClip), resolver: anytype) !motion.Clip {
     var source = try animation.decode(allocator, animations, state);
     defer source.deinit();
@@ -223,7 +256,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
             var profile: runtime.Profile = .{ .stops = undefined, .trips = undefined, .enabled_stop = spec.enabled_stop, .disabled = if (spec.disabled) |state| try resolve(allocator, animations, state, &clips, resolver) else null };
             for (spec.trips, 0..) |trip, index| {
                 profile.stops[1 - index] = .{ .idle = try resolve(allocator, animations, trip.parked, &clips, resolver), .floor_on_blocked_request = trip.floor_on_blocked_request };
-                profile.trips[index] = .{ .departure = try resolve(allocator, animations, trip.departure, &clips, resolver), .movement = try resolve(allocator, animations, trip.movement, &clips, resolver), .arrival = if (trip.arrival) |a| try resolve(allocator, animations, a, &clips, resolver) else null, .speed = trip.speed, .arrival_sound = trip.arrival_sound };
+                profile.trips[index] = .{ .departure = try resolve(allocator, animations, trip.departure, &clips, resolver), .movement = try resolve(allocator, animations, trip.movement, &clips, resolver), .arrival = if (trip.arrival) |a| try resolve(allocator, animations, a, &clips, resolver) else null, .speed = trip.speed, .arrival_sound = trip.arrival_sound, .transfer = trip.transfer };
             }
             if (spec.automatic_return) |automatic| {
                 for (&profile.stops) |*policy| {
@@ -255,7 +288,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         defer outputs.deinit(allocator);
         for (spec.trips, &durations, 0..) |trip, *duration, index| {
             duration.* = record.parameters[trip.distance_parameter];
-            if (duration.* <= 0) return error.InvalidLiftDistance;
+            // Timer words wrap in the original; zero is valid in a one-way transfer template.
             for ([_]?rules.Operation{ trip.start_output, trip.end_output }, 0..) |value, event_index| if (value) |output| {
                 const target = record.parameters[output.code - 35];
                 if (target < 0 or target >= table.count) return error.InvalidLiftOutput;

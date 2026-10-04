@@ -122,8 +122,9 @@ boards; keeping the travel keys held submits the renewed request that carries bo
 and the stone. Other loose item families do not automatically board.
 
 The ordinary ride and armed room-crossing ride have focused original behavior comparisons;
-SDL input, presented poses and PCM output were checked. Cinematic transfer lifts and some
-external call controllers remain unfinished.
+SDL input, presented poses and PCM output were checked. Cinematic transfers also play their
+original films and music; Tab skips a film and resumes the ride. Hidden lift templates and
+some external call controllers remain unfinished.
 
 ### Pressure-called lift return
 

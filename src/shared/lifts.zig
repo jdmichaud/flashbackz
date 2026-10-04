@@ -8,7 +8,9 @@ const terrain = @import("terrain.zig");
 const props = @import("world_props.zig");
 pub const Stop = enum { top, bottom };
 pub const Phase = enum { parked, departing, travelling, arriving, disabled };
+pub const Transfer = struct { movie: @import("story_cue.zig").Cue, displacement: i16 };
 pub const Trip = struct {
+    transfer: ?Transfer = null,
     departure: motion.Clip,
     movement: motion.Clip,
     arrival: ?motion.Clip,
@@ -97,6 +99,7 @@ pub const Instance = struct {
     release_passengers: bool = false,
     sound: ?motion.SoundId = null,
     event: ?Event = null,
+    movie: ?@import("story_cue.zig").Cue = null,
     pub fn clip(self: Instance, profile: Profile) motion.Clip {
         const trip = profile.trips[@backingInt(self.destination)];
         return switch (self.phase) {
@@ -186,7 +189,13 @@ pub const Instance = struct {
                 self.remaining -%= 1;
                 if (self.remaining == 0) try self.arrive(definition, profile, world) else self.move(profile.trips[@backingInt(self.destination)].speed);
             },
-            .arriving => self.phase = .parked,
+            .arriving => {
+                if (profile.trips[@backingInt(self.destination)].transfer) |transfer| {
+                    self.move(transfer.displacement);
+                    self.movie = transfer.movie;
+                }
+                self.phase = .parked;
+            },
         }
     }
 };
@@ -227,6 +236,7 @@ pub const World = struct {
             instance.release_passengers = false;
             instance.sound = null;
             instance.event = null;
+            instance.movie = null;
         }
     }
     pub fn requestRide(self: *World, index: usize, destination: Stop) void {

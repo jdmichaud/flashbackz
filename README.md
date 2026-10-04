@@ -66,8 +66,9 @@ Tab/arrow keys, and used with Return at a matching lock. Successful use consumes
 Ordinary lifts now carry Conrad and board stones through their original contact behavior.
 With the gun holstered, Shift+Up/Down requests a ride. Turning, crouching, drawing,
 shooting and holstering work while travelling. The jungle pressure-called lift now stays
-down while its plate is pressed, then returns automatically. Cinematic lifts,
-story-issued cards, other enemy families and the remaining mechanisms are
+down while its plate is pressed, then returns automatically. Long lift transfers now play
+the original LIFT films and music, then resume with their passengers at the destination.
+Hidden lift templates, story-issued cards, other enemy families and the remaining mechanisms are
 still being implemented.
 
 DEMO plays the three original recorded input streams through normal gameplay, in the
@@ -82,6 +83,10 @@ zig build --prefix /tmp/flashback/modern/out --cache-dir /tmp/flashback/modern/c
 /tmp/flashback/modern/out/bin/flashbackz-sdl ../disk1.img ../disk2.img
 /tmp/flashback/modern/out/bin/flashbackz-agent --scene menu --frames 120 ../disk1.img ../disk2.img
 ```
+
+For development checks, `--scene` also accepts `city`, `tower`, `earth_city`, `spaceport`,
+`alien_surface` and `alien_base`, alongside `menu` and `jungle`. These shortcuts skip startup;
+remaining gameplay and story behavior in those levels is still under implementation.
 
 Images are opened read-only. The bounded FAT12 reader validates geometry, matching FAT copies,
 cluster chains and file sizes. It imports into owned assets, limited to 32 MiB in total. ABA
