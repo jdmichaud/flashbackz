@@ -4,6 +4,7 @@ const std = @import("std");
 const platform = @import("../platform.zig");
 const palette = @import("palette.zig");
 pub const Values = struct {
+    continue_labels: [5][48]u8,
     demos: [3]@import("demo.zig").Descriptor,
     actor_colors: [2]palette.Bank,
     text_colors: palette.Bank,
@@ -86,7 +87,13 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
         if (room >= 64) return error.InvalidDemoRoom;
         descriptor.* = .{ .filename = filename, .level = @fromBackingInt(@as(u3, @intCast(source_level))), .start = if (room < 0) null else .{ .room = @fromBackingInt(@as(u16, @intCast(room)) + 1), .position = .{ .x = @bitCast(word(data, 0xfee + index * 8)), .y = @bitCast(word(data, 0xff0 + index * 8)) } } };
     }
+    var continue_labels: [5][48]u8 = @splat(@splat(0));
+    for ([_]usize{ 0x215f, 0x217d, 0x2185, 0x218e, 0x2194 }, &continue_labels) |offset, *label| {
+        const length = std.mem.indexOfScalar(u8, data[offset..][0..48], 0) orelse return error.InvalidContinueLabel;
+        @memcpy(label[0..length], data[offset..][0..length]);
+    }
     return .{
+        .continue_labels = continue_labels,
         .demos = demos,
         .actor_colors = .{ try palette.decodeActorBank(data[0xf31..0xf51]), try palette.decodeActorBank(data[0xf51..0xf71]) },
         .text_colors = try palette.decodeActorBank(data[0xf71..0xf91]),

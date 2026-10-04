@@ -25,7 +25,9 @@ AdLib music now plays through the logo, introduction and menu. Original musical 
 register writes agree across 16,709 observations; native SDL output has been captured. Digital
 effects now play for forest ambience, movement, the floor switch and weapon effects, with
 animated ejected casings. Other actor/mechanism cues, exact presentation/audio synchronization,
-menu fades/blinking, passwords and Continue are still unfinished. Start plays the wake-up animation with music and enters the
+menu fades/blinking and passwords are still unfinished. Continue now displays the original
+floppy screen; retry restarts the level opening, and Abort plays game over before returning
+to the title. Checkpoint restoration and complete defeat-flow timing remain unfinished. Start plays the wake-up animation with music and enters the
 jungle. Turning, walking and the existing movement/inventory development slice are available;
 The holocube and floor plate animate; Shift collects the cube, plays its pickup movie, and
 adds it to inventory for selection. Tab opens inventory; Return uses the selected holocube
