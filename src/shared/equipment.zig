@@ -5,18 +5,19 @@ const std = @import("std");
 const inventory = @import("inventory.zig");
 const motion = @import("motion.zig");
 pub const ItemHandle = @import("identity.zig").ItemHandle;
-pub const Kind = enum { gun, shield, credits };
+pub const Kind = enum { gun, shield, credits, holocube };
 pub const Definition = struct {
     kind: Kind,
     icon: motion.VisualId,
-    introduction_steps: u16,
+    /// Null leaves the instance available for a world pickup.
+    introduction_steps: ?u16,
     initial_quantity: i16,
     label: []const u8 = "",
     show_quantity: bool = false,
 };
 pub const Item = struct {
     definition: Definition,
-    state: union(enum) { introducing: u16, carried },
+    state: union(enum) { introducing: u16, available, carried },
     quantity: i16,
 };
 pub const Received = struct { item: ItemHandle, kind: Kind };
@@ -32,7 +33,7 @@ pub const Loadout = struct {
         errdefer allocator.free(entries);
         for (entries, definitions) |*entry, definition| entry.* = .{
             .definition = definition,
-            .state = .{ .introducing = definition.introduction_steps },
+            .state = if (definition.introduction_steps) |steps| .{ .introducing = steps } else .available,
             .quantity = definition.initial_quantity,
         };
         return .{ .allocator = allocator, .entries = entries, .inventory = try inventory.Inventory.init(allocator, entries.len) };
@@ -47,6 +48,13 @@ pub const Loadout = struct {
     pub fn item(self: *const Loadout, handle: ItemHandle) !*const Item {
         if (handle.generation != 1 or handle.index >= self.entries.len) return error.InvalidItemHandle;
         return &self.entries[handle.index];
+    }
+
+    pub fn acquire(self: *Loadout, handle: ItemHandle) !void {
+        const entry = try self.item(handle);
+        if (entry.state != .available) return error.ItemNotAvailable;
+        try inventory.transfer(handle, null, &self.inventory);
+        self.entries[handle.index].state = .carried;
     }
 
     pub fn selected(self: *const Loadout) !?*const Item {
@@ -71,6 +79,7 @@ pub const Loadout = struct {
                     events[count] = .{ .item = handle, .kind = entry.definition.kind };
                     count += 1;
                 },
+                .available => continue,
                 .carried => {},
             }
             if (entry.definition.kind == .shield) entry.quantity = shieldCharge(health);
@@ -83,6 +92,7 @@ pub const Loadout = struct {
             const pending: u32 = switch (entry.state) {
                 .introducing => |steps| @as(u32, steps) + 1,
                 .carried => 0,
+                .available => std.math.maxInt(u32),
             };
             for ([_]u32{ @backingInt(entry.definition.kind), @as(u16, @bitCast(entry.quantity)), pending }) |value|
                 hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));

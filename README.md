@@ -26,7 +26,9 @@ register writes agree across 16,709 observations; native SDL output has been cap
 sound effects, exact presentation/audio synchronization, menu fades/blinking, passwords and
 Continue are still unfinished. Start plays the wake-up animation with music and enters the
 jungle. Turning, walking and the existing movement/inventory development slice are available;
-other actors, interactions and complete floppy behavior qualification remain unfinished. The startup error `FloppyCinematicsNotYetImplemented` has been removed
+The holocube and floor plate animate; Shift collects the cube, plays its pickup movie, and
+adds it to inventory for selection. Recording playback, other actors/interactions and complete
+floppy behavior qualification remain unfinished. The startup error `FloppyCinematicsNotYetImplemented` has been removed
 from normal launch. `--scene menu` remains an optional development shortcut.
 
 ```sh

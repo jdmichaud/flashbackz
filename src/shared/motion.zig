@@ -21,7 +21,7 @@ pub const Step = union(enum) {
     },
 };
 
-pub const Clip = struct { steps: []const Step };
+pub const Clip = struct { steps: []const Step, presses_floor_switches: bool = false };
 
 pub const Playback = struct {
     next_step: usize = 0,

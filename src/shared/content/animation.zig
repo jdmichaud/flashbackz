@@ -41,13 +41,14 @@ pub const SourceClip = struct {
                 },
             };
         }
-        return .{ .allocator = allocator, .steps = steps };
+        return .{ .allocator = allocator, .steps = steps, .presses_floor_switches = self.header_metadata == 0 or self.header_metadata == 1 or self.header_metadata == 5 };
     }
 };
 
 pub const OwnedClip = struct {
     allocator: std.mem.Allocator,
     steps: []motion.Step,
+    presses_floor_switches: bool,
 
     pub fn deinit(self: *OwnedClip) void {
         self.allocator.free(self.steps);
@@ -55,7 +56,7 @@ pub const OwnedClip = struct {
     }
 
     pub fn clip(self: *const OwnedClip) motion.Clip {
-        return .{ .steps = self.steps };
+        return .{ .steps = self.steps, .presses_floor_switches = self.presses_floor_switches };
     }
 };
 

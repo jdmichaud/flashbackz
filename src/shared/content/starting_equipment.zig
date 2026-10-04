@@ -38,7 +38,7 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
         definition.* = .{
             .kind = spec.kind,
             .icon = try resolver.icon(source.inventory_icon),
-            .introduction_steps = @intCast(introduction.frames.len),
+            .introduction_steps = @as(u16, @intCast(introduction.frames.len)),
             .initial_quantity = source.life,
             .label = try strings.copy(allocator, names, source.text_id),
             .show_quantity = source.visual_flags & 4 != 0,

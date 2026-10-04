@@ -73,6 +73,8 @@ pub const Controller = struct {
     /// Ordered consequences of the latest step; the session applies them before equipment.
     fatal_landing: bool = false,
     death_wait_requested: ?u16 = null,
+    pickup_requested: bool = false,
+    pickup_available: bool = false,
 
     fn selectedClip(self: Controller, clips: Clips) !motion.Clip {
         return switch (self.activity) {
@@ -117,6 +119,10 @@ pub const Controller = struct {
         };
     }
 
+    pub fn pressesFloorSwitches(self: Controller, clips: Clips) !bool {
+        return (try self.selectedClip(clips)).presses_floor_switches;
+    }
+
     /// One simulation step. Intent is reconsidered at motion boundaries; committed
     /// strides, turns and braking actions finish after their input has been released.
     /// Neutral action input is not consumed here: interactions and combat are resolved by
@@ -126,6 +132,7 @@ pub const Controller = struct {
     }
 
     pub fn advanceIn(self: *Controller, clips: Clips, intent: Intent, pose: *motion.Pose, environment: anytype) !Result {
+        self.pickup_requested = false;
         self.fatal_landing = false;
         self.death_wait_requested = null;
         var clip = try self.selectedClip(clips);
@@ -134,7 +141,9 @@ pub const Controller = struct {
             switch (self.activity) {
                 .waking => self.activity = .standing,
                 .standing => {
-                    if (intent.vertical) |vertical| {
+                    if (self.pickup_available and intent.action and intent.direction == null and intent.vertical == null) {
+                        self.activity = .{ .crouching = .lowering };
+                    } else if (intent.vertical) |vertical| {
                         if (vertical == .up) {
                             if (!intent.action and try environment.ledge(pose.*, .head, 0, .ahead)) {
                                 self.activity = .{ .turning = .preparation };
@@ -236,7 +245,9 @@ pub const Controller = struct {
                         self.activity = .{ .crouching = .holding };
                     },
                     .holding => {
-                        if (intent.vertical == .down or (intent.vertical == null and intent.action and (intent.direction == null or intent.direction == pose.facing))) {
+                        if (self.pickup_available and intent.action and intent.direction == null and (intent.vertical == null or intent.vertical == .down)) {
+                            self.pickup_requested = true;
+                        } else if (intent.vertical == .down or (intent.vertical == null and intent.action and (intent.direction == null or intent.direction == pose.facing))) {
                             // Remain low while crouch/action is held.
                         } else if (intent.direction) |direction| {
                             if (direction == pose.facing) {

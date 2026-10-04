@@ -1,5 +1,6 @@
 //! Validated content importers. File layouts stop at this boundary; engine users see images,
 //! palettes and glyphs. No executable instructions or game-memory layout enter the runtime.
+pub const first_world_props = @import("first_world_props.zig");
 pub const floppy_interface = @import("floppy_interface.zig");
 pub const floppy_rooms = @import("floppy_rooms.zig");
 pub const music = @import("music.zig");

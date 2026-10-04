@@ -12,6 +12,8 @@ const palette = @import("../content/palette.zig");
 const controls = @import("../actors/controls.zig");
 const equipment_mod = @import("../equipment.zig");
 const inventory_menu = @import("inventory_menu.zig");
+const props_mod = @import("../world_props.zig");
+const text_renderer = @import("../render/text.zig");
 const terrain_mod = @import("../terrain.zig");
 
 pub const HeldInput = struct {
@@ -70,6 +72,9 @@ pub const Scene = struct {
     controller: conrad.Controller = .{},
     environment: environment_mod.Environment,
     terrain: terrain_mod.State,
+    props: props_mod.World,
+    pending_movie: ?props_mod.Movie = null,
+    movie_intent: ?controls.Intent = null,
     pose: motion.Pose,
     health: i16,
     death_wait: ?u16 = null,
@@ -97,6 +102,8 @@ pub const Scene = struct {
         errdefer equipment.deinit();
         var terrain = try terrain_mod.State.init(allocator, pack.terrain.map(), pack.terrain.materials, .{ .history_limit = pack.terrain.history_allowance });
         errdefer terrain.deinit();
+        var props = try props_mod.World.init(allocator, pack.world_props.definitions);
+        errdefer props.deinit();
         const received_items = try allocator.alloc(equipment_mod.Received, pack.initial_items.len);
         errdefer allocator.free(received_items);
         const menu_entries = try allocator.alloc(inventory_menu.Entry, pack.initial_items.len);
@@ -105,6 +112,7 @@ pub const Scene = struct {
             .content = pack,
             .environment = .{ .map = terrain.map(), .room = pack.initial_room, .materials = terrain.view() },
             .terrain = terrain,
+            .props = props,
             .pose = pack.initial_pose,
             .health = pack.initial_health,
             .equipment = equipment,
@@ -116,6 +124,7 @@ pub const Scene = struct {
     pub fn deinit(self: *Scene) void {
         self.equipment.deinit();
         self.terrain.deinit();
+        self.props.deinit();
         self.allocator.free(self.received_items);
         self.allocator.free(self.menu_entries);
         self.pending.deinit(self.allocator);
@@ -171,12 +180,27 @@ pub const Scene = struct {
                 }
                 self.death_wait = remaining - 1;
             }
-            try consumeInput(&self.pending, &self.input, deadline);
-            const result = try self.controller.advanceIn(self.content.controllerClips(), try self.input.intent(), &self.pose, &self.environment);
+            const intent = if (self.movie_intent) |latched| blk: {
+                self.movie_intent = null;
+                break :blk latched;
+            } else blk: {
+                try consumeInput(&self.pending, &self.input, deadline);
+                break :blk try self.input.intent();
+            };
+            try self.props.prepare(self.terrain.map(), &self.equipment, .{ .room = self.environment.room, .position = self.pose.position, .width = self.content.player_contact_width });
+            self.controller.pickup_available = self.props.pickup_candidate != null;
+            const result = try self.controller.advanceIn(self.content.controllerClips(), intent, &self.pose, &self.environment);
             if (result != .advanced) return error.UnimplementedMovementTransition;
             if (self.controller.fatal_landing) self.health = -1;
             if (self.death_wait == null) self.death_wait = self.controller.death_wait_requested;
             self.received_count = try self.equipment.advance(self.health, self.received_items);
+            try self.props.advance(self.terrain.map(), &self.equipment, try self.controller.pressesFloorSwitches(self.content.controllerClips()), self.controller.pickup_requested);
+            if (self.props.acquired) |handle| {
+                const item = try self.equipment.item(handle);
+                self.received_items[self.received_count] = .{ .item = handle, .kind = item.definition.kind };
+                self.received_count += 1;
+            }
+            if (self.props.movie) |movie| self.pending_movie = movie;
             self.simulation_steps += 1;
             self.clock.?.consume();
             if (self.inventory_cooldown != 0) {
@@ -190,7 +214,16 @@ pub const Scene = struct {
                 self.dialog = .{ .menu = try inventory_menu.Menu.init(items.len), .clock = try clock_mod.Clock.init(clock_mod.inventory, deadline) };
                 self.input = .{};
             }
+            if (self.pending_movie != null) return;
         }
+    }
+
+    pub fn latchMovieInput(self: *Scene) !void {
+        try consumeInput(&self.pending, &self.input, self.clock.?.deadline());
+        self.movie_intent = try self.input.intent();
+    }
+    pub fn resumeMovie(self: *Scene, paused_for: u64) !void {
+        self.clock.?.origin_ns = try std.math.add(u64, self.clock.?.origin_ns, paused_for);
     }
 
     pub fn nextDeadline(self: *const Scene) ?u64 {
@@ -207,14 +240,32 @@ pub const Scene = struct {
         const room = try self.content.roomArt(self.environment.room);
         if (indices.len != room.image.pixels.len) return error.InvalidFrameLength;
         @memcpy(indices, room.image.pixels);
+        try self.drawProps(.behind_player, room, indices);
         const frame = try self.content.frame(self.pose.visual.id);
         try sprite_renderer.draw(indices, room.image.width, room.image.height, frame, @as(i32, self.pose.position.x) + 8, @as(i32, self.pose.position.y) + 2, .{ .palette_bank = 4, .facing = if (self.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        try self.drawProps(.in_front_of_player, room, indices);
         if (try self.equipment.selected()) |selected| {
             const icon = try self.content.frame(selected.definition.icon);
             try sprite_renderer.draw(indices, room.image.width, room.image.height, icon, 232, 8, .{ .palette_bank = 10, .foreground = .overwrite });
         }
+        if (self.props.pickup_candidate) |handle| {
+            const item = try self.equipment.item(handle);
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(self.content.world_props.hint_icon), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
+            const label = item.definition.label;
+            try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, label, @divTrunc(176 - @as(i32, @intCast(label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
+        }
         if (self.dialog) |dialog| try dialog.menu.draw(self.content.inventory_art.artwork(), self.menu_entries[0..dialog.menu.count], self.score, indices, room.image.width, room.image.height);
         try palette.writeRgba(indices, &room.colors, rgba);
+    }
+
+    fn drawProps(self: *const Scene, layer: props_mod.Layer, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8) !void {
+        // Each rendering layer retains content order; the current two objects occupy
+        // separate layers, with Conrad drawn between them.
+        for (self.props.objects, self.props.definitions, 0..) |object, definition, index| {
+            if (definition.layer != layer or definition.footprint.room != self.environment.room or !try self.props.visible(index, &self.equipment)) continue;
+            const art = try self.content.frame(object.pose.visual.id);
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, art, @as(i32, object.pose.position.x) + 8, @as(i32, object.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (object.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        }
     }
 
     pub fn stateHash(self: *const Scene) u64 {
@@ -224,6 +275,7 @@ pub const Scene = struct {
         hash.update(&.{@intFromBool(self.defeated)});
         self.equipment.hashInto(&hash);
         self.terrain.hashInto(&hash);
+        self.props.hashInto(&hash);
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, self.score)));
         hash.update(&.{ self.inventory_cooldown, @intFromBool(self.input.inventory), @intFromBool(self.dialog != null) });
         if (self.dialog) |dialog| {

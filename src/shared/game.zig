@@ -6,6 +6,7 @@ const platform = @import("platform.zig");
 const menu_art = @import("content/menu_artwork.zig");
 const front_end = @import("scenes/front_end.zig");
 const continue_mod = @import("scenes/continue_game.zig");
+const story_mod = @import("scenes/story.zig");
 const jungle_mod = @import("scenes/jungle.zig");
 pub const Entry = enum { automatic, menu_development, jungle_development };
 const Scene = union(enum) {
@@ -168,6 +169,7 @@ pub const Game = struct {
     rgba: []u8,
     scene: Scene = .smoke,
     difficulty: @import("settings.zig").Difficulty = .normal,
+    story: ?story_mod.Story = null,
 
     pub fn init(allocator: std.mem.Allocator, assets: ?platform.AssetSource, storage: ?platform.Storage) !Game {
         return initWithEntry(allocator, assets, storage, .automatic);
@@ -194,6 +196,7 @@ pub const Game = struct {
     }
 
     pub fn deinit(self: *Game) void {
+        if (self.story) |*story| story.deinit();
         switch (self.scene) {
             .smoke => {},
             .menu => |*scene| scene.deinit(),
@@ -210,7 +213,16 @@ pub const Game = struct {
     }
 
     pub fn stateHash(self: *const Game) u64 {
-        if (self.scene == .jungle) return self.scene.jungle.stateHash();
+        if (self.scene == .jungle) {
+            const world = self.scene.jungle.stateHash();
+            if (self.story) |story| {
+                var hash = std.hash.Wyhash.init(world);
+                hash.update(&.{ @backingInt(story.kind), @intFromBool(story.skip) });
+                hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, story.player.playback.frame)));
+                return hash.final();
+            }
+            return world;
+        }
         if (self.scene == .menu) return self.scene.menu.stateHash();
         if (self.scene == .continue_game) return self.scene.continue_game.stateHash();
         return self.state.hash();
@@ -225,10 +237,15 @@ pub const Game = struct {
     }
 
     pub fn needsCatchup(self: *const Game, now_ns: u64) bool {
+        if (self.story) |*story| return story.player.needsCatchup(now_ns);
         if (self.scene == .jungle) return self.scene.jungle.needsCatchup(now_ns);
         if (self.scene == .menu) return self.scene.menu.needsCatchup(now_ns);
         if (self.scene == .continue_game) return self.scene.continue_game.needsCatchup(now_ns);
         return false;
+    }
+
+    pub fn isStoryPlaying(self: *const Game) bool {
+        return self.story != null;
     }
 
     /// One frame: the input, one step of the state, the sound and the picture.
@@ -253,6 +270,7 @@ pub const Game = struct {
             .finished => {},
         }
         if (self.phase == .finished) {
+            if (self.story) |*story| story.stopAudio(p);
             if (self.audio != null) p.audioClose();
             if (self.scene == .menu) self.scene.menu.stopAudio(p);
             return .finished;
@@ -274,6 +292,23 @@ pub const Game = struct {
         }
         if (self.jungle()) |scene| {
             const now = p.nowNs();
+            if (self.story == null and scene.pending_movie != null and scene.needsCatchup(now)) {
+                self.story = try story_mod.Story.open(self.allocator, self.assets.?, scene.pending_movie.?, now, if (scene.input.left_action) .left_shift else if (scene.input.right_action) .right_shift else null);
+                try scene.latchMovieInput();
+                scene.pending_movie = null;
+            }
+            if (self.story) |*story| {
+                if (try story.update(p)) {
+                    const paused = now - story.started_ns;
+                    story.stopAudio(p);
+                    story.deinit();
+                    try scene.resumeMovie(paused);
+                    self.story = null;
+                } else {
+                    try self.present(p);
+                    return .running;
+                }
+            }
             try scene.update(now);
             if (scene.defeated) {
                 const next = try continue_mod.Scene.init(self.allocator, self.assets.?, scene.score);
@@ -316,6 +351,14 @@ pub const Game = struct {
             if (n == 0) break;
             for (buf[0..n]) |event| {
                 self.events_consumed += 1;
+                if (self.story) |*story| {
+                    if (event.payload == .quit) {
+                        self.phase = .finished;
+                        continue;
+                    }
+                    if (!story.event(event)) try self.scene.jungle.enqueue(event);
+                    continue;
+                }
                 if (self.jungle()) |scene| {
                     switch (event.payload) {
                         .quit => self.phase = .finished,
@@ -397,6 +440,15 @@ pub const Game = struct {
     fn present(self: *Game, p: *platform.Platform) !void {
         const size = self.resolution();
         try p.setResolution(size.width, size.height);
+        if (self.story) |*story| {
+            const indices = self.page[0..57344];
+            const rgba = self.rgba[0 .. 57344 * 4];
+            try story.player.draw(indices, rgba);
+            self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
+            try p.present(.{ .width = 256, .height = 224, .stride = 256 * 4, .pixels = rgba });
+            self.frames_presented += 1;
+            return;
+        }
         if (self.jungle()) |scene| {
             const indices = self.page[0..57344];
             const frame = self.rgba[0 .. 57344 * 4];

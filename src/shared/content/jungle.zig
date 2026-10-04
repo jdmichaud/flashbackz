@@ -15,6 +15,9 @@ const equipment = @import("../equipment.zig");
 const starting_equipment = @import("starting_equipment.zig");
 const floppy_rooms = @import("floppy_rooms.zig");
 const floppy_interface = @import("floppy_interface.zig");
+const prop_import = @import("first_world_props.zig");
+const art_bank = @import("art_bank.zig");
+const object_art = @import("object_artwork.zig");
 const inventory_artwork = @import("inventory_artwork.zig");
 
 const Move = enum { wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover, collision_impact, recoil_fall, recoil_confined, recoil_staggered, recoil_prone, recoil_pause_prone, recoil_pause_tight, recoil_rise, recoil_drop, fall_begin, fall_continue, fatal_land, ledge_lower, ledge_catch, ledge_grip, ledge_hang, ledge_reach, ledge_settle_grip, ledge_climb, ledge_stand, ledge_release, ledge_drop, ledge_turn_release, ledge_tumble_release, ledge_brace, ledge_braced_lower };
@@ -32,6 +35,8 @@ pub const Pack = struct {
     initial_items: []equipment.Definition,
     initial_health: i16,
     inventory_art: inventory_artwork.Assets,
+    world_props: prop_import.Assets,
+    player_contact_width: u8,
     initial_pose: motion.Pose,
     initial_room: geometry.RoomId,
 
@@ -46,6 +51,7 @@ pub const Pack = struct {
         self.allocator.free(self.run_strides);
         starting_equipment.release(self.allocator, self.initial_items);
         self.inventory_art.deinit();
+        self.world_props.deinit();
         self.terrain.deinit();
         self.* = undefined;
     }
@@ -116,6 +122,9 @@ const Resolver = struct {
     sprites: []const u8,
     offsets: []const u8,
     icons: []const u8,
+    compositions: []const u8,
+    bindings: []const u8,
+    banks: art_bank.Archive,
     ids: std.AutoHashMap(u16, motion.VisualId),
     frames: std.ArrayList(sprite.Frame) = .empty,
 
@@ -126,13 +135,13 @@ const Resolver = struct {
     }
 
     pub fn resolve(self: *Resolver, kind: animation.VisualKind, index: u15) !motion.VisualId {
-        if (kind != .sprite) return error.UnsupportedPlayerArtwork;
-        if (self.ids.get(index)) |id| return id;
-        var frame = try sprite.fromArchive(self.allocator, self.sprites, self.offsets, index);
+        const key: u16 = @as(u16, index) | if (kind == .composition) @as(u16, 0x8000) else 0;
+        if (self.ids.get(key)) |id| return id;
+        var frame = if (kind == .sprite) try sprite.fromArchive(self.allocator, self.sprites, self.offsets, index) else try object_art.fromArchive(self.allocator, self.compositions, self.bindings, self.banks, index);
         errdefer frame.deinit();
         try self.frames.ensureUnusedCapacity(self.allocator, 1);
         const id: motion.VisualId = @fromBackingInt(@as(u32, @intCast(self.frames.items.len)));
-        try self.ids.put(index, id);
+        try self.ids.put(key, id);
         self.frames.appendAssumeCapacity(frame);
         return id;
     }
@@ -185,6 +194,13 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
     defer ct.deinit();
     var icons = try read(source, "DATA/GLOBAL.ICN", 32768);
     defer icons.deinit();
+    var compositions = try read(source, "DATA/GLOBAL.SPC", 65536);
+    defer compositions.deinit();
+    var banks_file = try read(source, "DATA/LEVEL1.MBK", 65536);
+    defer banks_file.deinit();
+    var bindings = try read(source, "DATA/LEVEL1.RP", 256);
+    defer bindings.deinit();
+    const banks = try art_bank.Archive.init(banks_file.bytes);
     var font_bytes = try read(source, "DATA/FB_TXT.FNT", 16384);
     defer font_bytes.deinit();
     var names = try read(source, "DATA/LEVEL1.TBN", 16384);
@@ -200,7 +216,7 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
     for (&room_ids, 0..) |*id, i| id.* = @fromBackingInt(@as(u16, @intCast(i)) + 1);
     var terrain = try collision.decode(allocator, ct.bytes, &room_ids);
     errdefer terrain.deinit();
-    var resolver: Resolver = .{ .allocator = allocator, .sprites = sprites.bytes, .offsets = offsets.bytes, .icons = icons.bytes, .ids = std.AutoHashMap(u16, motion.VisualId).init(allocator) };
+    var resolver: Resolver = .{ .allocator = allocator, .sprites = sprites.bytes, .offsets = offsets.bytes, .icons = icons.bytes, .compositions = compositions.bytes, .bindings = bindings.bytes, .banks = banks, .ids = std.AutoHashMap(u16, motion.VisualId).init(allocator) };
     defer resolver.deinit();
     const motions = try allocator.alloc(animation.OwnedClip, source_moves.len);
     var loaded: usize = 0;
@@ -221,8 +237,12 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
     const run = try allocator.alloc(motion.Clip, 4);
     errdefer allocator.free(run);
     for (run, 0..) |*clip, i| clip.* = motions[@backingInt(Move.run_a) + i].clip();
-    const initial_items = try starting_equipment.recover(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &resolver);
+    var initial_items = try starting_equipment.recover(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &resolver);
     errdefer starting_equipment.release(allocator, initial_items);
+    var props = try prop_import.load(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &room_ids, .{ .index = @intCast(initial_items.len), .generation = 1 }, &resolver);
+    errdefer props.deinit();
+    initial_items = try allocator.realloc(initial_items, initial_items.len + 1);
+    initial_items[initial_items.len - 1] = props.takeItem();
     var room_art: std.ArrayList(RoomArt) = .empty;
     errdefer {
         for (room_art.items) |*room| room.artwork.deinit();
@@ -267,6 +287,8 @@ pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, inte
         .initial_items = initial_items,
         .initial_health = player.life,
         .inventory_art = inventory_art,
+        .world_props = props,
+        .player_contact_width = player.collision_width,
         .initial_room = room_ids[player.room],
         .initial_pose = .{ .position = player.position, .facing = facing, .visual = .{ .id = first_visual.id, .mirrored = first_visual.mirrored != (facing == .left) } },
     };
