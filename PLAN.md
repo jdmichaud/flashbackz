@@ -54,6 +54,13 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   catches, crouch/roll chaining, ledge movement, falls/recovery, room handoffs and input
   combinations; include locomotion with the weapon drawn. Gate: original floppy comparisons
   cover each transition, and native exploration no longer terminates on valid movement input.
+- [ ] Game Options: pause/resume, original settings and abort flow, host free memory in MB,
+  plus user-requested master volume (0–100%). Gate: native menu input, pause behavior and
+  both music/effect output levels are verified; original-only settings retain measured semantics.
+- [ ] Original DEMO playback through the shared gameplay simulation: recover recording selection,
+  initial state, input cadence, interruption and completion. Use the three original recordings
+  as regression drivers; report divergences and resolve missing features through shared,
+  data-imported systems, never recording-specific behavior.
 - [ ] **Systematic mechanism import (user direction):** enumerate all level placements,
   shared rule groups and connections; classify behaviour families and translate them to typed
   definitions for shared switch/door/lift components. Gate: every instance is accounted for,
