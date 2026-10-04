@@ -20,8 +20,8 @@ const art_bank = @import("art_bank.zig");
 const object_art = @import("object_artwork.zig");
 const inventory_artwork = @import("inventory_artwork.zig");
 
-const Move = enum { roll_running_entry, roll_running_recovery, roll_jump_launch, run_wall_stop, run_stagger_stop, run_ledge_approach, run_ledge_reach, run_ledge_brace, jump_ledge_reach, run_drop, reverse_drop, unbalanced_drop, short_jump_drop, gliding_drop, vertical_drop, run_jump_takeoff, run_jump_ascent, run_jump_crest, run_jump_descent, run_jump_landing, run_jump_stand, run_jump_run, reverse_run, reverse_run_finish, accelerate_run, slow_to_walk, edge_stop, use_item, wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover, collision_impact, recoil_fall, recoil_confined, recoil_staggered, recoil_prone, recoil_pause_prone, recoil_pause_tight, recoil_rise, recoil_drop, fall_begin, fall_continue, fatal_land, ledge_lower, ledge_catch, ledge_grip, ledge_hang, ledge_reach, ledge_settle_grip, ledge_climb, ledge_stand, ledge_release, ledge_drop, ledge_turn_release, ledge_tumble_release, ledge_brace, ledge_braced_lower };
-const source_moves = [_]u16{ 33, 39, 40, 125, 67, 95, 121, 122, 32, 127, 129, 225, 63, 62, 41, 13, 21, 22, 23, 24, 31, 14, 10, 184, 11, 12, 30, 168, 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88, 263, 94, 85, 84, 83, 111, 74, 103, 86, 89, 90, 73, 15, 60, 61, 25, 101, 102, 16, 178, 91, 107, 123, 92, 104, 105 };
+const Move = enum { armed_drawing_crouched, armed_draw_crouched_release, armed_draw_start, armed_drawing, armed_draw_release, armed_aiming, armed_lowering_aim, armed_standing, armed_walking, armed_turning, armed_holstering, armed_holstering_aim, armed_raising_aim, armed_crouching, armed_crouched, armed_turning_crouched, armed_rising, armed_holstering_crouched, armed_lowering_aim_crouched, armed_raising_aim_crouched, armed_aim_crouch_release, armed_aiming_crouched, armed_crouching_aim, armed_rising_aim, armed_turning_aim, armed_turning_aim_crouched, armed_stepping_down, armed_landing, roll_running_entry, roll_running_recovery, roll_jump_launch, run_wall_stop, run_stagger_stop, run_ledge_approach, run_ledge_reach, run_ledge_brace, jump_ledge_reach, run_drop, reverse_drop, unbalanced_drop, short_jump_drop, gliding_drop, vertical_drop, run_jump_takeoff, run_jump_ascent, run_jump_crest, run_jump_descent, run_jump_landing, run_jump_stand, run_jump_run, reverse_run, reverse_run_finish, accelerate_run, slow_to_walk, edge_stop, use_item, wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover, collision_impact, recoil_fall, recoil_confined, recoil_staggered, recoil_prone, recoil_pause_prone, recoil_pause_tight, recoil_rise, recoil_drop, fall_begin, fall_continue, fatal_land, ledge_lower, ledge_catch, ledge_grip, ledge_hang, ledge_reach, ledge_settle_grip, ledge_climb, ledge_stand, ledge_release, ledge_drop, ledge_turn_release, ledge_tumble_release, ledge_brace, ledge_braced_lower };
+const source_moves = [_]u16{ 160, 222, 182, 175, 223, 57, 55, 44, 45, 48, 52, 262, 54, 46, 50, 49, 51, 161, 53, 47, 224, 56, 71, 72, 76, 173, 166, 167, 33, 39, 40, 125, 67, 95, 121, 122, 32, 127, 129, 225, 63, 62, 41, 13, 21, 22, 23, 24, 31, 14, 10, 184, 11, 12, 30, 168, 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88, 263, 94, 85, 84, 83, 111, 74, 103, 86, 89, 90, 73, 15, 60, 61, 25, 101, 102, 16, 178, 91, 107, 123, 92, 104, 105 };
 pub const RoomArt = struct { id: geometry.RoomId, artwork: artwork.Artwork };
 
 pub const Pack = struct {
@@ -62,6 +62,36 @@ pub const Pack = struct {
 
     pub fn controllerClips(self: *const Pack) conrad.Clips {
         return .{
+            .armed = .{
+                .drawing_crouched = self.clip(.armed_drawing_crouched),
+                .draw_crouched_release = self.clip(.armed_draw_crouched_release),
+                .draw_start = self.clip(.armed_draw_start),
+                .drawing = self.clip(.armed_drawing),
+                .draw_release = self.clip(.armed_draw_release),
+                .aiming = self.clip(.armed_aiming),
+                .lowering_aim = self.clip(.armed_lowering_aim),
+                .standing = self.clip(.armed_standing),
+                .walking = self.clip(.armed_walking),
+                .turning = self.clip(.armed_turning),
+                .holstering = self.clip(.armed_holstering),
+                .holstering_aim = self.clip(.armed_holstering_aim),
+                .raising_aim = self.clip(.armed_raising_aim),
+                .crouching = self.clip(.armed_crouching),
+                .crouched = self.clip(.armed_crouched),
+                .turning_crouched = self.clip(.armed_turning_crouched),
+                .rising = self.clip(.armed_rising),
+                .holstering_crouched = self.clip(.armed_holstering_crouched),
+                .lowering_aim_crouched = self.clip(.armed_lowering_aim_crouched),
+                .raising_aim_crouched = self.clip(.armed_raising_aim_crouched),
+                .aim_crouch_release = self.clip(.armed_aim_crouch_release),
+                .aiming_crouched = self.clip(.armed_aiming_crouched),
+                .crouching_aim = self.clip(.armed_crouching_aim),
+                .rising_aim = self.clip(.armed_rising_aim),
+                .turning_aim = self.clip(.armed_turning_aim),
+                .turning_aim_crouched = self.clip(.armed_turning_aim_crouched),
+                .stepping_down = self.clip(.armed_stepping_down),
+                .landing = self.clip(.armed_landing),
+            },
             .wake = self.clip(.wake),
             .use_item = self.clip(.use_item),
             .stand = self.clip(.stand),

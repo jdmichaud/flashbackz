@@ -6,6 +6,7 @@ pub const Intent = struct {
     vertical: ?Vertical = null,
     action: bool = false,
     use_item: bool = false,
+    weapon: bool = false,
     /// Opposite keys on one axis are held together; no single direction was requested.
     directions_conflict: bool = false,
 

@@ -26,3 +26,7 @@ mechanism work resumes.
 
 Existing basic controls remain: arrows move/jump/crouch, Shift modifies movement and picks up
 nearby objects, Tab opens inventory, and Return uses a selected supported item.
+
+Weapon-drawn walking, turning, crouching and holstering are now implemented in development
+builds and pass 920 original update comparisons. Firing is still unfinished, so this weapon
+batch is not yet included in the executable offered for user testing.

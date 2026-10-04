@@ -23,6 +23,7 @@ pub const HeldInput = struct {
     down: bool = false,
     left_action: bool = false,
     right_action: bool = false,
+    weapon: bool = false,
     inventory: bool = false,
     use_item: bool = false,
     use_held: bool = false,
@@ -36,6 +37,7 @@ pub const HeldInput = struct {
             .down => self.down = down,
             .left_shift => self.left_action = down,
             .right_shift => self.right_action = down,
+            .space => self.weapon = down,
             .tab => self.inventory = down,
             .enter => {
                 self.use_held = down;
@@ -55,7 +57,7 @@ pub const HeldInput = struct {
         // Mixed axes retain the last accepted direction, while the action modifier remains
         // current. This is the original input arbitration, expressed without a DOS bitmask.
         if (!(self.left or self.right) or !(self.up or self.down)) self.previous_direction = .{ .horizontal = horizontal, .vertical = vertical, .conflict = (self.left and self.right) or (self.up and self.down) };
-        return .{ .direction = self.previous_direction.horizontal, .vertical = self.previous_direction.vertical, .action = self.left_action or self.right_action, .use_item = self.use_item, .directions_conflict = self.previous_direction.conflict };
+        return .{ .direction = self.previous_direction.horizontal, .vertical = self.previous_direction.vertical, .action = self.left_action or self.right_action, .use_item = self.use_item, .weapon = self.weapon, .directions_conflict = self.previous_direction.conflict };
     }
 };
 
@@ -66,7 +68,7 @@ fn consumeInput(pending: *std.ArrayList(platform.Event), held: *HeldInput, deadl
             .focus_lost => held.* = .{},
             .key_down => |key| {
                 switch (key.key) {
-                    .space, .left_ctrl, .right_ctrl, .p, .f1, .f2, .f3 => return error.UnimplementedJungleControl,
+                    .left_ctrl, .right_ctrl, .p, .f1, .f2, .f3 => return error.UnimplementedJungleControl,
                     else => {},
                 }
                 held.*.key(key.key, true);
@@ -81,6 +83,7 @@ pub const Scene = struct {
     allocator: std.mem.Allocator,
     content: content.Pack,
     controller: conrad.Controller = .{},
+    weapon_toggle: conrad.armed.Toggle = .{},
     environment: environment_mod.Environment,
     terrain: terrain_mod.State,
     props: props_mod.World,
@@ -202,8 +205,10 @@ pub const Scene = struct {
             self.controller.pickup_available = self.props.pickup_candidate != null;
             const selected = try self.equipment.selected();
             self.controller.use_available = if (selected) |item| item.definition.use_action != null else false;
+            self.controller.weapon_desired = self.weapon_toggle.desired;
             const result = try self.controller.advanceIn(self.content.controllerClips(), intent, &self.pose, &self.environment);
             if (result != .advanced) return error.UnimplementedMovementTransition;
+            self.weapon_toggle.advance(intent.weapon, self.equipment.carries(.gun));
             if (self.controller.fatal_landing) self.health = -1;
             if (self.death_wait == null) self.death_wait = self.controller.death_wait_requested;
             self.received_count = try self.equipment.advance(self.health, self.received_items);
@@ -309,8 +314,10 @@ pub const Scene = struct {
             const keys = dialog.keys;
             for ([_]bool{ keys.directions.right, keys.directions.left, keys.directions.up, keys.directions.down, keys.previous.right, keys.previous.left, keys.previous.up, keys.previous.down, keys.left_shift, keys.right_shift, keys.space, keys.enter, keys.tab }) |value| hash.update(&.{@intFromBool(value)});
         }
+        hash.update(&.{ @intFromBool(self.input.weapon), @intFromBool(self.weapon_toggle.desired), @backingInt(self.weapon_toggle.phase), @intFromBool(self.controller.weapon_desired) });
         const activity: u32 = @backingInt(std.meta.activeTag(self.controller.activity));
         const phase: u32 = switch (self.controller.activity) {
+            .armed => |p| @backingInt(p.phase),
             .turning => |p| @backingInt(p),
             .walking, .running => |p| switch (p) {
                 .starting => 0,

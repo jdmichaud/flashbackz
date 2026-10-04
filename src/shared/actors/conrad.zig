@@ -2,6 +2,7 @@
 //! probes choose transitions, and room handoff occurs before the first frame of a new motion.
 const std = @import("std");
 const motion = @import("../motion.zig");
+pub const armed = @import("conrad_armed.zig");
 const descent = @import("conrad_descent.zig");
 const running_jump = @import("conrad_running_jump.zig");
 const jumping = @import("conrad_jump.zig");
@@ -32,6 +33,7 @@ pub const RunClips = struct {
 };
 
 pub const Clips = struct {
+    armed: ?armed.Clips = null,
     wake: motion.Clip,
     use_item: ?motion.Clip = null,
     stand: motion.Clip,
@@ -55,6 +57,7 @@ pub const Clips = struct {
 pub const TurnPhase = enum { preparation, follow_through };
 pub const GaitPhase = union(enum) { starting, stride: usize };
 pub const Activity = union(enum) {
+    armed: armed.State,
     waking,
     standing,
     using_item,
@@ -95,6 +98,7 @@ const NoEnvironment = struct {
 
 pub const Controller = struct {
     activity: Activity = .waking,
+    weapon_desired: bool = false,
     playback: motion.Playback = .{},
     /// Ordered consequences of the latest step; the session applies them before equipment.
     fatal_landing: bool = false,
@@ -110,6 +114,7 @@ pub const Controller = struct {
 
     fn selectedClip(self: Controller, clips: Clips) !motion.Clip {
         return switch (self.activity) {
+            .armed => |state| state.clip(clips.armed orelse return error.MissingMotion),
             .waking => clips.wake,
             .standing => clips.stand,
             .using_item => clips.use_item orelse return error.MissingMotion,
@@ -190,6 +195,16 @@ pub const Controller = struct {
         if (clip.steps.len == 0) return error.MissingMotion;
         if (self.playback.exhausted(clip)) {
             switch (self.activity) {
+                .armed => |*state| switch (try state.finishPhase(intent, self.weapon_desired, pose, environment)) {
+                    .continued => {},
+                    .unarmed_standing => self.activity = .standing,
+                    .unarmed_crouched => self.activity = .{ .crouching = .holding },
+                    .unarmed_rising => self.activity = .{ .crouching = .rising },
+                    .roll => self.activity = .{ .rolling = .{} },
+                    .roll_drop => self.activity = .{ .rolling = .{ .phase = .drop } },
+                    .long_fall => self.activity = .{ .falling = .{ .phase = .continuing } },
+                    .fire_requested => return .locomotion_requested,
+                },
                 .waking => self.activity = .standing,
                 .using_item => {
                     self.use_requested = true;
@@ -198,6 +213,8 @@ pub const Controller = struct {
                 .standing => {
                     if (clips.descent != null and !try environment.at(pose.*, .support, 0)) {
                         self.activity = .{ .descending = .{ .phase = .unbalanced } };
+                    } else if (self.weapon_desired) {
+                        self.activity = .{ .armed = .{} };
                     } else if (self.use_available and intent.use_item and !intent.action and intent.neutralDirections()) {
                         self.activity = .using_item;
                     } else if (self.pickup_available and intent.action and intent.neutralDirections()) {
@@ -397,7 +414,9 @@ pub const Controller = struct {
                         self.activity = .{ .crouching = .holding };
                     },
                     .holding => {
-                        if (self.pickup_available and intent.action and !intent.directions_conflict and intent.direction == null and (intent.vertical == null or intent.vertical == .down)) {
+                        if (self.weapon_desired) {
+                            self.activity = .{ .armed = .{ .phase = .drawing_crouched } };
+                        } else if (self.pickup_available and intent.action and !intent.directions_conflict and intent.direction == null and (intent.vertical == null or intent.vertical == .down)) {
                             self.pickup_requested = true;
                         } else if (intent.vertical == .down or (intent.vertical == null and intent.action and (intent.neutralDirections() or intent.direction == pose.facing))) {
                             // Remain low while crouch/action is held.

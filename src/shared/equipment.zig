@@ -58,6 +58,11 @@ pub const Loadout = struct {
         self.entries[handle.index].state = .carried;
     }
 
+    pub fn carries(self: *const Loadout, kind: Kind) bool {
+        for (self.entries) |entry| if (entry.state == .carried and entry.definition.kind == kind) return true;
+        return false;
+    }
+
     pub fn selected(self: *const Loadout) !?*const Item {
         return if (self.inventory.selected()) |handle| try self.item(handle) else null;
     }
