@@ -57,3 +57,6 @@ pub const key_pickups = @import("key_pickups.zig");
 pub const lifts = @import("lifts.zig");
 
 pub const energy_stations = @import("energy_stations.zig");
+
+pub const world_messages = @import("world_messages.zig");
+pub const platform_sections = @import("platform_sections.zig");

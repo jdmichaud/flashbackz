@@ -65,6 +65,10 @@ route through imported circuits. Ordinary keys can be collected with Shift, sele
 Tab/arrow keys, and used by holding Return through Conrad's hand press at a matching lock.
 Successful use consumes the key. Select SHIELD and hold Return near an energy generator to
 recharge it, with the original animation and music. Releasing Return before the press cancels.
+The magnetic cartridge can be collected, recharged at a generator and used in its lock to
+activate the bridge. Its lock instruction uses the original paged message display; Return,
+Space or Shift acknowledges a page while gameplay is paused. All links and support footprints
+come from the supplied data.
 Ordinary lifts now carry Conrad and board stones through their original contact behavior.
 With the gun holstered, Shift+Up/Down requests a ride. Turning, crouching, drawing,
 shooting and holstering work while travelling. The jungle pressure-called lift now stays

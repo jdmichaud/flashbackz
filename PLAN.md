@@ -75,7 +75,7 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
 - [ ] Import energy-generator fixtures and shared item recharge capabilities. Restore the
   shield through its authored use delay, healing value and recharge cinematic/music; reuse
   the capability for rechargeable puzzle items. Verify nearby and out-of-range use.
-- [ ] Rechargeable cartridge puzzle: pickup, charge completion after its film, credential
+- [x] Rechargeable cartridge puzzle: pickup, charge completion after its film, credential
   matching, consumption, lock instruction and both linked bridge sections. Import the full
   behavior families and preserve their event order.
 - [ ] Shared world-message display for item/control instructions and NPC dialogue, including

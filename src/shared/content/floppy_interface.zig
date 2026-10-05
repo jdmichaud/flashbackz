@@ -55,7 +55,8 @@ fn expand(allocator: std.mem.Allocator, encoded: []const u8, size: usize) ![]u8 
     return output;
 }
 
-pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values {
+/// Owned unpacked metadata for edition-specific content importers only.
+pub fn loadImage(allocator: std.mem.Allocator, source: platform.AssetSource) ![]u8 {
     var file = source.readAll("FB.EXE", 256 * 1024) catch |err| switch (err) {
         error.NotFound => try source.readAll("DATA/FB.EXE", 256 * 1024),
         else => return err,
@@ -68,7 +69,11 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
     if (!std.mem.eql(u8, &digest, &expected)) return error.UnrecognizedFloppyExecutable;
     const image_start: usize = @as(usize, word(file.bytes, 8)) * 16;
     const stub: usize = image_start + @as(usize, word(file.bytes, 22)) * 16;
-    const image = try expand(allocator, file.bytes[image_start..stub], @as(usize, word(file.bytes, stub + 12)) * 16);
+    return expand(allocator, file.bytes[image_start..stub], @as(usize, word(file.bytes, stub + 12)) * 16);
+}
+
+pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values {
+    const image = try loadImage(allocator, source);
     defer allocator.free(image);
     const data = image[0x1bcc0..];
     var interface_colors: palette.Bank = undefined;

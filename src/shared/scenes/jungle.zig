@@ -113,6 +113,8 @@ pub const Scene = struct {
     props: props_mod.World,
     operated_controls: @import("../operated_controls.zig").World,
     locks: @import("../key_locks.zig").World,
+    platform_sections: @import("../platform_sections.zig").World,
+    message: ?@import("../world_messages.zig").State = null,
     energy_stations: @import("../energy_stations.zig").World,
     hazards: @import("../electrical_hazards.zig").World,
     detectors: @import("../detectors.zig").World,
@@ -172,6 +174,8 @@ pub const Scene = struct {
         errdefer operated.deinit();
         var locks = try @import("../key_locks.zig").World.init(allocator, pack.locks.definitions);
         errdefer locks.deinit();
+        var platform_sections = try @import("../platform_sections.zig").World.init(allocator, pack.platform_sections.definitions);
+        errdefer platform_sections.deinit();
         var energy_stations = try @import("../energy_stations.zig").World.init(allocator, pack.energy_stations.definitions);
         errdefer energy_stations.deinit();
         var hazards = try @import("../electrical_hazards.zig").World.init(allocator, pack.hazards.definitions);
@@ -215,6 +219,7 @@ pub const Scene = struct {
             .props = props,
             .operated_controls = operated,
             .locks = locks,
+            .platform_sections = platform_sections,
             .energy_stations = energy_stations,
             .hazards = hazards,
             .detectors = detectors,
@@ -273,6 +278,7 @@ pub const Scene = struct {
         self.props.deinit();
         self.operated_controls.deinit();
         self.locks.deinit();
+        self.platform_sections.deinit();
         self.energy_stations.deinit();
         self.hazards.deinit();
         self.detectors.deinit();
@@ -316,6 +322,25 @@ pub const Scene = struct {
         // Preserve remaining debt for the next host call instead of dropping simulation.
         var work: usize = 0;
         while (self.needsCatchup(now_ns) and work < 8) : (work += 1) {
+            if (self.message) |*message| {
+                const deadline = message.clock.deadline();
+                while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) message.event(self.pending.orderedRemove(0));
+                if (message.poll(try self.content.messages.get(message.request.message))) {
+                    self.message = null;
+                    self.input = .{};
+                    try self.clock.?.resumeAfterPause(deadline);
+                    return;
+                }
+                if (self.replay) |*replay| {
+                    const sample = replay.next() orelse {
+                        self.aborted = true;
+                        return;
+                    };
+                    message.keys = @as(u3, @intFromBool(sample.action)) | (@as(u3, @intFromBool(sample.use_item)) << 1) | (@as(u3, @intFromBool(sample.weapon)) << 2);
+                }
+                message.latchInput();
+                continue;
+            }
             if (self.options) |*options| {
                 const deadline = options.clock.deadline();
                 while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
@@ -394,6 +419,7 @@ pub const Scene = struct {
             self.detectors.beginStep();
             self.ceiling_guns.beginStep();
             self.doors.beginStep();
+            self.platform_sections.beginStep();
             self.lifts.beginStep();
             self.ceiling_fire.beginStep();
             self.gunmen.prepare();
@@ -402,7 +428,7 @@ pub const Scene = struct {
             if (self.protection_steps != 0) self.protection_steps -= 1;
             try self.props.prepare(self.terrain.map(), &self.equipment, .{ .room = self.environment.room, .position = self.pose.position, .width = self.content.player_contact_width });
             try self.operated_controls.prepare(self.content.controls.definitions, self.terrain.map(), self.props.player_contact);
-            try self.locks.prepare(self.content.locks.definitions, self.terrain.map(), self.props.player_contact);
+            try self.locks.prepare(self.content.locks.definitions, self.content.locks.receivers, self.terrain.map(), self.props.player_contact);
             try self.passengers.prepare(self.terrain.map(), self.props.player_contact, &self.lifts, self.content.lifts.definitions, &self.props, &self.equipment);
             for (self.gunmen.actors) |actor| if (!actor.lost) try self.passengers.includeActor(self.terrain.map(), actor.contact, &self.lifts, self.content.lifts.definitions);
             for (self.robots.actors) |actor| if (!actor.removed) try self.passengers.includeActor(self.terrain.map(), actor.contact, &self.lifts, self.content.lifts.definitions);
@@ -444,7 +470,7 @@ pub const Scene = struct {
                         handled = true;
                     },
                     .unlock => |use| {
-                        handled = try self.locks.useKey(self.content.locks.definitions, self.content.locks.bindings, &self.equipment, handle);
+                        handled = try self.locks.useKey(self.content.locks.definitions, self.content.locks.receivers, self.content.locks.bindings, &self.equipment, handle, self.terrain.map(), self.environment.room);
                         if (handled) if (use.movie) |movie| {
                             self.pending_movie = movie;
                         };
@@ -460,8 +486,8 @@ pub const Scene = struct {
                 }
             }
             try self.props.advance(self.terrain.map(), &self.equipment, try self.controller.pressesFloorSwitches(self.content.controllerClips()), self.controller.pickup_requested);
-            try self.operated_controls.advance(self.content.controls.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested);
-            try self.locks.advance(self.content.locks.definitions, self.terrain.map(), self.environment.room);
+            try self.operated_controls.advance(self.content.controls.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested and self.locks.candidate == null);
+            try self.locks.advance(self.content.locks.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested);
             try self.energy_stations.advance(self.content.energy_stations.definitions, self.terrain.map(), self.environment.room);
             self.lifts.route(self.content.lifts.bindings, self.props.pressed_circuits[0..self.props.pressed_count]);
             self.lifts.route(self.content.lifts.bindings, self.operated_controls.pulses[0..self.operated_controls.pulse_count]);
@@ -498,6 +524,12 @@ pub const Scene = struct {
             self.doors.route(self.content.doors.bindings, self.locks.pulses[0..self.locks.pulse_count]);
             self.doors.route(self.content.doors.bindings, self.lifts.pulses[0..self.lifts.pulse_count]);
             self.doors.route(self.content.doors.bindings, self.detectors.pulses[0..self.detectors.pulse_count]);
+            self.platform_sections.route(self.content.platform_sections.bindings, self.locks.pulses[0..self.locks.pulse_count]);
+            self.platform_sections.route(self.content.platform_sections.bindings, self.props.pressed_circuits[0..self.props.pressed_count]);
+            self.platform_sections.route(self.content.platform_sections.bindings, self.operated_controls.pulses[0..self.operated_controls.pulse_count]);
+            self.platform_sections.route(self.content.platform_sections.bindings, self.detectors.pulses[0..self.detectors.pulse_count]);
+            self.platform_sections.route(self.content.platform_sections.bindings, self.lifts.pulses[0..self.lifts.pulse_count]);
+            try self.platform_sections.advance(self.content.platform_sections.definitions, &self.terrain, self.environment.room);
             try self.doors.advance(self.content.doors.definitions, self.content.doors.profiles, &self.terrain, self.environment.room, self.sensed_contacts[0..sensed_count], .before_fire);
             self.ceiling_guns.route(self.content.ceiling_guns.bindings, self.props.pressed_circuits[0..self.props.pressed_count]);
             self.ceiling_guns.route(self.content.ceiling_guns.bindings, self.operated_controls.pulses[0..self.operated_controls.pulse_count]);
@@ -560,6 +592,7 @@ pub const Scene = struct {
             for (self.ceiling_guns.instances, self.content.ceiling_guns.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.room);
             for (self.hazards.instances, self.content.hazards.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (self.energy_stations.instances, self.content.energy_stations.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
+            for (self.platform_sections.instances, self.content.platform_sections.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (self.locks.instances, self.content.locks.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (self.operated_controls.instances, self.content.controls.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (self.props.objects) |object| if (object.sound_requested) |sound| try self.emitSound(sound, object.room);
@@ -582,6 +615,20 @@ pub const Scene = struct {
             self.zoom.setActive(self.settings.zoom == .on, self.pose);
             self.zoom.advance(self.pose);
             self.clock.?.consume();
+            if (self.locks.notice) |notice| {
+                _ = try self.content.messages.get(notice.message);
+                self.message = try @import("../world_messages.zig").State.init(notice, deadline);
+                if (self.replay) |*replay| {
+                    const sample = replay.next() orelse {
+                        self.aborted = true;
+                        return;
+                    };
+                    self.message.?.keys = @as(u3, @intFromBool(sample.action)) | (@as(u3, @intFromBool(sample.use_item)) << 1) | (@as(u3, @intFromBool(sample.weapon)) << 2);
+                    self.message.?.latchInput();
+                }
+                self.input = .{};
+                return;
+            }
             if (self.input.options) {
                 self.options = .{ .menu = .{ .settings = self.settings }, .clock = try clock_mod.Clock.init(clock_mod.inventory, deadline) };
                 self.input = .{};
@@ -621,6 +668,7 @@ pub const Scene = struct {
     }
 
     pub fn nextDeadline(self: *const Scene) ?u64 {
+        if (self.message) |message| return message.clock.deadline();
         if (self.options) |options| return options.clock.deadline();
         if (self.dialog) |dialog| return dialog.clock.deadline();
         return if (self.clock) |clock| clock.deadline() else null;
@@ -641,6 +689,7 @@ pub const Scene = struct {
         try self.drawGunmen(room, indices, true);
         try self.drawRobots(room, indices, true);
         try self.drawDoors(room, indices, true);
+        try self.drawPlatformSections(room, indices, true);
         try self.drawLifts(room, indices, true);
         try self.drawStationary(self.detectors.instances, self.content.detectors.definitions, room, indices, true);
         try self.drawStationary(self.ceiling_guns.instances, self.content.ceiling_guns.definitions, room, indices, true);
@@ -655,6 +704,7 @@ pub const Scene = struct {
         try self.drawGunmen(room, indices, false);
         try self.drawRobots(room, indices, false);
         try self.drawDoors(room, indices, false);
+        try self.drawPlatformSections(room, indices, false);
         try self.drawLifts(room, indices, false);
         try self.drawStationary(self.detectors.instances, self.content.detectors.definitions, room, indices, false);
         try self.drawStationary(self.ceiling_guns.instances, self.content.ceiling_guns.definitions, room, indices, false);
@@ -671,15 +721,17 @@ pub const Scene = struct {
             const label = item.definition.label;
             try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, label, @divTrunc(176 - @as(i32, @intCast(label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
         }
-        if (self.operated_controls.candidate) |index| {
-            const control = self.content.controls.definitions[index];
-            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(control.hint), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
-            try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, control.label, @divTrunc(176 - @as(i32, @intCast(control.label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
-        }
-        if (self.locks.candidate) |index| {
-            const lock = self.content.locks.definitions[index];
-            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(lock.hint), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
-            try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, lock.label, @divTrunc(176 - @as(i32, @intCast(lock.label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
+        if (self.props.pickup_candidate == null) {
+            if (self.operated_controls.candidate) |index| {
+                const control = self.content.controls.definitions[index];
+                try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(control.hint), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
+                try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, control.label, @divTrunc(176 - @as(i32, @intCast(control.label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
+            }
+            if (self.locks.candidate) |index| {
+                const lock = self.content.locks.definitions[index];
+                try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(lock.hint), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
+                try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, lock.label, @divTrunc(176 - @as(i32, @intCast(lock.label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
+            }
         }
         if (self.props.pickup_candidate == null and self.operated_controls.candidate == null and self.locks.candidate == null) {
             if (self.energy_stations.candidate) |index| {
@@ -690,7 +742,10 @@ pub const Scene = struct {
                 }
             }
         }
-        try self.zoom.draw(indices, rgba);
+        if (self.message) |message| {
+            try message.draw(try self.content.messages.get(message.request.message), &self.content.inventory_art.font, room.image.pixels, indices);
+            try sprite_renderer.draw(indices, 256, 224, try self.content.frame(message.request.icon), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
+        } else try self.zoom.draw(indices, rgba);
         if (self.dialog) |dialog| try dialog.menu.draw(self.content.inventory_art.artwork(), self.menu_entries[0..dialog.menu.count], self.score, indices, room.image.width, room.image.height);
         if (self.options) |options| try options.menu.draw(indices, &self.content.inventory_art.font);
         try palette.writeRgba(indices, &room.colors, rgba);
@@ -783,6 +838,13 @@ pub const Scene = struct {
         }
     }
 
+    fn drawPlatformSections(self: *const Scene, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8, behind_player: bool) !void {
+        for (self.platform_sections.instances, self.content.platform_sections.definitions) |instance, definition| {
+            if (!instance.present or definition.footprint.room != self.environment.room or definition.behind_player != behind_player) continue;
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(instance.pose.visual.id), @as(i32, instance.pose.position.x) + 8, @as(i32, instance.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (instance.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        }
+    }
+
     fn drawLifts(self: *const Scene, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8, behind_player: bool) !void {
         for (self.lifts.instances, self.content.lifts.definitions) |instance, definition| {
             if (instance.room != self.environment.room or definition.behind_player != behind_player) continue;
@@ -823,6 +885,9 @@ pub const Scene = struct {
         self.props.hashInto(&hash);
         self.operated_controls.hashInto(&hash);
         self.locks.hashInto(&hash);
+        self.platform_sections.hashInto(&hash);
+        hash.update(&.{@intFromBool(self.message != null)});
+        if (self.message) |message| message.hashInto(&hash);
         self.energy_stations.hashInto(&hash);
         self.hazards.hashInto(&hash);
         self.detectors.hashInto(&hash);

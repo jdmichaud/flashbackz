@@ -139,3 +139,12 @@ Select the item with **Tab + arrows**, then close inventory. At a matching lock,
 energy generator with **SHIELD** selected, **hold Return** until Conrad presses with his hand.
 Releasing Return during the reach cancels the effect. The shield's recharge film restores its
 charge; **Tab** skips the film. The holocube keeps its existing single-press use behavior.
+
+
+### Cartridge and magnetic bridge
+
+Pick up the **CARTRIDGE** with **Shift**, select it in inventory, then **hold Return** beside
+an energy generator to charge it. Hold Return at the **CARTRIDGE LOCK** to use the charged
+cartridge. The bridge film plays, the cartridge is consumed, and the bridge becomes walkable.
+Press **Shift** at the unused lock to read its instruction; **Return**, **Space** or a fresh
+**Shift** press dismisses the message. Gameplay stays paused while the message is open.

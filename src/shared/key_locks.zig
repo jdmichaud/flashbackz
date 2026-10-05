@@ -6,7 +6,12 @@ const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
 const equipment = @import("equipment.zig");
 const props = @import("world_props.zig");
-pub const Binding = struct { item: equipment.ItemHandle, lock: usize, next_step: bool };
+pub const Receiver = struct {
+    footprint: contacts.Footprint,
+    credential: i16,
+    target: union(enum) { lock: usize, manual_control },
+};
+pub const Binding = struct { item: equipment.ItemHandle, receiver: usize, activates: bool, next_step: bool };
 pub const Definition = struct {
     footprint: contacts.Footprint,
     facing: motion.Facing,
@@ -18,10 +23,12 @@ pub const Definition = struct {
     unlock_forward: i16,
     unlock_down: i16,
     unlock_sound: ?motion.SoundId,
-    circuit: props.CircuitId,
+    circuits: []const props.CircuitId,
+    notice: ?@import("world_messages.zig").Id = null,
     initially_used: bool,
     initially_active: bool,
     wake_when_near: bool,
+    accepts_signals: bool,
     hint: motion.VisualId,
     label: []const u8,
 };
@@ -40,6 +47,8 @@ pub const World = struct {
     pulses: []props.CircuitId,
     pulse_count: usize = 0,
     candidate: ?usize = null,
+    use_candidate: ?usize = null,
+    notice: ?@import("world_messages.zig").Request = null,
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);
@@ -52,50 +61,78 @@ pub const World = struct {
             };
             instance.* = .{ .used = definition.initially_used, .active = definition.initially_active, .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } } };
         }
-        return .{ .allocator = allocator, .instances = instances, .pulses = try allocator.alloc(props.CircuitId, definitions.len) };
+        var capacity: usize = 0;
+        for (definitions) |definition| capacity += definition.circuits.len;
+        return .{ .allocator = allocator, .instances = instances, .pulses = try allocator.alloc(props.CircuitId, capacity) };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.instances);
         self.allocator.free(self.pulses);
     }
-    pub fn prepare(self: *World, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint) !void {
+    pub fn prepare(self: *World, definitions: []const Definition, receivers: []const Receiver, map: geometry.Map, player: contacts.Footprint) !void {
         self.candidate = null;
-        const layout: contacts.Layout = .{};
-        for (self.instances, definitions, 0..) |*instance, definition, i| {
+        self.use_candidate = null;
+        for (self.instances) |*instance| {
             instance.ready = instance.pending;
             instance.pending = false;
-            var footprint = definition.footprint;
-            footprint.position = instance.pose.position;
-            if (try layout.overlaps(map, player, footprint)) self.candidate = i;
         }
+        const layout: contacts.Layout = .{};
+        for (receivers, 0..) |receiver, index| {
+            var footprint = receiver.footprint;
+            if (receiver.target == .lock) {
+                const lock = receiver.target.lock;
+                footprint.position = self.instances[lock].pose.position;
+                const near = try @import("activation.zig").around(map, player.room, footprint.room, footprint.position.y);
+                if (definitions[lock].wake_when_near and near.wake) self.instances[lock].active = true;
+            }
+            if (try layout.overlaps(map, player, footprint)) self.use_candidate = index;
+        }
+        if (self.use_candidate) |index| if (receivers[index].target == .lock) {
+            self.candidate = receivers[index].target.lock;
+        };
     }
-    pub fn useKey(self: *World, definitions: []const Definition, bindings: []const Binding, loadout: *equipment.Loadout, handle: equipment.ItemHandle) !bool {
-        const index = self.candidate orelse return false;
+    pub fn useKey(self: *World, definitions: []const Definition, receivers: []const Receiver, bindings: []const Binding, loadout: *equipment.Loadout, handle: equipment.ItemHandle, map: geometry.Map, room: geometry.RoomId) !bool {
+        const index = self.use_candidate orelse return false;
+        const receiver = receivers[index];
         const item = try loadout.item(handle);
-        if (item.state != .carried or item.consume_in != null) return false;
+        if (item.state != .carried or item.consume_in != null or item.recharge_in != null) return false;
         const action = item.definition.use_action orelse return false;
         if (action != .unlock) return false;
         const credential = switch (action.unlock.credential) {
             .fixed => |value| value,
             .item_charge => item.quantity,
         };
-        if (credential != definitions[index].credential) return false;
+        if (credential != receiver.credential) return false;
         const binding = for (bindings) |entry| {
-            if (entry.lock == index and entry.item.eql(handle)) break entry;
+            if (entry.receiver == index and entry.item.eql(handle)) break entry;
         } else return false;
-        // Even a used matching lock accepts the credential check. The lock itself
-        // ignores repeat activation, while the consumable item still completes use.
-        if (binding.next_step) self.instances[index].pending = true else self.instances[index].ready = true;
+        // Matching succeeds independently of whether the control accepts the signal.
+        // This also preserves consumption at a matching, already-used lock.
+        if (binding.activates) {
+            const lock = receiver.target.lock;
+            const definition = definitions[lock];
+            const near = try @import("activation.zig").around(map, room, definition.footprint.room, self.instances[lock].pose.position.y);
+            if (definition.wake_when_near and near.wake) self.instances[lock].active = true;
+            if (self.instances[lock].active or definition.accepts_signals) {
+                if (binding.next_step) self.instances[lock].pending = true else self.instances[lock].ready = true;
+            }
+        }
         try loadout.consumeAfter(handle, action.unlock.consume_after_steps);
         return true;
     }
-    pub fn advance(self: *World, definitions: []const Definition, map: geometry.Map, room: geometry.RoomId) !void {
+    pub fn advance(self: *World, definitions: []const Definition, map: geometry.Map, room: geometry.RoomId, operate: bool) !void {
         self.pulse_count = 0;
-        for (self.instances, definitions) |*instance, definition| {
+        self.notice = null;
+        for (self.instances, definitions, 0..) |*instance, definition, index| {
             instance.sound = null;
             const near = try @import("activation.zig").around(map, room, definition.footprint.room, instance.pose.position.y);
             if (definition.wake_when_near and near.wake) instance.active = true;
-            if (instance.ready) {
+            if (operate and self.candidate == index and !instance.used and definition.notice != null and (instance.active or definition.accepts_signals)) {
+                instance.active = true;
+                instance.playback.completeDisplacement(definition.idle, &instance.pose);
+                instance.playback = .{};
+                self.notice = .{ .message = definition.notice.?, .icon = definition.hint };
+            } else if (instance.ready) {
                 instance.active = true;
                 if (!instance.used) {
                     instance.used = true;
@@ -103,8 +140,10 @@ pub const World = struct {
                     instance.pose.position.x +%= if (instance.pose.facing == .right) definition.unlock_forward else -definition.unlock_forward;
                     instance.pose.position.y +%= definition.unlock_down;
                     instance.sound = definition.unlock_sound;
-                    self.pulses[self.pulse_count] = definition.circuit;
-                    self.pulse_count += 1;
+                    for (definition.circuits) |circuit| {
+                        self.pulses[self.pulse_count] = circuit;
+                        self.pulse_count += 1;
+                    }
                 }
             }
             instance.ready = false;
@@ -119,6 +158,8 @@ pub const World = struct {
         }
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
+        const receiver: u64 = if (self.use_candidate) |index| index + 1 else 0;
+        hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, receiver)));
         for (self.instances) |instance| for ([_]u64{ @as(u16, @bitCast(instance.pose.position.x)), @as(u16, @bitCast(instance.pose.position.y)), @intFromBool(instance.active), @intFromBool(instance.used), @intFromBool(instance.ready), @intFromBool(instance.pending), instance.playback.next_step, @backingInt(instance.pose.visual.id), @intFromBool(instance.pose.visual.mirrored) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
     }
 };

@@ -40,6 +40,8 @@ pub const Pack = struct {
     world_props: prop_import.Assets,
     controls: @import("operated_controls.zig").Assets,
     locks: @import("key_locks.zig").Assets,
+    messages: @import("world_messages.zig").Assets,
+    platform_sections: @import("platform_sections.zig").Assets,
     energy_stations: @import("energy_stations.zig").Assets,
     hazards: @import("electrical_hazards.zig").Assets,
     detectors: @import("detectors.zig").Assets,
@@ -78,6 +80,8 @@ pub const Pack = struct {
         self.world_props.deinit();
         self.controls.deinit();
         self.locks.deinit();
+        self.messages.deinit();
+        self.platform_sections.deinit();
         self.energy_stations.deinit();
         self.hazards.deinit();
         self.detectors.deinit();
@@ -301,12 +305,16 @@ pub fn loadLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
 
 pub fn loadLevelWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSource, level: level_mod.Id, difficulty: @import("../settings.zig").Difficulty) !Pack {
     const values = try floppy_interface.load(allocator, source);
-    return assembleLevel(allocator, source, level, difficulty, .{ .actor_colors = values.actor_colors, .actor_libraries = &values.actor_libraries, .score_awards = values.score_awards, .text_colors = values.text_colors, .interface_colors = values.interface_colors, .level_label = &values.level_label });
+    var messages = try @import("world_messages.zig").load(allocator, source);
+    errdefer messages.deinit();
+    return assembleLevel(allocator, source, level, difficulty, .{ .messages = messages, .actor_colors = values.actor_colors, .actor_libraries = &values.actor_libraries, .score_awards = values.score_awards, .text_colors = values.text_colors, .interface_colors = values.interface_colors, .level_label = &values.level_label });
 }
 
 /// Decoded interface content supplied by an edition importer. No executable offsets enter
 /// scene assembly. Palette and label locations are isolated in the floppy edition importer.
 pub const Interface = struct {
+    /// Ownership transfers to the pack only on successful assembly.
+    messages: ?@import("world_messages.zig").Assets = null,
     actor_colors: [2]palette.Bank,
     actor_libraries: []const @import("actor_art.zig").Library,
     score_awards: [16]u16,
@@ -457,6 +465,8 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer hazards.deinit();
     var ceiling_guns = try @import("ceiling_guns.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, &resolver);
     errdefer ceiling_guns.deinit();
+    var platform_sections = try @import("platform_sections.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, &resolver);
+    errdefer platform_sections.deinit();
     var doors = try @import("doors.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, @intCast(gun.parameters[0]), &resolver);
     errdefer doors.deinit();
     var gunmen = try @import("gunmen.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, interface.score_awards, &resolver);
@@ -517,6 +527,8 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .world_props = props,
         .controls = operated,
         .locks = locks,
+        .messages = interface.messages orelse .{ .allocator = allocator, .messages = &.{} },
+        .platform_sections = platform_sections,
         .energy_stations = energy_stations,
         .hazards = hazards,
         .detectors = detectors,

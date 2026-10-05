@@ -318,7 +318,7 @@ pub const Game = struct {
         if (self.jungle()) |scene| {
             self.preferences = scene.settings;
             const now = p.nowNs();
-            if (self.story == null and scene.options == null and scene.dialog == null and scene.pending_movie != null and scene.needsCatchup(now)) {
+            if (self.story == null and scene.message == null and scene.options == null and scene.dialog == null and scene.pending_movie != null and scene.needsCatchup(now)) {
                 const movie = scene.pending_movie.?;
                 scene.pending_movie = null;
                 if (try scene.latchMovieInput()) {
