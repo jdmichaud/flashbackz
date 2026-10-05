@@ -16,6 +16,9 @@ pub const Story = struct {
 
     pub fn open(allocator: std.mem.Allocator, source: platform.AssetSource, kind: props.Movie, now: u64, activation: ?platform.Key) !Story {
         const cue: struct { film: []const u8, entry: u16, music: []const u8 } = switch (kind) {
+            .city_arrival => .{ .film = "CHUTE", .entry = 1, .music = "CHUTE3" },
+            .credit_payment => .{ .film = "OBJET", .entry = 7, .music = "DONNER3" },
+            .anti_g_received => .{ .film = "OBJET", .entry = 9, .music = "DONNER3" },
             .teleporter_pickup => .{ .film = "OBJET", .entry = 5, .music = "OBJET3" },
             .teleporter_delivery => .{ .film = "OBJET", .entry = 10, .music = "DONNER3" },
             .id_card_pickup => .{ .film = "OBJET", .entry = 6, .music = "OBJET3" },

@@ -80,6 +80,14 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
         const record = try table.record(@intCast(i));
         if (record.minimum_difficulty > @backingInt(difficulty)) continue;
         const group = try @import("rule_table.zig").group(rules, record.rule_group);
+        if (@import("inventory_grants.zig").recognize(group)) |grant| {
+            if (record.kind != 3 or record.room < room_ids.len or record.initial_state != grant.idle or record.object_id != 10) return error.UnsupportedInventoryGrant;
+            const label = try strings.copy(allocator, names, record.text_id);
+            errdefer allocator.free(label);
+            try item_sources.append(allocator, @intCast(i));
+            try items.append(allocator, .{ .kind = .anti_g_belt, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label });
+            continue;
+        }
         const gift = @import("quest_items.zig").card(group);
         var room = record.room;
         if (room >= room_ids.len) {
@@ -104,7 +112,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
                 const recipient = record.parameters[spec.target_parameter];
                 if (recipient < 0 or recipient >= table.count) return error.InvalidCreditRecipient;
                 const purse = try table.record(@intCast(recipient));
-                if (purse.kind != 3 or purse.object_id != 4 or purse.initially_active == 0) return error.UnsupportedCreditRecipient;
+                if (purse.kind != 3 or purse.initially_active == 0 or @import("credit_wallet.zig").signal(try @import("rule_table.zig").group(rules, purse.rule_group)) == null) return error.UnsupportedCreditRecipient;
                 const target: equipment.ItemHandle = for (supplied_items, 0..) |item, index| {
                     if (item.kind == .credits) break .{ .index = @intCast(index), .generation = 1 };
                 } else return error.MissingCreditPurse;

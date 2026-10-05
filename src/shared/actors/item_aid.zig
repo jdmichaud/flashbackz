@@ -81,6 +81,11 @@ pub const World = struct {
         }
         return true;
     }
+    pub fn offerPayment(self: *World, definitions: []const Definition, bindings: []const Binding, item: equipment.ItemHandle, amount: i16) !bool {
+        const index = self.candidate orelse return false;
+        if (amount < definitions[index].credential) return false;
+        return self.offer(definitions, bindings, item, definitions[index].credential);
+    }
     fn emit(self: *World, circuit: Circuit) void {
         self.pulses[self.pulse_count] = circuit;
         self.pulse_count += 1;

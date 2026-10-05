@@ -44,6 +44,10 @@ pub const Pack = struct {
     level_code: [13]u8,
     platform_sections: @import("platform_sections.zig").Assets,
     item_aid: @import("item_aid.zig").Assets,
+    traders: @import("traders.zig").Assets,
+    inventory_grants: @import("inventory_grants.zig").Assets,
+    exits: []@import("../level_exits.zig").Definition,
+    triggered_effects: @import("triggered_effects.zig").Assets,
     item_bindings: []@import("../world_props.zig").ItemBinding,
     energy_stations: @import("energy_stations.zig").Assets,
     hazards: @import("electrical_hazards.zig").Assets,
@@ -86,6 +90,10 @@ pub const Pack = struct {
         self.messages.deinit();
         self.platform_sections.deinit();
         self.item_aid.deinit();
+        self.traders.deinit();
+        self.inventory_grants.deinit();
+        self.allocator.free(self.exits);
+        self.triggered_effects.deinit();
         self.allocator.free(self.item_bindings);
         self.energy_stations.deinit();
         self.hazards.deinit();
@@ -461,8 +469,10 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer energy_stations.deinit();
     var locks = try @import("key_locks.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, &resolver);
     errdefer locks.deinit();
-    var item_aid = try @import("item_aid.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, &resolver);
+    var item_aid = try @import("item_aid.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, initial_items, &resolver);
     errdefer item_aid.deinit();
+    var traders = try @import("traders.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, initial_items, &resolver);
+    errdefer traders.deinit();
     var lifts = try @import("lifts.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
     errdefer lifts.deinit();
     const lift_passengers = try @import("lift_passengers.zig").load(allocator, placement_table, rules.bytes, props, @intCast(initial_items.len), lifts.source_indices);
@@ -474,6 +484,12 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     props.connections = combined_connections;
     const item_bindings = try @import("quest_items.zig").bindings(allocator, placement_table, rules.bytes, props, @intCast(initial_items.len), props.connections);
     errdefer allocator.free(item_bindings);
+    var inventory_grants = try @import("inventory_grants.zig").load(allocator, placement_table, rules.bytes, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, props.connections);
+    errdefer inventory_grants.deinit();
+    var triggered_effects = try @import("triggered_effects.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, &resolver);
+    errdefer triggered_effects.deinit();
+    const exits = try @import("level_exits.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty);
+    errdefer allocator.free(exits);
     var hazards = try @import("electrical_hazards.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, &resolver);
     errdefer hazards.deinit();
     var ceiling_guns = try @import("ceiling_guns.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, &resolver);
@@ -544,6 +560,10 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .messages = interface.messages orelse .{ .allocator = allocator, .messages = &.{} },
         .platform_sections = platform_sections,
         .item_aid = item_aid,
+        .traders = traders,
+        .inventory_grants = inventory_grants,
+        .exits = exits,
+        .triggered_effects = triggered_effects,
         .item_bindings = item_bindings,
         .energy_stations = energy_stations,
         .hazards = hazards,

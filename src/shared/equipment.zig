@@ -5,7 +5,7 @@ const std = @import("std");
 const inventory = @import("inventory.zig");
 const motion = @import("motion.zig");
 pub const ItemHandle = @import("identity.zig").ItemHandle;
-pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone, key, cartridge, id_card };
+pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone, key, cartridge, id_card, anti_g_belt };
 pub const Credential = union(enum) { fixed: i16, item_charge };
 pub const Recharge = struct {
     movie_when: enum { start, completion } = .completion,
@@ -24,7 +24,7 @@ pub const Definition = struct {
     initial_quantity: i16,
     label: []const u8 = "",
     show_quantity: bool = false,
-    use_action: ?union(enum) { story: @import("story_cue.zig").Cue, throw_item, offer: struct { credential: i16 }, unlock: struct { credential: Credential, consume_after_steps: ?u16, movie: ?@import("story_cue.zig").Cue = null } } = null,
+    use_action: ?union(enum) { story: @import("story_cue.zig").Cue, throw_item, pay, offer: struct { credential: i16 }, unlock: struct { credential: Credential, consume_after_steps: ?u16, movie: ?@import("story_cue.zig").Cue = null } } = null,
 };
 pub const Item = struct {
     definition: Definition,
@@ -69,6 +69,17 @@ pub const Loadout = struct {
         if (entry.state != .available) return error.ItemNotAvailable;
         try inventory.transfer(handle, null, &self.inventory);
         self.entries[handle.index].state = .carried;
+    }
+
+    pub fn grant(self: *Loadout, handle: ItemHandle) !void {
+        const entry = try self.item(handle);
+        if (entry.state != .available and entry.state != .carried) return error.ItemNotGrantable;
+        try inventory.transfer(handle, if (entry.state == .carried) &self.inventory else null, &self.inventory);
+        self.entries[handle.index].state = .carried;
+    }
+    pub fn debit(self: *Loadout, handle: ItemHandle, amount: i16) !void {
+        _ = try self.item(handle);
+        self.entries[handle.index].quantity -%= amount;
     }
 
     pub fn release(self: *Loadout, handle: ItemHandle) !void {

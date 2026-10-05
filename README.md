@@ -71,6 +71,9 @@ Space or Shift acknowledges a page while gameplay is paused. All links and suppo
 come from the supplied data.
 The wounded man's help/conversation and teleporter exchange are now connected. Return his
 teleporter to reveal the ID card; the card can be collected and used without being consumed.
+The old man now offers the anti-G belt: hold Shift to talk, select CREDITS with Tab/arrows,
+then press Return beside him to pay 500. The belt is granted automatically; enter the gap
+to play the descent film and reach New Washington. Later city gameplay is still incomplete.
 Startup also shows the original temporary level code until its timer expires or a nearby
 interaction hint replaces it.
 Ordinary lifts now carry Conrad and board stones through their original contact behavior.

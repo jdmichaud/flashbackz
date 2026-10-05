@@ -355,6 +355,21 @@ pub const Game = struct {
                 next.music_enabled = self.preferences.music;
                 scene.deinit();
                 self.scene = .{ .menu = next };
+            } else if (scene.exits.requested) |destination| {
+                var next = try jungle_mod.Scene.loadLevel(self.allocator, self.assets.?, destination, self.difficulty);
+                next.settings = scene.settings;
+                next.score = scene.score;
+                next.random = scene.random;
+                next.input = scene.input;
+                std.mem.swap(@TypeOf(next.pending), &next.pending, &scene.pending);
+                next.clock = try @import("step_clock.zig").Clock.init(@import("step_clock.zig").jungle, now);
+                next.pending_movie = switch (destination) {
+                    .city => .city_arrival,
+                    else => null,
+                };
+                scene.stopAudio(p);
+                scene.deinit();
+                self.scene = .{ .jungle = next };
             } else if (scene.defeated) {
                 scene.stopAudio(p);
                 const next = try continue_mod.Scene.init(self.allocator, self.assets.?, scene.score);

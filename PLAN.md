@@ -83,9 +83,11 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   Preserve dialogue, perception, animation and same/next-update links through shared systems.
 - [x] Original temporary level-code display: import the level/difficulty codes and show
   the startup notice until its timer expires or a contact hint replaces it.
-- [ ] Trading NPC family and credit payment: original price checks, debit, sale dialogue,
+- [x] Trading NPC family and credit payment: original price checks, debit, sale dialogue,
   item grants, anti-G-belt films and linked visual effects. Preserve repeated-payment and
   insufficient-funds behavior; connect the belt-dependent exit through shared progression.
+  Focused 560-update trade checks and native trade-to-city flow pass. Full arrival-film
+  pixel/audio and inter-level timestamp qualification remain part of whole-game acceptance.
 - [ ] Shared world-message display for item/control instructions and NPC dialogue, including
   original pages, colors, input and world pause/resume.
 - [ ] Shared key/card pickups and credential locks: match original item codes at contact,

@@ -48,10 +48,12 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
             .hold => {},
             .frame => |value| if (value.dx != 0 or value.dy != 0) return error.UnsupportedEquipmentIntroduction,
         };
+        if (spec.kind == .credits and (@import("credit_wallet.zig").signal(try @import("rule_table.zig").group(rules, source.rule_group)) == null or source.parameters[0] != 3)) return error.UnsupportedCreditUse;
         definition.* = .{
             .recharge = if (spec.kind == .shield) try shieldRecharge(allocator, source, rules, animations) else null,
             .use_motion = if (source.object_id == 3) .reach else .direct,
             .kind = spec.kind,
+            .use_action = if (spec.kind == .credits) .pay else null,
             .icon = try resolver.icon(source.inventory_icon),
             .introduction_steps = @as(u16, @intCast(introduction.frames.len)),
             .initial_quantity = source.life,

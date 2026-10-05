@@ -40,7 +40,7 @@ pub fn recognize(group: rules.Group) ?Spec {
     for ([_]i16{ r[2].effect.argument, r[7].effect.argument, r[24].conditions[1].argument }) |id| if (id < 0) return null;
     return .{ .states = .{ r[0].source, r[2].source, r[3].source, r[6].source, r[7].source, r[12].source, r[13].source, r[16].source, r[17].source, r[20].source, r[21].source, r[24].source, r[25].source, r[23].source }, .range = range, .wait = r[11].conditions[0].argument, .end = r[14].conditions[0].argument, .call = r[2].effect.argument, .request = r[7].effect.argument, .thanks = r[24].conditions[1].argument, .accept = r[8].conditions[0].argument, .return_parameter = 0, .return_signal = r[8].conditions[1].argument, .reward_parameter = 1, .reward_signal = r[8].effect.argument };
 }
-pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []const u8, animations: []const u8, names: []const u8, rooms: *const [64]geometry.RoomId, difficulty: @import("../settings.zig").Difficulty, routes: *std.ArrayList(props.Connection), item_sources: []const u16, first_item: @import("../equipment.zig").ItemHandle, resolver: anytype) !Assets {
+pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []const u8, animations: []const u8, names: []const u8, rooms: *const [64]geometry.RoomId, difficulty: @import("../settings.zig").Difficulty, routes: *std.ArrayList(props.Connection), item_sources: []const u16, first_item: @import("../equipment.zig").ItemHandle, supplies: []const @import("../equipment.zig").Definition, resolver: anytype) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
     errdefer {
         for (definitions.items) |d| allocator.free(d.label);
@@ -87,6 +87,18 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
             const offer = @import("quest_items.zig").teleporter(try rules.group(rule_bytes, item.rule_group)) orelse continue;
             if (item.parameters[0] != record.kind or offer.signal != spec.accept) continue;
             try bindings.append(allocator, .{ .item = .{ .index = first_item.index + @as(u16, @intCast(index)), .generation = first_item.generation }, .actor = definitions.items.len, .next_step = source >= i });
+        }
+        // Wallets offer the same signal after a minimum-value check. The civilian
+        // decides the response, so no credit debit is invented for this receiver.
+        for (0..table.count) |source| {
+            const item = try table.record(@intCast(source));
+            if (item.initially_active == 0 or item.parameters[0] != record.kind) continue;
+            const signal = @import("credit_wallet.zig").signal(try rules.group(rule_bytes, item.rule_group)) orelse continue;
+            if (signal != spec.accept) continue;
+            for (supplies, 0..) |supply, index| if (supply.kind == .credits) {
+                try bindings.append(allocator, .{ .item = .{ .index = @intCast(index), .generation = 1 }, .actor = definitions.items.len, .next_step = source >= i });
+                break;
+            };
         }
         const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
         errdefer allocator.free(label);

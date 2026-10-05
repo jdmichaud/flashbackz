@@ -12,7 +12,7 @@ fn terminated(bytes: []const u8) ![]const u8 {
 }
 fn read(source: platform.AssetSource, name: []const u8, extension: []const u8, maximum: usize) !platform.OwnedBytes {
     if (name.len == 0) return error.EmptyMusicName;
-    for (name) |c| if (!std.ascii.isAlphanumeric(c) and c != '_' and c != '.') return error.InvalidMusicName;
+    for (name) |c| if (!std.ascii.isAlphanumeric(c) and c != '_' and c != '.' and c != '-') return error.InvalidMusicName;
     var path: [64]u8 = undefined;
     const filename = try std.fmt.bufPrint(&path, "DATA/{s}{s}", .{ name, extension });
     for (filename) |*c| c.* = std.ascii.toUpper(c.*);
