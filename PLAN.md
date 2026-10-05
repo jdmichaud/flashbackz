@@ -78,10 +78,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
 - [x] Rechargeable cartridge puzzle: pickup, charge completion after its film, credential
   matching, consumption, lock instruction and both linked bridge sections. Import the full
   behavior families and preserve their event order.
-- [ ] Item-aid NPCs and reactive quest items: import the wounded-man behavior family,
+- [x] Item-aid NPCs and reactive quest items: import the wounded-man behavior family,
   teleporter delivery/acknowledgement, ID-card appearance/pickup and reusable card use.
   Preserve dialogue, perception, animation and same/next-update links through shared systems.
-- [ ] Original temporary level-code display: import the level/difficulty codes and show
+- [x] Original temporary level-code display: import the level/difficulty codes and show
   the startup notice until its timer expires or a contact hint replaces it.
 - [ ] Shared world-message display for item/control instructions and NPC dialogue, including
   original pages, colors, input and world pause/resume.

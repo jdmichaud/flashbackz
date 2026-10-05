@@ -148,3 +148,12 @@ an energy generator to charge it. Hold Return at the **CARTRIDGE LOCK** to use t
 cartridge. The bridge film plays, the cartridge is consumed, and the bridge becomes walkable.
 Press **Shift** at the unused lock to read its instruction; **Return**, **Space** or a fresh
 **Shift** press dismisses the message. Gameplay stays paused while the message is open.
+
+
+### Help the wounded man
+
+Use **Shift** beside him to talk; **Return**, **Space** or a fresh **Shift** press advances
+a dialogue page. Pick up his **TELEPORTER** with Shift, select it in inventory, approach him,
+and **hold Return** through the hand press. After his acknowledgement and departure, collect
+the **ID CARD** with Shift. Select it and hold Return at its matching card lock; the card
+remains in your inventory.

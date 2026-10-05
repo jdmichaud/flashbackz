@@ -14,7 +14,7 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
         .{ .kind = .gun, .state = 327, .target = 314, .operations = .{ 0, 0, 48 } },
         .{ .kind = .shield, .state = 322, .target = 321, .operations = .{ 89, 0, 48 } },
         .{ .kind = .credits, .state = 329, .target = 330, .operations = .{ 0, 48, 67 } },
-        .{ .kind = .teleporter, .state = 331, .target = 332, .operations = .{ 48, 0, 67 } },
+        .{ .kind = .id_card, .state = 331, .target = 332, .operations = .{ 48, 0, 67 } },
     };
     var count: usize = 0;
     for (0..placements.count) |i| {

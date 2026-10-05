@@ -114,6 +114,10 @@ pub const Scene = struct {
     operated_controls: @import("../operated_controls.zig").World,
     locks: @import("../key_locks.zig").World,
     platform_sections: @import("../platform_sections.zig").World,
+    item_aid: @import("../actors/item_aid.zig").World,
+    talk_selected: bool = false,
+    message_icon: @import("../motion.zig").VisualId,
+    level_code_steps: u16 = 150,
     message: ?@import("../world_messages.zig").State = null,
     energy_stations: @import("../energy_stations.zig").World,
     hazards: @import("../electrical_hazards.zig").World,
@@ -176,6 +180,8 @@ pub const Scene = struct {
         errdefer locks.deinit();
         var platform_sections = try @import("../platform_sections.zig").World.init(allocator, pack.platform_sections.definitions);
         errdefer platform_sections.deinit();
+        var item_aid = try @import("../actors/item_aid.zig").World.init(allocator, pack.item_aid.definitions, pack.item_aid.profiles);
+        errdefer item_aid.deinit();
         var energy_stations = try @import("../energy_stations.zig").World.init(allocator, pack.energy_stations.definitions);
         errdefer energy_stations.deinit();
         var hazards = try @import("../electrical_hazards.zig").World.init(allocator, pack.hazards.definitions);
@@ -220,6 +226,8 @@ pub const Scene = struct {
             .operated_controls = operated,
             .locks = locks,
             .platform_sections = platform_sections,
+            .item_aid = item_aid,
+            .message_icon = pack.world_props.hint_icon,
             .energy_stations = energy_stations,
             .hazards = hazards,
             .detectors = detectors,
@@ -279,6 +287,7 @@ pub const Scene = struct {
         self.operated_controls.deinit();
         self.locks.deinit();
         self.platform_sections.deinit();
+        self.item_aid.deinit();
         self.energy_stations.deinit();
         self.hazards.deinit();
         self.detectors.deinit();
@@ -415,6 +424,7 @@ pub const Scene = struct {
                 break :blk try self.input.intent();
             };
             self.sound_event_count = 0;
+            self.props.beginStep();
             self.hazards.beginStep();
             self.detectors.beginStep();
             self.ceiling_guns.beginStep();
@@ -427,17 +437,19 @@ pub const Scene = struct {
             self.enemy_fire.beginStep();
             if (self.protection_steps != 0) self.protection_steps -= 1;
             try self.props.prepare(self.terrain.map(), &self.equipment, .{ .room = self.environment.room, .position = self.pose.position, .width = self.content.player_contact_width });
+            try self.item_aid.prepare(self.content.item_aid.definitions, self.terrain.map(), self.props.player_contact);
+            self.talk_selected = if (self.item_aid.candidate) |index| self.props.pickup_candidate == null or self.content.item_aid.definitions[index].interaction_priority > self.props.pickup_priority else false;
             try self.operated_controls.prepare(self.content.controls.definitions, self.terrain.map(), self.props.player_contact);
             try self.locks.prepare(self.content.locks.definitions, self.content.locks.receivers, self.terrain.map(), self.props.player_contact);
-            try self.passengers.prepare(self.terrain.map(), self.props.player_contact, &self.lifts, self.content.lifts.definitions, &self.props, &self.equipment);
+            try self.passengers.prepare(self.terrain.map(), self.props.player_contact, &self.lifts, self.content.lifts.definitions, &self.props, &self.equipment, self.content.lift_passengers);
             for (self.gunmen.actors) |actor| if (!actor.lost) try self.passengers.includeActor(self.terrain.map(), actor.contact, &self.lifts, self.content.lifts.definitions);
             for (self.robots.actors) |actor| if (!actor.removed) try self.passengers.includeActor(self.terrain.map(), actor.contact, &self.lifts, self.content.lifts.definitions);
             self.controller.ride_available = self.passengers.candidate != null;
             self.controller.ride_acknowledged = self.passengers.acknowledged != null;
             self.controller.ride_arrived = self.passengers.arrival;
             try self.energy_stations.prepare(self.content.energy_stations.definitions, self.terrain.map(), self.props.player_contact);
-            self.controller.control_available = self.operated_controls.candidate != null or self.locks.candidate != null or self.energy_stations.candidate != null;
-            self.controller.pickup_available = self.props.pickup_candidate != null;
+            self.controller.control_available = self.talk_selected or self.operated_controls.candidate != null or self.locks.candidate != null or self.energy_stations.candidate != null;
+            self.controller.pickup_available = self.props.pickup_candidate != null and !self.talk_selected;
             const selected = try self.equipment.selected();
             self.controller.use_available = if (selected) |item| item.definition.use_action != null or item.definition.recharge != null else false;
             self.controller.use_reaches = if (selected) |item| item.definition.use_motion == .reach else false;
@@ -469,6 +481,9 @@ pub const Scene = struct {
                         self.pending_movie = cue;
                         handled = true;
                     },
+                    .offer => |offer| {
+                        handled = self.talk_selected and try self.item_aid.offer(self.content.item_aid.definitions, self.content.item_aid.bindings, handle, offer.credential);
+                    },
                     .unlock => |use| {
                         handled = try self.locks.useKey(self.content.locks.definitions, self.content.locks.receivers, self.content.locks.bindings, &self.equipment, handle, self.terrain.map(), self.environment.room);
                         if (handled) if (use.movie) |movie| {
@@ -486,8 +501,8 @@ pub const Scene = struct {
                 }
             }
             try self.props.advance(self.terrain.map(), &self.equipment, try self.controller.pressesFloorSwitches(self.content.controllerClips()), self.controller.pickup_requested);
-            try self.operated_controls.advance(self.content.controls.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested and self.locks.candidate == null);
-            try self.locks.advance(self.content.locks.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested);
+            try self.operated_controls.advance(self.content.controls.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested and !self.talk_selected and self.locks.candidate == null);
+            try self.locks.advance(self.content.locks.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested and !self.talk_selected);
             try self.energy_stations.advance(self.content.energy_stations.definitions, self.terrain.map(), self.environment.room);
             self.lifts.route(self.content.lifts.bindings, self.props.pressed_circuits[0..self.props.pressed_count]);
             self.lifts.route(self.content.lifts.bindings, self.operated_controls.pulses[0..self.operated_controls.pulse_count]);
@@ -518,7 +533,9 @@ pub const Scene = struct {
             self.lifts.route(self.content.lifts.bindings, self.detectors.pulses[0..self.detectors.pulse_count]);
             try self.passengers.updateItemOccupancy(self.terrain.map(), &self.lifts, self.content.lifts.definitions, &self.props, &self.equipment);
             try self.lifts.advance(self.content.lifts.definitions, self.content.lifts.profiles, &self.terrain, self.passengers.occupancy, self.environment.room);
-            try self.passengers.deliver(&self.lifts, self.content.lifts.definitions, self.content.lift_passengers, self.terrain.map(), &self.props, &self.equipment, &self.pose);
+            try self.passengers.deliver(&self.lifts, self.content.lifts.definitions, self.content.lift_passengers, self.terrain.map(), &self.props, &self.equipment, &self.pose, self.environment.room);
+            try self.item_aid.advance(self.content.item_aid.definitions, self.content.item_aid.profiles, self.terrain.map(), self.props.player_contact, self.controller.operate_requested and self.talk_selected);
+            try self.props.deliver(self.content.item_bindings, self.item_aid.pulses[0..self.item_aid.pulse_count], &self.equipment);
             self.doors.route(self.content.doors.bindings, self.props.pressed_circuits[0..self.props.pressed_count]);
             self.doors.route(self.content.doors.bindings, self.operated_controls.pulses[0..self.operated_controls.pulse_count]);
             self.doors.route(self.content.doors.bindings, self.locks.pulses[0..self.locks.pulse_count]);
@@ -586,6 +603,7 @@ pub const Scene = struct {
             try self.robots.advance(self.content.robots.definitions, self.content.robots.profiles, self.terrain.view(), .{ .room = self.environment.room, .position = self.pose.position }, self.combat_targets, first_robot);
             for (self.robots.outgoing[0..self.robots.outgoing_count]) |hit| self.deliverHit(hit);
             for (self.robots.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
+            for (self.item_aid.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
             for (self.lifts.instances) |instance| if (instance.sound) |sound| try self.emitSound(sound, instance.room);
             for (self.doors.instances, self.content.doors.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (self.detectors.instances, self.content.detectors.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.room);
@@ -609,15 +627,25 @@ pub const Scene = struct {
             };
             if (self.props.movie) |movie| self.pending_movie = movie;
             if (self.hazards.defeat_requested) self.pending_movie = .disintegration;
+            if (self.replay != null or try self.interactionHint() != null) self.level_code_steps = 0 else if (self.level_code_steps != 0) {
+                self.level_code_steps -= 1;
+            }
             self.simulation_steps += 1;
             if (self.zoom_room != null and self.zoom_room.? != self.environment.room and self.settings.zoom == .on) self.settings.zoom = .off;
             self.zoom_room = self.environment.room;
             self.zoom.setActive(self.settings.zoom == .on, self.pose);
             self.zoom.advance(self.pose);
             self.clock.?.consume();
-            if (self.locks.notice) |notice| {
+            var request = self.locks.notice;
+            if (self.item_aid.notice) |id| {
+                if (request == null or self.item_aid.notice_priority >= request.?.priority) request = .{ .message = id, .icon = self.message_icon, .priority = self.item_aid.notice_priority };
+            }
+            if (request) |notice| {
                 _ = try self.content.messages.get(notice.message);
-                self.message = try @import("../world_messages.zig").State.init(notice, deadline);
+                if (try self.interactionHint()) |hint| self.message_icon = hint.icon;
+                var presentation = notice;
+                presentation.icon = self.message_icon;
+                self.message = try @import("../world_messages.zig").State.init(presentation, deadline);
                 if (self.replay) |*replay| {
                     const sample = replay.next() orelse {
                         self.aborted = true;
@@ -687,6 +715,7 @@ pub const Scene = struct {
         try self.drawControls(.behind_player, room, indices);
         try self.drawHazards(.behind_player, room, indices);
         try self.drawGunmen(room, indices, true);
+        try self.drawItemAid(room, indices, true);
         try self.drawRobots(room, indices, true);
         try self.drawDoors(room, indices, true);
         try self.drawPlatformSections(room, indices, true);
@@ -702,6 +731,7 @@ pub const Scene = struct {
         try self.drawControls(.in_front_of_player, room, indices);
         try self.drawHazards(.in_front_of_player, room, indices);
         try self.drawGunmen(room, indices, false);
+        try self.drawItemAid(room, indices, false);
         try self.drawRobots(room, indices, false);
         try self.drawDoors(room, indices, false);
         try self.drawPlatformSections(room, indices, false);
@@ -715,32 +745,13 @@ pub const Scene = struct {
             const icon = try self.content.frame(selected.definition.icon);
             try sprite_renderer.draw(indices, room.image.width, room.image.height, icon, 232, 8, .{ .palette_bank = 10, .foreground = .overwrite });
         }
-        if (self.props.pickup_candidate) |handle| {
-            const item = try self.equipment.item(handle);
-            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(self.content.world_props.hint_icon), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
-            const label = item.definition.label;
-            try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, label, @divTrunc(176 - @as(i32, @intCast(label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
+        if (try self.interactionHint()) |hint| {
+            try sprite_renderer.draw(indices, 256, 224, try self.content.frame(hint.icon), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
+            try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, hint.label, @divTrunc(176 - @as(i32, @intCast(hint.label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
         }
-        if (self.props.pickup_candidate == null) {
-            if (self.operated_controls.candidate) |index| {
-                const control = self.content.controls.definitions[index];
-                try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(control.hint), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
-                try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, control.label, @divTrunc(176 - @as(i32, @intCast(control.label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
-            }
-            if (self.locks.candidate) |index| {
-                const lock = self.content.locks.definitions[index];
-                try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(lock.hint), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
-                try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, lock.label, @divTrunc(176 - @as(i32, @intCast(lock.label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
-            }
-        }
-        if (self.props.pickup_candidate == null and self.operated_controls.candidate == null and self.locks.candidate == null) {
-            if (self.energy_stations.candidate) |index| {
-                const station = self.content.energy_stations.definitions[index];
-                if (station.hint) |hint| {
-                    try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(hint), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
-                    try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, station.label, @divTrunc(176 - @as(i32, @intCast(station.label.len)) * 8, 2), 26, .{ .foreground = 0xe6, .shadow = 0xe2, .palette_bank = 14 });
-                }
-            }
+        if (self.level_code_steps != 0) {
+            const code = std.mem.sliceTo(&self.content.level_code, 0);
+            try text_renderer.draw(indices, 256, 224, &self.content.inventory_art.font, code, 128 - @as(i32, @intCast(code.len)) * 4, 16, .{ .foreground = 0xe7, .shadow = 0xe2, .palette_bank = 14 });
         }
         if (self.message) |message| {
             try message.draw(try self.content.messages.get(message.request.message), &self.content.inventory_art.font, room.image.pixels, indices);
@@ -749,6 +760,34 @@ pub const Scene = struct {
         if (self.dialog) |dialog| try dialog.menu.draw(self.content.inventory_art.artwork(), self.menu_entries[0..dialog.menu.count], self.score, indices, room.image.width, room.image.height);
         if (self.options) |options| try options.menu.draw(indices, &self.content.inventory_art.font);
         try palette.writeRgba(indices, &room.colors, rgba);
+    }
+
+    const Hint = struct { icon: @import("../motion.zig").VisualId, label: []const u8 };
+    fn interactionHint(self: *const Scene) !?Hint {
+        if (self.talk_selected) {
+            const definition = self.content.item_aid.definitions[self.item_aid.candidate.?];
+            return .{ .icon = definition.hint, .label = definition.label };
+        }
+        if (self.props.pickup_candidate) |handle| return .{ .icon = self.content.world_props.hint_icon, .label = (try self.equipment.item(handle)).definition.label };
+        if (self.locks.candidate) |index| {
+            const definition = self.content.locks.definitions[index];
+            return .{ .icon = definition.hint, .label = definition.label };
+        }
+        if (self.operated_controls.candidate) |index| {
+            const definition = self.content.controls.definitions[index];
+            return .{ .icon = definition.hint, .label = definition.label };
+        }
+        if (self.energy_stations.candidate) |index| {
+            const definition = self.content.energy_stations.definitions[index];
+            if (definition.hint) |hint| return .{ .icon = hint, .label = definition.label };
+        }
+        return null;
+    }
+    fn drawItemAid(self: *const Scene, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8, behind_player: bool) !void {
+        for (self.item_aid.actors, self.content.item_aid.definitions) |actor, definition| {
+            if (actor.phase == .gone or actor.room != self.environment.room or definition.behind_player != behind_player) continue;
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(actor.pose.visual.id), @as(i32, actor.pose.position.x) + 8, @as(i32, actor.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (actor.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        }
     }
 
     fn deliverHit(self: *Scene, hit: @import("../combat.zig").Hit) void {
@@ -886,6 +925,10 @@ pub const Scene = struct {
         self.operated_controls.hashInto(&hash);
         self.locks.hashInto(&hash);
         self.platform_sections.hashInto(&hash);
+        self.item_aid.hashInto(&hash);
+        hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u16, self.level_code_steps)));
+        hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, @backingInt(self.message_icon))));
+        hash.update(&.{@intFromBool(self.talk_selected)});
         hash.update(&.{@intFromBool(self.message != null)});
         if (self.message) |message| message.hashInto(&hash);
         self.energy_stations.hashInto(&hash);

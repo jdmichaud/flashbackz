@@ -20,6 +20,7 @@ pub const Definition = struct {
     idle: motion.Clip,
     used: motion.Clip,
     credential: i16,
+    interaction_priority: u16 = 0,
     unlock_forward: i16,
     unlock_down: i16,
     unlock_sound: ?motion.SoundId,
@@ -117,7 +118,7 @@ pub const World = struct {
                 if (binding.next_step) self.instances[lock].pending = true else self.instances[lock].ready = true;
             }
         }
-        try loadout.consumeAfter(handle, action.unlock.consume_after_steps);
+        if (action.unlock.consume_after_steps) |steps| try loadout.consumeAfter(handle, steps);
         return true;
     }
     pub fn advance(self: *World, definitions: []const Definition, map: geometry.Map, room: geometry.RoomId, operate: bool) !void {
@@ -131,7 +132,7 @@ pub const World = struct {
                 instance.active = true;
                 instance.playback.completeDisplacement(definition.idle, &instance.pose);
                 instance.playback = .{};
-                self.notice = .{ .message = definition.notice.?, .icon = definition.hint };
+                self.notice = .{ .message = definition.notice.?, .icon = definition.hint, .priority = definition.interaction_priority };
             } else if (instance.ready) {
                 instance.active = true;
                 if (!instance.used) {

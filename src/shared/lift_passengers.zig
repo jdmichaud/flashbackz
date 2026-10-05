@@ -6,7 +6,7 @@ const props = @import("world_props.zig");
 const equipment = @import("equipment.zig");
 const contacts = @import("contacts.zig");
 const geometry = @import("geometry.zig");
-pub const Binding = struct { prop: usize, platform: usize, next_step: bool };
+pub const Binding = struct { prop: usize, platform: usize, next_step: bool, automatic: bool = false };
 pub const State = struct {
     allocator: std.mem.Allocator,
     player: ?usize = null,
@@ -16,6 +16,7 @@ pub const State = struct {
     items: []?usize,
     pending: []?usize,
     occupancy: []lifts.Occupancy,
+    automatic_ready: []bool,
     pub fn init(allocator: std.mem.Allocator, platform_count: usize, prop_count: usize) !State {
         const items = try allocator.alloc(?usize, prop_count);
         errdefer allocator.free(items);
@@ -25,12 +26,16 @@ pub const State = struct {
         @memset(pending, null);
         const occupancy = try allocator.alloc(lifts.Occupancy, platform_count);
         @memset(occupancy, .{});
-        return .{ .allocator = allocator, .items = items, .pending = pending, .occupancy = occupancy };
+        errdefer allocator.free(occupancy);
+        const automatic_ready = try allocator.alloc(bool, prop_count);
+        @memset(automatic_ready, false);
+        return .{ .allocator = allocator, .items = items, .pending = pending, .occupancy = occupancy, .automatic_ready = automatic_ready };
     }
     pub fn deinit(self: *State) void {
         self.allocator.free(self.items);
         self.allocator.free(self.pending);
         self.allocator.free(self.occupancy);
+        self.allocator.free(self.automatic_ready);
     }
     fn board(self: *State, prop: usize, platform: usize, objects: *props.World, equipment_: *const equipment.Loadout, platforms: *const lifts.World, definitions: []const lifts.Definition, map: geometry.Map) !void {
         if (!try objects.visible(prop, equipment_) or objects.objects[prop].flight != null) return;
@@ -39,13 +44,19 @@ pub const State = struct {
         self.items[prop] = platform;
         objects.objects[prop].active = false;
     }
-    pub fn prepare(self: *State, map: geometry.Map, player: contacts.Footprint, platforms: *const lifts.World, definitions: []const lifts.Definition, objects: *props.World, equipment_: *const equipment.Loadout) !void {
+    pub fn prepare(self: *State, map: geometry.Map, player: contacts.Footprint, platforms: *const lifts.World, definitions: []const lifts.Definition, objects: *props.World, equipment_: *const equipment.Loadout, bindings: []const Binding) !void {
         self.candidate = null;
         for (self.items, self.pending, 0..) |*owner, *pending, index| {
             if (!try objects.visible(index, equipment_) or objects.objects[index].flight != null) owner.* = null;
             if (pending.*) |platform| try self.board(index, platform, objects, equipment_, platforms, definitions, map);
             pending.* = null;
         }
+        for (objects.objects, objects.definitions, self.automatic_ready) |object, definition, *ready| {
+            ready.* = definition.behavior == .collectible and object.flight == null and object.playback.exhausted(definition.behavior.collectible.idle);
+        }
+        for (bindings) |binding| if (binding.automatic and binding.next_step and self.automatic_ready[binding.prop] and objects.objects[binding.prop].active and try inView(map, player.room, objects.objects[binding.prop].room)) {
+            try self.board(binding.prop, binding.platform, objects, equipment_, platforms, definitions, map);
+        };
         const layout: contacts.Layout = .{};
         for (platforms.instances, definitions, self.occupancy, 0..) |instance, definition, *occupancy, index| {
             const footprint = instance.footprint(definition);
@@ -86,7 +97,7 @@ pub const State = struct {
         self.acknowledged = null;
         self.arrival = false;
     }
-    pub fn deliver(self: *State, platforms: *const lifts.World, definitions: []const lifts.Definition, bindings: []const Binding, map: geometry.Map, objects: *props.World, equipment_: *const equipment.Loadout, player: *@import("motion.zig").Pose) !void {
+    pub fn deliver(self: *State, platforms: *const lifts.World, definitions: []const lifts.Definition, bindings: []const Binding, map: geometry.Map, objects: *props.World, equipment_: *const equipment.Loadout, player: *@import("motion.zig").Pose, player_room: geometry.RoomId) !void {
         for (platforms.instances, 0..) |instance, index| {
             if (instance.board_player) self.acknowledged = index;
             if (self.player == index) {
@@ -94,7 +105,7 @@ pub const State = struct {
                 if (instance.release_passengers) self.arrival = true;
             }
             if (instance.invite_items) for (bindings) |binding| {
-                if (binding.platform != index) continue;
+                if (binding.platform != index or binding.automatic) continue;
                 const layout: contacts.Layout = .{};
                 if (!objects.objects[binding.prop].contact_present or !try layout.overlaps(map, objects.objects[binding.prop].contact, instance.footprint(definitions[index]))) continue;
                 if (binding.next_step) self.pending[binding.prop] = index else try self.board(binding.prop, index, objects, equipment_, platforms, definitions, map);
@@ -111,6 +122,13 @@ pub const State = struct {
                 if (instance.release_passengers) object.active = true;
             }
         }
+        for (bindings) |binding| if (binding.automatic and !binding.next_step and self.automatic_ready[binding.prop] and objects.objects[binding.prop].active and try inView(map, player_room, objects.objects[binding.prop].room)) {
+            try self.board(binding.prop, binding.platform, objects, equipment_, platforms, definitions, map);
+        };
+    }
+    fn inView(map: geometry.Map, player: geometry.RoomId, item: geometry.RoomId) !bool {
+        const view = try map.room(player);
+        return item == player or (view.edges.left == .room and view.edges.left.room == item) or (view.edges.right == .room and view.edges.right.room == item);
     }
     pub fn hashInto(self: State, hash: *std.hash.Wyhash) void {
         for ([_]?usize{ self.player, self.acknowledged, self.candidate }) |value| {

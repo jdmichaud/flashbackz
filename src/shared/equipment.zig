@@ -5,7 +5,7 @@ const std = @import("std");
 const inventory = @import("inventory.zig");
 const motion = @import("motion.zig");
 pub const ItemHandle = @import("identity.zig").ItemHandle;
-pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone, key, cartridge };
+pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone, key, cartridge, id_card };
 pub const Credential = union(enum) { fixed: i16, item_charge };
 pub const Recharge = struct {
     movie_when: enum { start, completion } = .completion,
@@ -24,7 +24,7 @@ pub const Definition = struct {
     initial_quantity: i16,
     label: []const u8 = "",
     show_quantity: bool = false,
-    use_action: ?union(enum) { story: @import("story_cue.zig").Cue, throw_item, unlock: struct { credential: Credential, consume_after_steps: u16, movie: ?@import("story_cue.zig").Cue = null } } = null,
+    use_action: ?union(enum) { story: @import("story_cue.zig").Cue, throw_item, offer: struct { credential: i16 }, unlock: struct { credential: Credential, consume_after_steps: ?u16, movie: ?@import("story_cue.zig").Cue = null } } = null,
 };
 pub const Item = struct {
     definition: Definition,
@@ -92,6 +92,14 @@ pub const Loadout = struct {
         if (entry.state != .carried or entry.recharge_in != null) return false;
         self.entries[handle.index].recharge_in = capability.delay_steps;
         return true;
+    }
+
+    pub fn consume(self: *Loadout, handle: ItemHandle) !void {
+        if ((try self.item(handle)).state != .carried) return error.ItemNotCarried;
+        if (!self.inventory.remove(handle)) return error.ItemNotCarried;
+        self.entries[handle.index].state = .consumed;
+        self.entries[handle.index].consume_in = null;
+        self.entries[handle.index].recharge_in = null;
     }
 
     pub fn consumeAfter(self: *Loadout, handle: ItemHandle, steps: u16) !void {

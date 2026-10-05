@@ -4,6 +4,8 @@ const std = @import("std");
 const platform = @import("../platform.zig");
 const palette = @import("palette.zig");
 pub const Values = struct {
+    passwords: [7][3][7]u8,
+    password_prefix: [6]u8,
     continue_labels: [5][48]u8,
     demos: [3]@import("demo.zig").Descriptor,
     actor_colors: [2]palette.Bank,
@@ -110,7 +112,18 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
         const colors = word(data, 0xea9 + i * 2);
         library.colors = try palette.decodeActorBank(data[colors..][0..32]);
     }
+    var passwords: [7][3][7]u8 = undefined;
+    for (&passwords, 0..) |*level, l| for (level, 0..) |*code, d| {
+        for (code, 0..) |*character, c| character.* = data[0x12ad + l * 21 + d * 7 + c] ^ 0x55;
+        if (std.mem.indexOfScalar(u8, code, 0) == null) return error.InvalidLevelCode;
+    };
+    // The immutable prefix is constructed from these immediate operands in this edition.
+    var password_prefix: [6]u8 = undefined;
+    for ([_]usize{ 0x2424, 0x242b, 0x2433, 0x243b, 0x2443 }, 0..) |offset, i| password_prefix[i] = image[offset] ^ 0x55;
+    password_prefix[5] = image[0x244b];
     return .{
+        .passwords = passwords,
+        .password_prefix = password_prefix,
         .actor_libraries = actor_libraries,
         .score_awards = score_awards,
         .continue_labels = continue_labels,

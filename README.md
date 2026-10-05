@@ -69,6 +69,10 @@ The magnetic cartridge can be collected, recharged at a generator and used in it
 activate the bridge. Its lock instruction uses the original paged message display; Return,
 Space or Shift acknowledges a page while gameplay is paused. All links and support footprints
 come from the supplied data.
+The wounded man's help/conversation and teleporter exchange are now connected. Return his
+teleporter to reveal the ID card; the card can be collected and used without being consumed.
+Startup also shows the original temporary level code until its timer expires or a nearby
+interaction hint replaces it.
 Ordinary lifts now carry Conrad and board stones through their original contact behavior.
 With the gun holstered, Shift+Up/Down requests a ride. Turning, crouching, drawing,
 shooting and holstering work while travelling. The jungle pressure-called lift now stays

@@ -102,7 +102,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         try sources.append(allocator, @intCast(i));
         const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
-        try definitions.append(allocator, .{ .footprint = .{ .room = room_ids[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .palette_bank = @intCast(record.visual_flags & 3), .layer = if (record.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .idle = pair[0], .used = pair[1], .credential = record.life, .unlock_forward = spec.forward, .unlock_down = spec.down, .unlock_sound = spec.sound, .circuits = circuits, .notice = spec.notice, .initially_used = record.initial_state == spec.used, .initially_active = record.initially_active != 0, .wake_when_near = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .hint = try resolver.icon(record.contact_icon - 1), .label = label });
+        try definitions.append(allocator, .{ .footprint = .{ .room = room_ids[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .palette_bank = @intCast(record.visual_flags & 3), .layer = if (record.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .idle = pair[0], .used = pair[1], .credential = record.life, .interaction_priority = @intCast(i), .unlock_forward = spec.forward, .unlock_down = spec.down, .unlock_sound = spec.sound, .circuits = circuits, .notice = spec.notice, .initially_used = record.initial_state == spec.used, .initially_active = record.initially_active != 0, .wake_when_near = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .hint = try resolver.icon(record.contact_icon - 1), .label = label });
     }
     // Preserve contact selection across all implemented controls, including controls
     // whose normal operation ignores an item's credential signal.
@@ -119,7 +119,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
             const item = try table.record(source);
             if (item.parameters[0] != record.kind) continue;
             const item_rules = try rules.group(rule_bytes, item.rule_group);
-            const signal = if (@import("key_pickups.zig").recognize(item_rules)) |key| key.signal else if (@import("cartridges.zig").recognize(item_rules)) |cartridge| cartridge.signal else continue;
+            const signal = if (@import("key_pickups.zig").recognize(item_rules)) |key| key.signal else if (@import("cartridges.zig").recognize(item_rules)) |cartridge| cartridge.signal else if (@import("quest_items.zig").card(item_rules)) |card| card.signal else continue;
             if (lock == null and signal == 30) return error.UnsupportedItemOperatedControl;
             try bindings.append(allocator, .{ .item = .{ .index = first_item.index + @as(u16, @intCast(index)), .generation = first_item.generation }, .receiver = receiver, .activates = if (lock != null) signal == recognize(group).?.input else false, .next_step = source >= i });
         }

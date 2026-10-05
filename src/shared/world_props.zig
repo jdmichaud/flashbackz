@@ -8,13 +8,16 @@ const equipment = @import("equipment.zig");
 pub const Movie = @import("story_cue.zig").Cue;
 pub const CircuitId = enum(u16) { _ };
 pub const Layer = enum { behind_player, in_front_of_player };
+pub const Response = union(enum) { reveal, redeem: Movie };
+pub const ItemBinding = struct { circuit: CircuitId, target: usize, response: Response, next_step: bool };
 pub const Definition = struct {
+    interaction_priority: u16 = 0,
     footprint: contacts.Footprint,
     facing: motion.Facing,
     palette_bank: u4,
     layer: Layer,
     behavior: union(enum) {
-        collectible: struct { item: equipment.ItemHandle, idle: motion.Clip, pickup_movie: ?Movie = null, throw_motion: ?@import("thrown_item.zig").Definition = null, quantity_grant: ?struct { target: equipment.ItemHandle, amount: i16 } = null, initially_active: bool = true, wake_nearby: bool = false },
+        collectible: struct { initially_present: bool = true, item: equipment.ItemHandle, idle: motion.Clip, pickup_movie: ?Movie = null, throw_motion: ?@import("thrown_item.zig").Definition = null, quantity_grant: ?struct { target: equipment.ItemHandle, amount: i16 } = null, initially_active: bool = true, wake_nearby: bool = false },
         floor_switch: struct { rest: motion.Clip, press: motion.Clip, circuit: CircuitId, accepts_objects: bool = true, initially_active: bool = true, wake_on_contact: bool = true, sleep_after_press: bool = false },
     },
 };
@@ -24,6 +27,7 @@ pub const Object = struct {
     contact: contacts.Footprint,
     flight: ?@import("thrown_item.zig").State = null,
     lost: bool = false,
+    present: bool = true,
     playback: motion.Playback = .{},
     pressing: bool = false,
     active: bool = true,
@@ -36,6 +40,9 @@ pub const World = struct {
     objects: []Object,
     player_contact: contacts.Footprint = undefined,
     pickup_candidate: ?equipment.ItemHandle = null,
+    pickup_priority: u16 = 0,
+    incoming: []?Response,
+    pending: []?Response,
     pressed_circuits: []CircuitId,
     pressed_count: usize = 0,
     acquired: ?equipment.ItemHandle = null,
@@ -54,20 +61,28 @@ pub const World = struct {
                 .frame => |frame| frame.visual,
                 .hold => return error.MissingPropVisual,
             };
-            object.* = .{ .room = definition.footprint.room, .contact = definition.footprint, .active = switch (definition.behavior) {
+            object.* = .{ .present = if (definition.behavior == .collectible) definition.behavior.collectible.initially_present else true, .room = definition.footprint.room, .contact = definition.footprint, .active = switch (definition.behavior) {
                 .floor_switch => |plate| plate.initially_active,
                 .collectible => |item| item.initially_active,
             }, .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } } };
         }
-        return .{ .allocator = allocator, .definitions = definitions, .objects = objects, .pressed_circuits = try allocator.alloc(CircuitId, definitions.len) };
+        const incoming = try allocator.alloc(?Response, definitions.len);
+        errdefer allocator.free(incoming);
+        @memset(incoming, null);
+        const pending = try allocator.alloc(?Response, definitions.len);
+        errdefer allocator.free(pending);
+        @memset(pending, null);
+        return .{ .allocator = allocator, .definitions = definitions, .objects = objects, .incoming = incoming, .pending = pending, .pressed_circuits = try allocator.alloc(CircuitId, definitions.len) };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.objects);
+        self.allocator.free(self.incoming);
+        self.allocator.free(self.pending);
         self.allocator.free(self.pressed_circuits);
         self.* = undefined;
     }
     pub fn visible(self: *const World, index: usize, items: *const equipment.Loadout) !bool {
-        if (self.objects[index].lost) return false;
+        if (self.objects[index].lost or !self.objects[index].present) return false;
         return switch (self.definitions[index].behavior) {
             .collectible => |value| (try items.item(value.item)).state == .available,
             .floor_switch => true,
@@ -78,6 +93,7 @@ pub const World = struct {
     pub fn prepare(self: *World, map: geometry.Map, items: *const equipment.Loadout, player: contacts.Footprint) !void {
         self.player_contact = player;
         self.pickup_candidate = null;
+        self.pickup_priority = 0;
         const layout: contacts.Layout = .{};
         for (self.objects, self.definitions, 0..) |*object, definition, index| {
             object.contact = definition.footprint;
@@ -93,7 +109,10 @@ pub const World = struct {
                 }
             }
             if (object.contact_present and object.flight == null and definition.behavior == .collectible) {
-                if (try layout.overlaps(map, player, object.contact)) self.pickup_candidate = definition.behavior.collectible.item;
+                if (try layout.overlaps(map, player, object.contact)) {
+                    self.pickup_candidate = definition.behavior.collectible.item;
+                    self.pickup_priority = definition.interaction_priority;
+                }
             }
         }
         for (self.objects, self.definitions, 0..) |*object, definition, index| {
@@ -105,6 +124,42 @@ pub const World = struct {
             }
         }
     }
+    pub fn beginStep(self: *World) void {
+        @memcpy(self.incoming, self.pending);
+        @memset(self.pending, null);
+    }
+    fn respond(self: *World, index: usize, response: Response, items: *equipment.Loadout, apply_frame: bool) !void {
+        const definition = self.definitions[index];
+        if (definition.behavior != .collectible) return error.InvalidItemResponse;
+        const item = definition.behavior.collectible;
+        const object = &self.objects[index];
+        switch (response) {
+            .reveal => {
+                if (object.present or (try items.item(item.item)).state != .available) return;
+                object.present = true;
+                object.active = true;
+                object.playback = .{};
+                if (apply_frame) {
+                    object.sound_requested = object.playback.soundOnEntry(item.idle);
+                    _ = object.playback.advance(item.idle, &object.pose);
+                }
+            },
+            .redeem => |movie| {
+                if ((try items.item(item.item)).state != .carried) return;
+                try items.consume(item.item);
+                object.active = false;
+                self.movie = movie;
+            },
+        }
+    }
+    /// Producers run after the ordinary prop pass. Later item recipients can react
+    /// immediately; earlier ones receive the response on their next update.
+    pub fn deliver(self: *World, bindings: []const ItemBinding, pulses: []const CircuitId, items: *equipment.Loadout) !void {
+        for (pulses) |pulse| for (bindings) |binding| {
+            if (binding.circuit != pulse) continue;
+            if (binding.next_step) self.pending[binding.target] = binding.response else try self.respond(binding.target, binding.response, items, true);
+        };
+    }
     pub fn advance(self: *World, map: geometry.Map, items: *equipment.Loadout, player_has_weight: bool, pickup: bool) !void {
         for (self.objects) |*object| object.sound_requested = null;
         self.pressed_count = 0;
@@ -113,6 +168,10 @@ pub const World = struct {
         const layout: contacts.Layout = .{};
         for (self.objects, self.definitions, 0..) |*object, definition, index| switch (definition.behavior) {
             .collectible => |item| {
+                if (self.incoming[index]) |response| {
+                    try self.respond(index, response, items, false);
+                    self.incoming[index] = null;
+                }
                 if (pickup and self.pickup_candidate != null and self.pickup_candidate.?.eql(item.item) and (try items.item(item.item)).state == .available) {
                     if (item.quantity_grant) |grant| {
                         try items.consumeInto(item.item, grant.target, grant.amount);
@@ -189,6 +248,13 @@ pub const World = struct {
     }
 
     pub fn hashInto(self: *const World, hash: *std.hash.Wyhash) void {
+        for (self.incoming, self.pending) |ready, pending| for ([_]?Response{ ready, pending }) |response| {
+            const value: u16 = if (response) |event| switch (event) {
+                .reveal => 1,
+                .redeem => |movie| 2 + @as(u16, @backingInt(movie)),
+            } else 0;
+            hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u16, value)));
+        };
         for (self.objects) |object| {
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u16, @backingInt(object.room))));
             hash.update(&.{ @intFromBool(object.lost), @intFromBool(object.flight != null) });
@@ -200,7 +266,7 @@ pub const World = struct {
                 };
                 hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, segment)));
             }
-            for ([_]u64{ @as(u16, @bitCast(object.pose.position.x)), @as(u16, @bitCast(object.pose.position.y)), @backingInt(object.pose.facing), @backingInt(object.pose.visual.id), @intFromBool(object.pose.visual.mirrored), object.playback.next_step, @intFromBool(object.pressing), @intFromBool(object.active), @intFromBool(object.contact_present) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+            for ([_]u64{ @intFromBool(object.present), @as(u16, @bitCast(object.pose.position.x)), @as(u16, @bitCast(object.pose.position.y)), @backingInt(object.pose.facing), @backingInt(object.pose.visual.id), @intFromBool(object.pose.visual.mirrored), object.playback.next_step, @intFromBool(object.pressing), @intFromBool(object.active), @intFromBool(object.contact_present) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
         }
     }
 };

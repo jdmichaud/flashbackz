@@ -78,7 +78,16 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
     const hint = try resolver.icon(0);
     for (0..table.count) |i| {
         const record = try table.record(@intCast(i));
-        if (record.room >= room_ids.len or record.minimum_difficulty > @backingInt(difficulty)) continue;
+        if (record.minimum_difficulty > @backingInt(difficulty)) continue;
+        const group = try @import("rule_table.zig").group(rules, record.rule_group);
+        const gift = @import("quest_items.zig").card(group);
+        var room = record.room;
+        if (room >= room_ids.len) {
+            const spec = gift orelse continue;
+            const destination = record.parameters[spec.room_parameter];
+            if (destination < 0 or destination >= room_ids.len) return error.InvalidGiftRoom;
+            room = @intCast(destination);
+        }
         const pressure_spec = @import("pressure_controls.zig").recognize(try @import("rule_table.zig").group(rules, record.rule_group));
         if (record.kind != 3 and pressure_spec == null) continue;
         const rule = try firstRule(rules, record.rule_group, record.initial_state);
@@ -88,7 +97,8 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
             const credit = @import("credit_pickups.zig").recognize(try @import("rule_table.zig").group(rules, record.rule_group));
             const key = @import("key_pickups.zig").recognize(try @import("rule_table.zig").group(rules, record.rule_group));
             const cartridge = @import("cartridges.zig").recognize(try @import("rule_table.zig").group(rules, record.rule_group));
-            if (record.initial_state != 328 and !stone and credit == null and key == null and cartridge == null) continue;
+            const device = @import("quest_items.zig").teleporter(group);
+            if (record.initial_state != 328 and !stone and credit == null and key == null and cartridge == null and gift == null and device == null) continue;
             if (credit) |spec| {
                 if (record.initial_state != spec.idle or record.contact_icon != 1) return error.UnsupportedCreditPickup;
                 const recipient = record.parameters[spec.target_parameter];
@@ -124,6 +134,23 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
                 errdefer allocator.free(label);
                 const item: equipment.Definition = .{ .kind = .cartridge, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label, .show_quantity = record.visual_flags & 4 != 0, .use_action = .{ .unlock = .{ .credential = .item_charge, .consume_after_steps = use_steps, .movie = .bridge_activation } }, .recharge = .{ .delay_steps = charge_steps, .restore = .{ .item_charge = spec.charge }, .movie = .cartridge_recharge, .movie_when = .start } };
                 behavior = .{ .collectible = .{ .item = .{ .index = first_item.index + @as(u16, @intCast(items.items.len)), .generation = first_item.generation }, .idle = idle, .pickup_movie = .cartridge_pickup } };
+                try items.append(allocator, item);
+            } else if (gift) |spec| {
+                const hidden = record.initial_state == spec.hidden;
+                if ((!hidden and record.initial_state != spec.idle) or (hidden and record.room < room_ids.len) or record.contact_icon != 1 or record.parameters[0] != 5) return error.UnsupportedGiftPlacement;
+                const idle = try appendClip(allocator, &clips, animations, spec.idle, resolver);
+                const label = try strings.copy(allocator, names, record.text_id);
+                errdefer allocator.free(label);
+                const item: equipment.Definition = .{ .kind = .id_card, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label, .use_action = .{ .unlock = .{ .credential = .{ .fixed = record.life }, .consume_after_steps = null } } };
+                behavior = .{ .collectible = .{ .item = .{ .index = first_item.index + @as(u16, @intCast(items.items.len)), .generation = first_item.generation }, .idle = idle, .pickup_movie = .id_card_pickup, .initially_present = !hidden } };
+                try items.append(allocator, item);
+            } else if (device) |spec| {
+                if (record.initial_state != spec.idle or record.contact_icon != 1 or record.parameters[0] != 3) return error.UnsupportedTeleporter;
+                const idle = try appendClip(allocator, &clips, animations, spec.idle, resolver);
+                const label = try strings.copy(allocator, names, record.text_id);
+                errdefer allocator.free(label);
+                const item: equipment.Definition = .{ .kind = .teleporter, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label, .use_action = .{ .offer = .{ .credential = record.life } } };
+                behavior = .{ .collectible = .{ .item = .{ .index = first_item.index + @as(u16, @intCast(items.items.len)), .generation = first_item.generation }, .idle = idle, .pickup_movie = .teleporter_pickup } };
                 try items.append(allocator, item);
             } else if (stone) {
                 if (record.contact_icon != 1 or record.object_id != 1) return error.UnsupportedThrowableItem;
@@ -174,7 +201,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
         errdefer if (behavior == .collectible) {
             if (behavior.collectible.throw_motion) |throw| allocator.free(throw.arc);
         };
-        try definitions.append(allocator, .{ .footprint = .{ .room = room_ids[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .palette_bank = @intCast(record.visual_flags & 3), .layer = if (record.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .behavior = behavior });
+        try definitions.append(allocator, .{ .interaction_priority = @intCast(i), .footprint = .{ .room = room_ids[room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .palette_bank = @intCast(record.visual_flags & 3), .layer = if (record.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .behavior = behavior });
     }
     const owned_clips = try clips.toOwnedSlice(allocator);
     errdefer {
