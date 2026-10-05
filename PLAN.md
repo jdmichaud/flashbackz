@@ -67,6 +67,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   imported by behavior family. Loose credit pickups also participate in enemy distraction. Use the
   original demo to expose the next missing interaction; validate increments with quick native
   play checks, per the user's iteration preference.
+- [ ] City police and rescued civilians: import pursuit, evasive movement, shooting,
+  damage/death signals, encounter-clearance relays and the Ian conversation/seat/recording
+  sequence. Preserve family-wide rules and data links; qualify with original city input
+  and focused native encounters, without per-placement scripting.
 - [ ] Shared enemy families: import every matching placement, animation library and behavior
   profile from original data. Implement perception, stone distractions, locomotion, shooting
   and damage through independent actor/combat components; qualify with quick native encounters.
