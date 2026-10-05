@@ -87,7 +87,8 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
             const stone = isThrowablePickup(rules, record.rule_group, record.initial_state, rule);
             const credit = @import("credit_pickups.zig").recognize(try @import("rule_table.zig").group(rules, record.rule_group));
             const key = @import("key_pickups.zig").recognize(try @import("rule_table.zig").group(rules, record.rule_group));
-            if (record.initial_state != 328 and !stone and credit == null and key == null) continue;
+            const cartridge = @import("cartridges.zig").recognize(try @import("rule_table.zig").group(rules, record.rule_group));
+            if (record.initial_state != 328 and !stone and credit == null and key == null and cartridge == null) continue;
             if (credit) |spec| {
                 if (record.initial_state != spec.idle or record.contact_icon != 1) return error.UnsupportedCreditPickup;
                 const recipient = record.parameters[spec.target_parameter];
@@ -111,8 +112,18 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
                 defer use.deinit();
                 const label = try strings.copy(allocator, names, record.text_id);
                 errdefer allocator.free(label);
-                const item: equipment.Definition = .{ .kind = .key, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label, .use_action = .{ .unlock = .{ .credential = record.life, .consume_after_steps = @intCast(use.frames.len) } } };
+                const item: equipment.Definition = .{ .kind = .key, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label, .use_action = .{ .unlock = .{ .credential = .{ .fixed = record.life }, .consume_after_steps = @intCast(use.frames.len) } } };
                 behavior = .{ .collectible = .{ .item = .{ .index = first_item.index + @as(u16, @intCast(items.items.len)), .generation = first_item.generation }, .idle = idle, .pickup_movie = .key_pickup } };
+                try items.append(allocator, item);
+            } else if (cartridge) |spec| {
+                if (record.initial_state != spec.idle or record.contact_icon != 1 or record.parameters[0] != 5) return error.UnsupportedCartridgePickup;
+                const idle = try appendClip(allocator, &clips, animations, spec.idle, resolver);
+                const use_steps = try itemUseDuration(allocator, animations, spec.using);
+                const charge_steps = try itemUseDuration(allocator, animations, spec.charging);
+                const label = try strings.copy(allocator, names, record.text_id);
+                errdefer allocator.free(label);
+                const item: equipment.Definition = .{ .kind = .cartridge, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label, .show_quantity = record.visual_flags & 4 != 0, .use_action = .{ .unlock = .{ .credential = .item_charge, .consume_after_steps = use_steps, .movie = .bridge_activation } }, .recharge = .{ .delay_steps = charge_steps, .restore = .{ .item_charge = spec.charge }, .movie = .cartridge_recharge, .movie_when = .start } };
+                behavior = .{ .collectible = .{ .item = .{ .index = first_item.index + @as(u16, @intCast(items.items.len)), .generation = first_item.generation }, .idle = idle, .pickup_movie = .cartridge_pickup } };
                 try items.append(allocator, item);
             } else if (stone) {
                 if (record.contact_icon != 1 or record.object_id != 1) return error.UnsupportedThrowableItem;
@@ -181,6 +192,17 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
     errdefer allocator.free(owned_sources);
     return .{ .allocator = allocator, .item_sources = owned_sources, .connections = owned_connections, .clips = owned_clips, .definitions = owned_definitions, .items = try items.toOwnedSlice(allocator), .hint_icon = hint };
 }
+fn itemUseDuration(allocator: std.mem.Allocator, animations: []const u8, state: u16) !u16 {
+    var clip = try animation.decode(allocator, animations, state);
+    defer clip.deinit();
+    if (clip.sound != null) return error.UnsupportedHiddenItemSound;
+    for (clip.frames) |frame| switch (frame) {
+        .hold => {},
+        .frame => |value| if (value.dx != 0 or value.dy != 0) return error.MovingInventoryItem,
+    };
+    return @intCast(clip.frames.len);
+}
+
 fn word(bytes: []const u8, offset: usize) u16 {
     return std.mem.readInt(u16, bytes[offset..][0..2], .little);
 }

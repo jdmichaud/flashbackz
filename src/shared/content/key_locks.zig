@@ -76,8 +76,9 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         }
         for (item_sources, 0..) |source, index| {
             const item = try table.record(source);
-            const key = @import("key_pickups.zig").recognize(try rules.group(rule_bytes, item.rule_group)) orelse continue;
-            if (key.signal != spec.input or item.parameters[0] != record.kind) continue;
+            const item_rules = try rules.group(rule_bytes, item.rule_group);
+            const signal = if (@import("key_pickups.zig").recognize(item_rules)) |key| key.signal else if (@import("cartridges.zig").recognize(item_rules)) |cartridge| cartridge.signal else continue;
+            if (signal != spec.input or item.parameters[0] != record.kind) continue;
             try bindings.append(allocator, .{ .item = .{ .index = first_item.index + @as(u16, @intCast(index)), .generation = first_item.generation }, .lock = definitions.items.len, .next_step = source >= i });
         }
         const label = try @import("string_table.zig").copy(allocator, names, record.text_id);

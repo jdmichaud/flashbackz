@@ -74,7 +74,12 @@ pub const World = struct {
         const item = try loadout.item(handle);
         if (item.state != .carried or item.consume_in != null) return false;
         const action = item.definition.use_action orelse return false;
-        if (action != .unlock or action.unlock.credential != definitions[index].credential) return false;
+        if (action != .unlock) return false;
+        const credential = switch (action.unlock.credential) {
+            .fixed => |value| value,
+            .item_charge => item.quantity,
+        };
+        if (credential != definitions[index].credential) return false;
         const binding = for (bindings) |entry| {
             if (entry.lock == index and entry.item.eql(handle)) break entry;
         } else return false;

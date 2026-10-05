@@ -431,7 +431,7 @@ pub const Scene = struct {
             self.received_count = try self.equipment.advance(self.health, self.received_items);
             if (self.equipment.recharged) |event| {
                 if (event.health) |health| self.health = health;
-                self.pending_movie = event.movie;
+                if (event.movie) |movie| self.pending_movie = movie;
             }
             if (self.controller.use_requested) {
                 if (!self.controller.use_reaches) self.input.consumeUse();
@@ -443,13 +443,21 @@ pub const Scene = struct {
                         self.pending_movie = cue;
                         handled = true;
                     },
-                    .unlock => handled = try self.locks.useKey(self.content.locks.definitions, self.content.locks.bindings, &self.equipment, handle),
+                    .unlock => |use| {
+                        handled = try self.locks.useKey(self.content.locks.definitions, self.content.locks.bindings, &self.equipment, handle);
+                        if (handled) if (use.movie) |movie| {
+                            self.pending_movie = movie;
+                        };
+                    },
                     .throw_item => {
                         try self.props.throwItem(&self.equipment, handle, self.pose, self.environment.room);
                         handled = true;
                     },
                 };
-                if (!handled and self.energy_stations.candidate != null) _ = try self.equipment.beginRecharge(handle);
+                if (!handled and self.energy_stations.candidate != null and try self.equipment.beginRecharge(handle)) {
+                    const recharge = item.definition.recharge.?;
+                    if (recharge.movie_when == .start) self.pending_movie = recharge.movie;
+                }
             }
             try self.props.advance(self.terrain.map(), &self.equipment, try self.controller.pressesFloorSwitches(self.content.controllerClips()), self.controller.pickup_requested);
             try self.operated_controls.advance(self.content.controls.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested);

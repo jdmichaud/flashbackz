@@ -5,13 +5,15 @@ const std = @import("std");
 const inventory = @import("inventory.zig");
 const motion = @import("motion.zig");
 pub const ItemHandle = @import("identity.zig").ItemHandle;
-pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone, key };
+pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone, key, cartridge };
+pub const Credential = union(enum) { fixed: i16, item_charge };
 pub const Recharge = struct {
+    movie_when: enum { start, completion } = .completion,
     delay_steps: u16,
     restore: union(enum) { player_health: i16, item_charge: i16 },
     movie: @import("story_cue.zig").Cue,
 };
-pub const Recharged = struct { item: ItemHandle, health: ?i16, movie: @import("story_cue.zig").Cue };
+pub const Recharged = struct { item: ItemHandle, health: ?i16, movie: ?@import("story_cue.zig").Cue };
 pub const Definition = struct {
     recharge: ?Recharge = null,
     use_motion: enum { direct, reach } = .direct,
@@ -22,7 +24,7 @@ pub const Definition = struct {
     initial_quantity: i16,
     label: []const u8 = "",
     show_quantity: bool = false,
-    use_action: ?union(enum) { story: @import("story_cue.zig").Cue, throw_item, unlock: struct { credential: i16, consume_after_steps: u16 } } = null,
+    use_action: ?union(enum) { story: @import("story_cue.zig").Cue, throw_item, unlock: struct { credential: Credential, consume_after_steps: u16, movie: ?@import("story_cue.zig").Cue = null } } = null,
 };
 pub const Item = struct {
     definition: Definition,
@@ -145,7 +147,7 @@ pub const Loadout = struct {
                         .player_health => |value| restored_health = value,
                         .item_charge => |value| entry.quantity = value,
                     }
-                    self.recharged = .{ .item = .{ .index = @intCast(index), .generation = 1 }, .health = restored_health, .movie = capability.movie };
+                    self.recharged = .{ .item = .{ .index = @intCast(index), .generation = 1 }, .health = restored_health, .movie = if (capability.movie_when == .completion) capability.movie else null };
                     entry.recharge_in = null;
                 } else entry.recharge_in = remaining - 1;
             }
