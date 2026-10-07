@@ -4,6 +4,7 @@ const rules = @import("rule_table.zig");
 const runtime = @import("../inventory_grants.zig");
 pub const Spec = struct { idle: u16, signal: i16, kind: @import("../equipment.zig").Kind, object_kind: u8, starting: ?u16 = null, movie: ?@import("../story_cue.zig").Cue };
 pub fn recognize(group: rules.Group) ?Spec {
+    if (@import("credential_cards.zig").parcel(group)) |p| return .{ .idle = p.idle, .signal = p.grant_signal, .kind = .parcel, .object_kind = 3, .movie = .parcel_received };
     if (@import("credential_cards.zig").permit(group) != null) return .{ .idle = group.at(0).source, .signal = group.at(0).conditions[0].argument, .kind = .work_permit, .object_kind = 3, .movie = .permit_received };
     if (group.count() != 2 and group.count() != 3) return null;
     const a = group.at(0);
@@ -28,7 +29,17 @@ pub const Assets = struct {
         self.allocator.free(self.bindings);
     }
 };
-pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table, rule_bytes: []const u8, sources: []const u16, first_item: @import("../equipment.zig").ItemHandle, routes: []const @import("first_world_props.zig").Connection) !Assets {
+/// Register delayed grant outputs before the level freezes its complete circuit catalog.
+pub fn outputs(allocator: std.mem.Allocator, table: @import("placement.zig").Table, bytes: []const u8, sources: []const u16, connections: *std.ArrayList(@import("first_world_props.zig").Connection)) !void {
+    for (sources) |source| {
+        const record = try table.record(source);
+        const spec = @import("credential_cards.zig").parcel(try rules.group(bytes, record.rule_group)) orelse continue;
+        const target = record.parameters[spec.followup_parameter];
+        if (target < 0 or target >= table.count) return error.InvalidGrantFollowup;
+        _ = try @import("first_world_props.zig").internConnection(allocator, connections, source, @intCast(target), spec.followup_signal);
+    }
+}
+pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table, rule_bytes: []const u8, animations: []const u8, sources: []const u16, first_item: @import("../equipment.zig").ItemHandle, routes: []const @import("first_world_props.zig").Connection) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
     errdefer definitions.deinit(allocator);
     var bindings: std.ArrayList(runtime.Binding) = .empty;
@@ -37,8 +48,18 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
         const record = try table.record(source);
         const spec = recognize(try rules.group(rule_bytes, record.rule_group)) orelse continue;
         const target = definitions.items.len;
+        var followup: ?runtime.Followup = null;
+        if (@import("credential_cards.zig").parcel(try rules.group(rule_bytes, record.rule_group))) |parcel| {
+            var clip = try @import("animation.zig").decode(allocator, animations, parcel.received);
+            defer clip.deinit();
+            const recipient = record.parameters[parcel.followup_parameter];
+            const circuit = for (routes) |route| {
+                if (route.sender == source and route.recipient == recipient and route.message == parcel.followup_signal) break route.circuit;
+            } else return error.MissingGrantFollowup;
+            followup = .{ .steps = @intCast(clip.frames.len), .circuit = circuit };
+        }
         table.register(@intCast(source), .inventory_grants);
-        try definitions.append(allocator, .{ .item = .{ .index = first_item.index + @as(u16, @intCast(index)), .generation = first_item.generation }, .movie = spec.movie });
+        try definitions.append(allocator, .{ .item = .{ .index = first_item.index + @as(u16, @intCast(index)), .generation = first_item.generation }, .movie = spec.movie, .followup = followup });
         for (routes) |route| if (route.recipient == source and route.message == spec.signal) {
             try bindings.append(allocator, .{ .circuit = route.circuit, .target = target, .next_step = route.sender >= source });
         };

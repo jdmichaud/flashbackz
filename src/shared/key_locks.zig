@@ -9,7 +9,7 @@ const props = @import("world_props.zig");
 pub const Receiver = struct {
     footprint: contacts.Footprint,
     credential: i16,
-    target: union(enum) { lock: usize, manual_control, service },
+    target: union(enum) { lock: usize, ignores_credential, signal_only },
 };
 pub const Binding = struct { item: equipment.ItemHandle, receiver: usize, activates: bool, next_step: bool, circuit: ?props.CircuitId = null };
 pub const Definition = struct {
@@ -52,7 +52,11 @@ pub const World = struct {
     credential_count: usize = 0,
     candidate: ?usize = null,
     use_candidate: ?usize = null,
+    receiver_bodies: []?contacts.Footprint,
     notice: ?@import("world_messages.zig").Request = null,
+    pub fn setReceiverBody(self: *World, index: usize, body: ?contacts.Footprint) void {
+        self.receiver_bodies[index] = body;
+    }
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition, receivers: []const Receiver) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);
@@ -67,14 +71,18 @@ pub const World = struct {
         }
         var capacity: usize = 0;
         for (definitions) |definition| capacity += definition.circuits.len + @intFromBool(definition.repaired_operation != null);
+        const receiver_bodies = try allocator.alloc(?contacts.Footprint, receivers.len);
+        errdefer allocator.free(receiver_bodies);
+        for (receiver_bodies, receivers) |*body, receiver| body.* = receiver.footprint;
         const pulses = try allocator.alloc(props.CircuitId, capacity + receivers.len);
         errdefer allocator.free(pulses);
-        return .{ .allocator = allocator, .instances = instances, .pulses = pulses, .credential_pulses = try allocator.alloc(props.CircuitId, receivers.len) };
+        return .{ .allocator = allocator, .instances = instances, .pulses = pulses, .credential_pulses = try allocator.alloc(props.CircuitId, receivers.len), .receiver_bodies = receiver_bodies };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.instances);
         self.allocator.free(self.pulses);
         self.allocator.free(self.credential_pulses);
+        self.allocator.free(self.receiver_bodies);
     }
     pub fn prepare(self: *World, definitions: []const Definition, receivers: []const Receiver, map: geometry.Map, player: contacts.Footprint) !void {
         self.candidate = null;
@@ -85,7 +93,7 @@ pub const World = struct {
         }
         const layout: contacts.Layout = .{};
         for (receivers, 0..) |receiver, index| {
-            var footprint = receiver.footprint;
+            var footprint = self.receiver_bodies[index] orelse continue;
             if (receiver.target == .lock) {
                 const lock = receiver.target.lock;
                 footprint.position = self.instances[lock].pose.position;

@@ -86,7 +86,13 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
             const label = try strings.copy(allocator, names, record.text_id);
             errdefer allocator.free(label);
             try item_sources.append(allocator, @intCast(i));
-            try items.append(allocator, .{ .kind = grant.kind, .use_motion = if (record.object_id == 3) .reach else .direct, .use_action = if (grant.kind == .work_permit) .{ .unlock = .{ .credential = .{ .fixed = record.life }, .consume_after_steps = null } } else null, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label });
+            var consumption_steps: ?u16 = null;
+            if (@import("credential_cards.zig").parcel(group)) |parcel| {
+                var use = try animation.decode(allocator, animations, parcel.using);
+                defer use.deinit();
+                consumption_steps = @intCast(use.frames.len);
+            }
+            try items.append(allocator, .{ .kind = grant.kind, .use_motion = if (record.object_id == 3) .reach else .direct, .use_action = if (grant.kind == .work_permit or grant.kind == .parcel) .{ .unlock = .{ .credential = .{ .fixed = record.life }, .consume_after_steps = consumption_steps, .movie = if (grant.kind == .parcel) .parcel_delivered else null } } else null, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label });
             continue;
         }
         const gift = @import("quest_items.zig").card(group);

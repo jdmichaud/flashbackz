@@ -5,7 +5,7 @@ const std = @import("std");
 const inventory = @import("inventory.zig");
 const motion = @import("motion.zig");
 pub const ItemHandle = @import("identity.zig").ItemHandle;
-pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone, key, cartridge, id_card, anti_g_belt, force_field, fuse, work_permit };
+pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone, key, cartridge, id_card, anti_g_belt, force_field, fuse, work_permit, parcel };
 pub const Credential = union(enum) { fixed: i16, item_charge };
 pub const Recharge = struct {
     movie_when: enum { start, completion } = .completion,
@@ -79,6 +79,11 @@ pub const Loadout = struct {
         try inventory.transfer(handle, if (entry.state == .carried) &self.inventory else null, &self.inventory);
         self.entries[handle.index].state = .carried;
     }
+    pub fn credit(self: *Loadout, handle: ItemHandle, amount: i16) !void {
+        _ = try self.item(handle);
+        self.entries[handle.index].quantity +%= amount;
+    }
+
     pub fn debit(self: *Loadout, handle: ItemHandle, amount: i16) !void {
         _ = try self.item(handle);
         self.entries[handle.index].quantity -%= amount;

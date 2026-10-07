@@ -8,12 +8,14 @@ const animation = @import("animation.zig");
 const geometry = @import("../geometry.zig");
 const motion = @import("../motion.zig");
 const props = @import("first_world_props.zig");
+pub const QuestReceiver = struct { receiver: usize, contact: usize };
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
     clips: []animation.OwnedClip,
     bindings: []runtime.Binding,
     receivers: []runtime.Receiver,
+    quest_receivers: []QuestReceiver,
     pub fn deinit(self: *Assets) void {
         for (self.definitions) |definition| {
             self.allocator.free(definition.label);
@@ -24,6 +26,7 @@ pub const Assets = struct {
         self.allocator.free(self.clips);
         self.allocator.free(self.bindings);
         self.allocator.free(self.receivers);
+        self.allocator.free(self.quest_receivers);
     }
 };
 pub const Spec = struct { idle: u16, used: u16, target_parameter: u2, input: i16, output: i16, sound: ?motion.SoundId, forward: i16, down: i16, second: ?struct { parameter: u2, signal: i16 } = null, notice: ?@import("../world_messages.zig").Id = null, repaired_operation: ?struct { parameter: u2, signal: i16, sound: motion.SoundId } = null };
@@ -72,7 +75,7 @@ pub fn recognize(group: rules.Group) ?Spec {
     }
     return .{ .idle = use.source, .used = use.target, .target_parameter = @intCast(use.conditions[1].code - 35), .input = use.conditions[0].argument, .output = use.conditions[1].argument, .sound = if (instructed) null else @as(motion.SoundId, @fromBackingInt(@as(u8, @intCast(use.effect.argument)))), .forward = -@as(i16, use.dx), .down = use.dy, .second = if (instructed) .{ .parameter = @intCast(use.effect.code - 35), .signal = use.effect.argument } else null, .notice = if (instructed) @fromBackingInt(@as(u16, @intCast(group.at(0).effect.argument))) else null };
 }
-pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []const u8, animations: []const u8, names: []const u8, room_ids: *const [64]geometry.RoomId, difficulty: @import("../settings.zig").Difficulty, connections: *std.ArrayList(props.Connection), item_sources: []const u16, first_item: @import("../equipment.zig").ItemHandle, resolver: anytype) !Assets {
+pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []const u8, animations: []const u8, names: []const u8, room_ids: *const [64]geometry.RoomId, difficulty: @import("../settings.zig").Difficulty, connections: *std.ArrayList(props.Connection), item_sources: []const u16, quest_contacts: @import("quest_contacts.zig").Assets, first_item: @import("../equipment.zig").ItemHandle, resolver: anytype) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
     errdefer {
         for (definitions.items) |definition| {
@@ -88,6 +91,8 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
     }
     var sources: std.ArrayList(u16) = .empty;
     defer sources.deinit(allocator);
+    var quest_receivers: std.ArrayList(QuestReceiver) = .empty;
+    errdefer quest_receivers.deinit(allocator);
     var receivers: std.ArrayList(runtime.Receiver) = .empty;
     errdefer receivers.deinit(allocator);
     var bindings: std.ArrayList(runtime.Binding) = .empty;
@@ -136,21 +141,28 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
     // whose normal operation ignores an item's credential signal.
     for (0..table.count) |i| {
         const record = try table.record(@intCast(i));
-        if (record.kind != 5 or record.room >= room_ids.len or record.minimum_difficulty > @backingInt(difficulty)) continue;
+        if (record.kind != 5 or record.minimum_difficulty > @backingInt(difficulty)) continue;
+        const quest_index = std.mem.indexOfScalar(u16, quest_contacts.sources, @intCast(i));
+        if (quest_index == null and record.room >= room_ids.len) continue;
+        const footprint: @import("../contacts.zig").Footprint = if (quest_index) |index| quest_contacts.definitions[index].footprint else .{ .room = room_ids[record.room], .position = record.position, .width = record.collision_width };
         const group = try rules.group(rule_bytes, record.rule_group);
         const lock = std.mem.indexOfScalar(u16, sources.items, @intCast(i));
         const manual = @import("operated_controls.zig").recognize(group);
         const service = @import("service_counters.zig").recognize(group);
-        if (lock == null and service == null and (manual == null or record.initial_state != manual.?.idle)) continue;
+        const mission = @import("mission_terminals.zig").recognize(group);
+        const quest = @import("quest_contacts.zig").recognize(group);
+        const external_signal: ?i16 = if (service) |value| value.signal else if (mission) |value| value.signals[1] else if (quest) |value| value.receive else null;
+        if (lock == null and external_signal == null and quest_index == null and (manual == null or record.initial_state != manual.?.idle)) continue;
         const receiver = receivers.items.len;
-        try receivers.append(allocator, .{ .footprint = .{ .room = room_ids[record.room], .position = record.position, .width = record.collision_width }, .credential = record.life, .target = if (lock) |index| .{ .lock = index } else if (service != null) .service else .manual_control });
+        if (quest_index) |index| try quest_receivers.append(allocator, .{ .receiver = receiver, .contact = index });
+        try receivers.append(allocator, .{ .footprint = footprint, .credential = record.life, .target = if (lock) |index| .{ .lock = index } else if (external_signal != null) .signal_only else .ignores_credential });
         for (item_sources, 0..) |source, index| {
             const item = try table.record(source);
             if (item.parameters[0] != record.kind) continue;
             const item_rules = try rules.group(rule_bytes, item.rule_group);
-            const signal = if (@import("key_pickups.zig").recognize(item_rules)) |key| key.signal else if (@import("cartridges.zig").recognize(item_rules)) |cartridge| cartridge.signal else if (@import("quest_items.zig").card(item_rules)) |card| card.signal else if (@import("credential_cards.zig").starting(item_rules)) |card| card.signal else if (@import("credential_cards.zig").permit(item_rules)) |card| card.signal else continue;
+            const signal = if (@import("key_pickups.zig").recognize(item_rules)) |key| key.signal else if (@import("cartridges.zig").recognize(item_rules)) |cartridge| cartridge.signal else if (@import("quest_items.zig").card(item_rules)) |card| card.signal else if (@import("credential_cards.zig").starting(item_rules)) |card| card.signal else if (@import("credential_cards.zig").permit(item_rules)) |card| card.signal else if (@import("credential_cards.zig").parcel(item_rules)) |parcel| parcel.signal else continue;
             if (lock == null and signal == 30) return error.UnsupportedItemOperatedControl;
-            const circuit = if (service != null and signal == service.?.signal) try props.internConnection(allocator, connections, source, @intCast(i), signal) else null;
+            const circuit = if (external_signal != null and signal == external_signal.?) try props.internConnection(allocator, connections, source, @intCast(i), signal) else null;
             try bindings.append(allocator, .{ .circuit = circuit, .item = .{ .index = first_item.index + @as(u16, @intCast(index)), .generation = first_item.generation }, .receiver = receiver, .activates = if (lock != null) signal == recognize(group).?.input else false, .next_step = source >= i });
         }
     }
@@ -169,5 +181,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
     }
     const owned_receivers = try receivers.toOwnedSlice(allocator);
     errdefer allocator.free(owned_receivers);
-    return .{ .allocator = allocator, .definitions = owned, .clips = owned_clips, .receivers = owned_receivers, .bindings = try bindings.toOwnedSlice(allocator) };
+    const owned_quests = try quest_receivers.toOwnedSlice(allocator);
+    errdefer allocator.free(owned_quests);
+    return .{ .allocator = allocator, .definitions = owned, .clips = owned_clips, .receivers = owned_receivers, .quest_receivers = owned_quests, .bindings = try bindings.toOwnedSlice(allocator) };
 }

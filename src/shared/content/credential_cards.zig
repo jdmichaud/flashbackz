@@ -41,3 +41,19 @@ pub fn permit(group: rules.Group) ?Card {
     }
     return .{ .signal = b.conditions[1].argument, .using = b.target };
 }
+
+pub const Parcel = struct { idle: u16, using: u16, received: u16, signal: i16, grant_signal: i16, followup_parameter: u2, followup_signal: i16 };
+pub fn parcel(group: rules.Group) ?Parcel {
+    if (group.count() != 6) return null;
+    const a = group.at(0);
+    const b = group.at(1);
+    const operations = [_][3]u8{ .{ 34, 72, 90 }, .{ 34, 90, 48 }, .{ 80, 0, 0 }, .{ 0, 0, 67 }, .{ 0, 0, 74 }, .{ 0, 0, 37 } };
+    const next = [_]u16{ 4, 5, 0, 0, 0, 0 };
+    for (operations, next, 0..) |codes, target, i| {
+        const r = group.at(i);
+        if (r.source != (if (i < 4) a.source else if (i == 4) a.target else b.target) or r.target != group.at(target).source or r.next != target or r.dx != 0 or r.dy != 0 or r.flags != 0) return null;
+        if (r.conditions[0].code != codes[0] or r.conditions[1].code != codes[1] or r.effect.code != codes[2]) return null;
+    }
+    if (a.conditions[0].argument != 102 or a.effect.argument != 33 or b.conditions[1].argument != 32 or b.effect.argument != 0 or group.at(2).conditions[0].argument != 7) return null;
+    return .{ .idle = a.source, .using = a.target, .received = b.target, .signal = a.conditions[1].argument, .grant_signal = b.conditions[0].argument, .followup_parameter = 2, .followup_signal = group.at(5).effect.argument };
+}

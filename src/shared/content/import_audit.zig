@@ -32,6 +32,8 @@ pub const System = enum(u6) {
     surface_reactions,
     service_counters,
     credential_use,
+    mission_terminals,
+    quest_contacts,
 };
 pub const Ledger = struct {
     entries: [256]u64 = @splat(0),

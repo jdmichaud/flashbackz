@@ -41,6 +41,10 @@ pub const Pack = struct {
     world_props: prop_import.Assets,
     controls: @import("operated_controls.zig").Assets,
     locks: @import("key_locks.zig").Assets,
+    quest_contacts: @import("quest_contacts.zig").Assets,
+    quest_contact_bindings: []@import("../quest_contacts.zig").Binding,
+    mission_terminals: @import("mission_terminals.zig").Assets,
+    mission_terminal_bindings: []@import("../mission_terminals.zig").Binding,
     service_counters: @import("service_counters.zig").Assets,
     service_counter_bindings: []@import("../service_counters.zig").Binding,
     messages: @import("world_messages.zig").Assets,
@@ -102,6 +106,10 @@ pub const Pack = struct {
         self.controls.deinit();
         self.locks.deinit();
         self.service_counters.deinit();
+        self.mission_terminals.deinit();
+        self.quest_contacts.deinit();
+        self.allocator.free(self.quest_contact_bindings);
+        self.allocator.free(self.mission_terminal_bindings);
         self.allocator.free(self.service_counter_bindings);
         self.messages.deinit();
         self.platform_sections.deinit();
@@ -508,9 +516,14 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     defer allocator.free(credential_sources);
     @memcpy(credential_sources[0..starting.sources.len], starting.sources);
     @memcpy(credential_sources[starting.sources.len..], props.item_sources);
+    var quest_contacts = try @import("quest_contacts.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, &resolver);
+    errdefer quest_contacts.deinit();
+    try @import("inventory_grants.zig").outputs(allocator, placement_table, rules.bytes, props.item_sources, &connections);
+    var mission_terminals = try @import("mission_terminals.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, initial_items, &resolver);
+    errdefer mission_terminals.deinit();
     var service_counters = try @import("service_counters.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, &resolver);
     errdefer service_counters.deinit();
-    var locks = try @import("key_locks.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, credential_sources, .{ .index = 0, .generation = 1 }, &resolver);
+    var locks = try @import("key_locks.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, credential_sources, quest_contacts, .{ .index = 0, .generation = 1 }, &resolver);
     errdefer locks.deinit();
     var item_aid = try @import("item_aid.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, initial_items, &resolver);
     errdefer item_aid.deinit();
@@ -533,6 +546,10 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     const combined_connections = try connections.toOwnedSlice(allocator);
     allocator.free(props.connections);
     props.connections = combined_connections;
+    const quest_contact_bindings = try quest_contacts.bind(props.connections);
+    errdefer allocator.free(quest_contact_bindings);
+    const mission_terminal_bindings = try mission_terminals.bind(props.connections);
+    errdefer allocator.free(mission_terminal_bindings);
     const service_counter_bindings = try service_counters.bind(props.connections);
     errdefer allocator.free(service_counter_bindings);
     const story_station_bindings = try story_stations.bind(props.connections);
@@ -545,7 +562,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer allocator.free(barrier_bindings);
     const item_bindings = try @import("quest_items.zig").bindings(allocator, placement_table, rules.bytes, props, @intCast(initial_items.len), props.connections);
     errdefer allocator.free(item_bindings);
-    var inventory_grants = try @import("inventory_grants.zig").load(allocator, placement_table, rules.bytes, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, props.connections);
+    var inventory_grants = try @import("inventory_grants.zig").load(allocator, placement_table, rules.bytes, ani.bytes, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, props.connections);
     errdefer inventory_grants.deinit();
     var triggered_effects = try @import("triggered_effects.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, &resolver);
     errdefer triggered_effects.deinit();
@@ -565,7 +582,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer robots.deinit();
     var force_fields = try @import("force_fields.zig").load(allocator, placement_table, rules.bytes, ani.bytes, difficulty, &resolver);
     errdefer force_fields.deinit();
-    var visibility = try @import("visibility.zig").load(allocator, placement_table, &room_ids, difficulty, .{ .props = props, .guards = guards, .doors = doors, .item_aid = item_aid, .traders = traders, .guides = guides, .story_stations = story_stations, .force_fields = force_fields, .service_counters = service_counters });
+    var visibility = try @import("visibility.zig").load(allocator, placement_table, &room_ids, difficulty, .{ .props = props, .guards = guards, .doors = doors, .item_aid = item_aid, .traders = traders, .guides = guides, .story_stations = story_stations, .force_fields = force_fields, .service_counters = service_counters, .mission_terminals = mission_terminals, .quest_contacts = quest_contacts });
     errdefer visibility.deinit();
     const supplied = initial_items.len;
     initial_items = try allocator.realloc(initial_items, supplied + props.items.len);
@@ -626,6 +643,10 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .controls = operated,
         .locks = locks,
         .service_counters = service_counters,
+        .mission_terminals = mission_terminals,
+        .quest_contacts = quest_contacts,
+        .quest_contact_bindings = quest_contact_bindings,
+        .mission_terminal_bindings = mission_terminal_bindings,
         .service_counter_bindings = service_counter_bindings,
         .level_code = interface.level_code,
         .messages = interface.messages orelse .{ .allocator = allocator, .messages = &.{} },

@@ -68,8 +68,11 @@ Successful use consumes the key. Select SHIELD and hold Return near an energy ge
 recharge it, with the original animation and music. Releasing Return before the press cancels.
 The administrative-center BOSS now accepts the starting ID card and issues WORK PERMIT.
 Hold Shift for his request, acknowledge the pages with Return, then select ID CARD and hold
-Return beside him. The original exchange films play. Work-permit mission terminals are still
-being implemented.
+Return beside him. The original exchange films play. Mission screens now show their briefings with Shift and
+accept WORK PERMIT with Return. Return, Space or Shift advances film pages; Tab skips.
+The first parcel assignment's conversations, grant, ambush, delivery, 100-credit payment and
+next-terminal unlock are connected. Its prepared route matches the original; normal city
+access through the bar/forger and the remaining assignment consumers are still incomplete.
 The city fuse can be collected with Shift. Select FUSE with Tab/arrows, close inventory,
 then hold Return at the broken switch. Repair consumes the fuse and enables the linked lift;
 hold Shift at the repaired switch to call it.

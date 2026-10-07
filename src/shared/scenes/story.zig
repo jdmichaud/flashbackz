@@ -16,6 +16,19 @@ pub const Story = struct {
 
     pub fn open(allocator: std.mem.Allocator, source: platform.AssetSource, kind: props.Movie, now: u64, activation: ?platform.Key) !Story {
         const cue: struct { film: []const u8, entry: u16, music: []const u8 } = switch (kind) {
+            .delivery_briefing => .{ .film = "MISSIONS", .entry = 0, .music = "MISSION3" },
+            .escort_briefing => .{ .film = "MISSIONS", .entry = 1, .music = "MISSION3" },
+            .android_briefing => .{ .film = "MISSIONS", .entry = 2, .music = "MISSION3" },
+            .reactor_briefing => .{ .film = "MISSIONS", .entry = 3, .music = "MISSION3" },
+            .mutant_briefing => .{ .film = "MISSIONS", .entry = 4, .music = "MISSION3" },
+            .mission_accepted => .{ .film = "MISSIONS", .entry = 5, .music = "MISVALI3" },
+            .delivery_completed => .{ .film = "MISSIONS", .entry = 6, .music = "MISSION3" },
+            .escort_completed => .{ .film = "MISSIONS", .entry = 7, .music = "MISSION3" },
+            .android_completed => .{ .film = "MISSIONS", .entry = 8, .music = "MISSION3" },
+            .reactor_completed => .{ .film = "MISSIONS", .entry = 9, .music = "MISSION3" },
+            .mutant_completed => .{ .film = "MISSIONS", .entry = 10, .music = "MISSION3" },
+            .parcel_received => .{ .film = "OBJET", .entry = 12, .music = "DONNER3" },
+            .parcel_delivered => .{ .film = "OBJET", .entry = 13, .music = "DONNER3" },
             .card_delivery => .{ .film = "OBJET", .entry = 8, .music = "DONNER3" },
             .permit_received => .{ .film = "OBJET", .entry = 14, .music = "DONNER3" },
             .memory_restoration => .{ .film = "MEMO", .entry = 0, .music = "MEMORY3" },
