@@ -34,7 +34,7 @@ pub fn draw(pixels: []u8, width: u16, height: u16, frame: *const sprites.Frame, 
             const sx = if (style.facing == .mirrored) image.width - 1 - column else column;
             const color = image.pixels[sy * image.width + sx];
             if (color == 0) continue;
-            if (color > 15) return error.InvalidSpriteColor;
+            if (frame.color_bits == .local4 and color > 15) return error.InvalidSpriteColor;
             const offset = dy * width + dx;
             const target = &pixels[offset];
             if (style.foreground == .respect) if (style.occlusion) |mask| if (mask[offset]) {
@@ -58,4 +58,19 @@ test "clipping, mirroring, transparency and foreground all apply in image space"
     const previous = page;
     try draw(&page, 3, 2, &frame, std.math.minInt(i32), std.math.maxInt(i32), .{ .palette_bank = 4 });
     try std.testing.expectEqualSlices(u8, &previous, &page);
+}
+
+test "direct sprite bytes retain full color bits and are bounded before drawing" {
+    var record: [4 + 129]u8 = @splat(0);
+    record[2] = 0x81;
+    record[3] = 1;
+    record[4] = 0xa3;
+    record[6] = 0x1f;
+    var frame = try sprites.decode(std.testing.allocator, &record);
+    defer frame.deinit();
+    try std.testing.expectEqual(@as(u16, 129), frame.image.width);
+    var page: [3]u8 = @splat(7);
+    try draw(&page, 3, 1, &frame, 0, 0, .{ .palette_bank = 5 });
+    try std.testing.expectEqualSlices(u8, &.{ 0xf3, 7, 0x5f }, &page);
+    try std.testing.expectError(error.TruncatedSprite, sprites.decode(std.testing.allocator, record[0 .. record.len - 1]));
 }

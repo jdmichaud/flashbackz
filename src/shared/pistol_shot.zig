@@ -16,6 +16,7 @@ pub const Definition = struct {
     ignition: motion.Clip,
     standing_flash: motion.Clip,
     crouched_flash: motion.Clip,
+    airborne_flash: ?motion.Clip = null,
     standing_impact: motion.Clip,
     crouched_impact: motion.Clip,
     range_cells: u16,
@@ -27,12 +28,13 @@ pub const Effect = struct {
     pose: motion.Pose,
     room: geometry.RoomId,
     height: Height,
+    airborne: bool = false,
     phase: Phase = .ignition,
     playback: motion.Playback = .{},
     fn clip(self: Effect, definition: Definition) motion.Clip {
         return switch (self.phase) {
             .ignition => definition.ignition,
-            .flash => if (self.height == .standing) definition.standing_flash else definition.crouched_flash,
+            .flash => if (self.airborne) definition.airborne_flash orelse definition.crouched_flash else if (self.height == .standing) definition.standing_flash else definition.crouched_flash,
             .impact => if (self.height == .standing) definition.standing_impact else definition.crouched_impact,
         };
     }
@@ -64,13 +66,16 @@ pub const State = struct {
         return self.advanceWithTargets(definition, shot, pose, room, materials, &.{});
     }
     pub fn advanceWithTargets(self: *State, definition: Definition, shot: ?Height, pose: motion.Pose, room: geometry.RoomId, materials: terrain.View, targets: []const combat.Target) !void {
+        return self.advanceWithVariant(definition, shot, false, pose, room, materials, targets);
+    }
+    pub fn advanceWithVariant(self: *State, definition: Definition, shot: ?Height, airborne: bool, pose: motion.Pose, room: geometry.RoomId, materials: terrain.View, targets: []const combat.Target) !void {
         self.sound_requested = null;
         self.hit_requested = null;
         const accepts = if (self.effect) |effect| effect.phase == .impact and definition.retrigger_impact else true;
         if (shot != null and accepts) {
             const height = shot.?;
             self.shots_fired +%= 1;
-            self.effect = .{ .pose = pose, .room = room, .height = height, .phase = definition.initial_phase };
+            self.effect = .{ .pose = pose, .room = room, .height = height, .airborne = airborne, .phase = definition.initial_phase };
         }
         if (self.effect) |*effect| {
             if (effect.playback.exhausted(effect.clip(definition))) {
@@ -108,7 +113,7 @@ pub const State = struct {
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, self.shots_fired)));
         hash.update(&.{@intFromBool(self.effect != null)});
         if (self.effect) |effect| {
-            for ([_]u32{ @backingInt(effect.room), @as(u16, @bitCast(effect.pose.position.x)), @as(u16, @bitCast(effect.pose.position.y)), @backingInt(effect.pose.facing), @backingInt(effect.pose.visual.id), @intFromBool(effect.pose.visual.mirrored), @backingInt(effect.height), @backingInt(effect.phase), @intCast(effect.playback.next_step) }) |value|
+            for ([_]u32{ @backingInt(effect.room), @as(u16, @bitCast(effect.pose.position.x)), @as(u16, @bitCast(effect.pose.position.y)), @backingInt(effect.pose.facing), @backingInt(effect.pose.visual.id), @intFromBool(effect.pose.visual.mirrored), @backingInt(effect.height), @intFromBool(effect.airborne), @backingInt(effect.phase), @intCast(effect.playback.next_step) }) |value|
                 hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
         }
     }

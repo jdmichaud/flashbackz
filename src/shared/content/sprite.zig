@@ -7,6 +7,7 @@ pub const Frame = struct {
     image: bitmap.IndexedImage,
     origin_x: i16,
     origin_y: i16,
+    color_bits: enum { local4, full8 } = .local4,
 
     pub fn deinit(self: *Frame) void {
         self.image.deinit();
@@ -56,8 +57,10 @@ pub fn fromIcons(allocator: std.mem.Allocator, file: []const u8, index: u16) !Fr
 pub fn decode(allocator: std.mem.Allocator, record: []const u8) !Frame {
     if (record.len < 4) return error.TruncatedSprite;
     const columns_first = record[2] & 0x40 != 0;
-    if (record[2] & 0x80 != 0) return error.UnsupportedSpriteEncoding;
-    const major = record[2] & 0x3f;
+    const raw = record[2] & 0x80 != 0;
+    // The direct-draw path clears only the column-layout bit. Its high selector bit
+    // remains in the dimension, and the pixels begin immediately after the header.
+    const major = record[2] & @as(u8, if (raw) 0xbf else 0x3f);
     const minor = record[3];
     if (major == 0 or minor == 0) return error.InvalidSpriteDimensions;
     const width: u16 = if (columns_first) minor else major;
@@ -65,10 +68,15 @@ pub fn decode(allocator: std.mem.Allocator, record: []const u8) !Frame {
     const area = @as(usize, width) * height;
     const pixels = try allocator.alloc(u8, area);
     errdefer allocator.free(pixels);
-    if (record.len < 6) return error.TruncatedSprite;
-    const length = std.mem.readInt(u16, record[4..6], .big);
-    if (length > record.len - 6) return error.TruncatedSprite;
-    try decodePixels(allocator, record[6..][0..length], pixels);
+    if (raw) {
+        if (area > record.len - 4) return error.TruncatedSprite;
+        @memcpy(pixels, record[4..][0..area]);
+    } else {
+        if (record.len < 6) return error.TruncatedSprite;
+        const length = std.mem.readInt(u16, record[4..6], .big);
+        if (length > record.len - 6) return error.TruncatedSprite;
+        try decodePixels(allocator, record[6..][0..length], pixels);
+    }
     if (columns_first) {
         const row_major = try allocator.alloc(u8, area);
         defer allocator.free(row_major);
@@ -81,6 +89,7 @@ pub fn decode(allocator: std.mem.Allocator, record: []const u8) !Frame {
         .image = .{ .allocator = allocator, .width = width, .height = height, .pixels = pixels },
         .origin_x = @as(i8, @bitCast(record[0])),
         .origin_y = @as(i8, @bitCast(record[1])),
+        .color_bits = if (raw) .full8 else .local4,
     };
 }
 

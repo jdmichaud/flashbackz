@@ -3,7 +3,7 @@
 const geometry = @import("../geometry.zig");
 const terrain = @import("../terrain.zig");
 const motion = @import("../motion.zig");
-pub const Height = enum { above_head, head, torso, support };
+pub const Height = enum { above_head, head, torso, support, lower_support };
 
 pub const Environment = struct {
     map: geometry.Map,
@@ -19,6 +19,7 @@ pub const Environment = struct {
             .head => 0,
             .torso => 1,
             .support => 2,
+            .lower_support => 4,
         };
         const dx = if (pose.facing == .left) -%ahead else ahead;
         return .{ .column = column +% dx, .row = band +% dy };

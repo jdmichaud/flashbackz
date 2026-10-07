@@ -49,5 +49,9 @@ pub fn load(allocator: std.mem.Allocator, record: @import("placement.zig").Recor
         forward[height] = -@as(i16, impact.dx);
         down[height] = -@as(i16, impact.dy);
     }
-    return .{ .initial_phase = .flash, .retrigger_impact = retrigger.?, .ignition = flashes[0], .standing_flash = flashes[0], .crouched_flash = flashes[1], .standing_impact = impacts[0], .crouched_impact = impacts[1], .range_cells = @intCast(record.parameters[0]), .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .impact_forward = forward, .impact_down = down };
+    const airborne_flash: ?motion.Clip = for (0..group.count()) |index| {
+        const rule = group.at(index);
+        if (rule.source == record.initial_state and rule.conditions[0].code == 34 and rule.conditions[0].argument == 42 and rule.conditions[1].code == 96 and rule.conditions[1].argument == 42) break try clip(allocator, animations, rule.target, owned, resolver);
+    } else null;
+    return .{ .airborne_flash = airborne_flash, .initial_phase = .flash, .retrigger_impact = retrigger.?, .ignition = flashes[0], .standing_flash = flashes[0], .crouched_flash = flashes[1], .standing_impact = impacts[0], .crouched_impact = impacts[1], .range_cells = @intCast(record.parameters[0]), .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .impact_forward = forward, .impact_down = down };
 }
