@@ -22,7 +22,7 @@ pub const Phase = union(enum) { arc: usize, rebound: usize, drop_start, drop_con
 pub const Event = struct { sound: ?motion.SoundId = null, settled: bool = false, lost: bool = false };
 pub const State = struct {
     phase: Phase = .{ .arc = 0 },
-    fn clip(self: State, definition: Definition) motion.Clip {
+    pub fn clip(self: State, definition: Definition) motion.Clip {
         return switch (self.phase) {
             .arc => |index| definition.arc[index].clip,
             .rebound => |index| definition.arc[index].rebound.?.clip,

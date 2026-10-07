@@ -41,6 +41,10 @@ pub const Pack = struct {
     world_props: prop_import.Assets,
     controls: @import("operated_controls.zig").Assets,
     locks: @import("key_locks.zig").Assets,
+    scripted_transport: @import("scripted_transport.zig").Assets,
+    transport_bindings: []@import("../scripted_transport.zig").Binding,
+    arrival_triggers: @import("arrival_triggers.zig").Assets,
+    escort_followers: @import("escort_followers.zig").Assets,
     attentive_contacts: @import("attentive_contacts.zig").Assets,
     quest_contacts: @import("quest_contacts.zig").Assets,
     quest_contact_bindings: []@import("../quest_contacts.zig").Binding,
@@ -110,6 +114,10 @@ pub const Pack = struct {
         self.mission_terminals.deinit();
         self.quest_contacts.deinit();
         self.attentive_contacts.deinit();
+        self.escort_followers.deinit();
+        self.arrival_triggers.deinit();
+        self.scripted_transport.deinit();
+        self.allocator.free(self.transport_bindings);
         self.allocator.free(self.quest_contact_bindings);
         self.allocator.free(self.mission_terminal_bindings);
         self.allocator.free(self.service_counter_bindings);
@@ -164,6 +172,7 @@ pub const Pack = struct {
     pub fn controllerClips(self: *const Pack) conrad.Clips {
         return .{
             .riding = self.riding.definition,
+            .transport = self.scripted_transport.player_clips,
             .wounds = self.wounds.definition(),
             .armed = .{
                 .clearing_draw = self.clip(.armed_clearing_draw),
@@ -518,6 +527,10 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     defer allocator.free(credential_sources);
     @memcpy(credential_sources[0..starting.sources.len], starting.sources);
     @memcpy(credential_sources[starting.sources.len..], props.item_sources);
+    var scripted_transport = try @import("scripted_transport.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
+    errdefer scripted_transport.deinit();
+    var arrival_triggers = try @import("arrival_triggers.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
+    errdefer arrival_triggers.deinit();
     var attentive_contacts = try @import("attentive_contacts.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, &resolver);
     errdefer attentive_contacts.deinit();
     var quest_contacts = try @import("quest_contacts.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, initial_items, &resolver);
@@ -539,6 +552,8 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer traders.deinit();
     var lifts = try @import("lifts.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
     errdefer lifts.deinit();
+    var escort_followers = try @import("escort_followers.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, lifts, &resolver);
+    errdefer escort_followers.deinit();
     const lift_passengers = try @import("lift_passengers.zig").load(allocator, placement_table, rules.bytes, props, @intCast(initial_items.len), lifts.source_indices);
     errdefer allocator.free(lift_passengers);
     var riding = try @import("conrad_lift.zig").load(allocator, rules.bytes, player.rule_group, ani.bytes, &resolver);
@@ -550,6 +565,8 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     const combined_connections = try connections.toOwnedSlice(allocator);
     allocator.free(props.connections);
     props.connections = combined_connections;
+    const transport_bindings = try scripted_transport.bind(props.connections);
+    errdefer allocator.free(transport_bindings);
     const quest_contact_bindings = try quest_contacts.bind(props.connections);
     errdefer allocator.free(quest_contact_bindings);
     const mission_terminal_bindings = try mission_terminals.bind(props.connections);
@@ -586,7 +603,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer robots.deinit();
     var force_fields = try @import("force_fields.zig").load(allocator, placement_table, rules.bytes, ani.bytes, difficulty, &resolver);
     errdefer force_fields.deinit();
-    var visibility = try @import("visibility.zig").load(allocator, placement_table, &room_ids, difficulty, .{ .props = props, .guards = guards, .doors = doors, .item_aid = item_aid, .traders = traders, .guides = guides, .story_stations = story_stations, .force_fields = force_fields, .service_counters = service_counters, .mission_terminals = mission_terminals, .quest_contacts = quest_contacts, .attentive_contacts = attentive_contacts });
+    var visibility = try @import("visibility.zig").load(allocator, placement_table, &room_ids, difficulty, .{ .props = props, .guards = guards, .doors = doors, .item_aid = item_aid, .traders = traders, .guides = guides, .story_stations = story_stations, .force_fields = force_fields, .service_counters = service_counters, .mission_terminals = mission_terminals, .quest_contacts = quest_contacts, .attentive_contacts = attentive_contacts, .escort_followers = escort_followers });
     errdefer visibility.deinit();
     const supplied = initial_items.len;
     initial_items = try allocator.realloc(initial_items, supplied + props.items.len);
@@ -650,6 +667,10 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .mission_terminals = mission_terminals,
         .quest_contacts = quest_contacts,
         .attentive_contacts = attentive_contacts,
+        .escort_followers = escort_followers,
+        .arrival_triggers = arrival_triggers,
+        .scripted_transport = scripted_transport,
+        .transport_bindings = transport_bindings,
         .quest_contact_bindings = quest_contact_bindings,
         .mission_terminal_bindings = mission_terminal_bindings,
         .service_counter_bindings = service_counter_bindings,

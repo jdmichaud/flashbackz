@@ -41,7 +41,7 @@ pub const SourceClip = struct {
                 },
             };
         }
-        return .{ .allocator = allocator, .steps = steps, .sound = if (self.sound) |id| @fromBackingInt(id) else null, .disturbs_surface = self.header_metadata == 1 or self.header_metadata == 4, .presses_floor_switches = self.header_metadata == 0 or self.header_metadata == 1 or self.header_metadata == 5 };
+        return .{ .allocator = allocator, .steps = steps, .sound = if (self.sound) |id| @fromBackingInt(id) else null, .disturbs_surface = self.header_metadata == 1 or self.header_metadata == 4, .ordinary_contact = self.header_metadata == 0 or self.header_metadata == 1, .presses_floor_switches = self.header_metadata == 0 or self.header_metadata == 1 or self.header_metadata == 5 };
     }
 };
 
@@ -50,6 +50,7 @@ pub const OwnedClip = struct {
     allocator: std.mem.Allocator,
     steps: []motion.Step,
     presses_floor_switches: bool,
+    ordinary_contact: bool = false,
     sound: ?motion.SoundId = null,
     disturbs_surface: bool = false,
 
@@ -59,7 +60,7 @@ pub const OwnedClip = struct {
     }
 
     pub fn clip(self: *const OwnedClip) motion.Clip {
-        return .{ .hit_profile = self.hit_profile, .steps = self.steps, .presses_floor_switches = self.presses_floor_switches, .sound = self.sound, .disturbs_surface = self.disturbs_surface };
+        return .{ .hit_profile = self.hit_profile, .steps = self.steps, .presses_floor_switches = self.presses_floor_switches, .ordinary_contact = self.ordinary_contact, .sound = self.sound, .disturbs_surface = self.disturbs_surface };
     }
 };
 

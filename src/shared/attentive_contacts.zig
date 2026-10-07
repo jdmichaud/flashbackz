@@ -33,7 +33,7 @@ pub const Instance = struct {
     playback: motion.Playback = .{},
     active: bool,
     sound: ?motion.SoundId = null,
-    fn clip(self: Instance, definition: Definition) motion.Clip {
+    pub fn clip(self: Instance, definition: Definition) motion.Clip {
         return if (self.topic) |topic| definition.speech[@backingInt(topic)] else definition.idle[@intFromBool(self.acquainted)][@backingInt(self.posture)];
     }
 };

@@ -35,6 +35,10 @@ pub const System = enum(u6) {
     mission_terminals,
     quest_contacts,
     attentive_contacts,
+    escort_followers,
+    arrival_triggers,
+    scripted_transport,
+    transport_templates,
 };
 pub const Ledger = struct {
     entries: [256]u64 = @splat(0),

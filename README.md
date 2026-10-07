@@ -73,6 +73,10 @@ accept WORK PERMIT with Return. Return, Space or Shift advances film pages; Tab 
 The first parcel assignment's conversations, grant, ambush, delivery, 100-credit payment and
 next-terminal unlock are connected. Its prepared route matches the original; the remaining
 assignment consumers and full street-route qualification are still incomplete.
+The escort follower now follows, turns and boards ordinary lifts through shared contact and
+passenger rules. Stay ahead of him; use Shift+Up/Down on the lift. Arrival triggers the original
+dialogue, 300-credit mission payment and return effect. Holster the gun to accept the return.
+Prepared original/native checks pass; the complete unmodified escort route remains unqualified.
 The city fuse can be collected with Shift. Select FUSE with Tab/arrows, close inventory,
 then hold Return at the broken switch. Repair consumes the fuse and enables the linked lift;
 hold Shift at the repaired switch to call it.

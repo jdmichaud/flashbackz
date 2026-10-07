@@ -105,6 +105,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   dialogue and lift boarding/release. Bind arrival to the original destination sensor,
   mission payment and player return effect. Exclude the original protection wrapper while
   preserving the underlying transport; qualify through original observations and native input.
+  - Core follower/lift/arrival/payment/return components match 770 prepared original updates
+    and native input. Full unmodified mission travel remains open.
+  - Retain the early weapon-toggle mismatch when Space is pressed before starting equipment
+    is granted; the settled armed transport wait is qualified separately.
 - [ ] Shared enemy families: import every matching placement, animation library and behavior
   profile from original data. Implement perception, stone distractions, locomotion, shooting
   and damage through independent actor/combat components; qualify with quick native encounters.

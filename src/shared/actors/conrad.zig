@@ -36,6 +36,7 @@ pub const RunClips = struct {
 };
 
 pub const Clips = struct {
+    transport: ?[2]motion.Clip = null,
     riding: ?riding.Clips = null,
     wounds: ?wounds.Definition = null,
     armed: ?armed.Clips = null,
@@ -64,6 +65,7 @@ pub const Clips = struct {
 pub const TurnPhase = enum { preparation, follow_through };
 pub const GaitPhase = union(enum) { starting, stride: usize };
 pub const Activity = union(enum) {
+    transporting: enum { departure, recovery },
     riding: riding.State,
     wounded: wounds.State,
     armed: armed.State,
@@ -109,6 +111,8 @@ const NoEnvironment = struct {
 
 pub const Controller = struct {
     activity: Activity = .waking,
+    transport_requested: bool = false,
+    transport_acknowledged: bool = false,
     /// Session input and ordered consequences, reset at each movement step.
     health_before_step: i16 = 5,
     damage_requested: u8 = 0,
@@ -143,6 +147,7 @@ pub const Controller = struct {
 
     fn selectedClip(self: Controller, clips: Clips) !motion.Clip {
         return switch (self.activity) {
+            .transporting => |phase| (clips.transport orelse return error.MissingTransportMotion)[@backingInt(phase)],
             .riding => |state| state.clip(clips.riding orelse return error.MissingRidingMotion),
             .wounded => |state| state.clip(clips.wounds orelse return error.MissingInjuryMotion),
             .armed => |state| state.clip(clips.armed orelse return error.MissingMotion),
@@ -256,6 +261,10 @@ pub const Controller = struct {
         return (try self.selectedClip(clips)).disturbs_surface;
     }
 
+    pub fn ordinaryContact(self: Controller, clips: Clips) !bool {
+        return (try self.selectedClip(clips)).ordinary_contact;
+    }
+
     pub fn pressesFloorSwitches(self: Controller, clips: Clips) !bool {
         return (try self.selectedClip(clips)).presses_floor_switches;
     }
@@ -269,6 +278,7 @@ pub const Controller = struct {
     }
 
     pub fn advanceIn(self: *Controller, clips: Clips, intent: Intent, pose: *motion.Pose, environment: anytype) !Result {
+        self.transport_acknowledged = false;
         self.ride_requested = null;
         self.ride_boarded = false;
         self.ride_left = false;
@@ -287,6 +297,7 @@ pub const Controller = struct {
         if (self.activity == .riding and self.ride_arrived and self.activity.riding.acceptsArrival()) self.playback.completeDisplacement(clip, pose);
         if (self.playback.exhausted(clip)) {
             switch (self.activity) {
+                .transporting => |phase| self.activity = if (phase == .departure) .{ .transporting = .recovery } else .standing,
                 .riding => |*state| switch (state.finish(intent, self.weapon_desired, self.ride_acknowledged, self.ride_arrived, pose)) {
                     .continued => {},
                     .boarded => self.ride_boarded = true,
@@ -353,6 +364,9 @@ pub const Controller = struct {
                 .standing => {
                     if (clips.descent != null and !try environment.at(pose.*, .support, 0)) {
                         self.activity = .{ .descending = .{ .phase = .unbalanced } };
+                    } else if (self.transport_requested) {
+                        self.transport_acknowledged = true;
+                        self.activity = .{ .transporting = .departure };
                     } else if (self.weapon_desired) {
                         self.activity = .{ .armed = .{} };
                     } else if (self.use_available and intent.use_item and !intent.action and !intent.weapon and intent.neutralDirections()) {

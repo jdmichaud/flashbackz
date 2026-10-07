@@ -88,7 +88,7 @@ fn senses(allocator: std.mem.Allocator, group: rules.Group, state: u16) ![]runti
         } else if (a.code == 0 and b.code == 64) .{ .contacts = .{
             .kind = switch (a.argument) {
                 1 => .player,
-                3 => .item,
+                3 => .interactable,
                 10 => .enemy,
                 else => return error.UnsupportedDetectorContactKind,
             },

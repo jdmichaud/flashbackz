@@ -10,6 +10,7 @@ pub const Action = enum { reveal, deliver };
 pub const Role = enum { giver, recipient, conversation, introducer, seller };
 pub const Definition = struct {
     footprint: contacts.Footprint,
+    contact_kind: contacts.Kind,
     facing: motion.Facing,
     hidden: bool,
     role: Role,
@@ -53,7 +54,7 @@ pub const Instance = struct {
         result.position = self.pose.position;
         return result;
     }
-    fn clip(self: Instance, definition: Definition) motion.Clip {
+    pub fn clip(self: Instance, definition: Definition) motion.Clip {
         return if (self.stage == .hidden) definition.hidden_clip else if (self.stage == .conversation_finished or self.stage == .departing) definition.after[@backingInt(self.idle_pose)] else definition.idle[@backingInt(self.idle_pose)];
     }
 };

@@ -22,7 +22,7 @@ pub const Step = union(enum) {
     },
 };
 
-pub const Clip = struct { hit_profile: ?@import("combat.zig").ProfileId = null, steps: []const Step, presses_floor_switches: bool = false, sound: ?SoundId = null, disturbs_surface: bool = false };
+pub const Clip = struct { hit_profile: ?@import("combat.zig").ProfileId = null, steps: []const Step, presses_floor_switches: bool = false, ordinary_contact: bool = false, sound: ?SoundId = null, disturbs_surface: bool = false };
 
 pub const Playback = struct {
     next_step: usize = 0,

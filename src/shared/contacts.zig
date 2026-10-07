@@ -4,8 +4,8 @@ const geometry = @import("geometry.zig");
 const motion = @import("motion.zig");
 pub const Cell = struct { room: geometry.RoomId, column: u16, row: u16 };
 pub const Footprint = struct { room: geometry.RoomId, position: motion.Position, width: u8 = 1 };
-pub const Kind = enum { player, enemy, item, mechanism };
-pub const Participant = struct { footprint: Footprint, kind: Kind, active: bool };
+pub const Kind = enum { player, enemy, interactable, mechanism };
+pub const Participant = struct { footprint: Footprint, kind: Kind, active: bool, ordinary_contact: bool = false };
 pub const Layout = struct {
     column_pixels: i16 = 16,
     tier_pixels: i16 = 72,

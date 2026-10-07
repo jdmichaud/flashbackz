@@ -44,6 +44,7 @@ pub const World = struct {
     incoming: []?Response,
     pending: []?Response,
     pressed_circuits: []CircuitId,
+    actor_contacts: []const contacts.Footprint = &.{},
     pressed_count: usize = 0,
     acquired: ?equipment.ItemHandle = null,
     movie: ?Movie = null,
@@ -118,6 +119,9 @@ pub const World = struct {
         for (self.objects, self.definitions, 0..) |*object, definition, index| {
             if (definition.behavior != .floor_switch or !definition.behavior.floor_switch.wake_on_contact) continue;
             if (try layout.overlaps(map, player, definition.footprint)) object.active = true;
+            for (self.actor_contacts) |contact| if (try layout.overlaps(map, contact, definition.footprint)) {
+                object.active = true;
+            };
             for (self.objects, 0..) |other, j| {
                 if (j == index or !other.active or !other.contact_present) continue;
                 if (try layout.overlaps(map, definition.footprint, other.contact)) object.active = true;
@@ -213,6 +217,9 @@ pub const World = struct {
                                 .floor_switch => |value| if (other.pressing) value.press else value.rest,
                             };
                             if (other_clip.presses_floor_switches and try layout.overlaps(map, object.contact, other.contact)) occupied = true;
+                        };
+                        if (plate.accepts_objects) for (self.actor_contacts) |contact| {
+                            if (try layout.overlaps(map, object.contact, contact)) occupied = true;
                         };
                         if (!occupied) {
                             object.active = false;
