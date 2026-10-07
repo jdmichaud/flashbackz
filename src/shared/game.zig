@@ -223,7 +223,7 @@ pub const Game = struct {
             const world = std.hash.Wyhash.hash(self.scene.jungle.stateHash(), &.{ @backingInt(self.level), @backingInt(self.difficulty) });
             if (self.story) |story| {
                 var hash = std.hash.Wyhash.init(world);
-                hash.update(&.{ @backingInt(story.kind), @intFromBool(story.skip) });
+                hash.update(&.{ @backingInt(story.kind), @intFromBool(story.skip), @intFromBool(story.player.confirmed) });
                 hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, story.player.playback.frame)));
                 return hash.final();
             }

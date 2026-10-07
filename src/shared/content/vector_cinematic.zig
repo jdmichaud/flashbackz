@@ -248,8 +248,12 @@ fn compileFrom(allocator: std.mem.Allocator, commands: []const u8, polygons: []c
     var reader: Reader = .{ .bytes = commands, .at = start + if (entry == 0) @as(usize, 0) else try wordAt(commands, 2 + @as(usize, entry) * 2) };
     var builder: Builder = .{ .allocator = content, .geometry = polygons, .source = source };
     try builder.frames.append(content, .{ .drawings = &.{}, .colors = builder.colors, .hold_ticks = 0 });
+    var command_frames: std.AutoHashMap(usize, usize) = .init(allocator);
+    defer command_frames.deinit();
     var finished = false;
     for (0..100000) |_| {
+        const command_offset = reader.at;
+        try command_frames.put(command_offset, builder.frames.items.len);
         const encoded = try reader.byte();
         if (encoded & 128 != 0) {
             finished = true;
@@ -289,9 +293,30 @@ fn compileFrom(allocator: std.mem.Allocator, commands: []const u8, polygons: []c
                 const mask = try reader.byte();
                 if (mask == 255) continue;
                 const destination = try reader.signed();
-                if (mask != 0 or destination >= 0) return error.UnsupportedCinematicInteraction;
-                finished = true;
-                break;
+                if (mask == 0 and destination < 0) {
+                    finished = true;
+                    break;
+                }
+                // The supplied page loops repeat the same picture while a key is held,
+                // then await a new confirmation. Resolve their control flow at import;
+                // playback receives pictures and timed confirmation loops.
+                if (mask != 128 or try reader.byte() != 0) return error.UnsupportedCinematicInteraction;
+                const fallback = try reader.signed();
+                if (try reader.byte() != 255 or fallback < 0) return error.UnsupportedCinematicInteraction;
+                const idle_target = start + @as(usize, @intCast(fallback));
+                if (destination >= 0 and start + @as(usize, @intCast(destination)) <= command_offset and idle_target > command_offset) {
+                    reader.at = idle_target; // Release loop; the following page awaits confirmation.
+                } else if (idle_target <= command_offset and (destination < 0 or start + @as(usize, @intCast(destination)) > command_offset)) {
+                    const first_output = command_frames.get(idle_target) orelse return error.UnsupportedCinematicInteraction;
+                    // A branch-only self-loop waits on the picture already presented.
+                    const loop_start = @min(first_output, builder.frames.items.len - 1);
+                    builder.frames.items[builder.frames.items.len - 1].input_loop_start = loop_start;
+                    if (destination < 0) {
+                        finished = true;
+                        break;
+                    }
+                    reader.at = start + @as(usize, @intCast(destination));
+                } else return error.UnsupportedCinematicInteraction;
             },
             11 => try builder.drawShape(&reader, .rotated),
             else => return error.UnsupportedCinematicCommand,

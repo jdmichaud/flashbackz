@@ -29,6 +29,25 @@ pub const Player = struct {
     playback: film.Playback,
     cadence: Cadence,
     origin_ns: ?u64 = null,
+    confirmed: bool = false,
+    pub fn interactive(self: *const Player) bool {
+        for (self.movie.frames) |frame| if (frame.input_loop_start != null) return true;
+        return false;
+    }
+    pub fn awaitingInput(self: *const Player) bool {
+        if (self.playback.finished or self.confirmed) return false;
+        for (self.movie.frames, 0..) |frame, end| if (frame.input_loop_start) |start| {
+            if (self.playback.frame >= start and self.playback.frame <= end) return true;
+        };
+        return false;
+    }
+    fn staticInputWait(self: *const Player) bool {
+        const frame = self.movie.frames[self.playback.frame];
+        return frame.input_loop_start == self.playback.frame and frame.hold_ticks == 0;
+    }
+    pub fn confirm(self: *Player) void {
+        if (self.awaitingInput()) self.confirmed = true;
+    }
 
     pub fn open(allocator: std.mem.Allocator, source: platform.AssetSource, name: []const u8, entry: u16) !Player {
         var movie = try content.load(allocator, source, name, entry);
@@ -45,6 +64,17 @@ pub const Player = struct {
     pub fn update(self: *Player, now_ns: u64) !bool {
         if (self.origin_ns == null) self.origin_ns = now_ns;
         if (self.needsCatchup(now_ns)) {
+            if (self.movie.frames[self.playback.frame].input_loop_start) |start| {
+                if (!self.confirmed) {
+                    self.playback.frame = start;
+                    const ticks = self.movie.frames[start].hold_ticks;
+                    self.playback.next_tick = try std.math.add(u64, self.playback.next_tick, ticks);
+                    try self.cadence.hold(ticks);
+                    return false;
+                }
+                if (self.staticInputWait()) self.origin_ns = now_ns -| self.cadence.deadline_ns;
+                self.confirmed = false;
+            }
             if (try self.playback.advance(self.movie.view(), self.playback.next_tick)) {
                 try self.cadence.hold(self.movie.frames[self.playback.frame].hold_ticks);
             }
@@ -52,6 +82,7 @@ pub const Player = struct {
         return self.playback.finished;
     }
     pub fn needsCatchup(self: *const Player, now_ns: u64) bool {
+        if (self.staticInputWait() and !self.confirmed) return false;
         const origin = self.origin_ns orelse return false;
         return !self.playback.finished and now_ns -| origin >= self.cadence.deadline_ns;
     }
@@ -70,4 +101,32 @@ test "presentation cadence remains bounded and host-rate independent" {
     const before = cadence.deadline_ns;
     try cadence.hold(0);
     try std.testing.expectEqual(before, cadence.deadline_ns);
+}
+
+test "confirmation loops keep animating and one confirmation cannot skip the next page" {
+    const allocator = std.testing.allocator;
+    const arena = try allocator.create(std.heap.ArenaAllocator);
+    arena.* = .init(allocator);
+    const colors: @import("../content/palette.zig").Palette = @splat(.{ .r = 0, .g = 0, .b = 0 });
+    const frames = [_]film.Frame{
+        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4 },
+        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 8, .input_loop_start = 0 },
+        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 0, .input_loop_start = 2 },
+    };
+    var player: Player = .{ .movie = .{ .allocator = allocator, .arena = arena, .frames = &frames }, .playback = try film.Playback.init(.{ .frames = &frames }), .cadence = .{}, .origin_ns = 0 };
+    defer player.deinit();
+    try player.cadence.hold(frames[0].hold_ticks);
+    try std.testing.expect(player.awaitingInput());
+    try std.testing.expect(!try player.update(player.cadence.deadline_ns));
+    try std.testing.expectEqual(@as(usize, 1), player.playback.frame);
+    try std.testing.expect(!try player.update(player.cadence.deadline_ns));
+    try std.testing.expectEqual(@as(usize, 0), player.playback.frame);
+    player.confirm();
+    _ = try player.update(player.cadence.deadline_ns);
+    _ = try player.update(player.cadence.deadline_ns);
+    try std.testing.expectEqual(@as(usize, 2), player.playback.frame);
+    try std.testing.expect(player.awaitingInput());
+    try std.testing.expect(!try player.update(player.cadence.deadline_ns));
+    player.confirm();
+    try std.testing.expect(try player.update(player.cadence.deadline_ns));
 }

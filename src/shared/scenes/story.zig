@@ -85,6 +85,11 @@ pub const Story = struct {
                 return false;
             },
             .key_down => |key| {
+                if (self.player.interactive() and key.key != .tab and key.key != .escape) {
+                    const confirm = key.key == .enter or key.key == .space or key.key == .left_shift or key.key == .right_shift;
+                    if (confirm and !key.repeat and self.activation_key != key.key) self.player.confirm();
+                    return confirm;
+                }
                 const skip = switch (key.key) {
                     .tab, .escape, .enter, .space, .left_shift, .right_shift => true,
                     else => false,

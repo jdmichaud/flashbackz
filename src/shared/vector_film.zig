@@ -21,6 +21,8 @@ pub const Frame = struct {
     drawings: []const Drawing,
     colors: palette.Palette,
     hold_ticks: u32,
+    /// At this frame, repeat the named frame range until the viewer confirms.
+    input_loop_start: ?usize = null,
     background: u8 = 0xc0,
     captions: []const TextRun = &.{},
     caption_band: bool = false,
@@ -37,6 +39,12 @@ pub const View = struct {
     pub fn validate(self: View) !void {
         if (self.frames.len == 0) return error.EmptyFilm;
         if (self.frames.len > 10000 or self.width == 0 or self.height == 0) return error.InvalidFilm;
+        for (self.frames, 0..) |frame, end| if (frame.input_loop_start) |start| {
+            if (start > end) return error.InvalidFilmInputLoop;
+            var timed = false;
+            for (self.frames[start .. end + 1]) |loop_frame| timed = timed or loop_frame.hold_ticks != 0;
+            if (!timed and start != end) return error.UnboundedFilmInputLoop;
+        };
     }
 
     pub fn draw(self: View, frame_index: usize, pixels: []u8, rgba: []u8) !void {
