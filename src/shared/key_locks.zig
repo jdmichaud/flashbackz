@@ -9,9 +9,9 @@ const props = @import("world_props.zig");
 pub const Receiver = struct {
     footprint: contacts.Footprint,
     credential: i16,
-    target: union(enum) { lock: usize, manual_control },
+    target: union(enum) { lock: usize, manual_control, service },
 };
-pub const Binding = struct { item: equipment.ItemHandle, receiver: usize, activates: bool, next_step: bool };
+pub const Binding = struct { item: equipment.ItemHandle, receiver: usize, activates: bool, next_step: bool, circuit: ?props.CircuitId = null };
 pub const Definition = struct {
     footprint: contacts.Footprint,
     facing: motion.Facing,
@@ -48,10 +48,12 @@ pub const World = struct {
     instances: []Instance,
     pulses: []props.CircuitId,
     pulse_count: usize = 0,
+    credential_pulses: []props.CircuitId,
+    credential_count: usize = 0,
     candidate: ?usize = null,
     use_candidate: ?usize = null,
     notice: ?@import("world_messages.zig").Request = null,
-    pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {
+    pub fn init(allocator: std.mem.Allocator, definitions: []const Definition, receivers: []const Receiver) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);
         for (instances, definitions) |*instance, definition| {
@@ -65,11 +67,14 @@ pub const World = struct {
         }
         var capacity: usize = 0;
         for (definitions) |definition| capacity += definition.circuits.len + @intFromBool(definition.repaired_operation != null);
-        return .{ .allocator = allocator, .instances = instances, .pulses = try allocator.alloc(props.CircuitId, capacity) };
+        const pulses = try allocator.alloc(props.CircuitId, capacity + receivers.len);
+        errdefer allocator.free(pulses);
+        return .{ .allocator = allocator, .instances = instances, .pulses = pulses, .credential_pulses = try allocator.alloc(props.CircuitId, receivers.len) };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.instances);
         self.allocator.free(self.pulses);
+        self.allocator.free(self.credential_pulses);
     }
     pub fn prepare(self: *World, definitions: []const Definition, receivers: []const Receiver, map: geometry.Map, player: contacts.Footprint) !void {
         self.candidate = null;
@@ -110,7 +115,10 @@ pub const World = struct {
         } else return false;
         // Matching succeeds independently of whether the control accepts the signal.
         // This also preserves consumption at a matching, already-used lock.
-        if (binding.activates) {
+        if (binding.circuit) |circuit| {
+            self.credential_pulses[self.credential_count] = circuit;
+            self.credential_count += 1;
+        } else if (binding.activates) {
             const lock = receiver.target.lock;
             const definition = definitions[lock];
             const near = try @import("activation.zig").around(map, room, definition.footprint.room, self.instances[lock].pose.position.y);
@@ -123,7 +131,9 @@ pub const World = struct {
         return true;
     }
     pub fn advance(self: *World, definitions: []const Definition, map: geometry.Map, room: geometry.RoomId, operate: bool) !void {
-        self.pulse_count = 0;
+        self.pulse_count = self.credential_count;
+        @memcpy(self.pulses[0..self.credential_count], self.credential_pulses[0..self.credential_count]);
+        self.credential_count = 0;
         self.notice = null;
         for (self.instances, definitions, 0..) |*instance, definition, index| {
             instance.sound = null;

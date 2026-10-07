@@ -6,10 +6,13 @@ const placement = @import("placement.zig");
 const animation = @import("animation.zig");
 const strings = @import("string_table.zig");
 
-pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animations: []const u8, rules: []const u8, names: []const u8, resolver: anytype) ![]equipment.Definition {
+pub const Recovered = struct { definitions: []equipment.Definition, sources: []u16 };
+
+pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animations: []const u8, rules: []const u8, names: []const u8, resolver: anytype) !Recovered {
     const Spec = struct { kind: equipment.Kind, state: u16, target: u16, operations: [3]u8 };
     // Ascending source activation order determines simultaneous item-arrival order. The
-    // result contains semantic kinds, resolved icons and durations, not source entity IDs.
+    // definitions contain semantic kinds, resolved icons and durations. Source provenance
+    // is returned separately for import-time bindings and is discarded after assembly.
     const specs = [_]Spec{
         .{ .kind = .gun, .state = 327, .target = 314, .operations = .{ 0, 0, 48 } },
         .{ .kind = .shield, .state = 322, .target = 321, .operations = .{ 89, 0, 48 } },
@@ -26,6 +29,8 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
     }
     const definitions = try allocator.alloc(equipment.Definition, count);
     errdefer allocator.free(definitions);
+    const sources = try allocator.alloc(u16, count);
+    errdefer allocator.free(sources);
     var loaded: usize = 0;
     errdefer for (definitions[0..loaded]) |definition| allocator.free(definition.label);
     for (0..placements.count) |i| {
@@ -52,11 +57,18 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
             .frame => |value| if (spec.kind != .force_field and (value.dx != 0 or value.dy != 0)) return error.UnsupportedEquipmentIntroduction,
         };
         if (spec.kind == .credits and (@import("credit_wallet.zig").signal(try @import("rule_table.zig").group(rules, source.rule_group)) == null or source.parameters[0] != 3)) return error.UnsupportedCreditUse;
+        const card = if (spec.kind == .id_card) @import("credential_cards.zig").starting(try @import("rule_table.zig").group(rules, source.rule_group)) orelse return error.UnsupportedStartingCard else null;
+        var use_steps: ?u16 = null;
+        if (card) |capability| {
+            var clip = try animation.decode(allocator, animations, capability.using);
+            defer clip.deinit();
+            use_steps = @intCast(clip.frames.len);
+        }
         definition.* = .{
             .recharge = if (spec.kind == .shield) try shieldRecharge(allocator, source, rules, animations) else null,
             .use_motion = if (source.object_id == 3) .reach else .direct,
             .kind = spec.kind,
-            .use_action = if (spec.kind == .credits) .pay else null,
+            .use_action = if (spec.kind == .credits) .pay else if (card != null) .{ .unlock = .{ .credential = .{ .fixed = source.life }, .consume_after_steps = use_steps, .movie = .card_delivery } } else null,
             .icon = try resolver.icon(source.inventory_icon),
             .introduction_steps = @as(u16, @intCast(introduction.frames.len)),
             .initial_quantity = source.life,
@@ -64,9 +76,11 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
             .show_quantity = source.visual_flags & 4 != 0,
         };
         placements.register(@intCast(i), .starting_equipment);
+        if (card != null) placements.register(@intCast(i), .credential_use);
+        sources[loaded] = @intCast(i);
         loaded += 1;
     }
-    return definitions;
+    return .{ .definitions = definitions, .sources = sources };
 }
 
 fn shieldRecharge(allocator: std.mem.Allocator, record: placement.Record, rule_bytes: []const u8, animations: []const u8) !equipment.Recharge {

@@ -4,6 +4,7 @@ const rules = @import("rule_table.zig");
 const runtime = @import("../inventory_grants.zig");
 pub const Spec = struct { idle: u16, signal: i16, kind: @import("../equipment.zig").Kind, object_kind: u8, starting: ?u16 = null, movie: ?@import("../story_cue.zig").Cue };
 pub fn recognize(group: rules.Group) ?Spec {
+    if (@import("credential_cards.zig").permit(group) != null) return .{ .idle = group.at(0).source, .signal = group.at(0).conditions[0].argument, .kind = .work_permit, .object_kind = 3, .movie = .permit_received };
     if (group.count() != 2 and group.count() != 3) return null;
     const a = group.at(0);
     const b = group.at(1);
