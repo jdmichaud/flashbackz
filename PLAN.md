@@ -101,6 +101,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   damage/death signals, encounter-clearance relays and the Ian conversation/seat/recording
   sequence. Preserve family-wide rules and data links; qualify with original city input
   and focused native encounters, without per-placement scripting.
+- [ ] Escort assignment: import follower spacing, turns, obstacle/support decisions,
+  dialogue and lift boarding/release. Bind arrival to the original destination sensor,
+  mission payment and player return effect. Exclude the original protection wrapper while
+  preserving the underlying transport; qualify through original observations and native input.
 - [ ] Shared enemy families: import every matching placement, animation library and behavior
   profile from original data. Implement perception, stone distractions, locomotion, shooting
   and damage through independent actor/combat components; qualify with quick native encounters.
