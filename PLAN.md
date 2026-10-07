@@ -101,6 +101,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   damage/death signals, encounter-clearance relays and the Ian conversation/seat/recording
   sequence. Preserve family-wide rules and data links; qualify with original city input
   and focused native encounters, without per-placement scripting.
+- [ ] Reactor assignment: recover contact-gated transport, the carried countdown and its
+  expiry, terminal-card grants/use, linked terminal outputs, alarm and failure presentation.
+  Compile shared transport, timed-item and credential components; connect completion/payment
+  through original links. Qualify focused original/native scenarios and retain full-route gaps.
 - [ ] Escort assignment: import follower spacing, turns, obstacle/support decisions,
   dialogue and lift boarding/release. Bind arrival to the original destination sensor,
   mission payment and player return effect. Exclude the original protection wrapper while
