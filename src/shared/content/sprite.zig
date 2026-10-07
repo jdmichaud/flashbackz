@@ -32,7 +32,13 @@ pub fn fromArchive(allocator: std.mem.Allocator, sprites: []const u8, offsets: [
         }
     }
     const offset = found orelse return error.MissingSprite;
-    if (offset == 0xffffffff) return error.MissingSprite;
+    // An explicitly null entry clears the actor image (for example during transport).
+    // An identifier absent from this library still falls through to another library.
+    if (offset == 0xffffffff) {
+        const pixels = try allocator.alloc(u8, 1);
+        pixels[0] = 0;
+        return .{ .image = .{ .allocator = allocator, .width = 1, .height = 1, .pixels = pixels }, .origin_x = 0, .origin_y = 0 };
+    }
     const body = sprites[12..];
     if (offset >= body.len) return error.InvalidSpriteOffset;
     return decode(allocator, body[offset..]);
@@ -198,4 +204,13 @@ test "icon offsets and nibble order are bounded independently of sprite archives
     try std.testing.expectEqualSlices(u8, &.{ 1, 15, 0, 0 }, icon.image.pixels[0..4]);
     try std.testing.expectError(error.MissingIcon, fromIcons(std.testing.allocator, &file, 1));
     try std.testing.expectError(error.TruncatedIcon, fromIcons(std.testing.allocator, file[0..131], 0));
+}
+
+test "explicit null artwork becomes transparent while an absent identifier stays missing" {
+    const archive = [_]u8{ 'S', 'P', 'P', 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    const offsets = [_]u8{ 7, 0, 255, 255, 255, 255, 255, 255 };
+    var frame = try fromArchive(std.testing.allocator, &archive, &offsets, 7);
+    defer frame.deinit();
+    try std.testing.expectEqualSlices(u8, &.{0}, frame.image.pixels);
+    try std.testing.expectError(error.MissingSprite, fromArchive(std.testing.allocator, &archive, &offsets, 8));
 }
