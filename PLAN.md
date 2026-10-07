@@ -83,6 +83,12 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
 - [x] Starting identity-card capability and employment registration: bind initial supplies
   through the same credential catalog as pickups; recover animated service counters and
   their linked work-permit grant. Preserve consumption, dialogue and movie/signal ordering.
+- [ ] Mission-terminal family: import briefing, permit acceptance, assignment activation,
+  completion, payout and data-linked successor unlocking for every placed terminal. Qualify
+  through ordinary input and original completion signals, retaining unused/optional entries.
+- [ ] Courier assignment: shared revealed civilian conversations, issued delivery items,
+  recipient acknowledgement/removal and linked ambush/mission completion, without room or
+  placement-specific scripting. Complete the delivery-and-payment route against the original.
 - [ ] City bar and forger progression: recover the bartender's attention/dialogue family,
   signal-based civilian appearance, introductory handoff, payment and papers reward. Import
   shared content definitions and links; qualify normal-input conversations and transactions.
