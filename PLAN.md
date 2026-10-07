@@ -90,6 +90,9 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
 - [x] Item-aid NPCs and reactive quest items: import the wounded-man behavior family,
   teleporter delivery/acknowledgement, ID-card appearance/pickup and reusable card use.
   Preserve dialogue, perception, animation and same/next-update links through shared systems.
+- [ ] Title-menu level codes: match the supplied edition’s codes, select their level and
+  difficulty, play the appropriate entry sequence and let the user test all seven levels.
+  Invalid codes return safely to the title; retry restarts the selected level.
 - [x] Original temporary level-code display: import the level/difficulty codes and show
   the startup notice until its timer expires or a contact hint replaces it.
 - [x] Trading NPC family and credit payment: original price checks, debit, sale dialogue,
