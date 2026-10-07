@@ -44,7 +44,8 @@ movement (including quick draws after climbing/landing and armed roll recovery) 
 Escape opens Game Options and pauses the world. Up/Down selects a row; Left/Right changes
 its value. Escape or an action key applies settings and resumes; select Abort Game to return
 to the title. The added Volume row adjusts music and effects from 0–100% in 10% steps.
-Settings persist during the current application session. Free memory is displayed in MB.
+Volume is saved when Game Options closes and restored on the next launch, including startup
+music. Free memory is displayed in MB.
 Manual Zoom doubles a cropped view and switches off on a room change. Automatic combat
 zoom and the joystick option are not connected yet.
 

@@ -182,10 +182,12 @@ pub const Game = struct {
         errdefer allocator.free(page);
         const rgba = try allocator.alloc(u8, page_width * page_height * platform.RgbaFrame.bytes_per_pixel);
         errdefer allocator.free(rgba);
+        const preferences: @import("scenes/game_options.zig").Settings = .{ .volume = @import("volume_preference.zig").load(storage) };
         if (entry == .jungle_development or entry == .level_development) {
             const level: @import("content/level.zig").Id = if (entry == .level_development) entry.level_development else .jungle;
-            const scene = try jungle_mod.Scene.loadLevel(allocator, assets orelse return error.OriginalContentRequired, level, .normal);
-            return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .scene = .{ .jungle = scene } };
+            var scene = try jungle_mod.Scene.loadLevel(allocator, assets orelse return error.OriginalContentRequired, level, .normal);
+            scene.settings = preferences;
+            return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .preferences = preferences, .scene = .{ .jungle = scene } };
         }
         const original_menu = if (assets) |source| try menu_art.load(allocator, source) else null;
         var scene: Scene = .smoke;
@@ -195,7 +197,7 @@ pub const Game = struct {
             if (entry == .automatic) try front.intro();
             scene = .{ .menu = front };
         }
-        return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .scene = scene };
+        return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .preferences = preferences, .scene = scene };
     }
 
     pub fn deinit(self: *Game) void {
@@ -316,7 +318,7 @@ pub const Game = struct {
             }
         }
         if (self.jungle()) |scene| {
-            self.preferences = scene.settings;
+            self.applyPreferences(scene.settings);
             const now = p.nowNs();
             if (self.story == null and scene.message == null and scene.options == null and scene.dialog == null and scene.pending_movie != null and scene.needsCatchup(now)) {
                 const movie = scene.pending_movie.?;
@@ -343,7 +345,7 @@ pub const Game = struct {
                 }
             }
             try scene.update(now);
-            self.preferences = scene.settings;
+            self.applyPreferences(scene.settings);
             if (scene.options) |*options| if (options.menu.free_memory_mb == null) {
                 if (p.availableMemory()) |bytes| options.menu.free_memory_mb = bytes / (1024 * 1024);
             };
@@ -450,6 +452,12 @@ pub const Game = struct {
                 }
             }
         }
+    }
+
+    fn applyPreferences(self: *Game, settings: @import("scenes/game_options.zig").Settings) void {
+        const volume_changed = self.preferences.volume != settings.volume;
+        self.preferences = settings;
+        if (volume_changed) @import("volume_preference.zig").save(self.storage, settings.volume) catch {};
     }
 
     fn saveState(self: *Game) void {
@@ -642,4 +650,23 @@ test "F2 saves through the bound storage, F3 loads it back, and the title comes 
     bare.saveState();
     bare.loadState();
     try testing.expectEqual(@as(u32, 0), bare.saves_written);
+}
+
+test "applied volume survives a new game instance and invalid preferences use defaults" {
+    var store = @import("memory.zig").MemoryStorage.init(testing.allocator);
+    defer store.deinit();
+    for ([_]u8{ 50, 0, 100 }) |volume| {
+        var first = try Game.init(testing.allocator, null, store.storage());
+        first.applyPreferences(.{ .volume = volume });
+        first.deinit();
+        var reopened = try Game.init(testing.allocator, null, store.storage());
+        defer reopened.deinit();
+        try testing.expectEqual(volume, reopened.preferences.volume);
+    }
+    for ([_][]const u8{ "101", "-1", "broken", "" }) |record| {
+        try store.storage().save(@import("volume_preference.zig").key, record);
+        var game = try Game.init(testing.allocator, null, store.storage());
+        defer game.deinit();
+        try testing.expectEqual(@as(u8, 100), game.preferences.volume);
+    }
 }
