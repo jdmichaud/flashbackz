@@ -69,6 +69,9 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   imported by behavior family. Loose credit pickups also participate in enemy distraction. Use the
   original demo to expose the next missing interaction; validate increments with quick native
   play checks, per the user's iteration preference.
+- [ ] Preserve the original leftward visibility continuation after a nonmatching contact.
+  Recover the observable contact ordering and redirects, isolate compatibility metadata at
+  import, and keep original addresses and mutable RAM layouts out of the game state model.
 - [ ] City police and rescued civilians: import pursuit, evasive movement, shooting,
   damage/death signals, encounter-clearance relays and the Ian conversation/seat/recording
   sequence. Preserve family-wide rules and data links; qualify with original city input
