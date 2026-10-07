@@ -75,6 +75,9 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
 - [x] Activate the carried force field through normal inventory use. Recover its deployment,
   animation, lifetime, repeat-use and projectile-blocking behavior from the supplied original;
   implement a shared equipment capability and qualify with a focused native encounter.
+- [ ] City bar and forger progression: recover the bartender's attention/dialogue family,
+  signal-based civilian appearance, introductory handoff, payment and papers reward. Import
+  shared content definitions and links; qualify normal-input conversations and transactions.
 - [ ] City police and rescued civilians: import pursuit, evasive movement, shooting,
   damage/death signals, encounter-clearance relays and the Ian conversation/seat/recording
   sequence. Preserve family-wide rules and data links; qualify with original city input
