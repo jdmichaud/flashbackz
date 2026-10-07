@@ -74,3 +74,7 @@ Rules:
 - Latest user workflow preference: keep iteration fast. Launch the game and test the feature
   directly, then move on when it works. Do not run broad regressions or lengthy qualification
   for each increment. Investigate observed failures as needed; the original remains authority.
+
+- User-authorized durable reference exception (2026-10-07): keep the installed English
+  floppy game and qualified observer under `~/flashback-reference/`, outside Git. Treat
+  that installation as read-only; disposable runs, captures and build caches stay in /tmp.
