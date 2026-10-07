@@ -29,6 +29,7 @@ pub const Scene = struct {
     stage: Stage = .menu,
     view: View = .main,
     difficulty: Difficulty = .normal,
+    selected_level: @import("../content/level.zig").Id = .jungle,
     pending_difficulty: Difficulty = .normal,
     activation_key: ?platform.Key = null,
     password: [6]u8 = @splat(0),
@@ -118,7 +119,7 @@ pub const Scene = struct {
 
     pub fn stateHash(self: *const Scene) u64 {
         var hash = std.hash.Wyhash.init(0);
-        hash.update(&.{ @backingInt(self.stage), @backingInt(self.view), @backingInt(self.menu.selected), @backingInt(self.difficulty), @backingInt(self.pending_difficulty) });
+        hash.update(&.{ @backingInt(self.stage), @backingInt(self.view), @backingInt(self.menu.selected), @backingInt(self.difficulty), @backingInt(self.pending_difficulty), @backingInt(self.selected_level) });
         hash.update(self.password[0..self.password_length]);
         hash.update(&.{@backingInt(self.introduction_part)});
         if (self.player) |player| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, player.playback.frame)));
@@ -178,9 +179,16 @@ pub const Scene = struct {
     }
 
     pub fn start(self: *Scene, key: ?platform.Key) !void {
-        try self.play("DEBUT");
+        try self.startLevel(.jungle, key);
+    }
+
+    pub fn startLevel(self: *Scene, level: @import("../content/level.zig").Id, key: ?platform.Key) !void {
+        self.selected_level = level;
+        if (level == .jungle) {
+            try self.play("DEBUT");
+            self.stage = .awakening;
+        } else self.stage = .ready;
         self.activation_key = key;
-        self.stage = .awakening;
     }
 
     pub fn gameOver(self: *Scene, key: ?platform.Key) !void {
@@ -259,8 +267,13 @@ pub const Scene = struct {
         }
     }
 
-    fn submitPassword(_: *Scene, _: platform.Key) !void {
-        return error.FloppyPasswordsNotYetQualified;
+    fn submitPassword(self: *Scene, key: platform.Key) !void {
+        const destination = try @import("../content/level_codes.zig").lookup(self.allocator, self.source, self.password[0..self.password_length]);
+        self.mainMenu();
+        if (destination) |entry| {
+            self.difficulty = entry.difficulty;
+            try self.startLevel(entry.level, key);
+        }
     }
 
     pub fn draw(self: *const Scene, indices: []u8, rgba: []u8) !void {

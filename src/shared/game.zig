@@ -171,6 +171,7 @@ pub const Game = struct {
     scene: Scene = .smoke,
     demo_index: u2 = 0,
     difficulty: @import("settings.zig").Difficulty = .normal,
+    level: @import("content/level.zig").Id = .jungle,
     story: ?story_mod.Story = null,
 
     pub fn init(allocator: std.mem.Allocator, assets: ?platform.AssetSource, storage: ?platform.Storage) !Game {
@@ -187,7 +188,7 @@ pub const Game = struct {
             const level: @import("content/level.zig").Id = if (entry == .level_development) entry.level_development else .jungle;
             var scene = try jungle_mod.Scene.loadLevel(allocator, assets orelse return error.OriginalContentRequired, level, .normal);
             scene.settings = preferences;
-            return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .preferences = preferences, .scene = .{ .jungle = scene } };
+            return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .preferences = preferences, .level = level, .scene = .{ .jungle = scene } };
         }
         const original_menu = if (assets) |source| try menu_art.load(allocator, source) else null;
         var scene: Scene = .smoke;
@@ -219,7 +220,7 @@ pub const Game = struct {
 
     pub fn stateHash(self: *const Game) u64 {
         if (self.scene == .jungle) {
-            const world = self.scene.jungle.stateHash();
+            const world = std.hash.Wyhash.hash(self.scene.jungle.stateHash(), &.{ @backingInt(self.level), @backingInt(self.difficulty) });
             if (self.story) |story| {
                 var hash = std.hash.Wyhash.init(world);
                 hash.update(&.{ @backingInt(story.kind), @intFromBool(story.skip) });
@@ -310,7 +311,10 @@ pub const Game = struct {
                     self.demo_index += 1;
                 }
             } else if (front.stage == .ready) {
-                var next = try jungle_mod.Scene.loadWithDifficulty(self.allocator, self.assets.?, front.difficulty);
+                var next = try jungle_mod.Scene.loadLevel(self.allocator, self.assets.?, front.selected_level, front.difficulty);
+                next.pending_movie = @import("content/level.zig").opening(front.selected_level);
+                if (next.pending_movie != null) next.clock = try @import("step_clock.zig").Clock.init(@import("step_clock.zig").jungle, p.nowNs());
+                self.level = front.selected_level;
                 next.settings = self.preferences;
                 self.difficulty = front.difficulty;
                 front.deinit();
@@ -365,10 +369,8 @@ pub const Game = struct {
                 next.input = scene.input;
                 std.mem.swap(@TypeOf(next.pending), &next.pending, &scene.pending);
                 next.clock = try @import("step_clock.zig").Clock.init(@import("step_clock.zig").jungle, now);
-                next.pending_movie = switch (destination) {
-                    .city => .city_arrival,
-                    else => null,
-                };
+                next.pending_movie = @import("content/level.zig").opening(destination);
+                self.level = destination;
                 scene.stopAudio(p);
                 scene.deinit();
                 self.scene = .{ .jungle = next };
@@ -390,7 +392,7 @@ pub const Game = struct {
                 var next = front_end.Scene.init(self.allocator, self.assets.?, art);
                 errdefer next.deinit();
                 next.difficulty = self.difficulty;
-                if (choice == .retry) try next.start(dialog.menu.activation_key) else try next.gameOver(dialog.menu.activation_key);
+                if (choice == .retry) try next.startLevel(self.level, dialog.menu.activation_key) else try next.gameOver(dialog.menu.activation_key);
                 dialog.deinit();
                 self.scene = .{ .menu = next };
             }

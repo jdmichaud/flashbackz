@@ -12,3 +12,15 @@ pub fn files(id: Id) Files {
         .alien_base => .{ .actors = "LEVEL5_2", .rooms = "LEVEL5" },
     };
 }
+
+/// Opening films recovered from the edition's level descriptors. The jungle opening
+/// is owned by the title scene; levels without an entry film begin directly in play.
+pub fn opening(id: Id) ?@import("../story_cue.zig").Cue {
+    return switch (id) {
+        .city => .city_arrival,
+        .earth_city => .earth_arrival,
+        .spaceport => .spaceport_arrival,
+        .alien_surface => .alien_arrival,
+        .jungle, .tower, .alien_base => null,
+    };
+}

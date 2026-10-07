@@ -60,3 +60,5 @@ pub const energy_stations = @import("energy_stations.zig");
 
 pub const world_messages = @import("world_messages.zig");
 pub const platform_sections = @import("platform_sections.zig");
+
+pub const level_codes = @import("level_codes.zig");

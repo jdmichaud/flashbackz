@@ -407,7 +407,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     const casing = try placement_table.record(@intCast(shot.parameters[3]));
     if (casing.initial_state != 163) return error.UnsupportedCasingStart;
     if (gun.object_id != 2 or shot.parameters[0] < 1 or shot.parameters[0] > 64) return error.UnsupportedPistolDefinition;
-    if ((player.initial_state != 99 and player.initial_state != 1) or player.kind != 1 or player.room >= 64) return error.UnsupportedPlayerStart;
+    if ((player.initial_state != 99 and player.initial_state != 1 and player.initial_state != 103) or player.kind != 1 or player.room >= 64) return error.UnsupportedPlayerStart;
     var inventory_art = try inventory_artwork.load(allocator, icons.bytes, font_bytes.bytes, interface.level_label);
     errdefer inventory_art.deinit();
     var room_ids: [64]geometry.RoomId = undefined;
@@ -537,7 +537,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         allocator.free(decoded_rooms);
     }
     const facing: motion.Facing = if (player.facing_right == 0) .left else .right;
-    const first_visual = switch (motions[@backingInt(if (player.initial_state == 99) Move.wake else Move.stand)].steps[0]) {
+    const first_visual = switch (motions[@backingInt(if (player.initial_state == 99) Move.wake else if (player.initial_state == 103) Move.recoil_rise else Move.stand)].steps[0]) {
         .frame => |frame| frame.visual,
         .hold => return error.UnsupportedPlayerStart,
     };
@@ -593,7 +593,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .pistol_behind_player = shot.visual_flags & 8 != 0,
         .player_contact_width = player.collision_width,
         .initial_room = room_ids[player.room],
-        .initial_activity = if (player.initial_state == 99) .waking else .standing,
+        .initial_activity = if (player.initial_state == 99) .waking else if (player.initial_state == 103) .{ .wounded = .{ .phase = .backward_rise } } else .standing,
         .forest_enabled = forest_enabled,
         .initial_pose = .{ .position = player.position, .facing = facing, .visual = .{ .id = first_visual.id, .mirrored = first_visual.mirrored != (facing == .left) } },
     };
