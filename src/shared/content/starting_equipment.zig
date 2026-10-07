@@ -15,6 +15,7 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
         .{ .kind = .shield, .state = 322, .target = 321, .operations = .{ 89, 0, 48 } },
         .{ .kind = .credits, .state = 329, .target = 330, .operations = .{ 0, 48, 67 } },
         .{ .kind = .id_card, .state = 331, .target = 332, .operations = .{ 48, 0, 67 } },
+        .{ .kind = .force_field, .state = 424, .target = 427, .operations = .{ 0, 48, 0 } },
     };
     var count: usize = 0;
     for (0..placements.count) |i| {
@@ -43,10 +44,12 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
             return error.UnsupportedStartingEquipmentRule;
         var introduction = try animation.decode(allocator, animations, source.initial_state);
         defer introduction.deinit();
-        if (introduction.sound != null or introduction.header_metadata != 0) return error.UnsupportedEquipmentIntroduction;
+        if (introduction.sound != null or introduction.header_metadata != (if (spec.kind == .force_field) @as(u8, 2) else 0)) return error.UnsupportedEquipmentIntroduction;
+        // Offstage inventory grants may animate their unused source position.
+        // The loadout owns arrival timing, without creating an invisible world actor.
         for (introduction.frames) |frame| switch (frame) {
             .hold => {},
-            .frame => |value| if (value.dx != 0 or value.dy != 0) return error.UnsupportedEquipmentIntroduction,
+            .frame => |value| if (spec.kind != .force_field and (value.dx != 0 or value.dy != 0)) return error.UnsupportedEquipmentIntroduction,
         };
         if (spec.kind == .credits and (@import("credit_wallet.zig").signal(try @import("rule_table.zig").group(rules, source.rule_group)) == null or source.parameters[0] != 3)) return error.UnsupportedCreditUse;
         definition.* = .{

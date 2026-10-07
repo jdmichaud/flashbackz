@@ -3,7 +3,7 @@ const std = @import("std");
 const equipment = @import("equipment.zig");
 pub const Definition = struct {
     item: equipment.ItemHandle,
-    movie: @import("story_cue.zig").Cue,
+    movie: ?@import("story_cue.zig").Cue,
 };
 pub const Binding = struct {
     circuit: @import("world_props.zig").CircuitId,
@@ -31,7 +31,7 @@ pub const World = struct {
         if (self.applied[index]) return;
         try items.grant(definitions[index].item);
         self.applied[index] = true;
-        self.movie = definitions[index].movie;
+        if (definitions[index].movie) |movie| self.movie = movie;
     }
     pub fn beginStep(self: *World, definitions: []const Definition, items: *equipment.Loadout) !void {
         @memset(self.applied, false);

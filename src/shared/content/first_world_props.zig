@@ -81,11 +81,12 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
         if (record.minimum_difficulty > @backingInt(difficulty)) continue;
         const group = try @import("rule_table.zig").group(rules, record.rule_group);
         if (@import("inventory_grants.zig").recognize(group)) |grant| {
-            if (record.kind != 3 or record.room < room_ids.len or record.initial_state != grant.idle or record.object_id != 10) return error.UnsupportedInventoryGrant;
+            if (grant.starting != null and record.initial_state == grant.starting.? and record.initially_active != 0) continue;
+            if (record.kind != 3 or record.room < room_ids.len or record.initial_state != grant.idle or record.object_id != grant.object_kind) return error.UnsupportedInventoryGrant;
             const label = try strings.copy(allocator, names, record.text_id);
             errdefer allocator.free(label);
             try item_sources.append(allocator, @intCast(i));
-            try items.append(allocator, .{ .kind = .anti_g_belt, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label });
+            try items.append(allocator, .{ .kind = grant.kind, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label });
             continue;
         }
         const gift = @import("quest_items.zig").card(group);

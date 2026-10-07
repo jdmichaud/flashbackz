@@ -16,6 +16,7 @@ pub const Story = struct {
 
     pub fn open(allocator: std.mem.Allocator, source: platform.AssetSource, kind: props.Movie, now: u64, activation: ?platform.Key) !Story {
         const cue: struct { film: []const u8, entry: u16, music: []const u8 } = switch (kind) {
+            .memory_restoration => .{ .film = "MEMO", .entry = 0, .music = "MEMORY3" },
             .earth_arrival => .{ .film = "VOYAGE", .entry = 0, .music = "VOYAGE3" },
             .spaceport_arrival => .{ .film = "ESPIONS", .entry = 0, .music = "CAPTURE3" },
             .alien_arrival => .{ .film = "TELEPORT", .entry = 0, .music = "TELEPOR3" },
