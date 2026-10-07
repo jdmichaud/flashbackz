@@ -4,7 +4,7 @@ const std = @import("std");
 const runtime = @import("../visibility.zig");
 const placement = @import("placement.zig");
 const geometry = @import("../geometry.zig");
-pub const Owner = union(enum) { player, prop: usize, guard: usize, door: usize, item_aid: usize, trader: usize, guide: usize, station: usize, force_field: usize, unbound };
+pub const Owner = union(enum) { player, prop: usize, guard: usize, door: usize, item_aid: usize, trader: usize, guide: usize, station: usize, force_field: usize, service_counter: usize, unbound };
 pub const Binding = struct { entity: runtime.Entity, owner: Owner };
 pub const Assets = struct {
     allocator: std.mem.Allocator,
@@ -94,6 +94,10 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rooms: *const 
         };
         for (owners.force_fields.sources, 0..) |source, i| if (source == index) {
             owner = .{ .force_field = i };
+            break;
+        };
+        for (owners.service_counters.sources, 0..) |source, i| if (source == index) {
+            owner = .{ .service_counter = i };
             break;
         };
         if (owner == .unbound) unbound += 1;

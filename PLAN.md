@@ -80,7 +80,7 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   difficulty-excluded content visible; imported content is not automatically fidelity-qualified.
 - [x] Fuse repair: recover the pickup, use predicate, receiver connection and completion
   movie/message; integrate it through shared collectibles and credential interactions.
-- [ ] Starting identity-card capability and employment registration: bind initial supplies
+- [x] Starting identity-card capability and employment registration: bind initial supplies
   through the same credential catalog as pickups; recover animated service counters and
   their linked work-permit grant. Preserve consumption, dialogue and movie/signal ordering.
 - [ ] City bar and forger progression: recover the bartender's attention/dialogue family,

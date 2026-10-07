@@ -41,6 +41,8 @@ pub const Pack = struct {
     world_props: prop_import.Assets,
     controls: @import("operated_controls.zig").Assets,
     locks: @import("key_locks.zig").Assets,
+    service_counters: @import("service_counters.zig").Assets,
+    service_counter_bindings: []@import("../service_counters.zig").Binding,
     messages: @import("world_messages.zig").Assets,
     level_code: [13]u8,
     platform_sections: @import("platform_sections.zig").Assets,
@@ -99,6 +101,8 @@ pub const Pack = struct {
         self.world_props.deinit();
         self.controls.deinit();
         self.locks.deinit();
+        self.service_counters.deinit();
+        self.allocator.free(self.service_counter_bindings);
         self.messages.deinit();
         self.platform_sections.deinit();
         self.item_aid.deinit();
@@ -485,7 +489,9 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     if (forest_enabled) for (0..placement_table.count) |i| {
         if ((try placement_table.record(@intCast(i))).initial_state == 1143) placement_table.register(@intCast(i), .ambience);
     };
-    var initial_items = try starting_equipment.recover(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &resolver);
+    const starting = try starting_equipment.recover(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &resolver);
+    defer allocator.free(starting.sources);
+    var initial_items = starting.definitions;
     errdefer starting_equipment.release(allocator, initial_items);
     var props = try prop_import.load(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &room_ids, difficulty, .{ .index = @intCast(initial_items.len), .generation = 1 }, initial_items, &resolver);
     errdefer props.deinit();
@@ -498,7 +504,13 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer detectors.deinit();
     var energy_stations = try @import("energy_stations.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &resolver);
     errdefer energy_stations.deinit();
-    var locks = try @import("key_locks.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, &resolver);
+    const credential_sources = try allocator.alloc(u16, starting.sources.len + props.item_sources.len);
+    defer allocator.free(credential_sources);
+    @memcpy(credential_sources[0..starting.sources.len], starting.sources);
+    @memcpy(credential_sources[starting.sources.len..], props.item_sources);
+    var service_counters = try @import("service_counters.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, &resolver);
+    errdefer service_counters.deinit();
+    var locks = try @import("key_locks.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, credential_sources, .{ .index = 0, .generation = 1 }, &resolver);
     errdefer locks.deinit();
     var item_aid = try @import("item_aid.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, initial_items, &resolver);
     errdefer item_aid.deinit();
@@ -521,6 +533,8 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     const combined_connections = try connections.toOwnedSlice(allocator);
     allocator.free(props.connections);
     props.connections = combined_connections;
+    const service_counter_bindings = try service_counters.bind(props.connections);
+    errdefer allocator.free(service_counter_bindings);
     const story_station_bindings = try story_stations.bind(props.connections);
     errdefer allocator.free(story_station_bindings);
     const guide_bindings = try guides.bind(props.connections);
@@ -551,7 +565,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer robots.deinit();
     var force_fields = try @import("force_fields.zig").load(allocator, placement_table, rules.bytes, ani.bytes, difficulty, &resolver);
     errdefer force_fields.deinit();
-    var visibility = try @import("visibility.zig").load(allocator, placement_table, &room_ids, difficulty, .{ .props = props, .guards = guards, .doors = doors, .item_aid = item_aid, .traders = traders, .guides = guides, .story_stations = story_stations, .force_fields = force_fields });
+    var visibility = try @import("visibility.zig").load(allocator, placement_table, &room_ids, difficulty, .{ .props = props, .guards = guards, .doors = doors, .item_aid = item_aid, .traders = traders, .guides = guides, .story_stations = story_stations, .force_fields = force_fields, .service_counters = service_counters });
     errdefer visibility.deinit();
     const supplied = initial_items.len;
     initial_items = try allocator.realloc(initial_items, supplied + props.items.len);
@@ -611,6 +625,8 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .world_props = props,
         .controls = operated,
         .locks = locks,
+        .service_counters = service_counters,
+        .service_counter_bindings = service_counter_bindings,
         .level_code = interface.level_code,
         .messages = interface.messages orelse .{ .allocator = allocator, .messages = &.{} },
         .platform_sections = platform_sections,

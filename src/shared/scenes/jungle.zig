@@ -115,6 +115,7 @@ pub const Scene = struct {
     props: props_mod.World,
     operated_controls: @import("../operated_controls.zig").World,
     locks: @import("../key_locks.zig").World,
+    service_counters: @import("../service_counters.zig").World,
     platform_sections: @import("../platform_sections.zig").World,
     item_aid: @import("../actors/item_aid.zig").World,
     interaction: Interaction = .none,
@@ -189,8 +190,10 @@ pub const Scene = struct {
         errdefer props.deinit();
         var operated = try @import("../operated_controls.zig").World.init(allocator, pack.controls.definitions);
         errdefer operated.deinit();
-        var locks = try @import("../key_locks.zig").World.init(allocator, pack.locks.definitions);
+        var locks = try @import("../key_locks.zig").World.init(allocator, pack.locks.definitions, pack.locks.receivers);
         errdefer locks.deinit();
+        var service_counters = try @import("../service_counters.zig").World.init(allocator, pack.service_counters.definitions);
+        errdefer service_counters.deinit();
         var platform_sections = try @import("../platform_sections.zig").World.init(allocator, pack.platform_sections.definitions);
         errdefer platform_sections.deinit();
         var item_aid = try @import("../actors/item_aid.zig").World.init(allocator, pack.item_aid.definitions, pack.item_aid.profiles);
@@ -261,6 +264,7 @@ pub const Scene = struct {
             .props = props,
             .operated_controls = operated,
             .locks = locks,
+            .service_counters = service_counters,
             .platform_sections = platform_sections,
             .item_aid = item_aid,
             .guides = guides,
@@ -333,6 +337,7 @@ pub const Scene = struct {
         self.props.deinit();
         self.operated_controls.deinit();
         self.locks.deinit();
+        self.service_counters.deinit();
         self.platform_sections.deinit();
         self.item_aid.deinit();
         self.guides.deinit();
@@ -507,6 +512,7 @@ pub const Scene = struct {
             try self.syncVisibility();
             try self.visibility.rebuild(self.terrain.map(), self.environment.room);
             self.interaction = try self.chooseInteraction();
+            try self.service_counters.prepare(self.content.service_counters.definitions, self.terrain.map(), self.props.player_contact);
             try self.operated_controls.prepare(self.content.controls.definitions, self.terrain.map(), self.props.player_contact);
             try self.locks.prepare(self.content.locks.definitions, self.content.locks.receivers, self.terrain.map(), self.props.player_contact);
             try self.passengers.prepare(self.terrain.map(), self.props.player_contact, &self.lifts, self.content.lifts.definitions, &self.props, &self.equipment, self.content.lift_passengers);
@@ -516,7 +522,7 @@ pub const Scene = struct {
             self.controller.ride_acknowledged = self.passengers.acknowledged != null;
             self.controller.ride_arrived = self.passengers.arrival;
             try self.energy_stations.prepare(self.content.energy_stations.definitions, self.terrain.map(), self.props.player_contact);
-            self.controller.control_available = self.interaction != .none or self.operated_controls.candidate != null or self.locks.candidate != null or self.energy_stations.candidate != null;
+            self.controller.control_available = self.interaction != .none or self.service_counters.candidate != null or self.operated_controls.candidate != null or self.locks.candidate != null or self.energy_stations.candidate != null;
             self.controller.pickup_available = self.props.pickup_candidate != null and self.interaction == .none;
             const selected = try self.equipment.selected();
             // Presenting a possession is a player gesture; its receiver decides whether
@@ -680,6 +686,10 @@ pub const Scene = struct {
             self.guards.route(self.content.guard_bindings, self.props.pressed_circuits[0..self.props.pressed_count]);
             self.guards.route(self.content.guard_bindings, self.locks.pulses[0..self.locks.pulse_count]);
             try self.syncVisibility();
+            self.service_counters.route(self.content.service_counter_bindings, self.locks.pulses[0..self.locks.pulse_count]);
+            try self.service_counters.advance(self.content.service_counters.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested and self.interaction == .none, &self.random);
+            try self.inventory_grants.deliver(self.content.inventory_grants.definitions, self.content.inventory_grants.bindings, self.service_counters.pulses[0..self.service_counters.pulse_count], &self.equipment);
+            for (self.service_counters.instances, self.content.service_counters.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             try self.guards.advance(self.content.guards.definitions, self.content.guards.profiles, self.terrain.map(), self.props.player_contact, intent.vertical == .down, self.combat_targets, first_guard, &self.visibility, self.content.visibility.guard_entities, &self.random);
             self.score +%= self.guards.score_requested;
             for (self.guards.actors) |actor| if (actor.sound) |sound| if (actor.room) |room| {
@@ -769,6 +779,9 @@ pub const Scene = struct {
             self.zoom.advance(self.pose);
             self.clock.?.consume();
             var request = self.locks.notice;
+            if (self.service_counters.notice) |notice| if (request == null or notice.priority >= request.?.priority) {
+                request = notice;
+            };
             if (request == null) if (self.equipment.notice) |id| {
                 request = .{ .message = id, .icon = self.message_icon, .priority = 0 };
             };
@@ -960,6 +973,10 @@ pub const Scene = struct {
             return .{ .icon = definition.hint, .label = definition.label };
         }
         if (self.props.pickup_candidate) |handle| return .{ .icon = self.content.world_props.hint_icon, .label = (try self.equipment.item(handle)).definition.label };
+        if (self.service_counters.candidate) |index| {
+            const definition = self.content.service_counters.definitions[index];
+            return .{ .icon = definition.hint, .label = definition.label };
+        }
         if (self.locks.candidate) |index| {
             const definition = self.content.locks.definitions[index];
             return .{ .icon = definition.hint, .label = definition.label };
@@ -978,6 +995,10 @@ pub const Scene = struct {
         for (self.force_fields, self.content.force_fields.definitions) |field, definition| {
             if (field.room != self.environment.room or definition.behind_player != behind_player) continue;
             try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(field.pose.visual.id), @as(i32, field.pose.position.x) + 8, @as(i32, field.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (field.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        }
+        for (self.service_counters.instances, self.content.service_counters.definitions) |instance, definition| {
+            if (definition.footprint.room != self.environment.room or definition.behind_player != behind_player) continue;
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(instance.pose.visual.id), @as(i32, instance.pose.position.x) + 8, @as(i32, instance.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (instance.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
         }
         for (self.triggered_effects.instances, self.content.triggered_effects.definitions) |instance, definition| {
             if (instance.room != self.environment.room or definition.behind_player != behind_player) continue;
@@ -1004,6 +1025,7 @@ pub const Scene = struct {
     fn syncVisibility(self: *Scene) !void {
         for (self.content.visibility.bindings) |binding| {
             const observation: @import("../visibility.zig").Observation = switch (binding.owner) {
+                .service_counter => |index| .{ .body = self.content.service_counters.definitions[index].footprint, .active = self.service_counters.instances[index].active },
                 .force_field => |index| .{ .body = self.force_fields[index].body(self.content.force_fields.definitions[index]), .active = true },
                 .player => .{ .body = self.props.player_contact, .active = true },
                 .guard => |index| blk: {
@@ -1178,6 +1200,7 @@ pub const Scene = struct {
         self.props.hashInto(&hash);
         self.operated_controls.hashInto(&hash);
         self.locks.hashInto(&hash);
+        self.service_counters.hashInto(&hash);
         self.platform_sections.hashInto(&hash);
         self.item_aid.hashInto(&hash);
         self.guides.hashInto(&hash);

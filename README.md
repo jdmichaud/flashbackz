@@ -66,6 +66,10 @@ route through imported circuits. Ordinary keys can be collected with Shift, sele
 Tab/arrow keys, and used by holding Return through Conrad's hand press at a matching lock.
 Successful use consumes the key. Select SHIELD and hold Return near an energy generator to
 recharge it, with the original animation and music. Releasing Return before the press cancels.
+The administrative-center BOSS now accepts the starting ID card and issues WORK PERMIT.
+Hold Shift for his request, acknowledge the pages with Return, then select ID CARD and hold
+Return beside him. The original exchange films play. Work-permit mission terminals are still
+being implemented.
 The city fuse can be collected with Shift. Select FUSE with Tab/arrows, close inventory,
 then hold Return at the broken switch. Repair consumes the fuse and enables the linked lift;
 hold Shift at the repaired switch to call it.

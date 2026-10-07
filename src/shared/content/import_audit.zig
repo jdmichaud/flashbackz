@@ -30,6 +30,8 @@ pub const System = enum(u6) {
     casings,
     ambience,
     surface_reactions,
+    service_counters,
+    credential_use,
 };
 pub const Ledger = struct {
     entries: [256]u64 = @splat(0),
