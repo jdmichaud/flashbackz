@@ -93,6 +93,8 @@ fn consumeInput(pending: *std.ArrayList(platform.Event), held: *HeldInput, deadl
     }
 }
 
+const Interaction = enum { none, item_aid, trader, guide, station };
+
 pub const Scene = struct {
     allocator: std.mem.Allocator,
     content: content.Pack,
@@ -115,9 +117,14 @@ pub const Scene = struct {
     locks: @import("../key_locks.zig").World,
     platform_sections: @import("../platform_sections.zig").World,
     item_aid: @import("../actors/item_aid.zig").World,
-    talk_selected: bool = false,
-    trader_selected: bool = false,
+    interaction: Interaction = .none,
+    guides: @import("../actors/rescued_guide.zig").World,
+    story_stations: @import("../story_stations.zig").World,
     traders: @import("../actors/trader.zig").World,
+    guards: @import("../actors/mobile_guard.zig").World,
+    visibility: @import("../visibility.zig").World,
+    guard_fire: @import("../weapon_fire.zig").World,
+    barriers: @import("../event_barriers.zig").World,
     inventory_grants: @import("../inventory_grants.zig").World,
     exits: @import("../level_exits.zig").World,
     triggered_effects: @import("../triggered_effects.zig").World,
@@ -136,6 +143,7 @@ pub const Scene = struct {
     gunmen: @import("../actors/gunman.zig").World,
     robots: @import("../actors/ground_robot.zig").World,
     distractions: []@import("../contacts.zig").Footprint,
+    force_fields: []@import("../force_fields.zig").Emitter,
     combat_targets: []@import("../combat.zig").Target,
     surfaces: @import("../surface_reactions.zig").World,
     pending_movie: ?props_mod.Movie = null,
@@ -187,8 +195,20 @@ pub const Scene = struct {
         errdefer platform_sections.deinit();
         var item_aid = try @import("../actors/item_aid.zig").World.init(allocator, pack.item_aid.definitions, pack.item_aid.profiles);
         errdefer item_aid.deinit();
+        var guides = try @import("../actors/rescued_guide.zig").World.init(allocator, pack.guides.definitions, pack.guides.profiles);
+        errdefer guides.deinit();
+        var story_stations = try @import("../story_stations.zig").World.init(allocator, pack.story_stations.definitions);
+        errdefer story_stations.deinit();
         var traders = try @import("../actors/trader.zig").World.init(allocator, pack.traders.definitions, pack.traders.profiles);
         errdefer traders.deinit();
+        var guards = try @import("../actors/mobile_guard.zig").World.init(allocator, pack.guards.definitions, pack.guards.profiles);
+        errdefer guards.deinit();
+        var visibility = try @import("../visibility.zig").World.init(allocator, pack.visibility.definitions, 256);
+        errdefer visibility.deinit();
+        var guard_fire = try @import("../weapon_fire.zig").World.init(allocator, pack.guards.weapons.len);
+        errdefer guard_fire.deinit();
+        var barriers = try @import("../event_barriers.zig").World.init(allocator, pack.barriers.definitions.len);
+        errdefer barriers.deinit();
         var inventory_grants = try @import("../inventory_grants.zig").World.init(allocator, pack.inventory_grants.definitions.len);
         errdefer inventory_grants.deinit();
         var exits = try @import("../level_exits.zig").World.init(allocator, pack.exits);
@@ -205,7 +225,7 @@ pub const Scene = struct {
         errdefer robots.deinit();
         var enemy_fire = try @import("../weapon_fire.zig").World.init(allocator, pack.gunmen.weapons.len);
         errdefer enemy_fire.deinit();
-        const contact_capacity = pack.gunmen.definitions.len + pack.robots.definitions.len + pack.world_props.definitions.len + pack.doors.definitions.len + 1;
+        const contact_capacity = pack.gunmen.definitions.len + pack.robots.definitions.len + pack.guards.definitions.len + pack.world_props.definitions.len + pack.doors.definitions.len + 1;
         const sensed_contacts = try allocator.alloc(@import("../contacts.zig").Participant, contact_capacity);
         errdefer allocator.free(sensed_contacts);
         var detectors = try @import("../detectors.zig").World.init(allocator, pack.detectors.definitions, pack.detectors.profiles, contact_capacity);
@@ -220,7 +240,10 @@ pub const Scene = struct {
         errdefer passengers.deinit();
         var ceiling_fire = try @import("../weapon_fire.zig").World.init(allocator, pack.ceiling_guns.weapons.len);
         errdefer ceiling_fire.deinit();
-        const combat_targets = try allocator.alloc(@import("../combat.zig").Target, pack.gunmen.definitions.len + pack.robots.definitions.len + pack.doors.definitions.len + 1);
+        const force_fields = try allocator.alloc(@import("../force_fields.zig").Emitter, pack.force_fields.definitions.len);
+        errdefer allocator.free(force_fields);
+        @memset(force_fields, .{});
+        const combat_targets = try allocator.alloc(@import("../combat.zig").Target, pack.gunmen.definitions.len + pack.robots.definitions.len + pack.guards.definitions.len + pack.doors.definitions.len + pack.force_fields.definitions.len + 1);
         errdefer allocator.free(combat_targets);
         const distractions = try allocator.alloc(@import("../contacts.zig").Footprint, pack.world_props.definitions.len);
         errdefer allocator.free(distractions);
@@ -240,7 +263,13 @@ pub const Scene = struct {
             .locks = locks,
             .platform_sections = platform_sections,
             .item_aid = item_aid,
+            .guides = guides,
+            .story_stations = story_stations,
             .traders = traders,
+            .guards = guards,
+            .visibility = visibility,
+            .guard_fire = guard_fire,
+            .barriers = barriers,
             .inventory_grants = inventory_grants,
             .exits = exits,
             .triggered_effects = triggered_effects,
@@ -258,6 +287,7 @@ pub const Scene = struct {
             .robots = robots,
             .distractions = distractions,
             .combat_targets = combat_targets,
+            .force_fields = force_fields,
             .enemy_fire = enemy_fire,
             .surfaces = surfaces,
             .pose = pack.initial_pose,
@@ -305,7 +335,13 @@ pub const Scene = struct {
         self.locks.deinit();
         self.platform_sections.deinit();
         self.item_aid.deinit();
+        self.guides.deinit();
+        self.story_stations.deinit();
         self.traders.deinit();
+        self.guards.deinit();
+        self.visibility.deinit();
+        self.guard_fire.deinit();
+        self.barriers.deinit();
         self.inventory_grants.deinit();
         self.exits.deinit();
         self.triggered_effects.deinit();
@@ -323,6 +359,7 @@ pub const Scene = struct {
         self.enemy_fire.deinit();
         self.allocator.free(self.distractions);
         self.allocator.free(self.combat_targets);
+        self.allocator.free(self.force_fields);
         self.surfaces.deinit();
         self.allocator.free(self.received_items);
         self.allocator.free(self.menu_entries);
@@ -456,18 +493,20 @@ pub const Scene = struct {
             self.lifts.beginStep();
             self.ceiling_fire.beginStep();
             self.gunmen.prepare();
+            try self.guards.prepare(self.content.guards.definitions, self.terrain.map(), self.environment.room);
+            self.guard_fire.beginStep();
+            self.barriers.beginStep();
             self.robots.prepare();
             self.enemy_fire.beginStep();
             if (self.protection_steps != 0) self.protection_steps -= 1;
             try self.props.prepare(self.terrain.map(), &self.equipment, .{ .room = self.environment.room, .position = self.pose.position, .width = self.content.player_contact_width });
             try self.item_aid.prepare(self.content.item_aid.definitions, self.terrain.map(), self.props.player_contact);
-            self.talk_selected = if (self.item_aid.candidate) |index| self.props.pickup_candidate == null or self.content.item_aid.definitions[index].interaction_priority > self.props.pickup_priority else false;
             try self.traders.prepare(self.content.traders.definitions, self.terrain.map(), self.props.player_contact);
-            self.trader_selected = if (self.traders.candidate) |index| blk: {
-                const priority = self.content.traders.definitions[index].interaction_priority;
-                break :blk (!self.talk_selected or priority > self.content.item_aid.definitions[self.item_aid.candidate.?].interaction_priority) and (self.props.pickup_candidate == null or priority > self.props.pickup_priority);
-            } else false;
-            if (self.trader_selected) self.talk_selected = false;
+            try self.guides.prepare(self.content.guides.definitions, self.terrain.map(), self.props.player_contact);
+            try self.story_stations.prepare(self.content.story_stations.definitions, self.terrain.map(), self.props.player_contact);
+            try self.syncVisibility();
+            try self.visibility.rebuild(self.terrain.map(), self.environment.room);
+            self.interaction = try self.chooseInteraction();
             try self.operated_controls.prepare(self.content.controls.definitions, self.terrain.map(), self.props.player_contact);
             try self.locks.prepare(self.content.locks.definitions, self.content.locks.receivers, self.terrain.map(), self.props.player_contact);
             try self.passengers.prepare(self.terrain.map(), self.props.player_contact, &self.lifts, self.content.lifts.definitions, &self.props, &self.equipment, self.content.lift_passengers);
@@ -477,8 +516,8 @@ pub const Scene = struct {
             self.controller.ride_acknowledged = self.passengers.acknowledged != null;
             self.controller.ride_arrived = self.passengers.arrival;
             try self.energy_stations.prepare(self.content.energy_stations.definitions, self.terrain.map(), self.props.player_contact);
-            self.controller.control_available = self.trader_selected or self.talk_selected or self.operated_controls.candidate != null or self.locks.candidate != null or self.energy_stations.candidate != null;
-            self.controller.pickup_available = self.props.pickup_candidate != null and !self.talk_selected and !self.trader_selected;
+            self.controller.control_available = self.interaction != .none or self.operated_controls.candidate != null or self.locks.candidate != null or self.energy_stations.candidate != null;
+            self.controller.pickup_available = self.props.pickup_candidate != null and self.interaction == .none;
             const selected = try self.equipment.selected();
             self.controller.use_available = if (selected) |item| item.definition.use_action != null or item.definition.recharge != null else false;
             self.controller.use_reaches = if (selected) |item| item.definition.use_motion == .reach else false;
@@ -502,7 +541,7 @@ pub const Scene = struct {
             }
             if (self.controller.use_requested) {
                 const item = selected orelse return error.MissingSelectedItem;
-                if (!self.controller.use_reaches and !(if (item.definition.use_action) |action| action == .pay else false)) self.input.consumeUse();
+                if (!self.controller.use_reaches and !(if (item.definition.use_action) |action| action == .pay or action == .deploy_field else false)) self.input.consumeUse();
                 const handle = self.equipment.inventory.selected() orelse return error.MissingSelectedItem;
                 var handled = false;
                 if (item.definition.use_action) |action| switch (action) {
@@ -510,11 +549,17 @@ pub const Scene = struct {
                         self.pending_movie = cue;
                         handled = true;
                     },
+                    .deploy_field => handled = true,
                     .pay => {
-                        handled = if (self.trader_selected) self.traders.offerPayment(self.content.traders.definitions, self.content.traders.bindings, handle, item.quantity) else self.talk_selected and try self.item_aid.offerPayment(self.content.item_aid.definitions, self.content.item_aid.bindings, handle, item.quantity);
+                        handled = switch (self.interaction) {
+                            .trader => self.traders.offerPayment(self.content.traders.definitions, self.content.traders.bindings, handle, item.quantity),
+                            .item_aid => try self.item_aid.offerPayment(self.content.item_aid.definitions, self.content.item_aid.bindings, handle, item.quantity),
+                            .guide => self.guides.offerPayment(self.content.guides.definitions, self.content.guides.payments, handle, item.quantity),
+                            .none, .station => false,
+                        };
                     },
                     .offer => |offer| {
-                        handled = self.talk_selected and try self.item_aid.offer(self.content.item_aid.definitions, self.content.item_aid.bindings, handle, offer.credential);
+                        handled = self.interaction == .item_aid and try self.item_aid.offer(self.content.item_aid.definitions, self.content.item_aid.bindings, handle, offer.credential);
                     },
                     .unlock => |use| {
                         handled = try self.locks.useKey(self.content.locks.definitions, self.content.locks.receivers, self.content.locks.bindings, &self.equipment, handle, self.terrain.map(), self.environment.room);
@@ -533,8 +578,8 @@ pub const Scene = struct {
                 }
             }
             try self.props.advance(self.terrain.map(), &self.equipment, try self.controller.pressesFloorSwitches(self.content.controllerClips()), self.controller.pickup_requested);
-            try self.operated_controls.advance(self.content.controls.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested and !self.talk_selected and !self.trader_selected and self.locks.candidate == null);
-            try self.locks.advance(self.content.locks.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested and !self.talk_selected and !self.trader_selected);
+            try self.operated_controls.advance(self.content.controls.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested and self.interaction == .none and self.locks.candidate == null);
+            try self.locks.advance(self.content.locks.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested and self.interaction == .none);
             try self.energy_stations.advance(self.content.energy_stations.definitions, self.terrain.map(), self.environment.room);
             self.lifts.route(self.content.lifts.bindings, self.props.pressed_circuits[0..self.props.pressed_count]);
             self.lifts.route(self.content.lifts.bindings, self.operated_controls.pulses[0..self.operated_controls.pulse_count]);
@@ -549,6 +594,10 @@ pub const Scene = struct {
                 self.sensed_contacts[sensed_count] = .{ .footprint = actor.contact, .kind = .enemy, .active = actor.active and !actor.removed };
                 sensed_count += 1;
             }
+            for (self.guards.actors) |actor| if (actor.contact) |contact| {
+                self.sensed_contacts[sensed_count] = .{ .footprint = contact, .kind = .enemy, .active = actor.active and actor.activity != .removed };
+                sensed_count += 1;
+            };
             for (self.props.objects, self.props.definitions, 0..) |object, definition, index| {
                 if (definition.behavior != .collectible) continue;
                 self.sensed_contacts[sensed_count] = .{ .footprint = object.contact, .kind = .item, .active = object.active and object.contact_present and try self.props.visible(index, &self.equipment) };
@@ -566,7 +615,11 @@ pub const Scene = struct {
             try self.passengers.updateItemOccupancy(self.terrain.map(), &self.lifts, self.content.lifts.definitions, &self.props, &self.equipment);
             try self.lifts.advance(self.content.lifts.definitions, self.content.lifts.profiles, &self.terrain, self.passengers.occupancy, self.environment.room);
             try self.passengers.deliver(&self.lifts, self.content.lifts.definitions, self.content.lift_passengers, self.terrain.map(), &self.props, &self.equipment, &self.pose, self.environment.room);
-            try self.item_aid.advance(self.content.item_aid.definitions, self.content.item_aid.profiles, self.terrain.map(), self.props.player_contact, self.controller.operate_requested and self.talk_selected);
+            try self.guides.advance(self.content.guides.definitions, self.content.guides.profiles, self.terrain.map(), self.props.player_contact, self.controller.operate_requested and self.interaction == .guide);
+            self.doors.route(self.content.doors.bindings, self.guides.pulses[0..self.guides.pulse_count]);
+            self.story_stations.route(self.content.story_station_bindings, self.guides.pulses[0..self.guides.pulse_count]);
+            try self.inventory_grants.deliver(self.content.inventory_grants.definitions, self.content.inventory_grants.bindings, self.guides.pulses[0..self.guides.pulse_count], &self.equipment);
+            try self.item_aid.advance(self.content.item_aid.definitions, self.content.item_aid.profiles, self.terrain.map(), self.props.player_contact, self.controller.operate_requested and self.interaction == .item_aid);
             try self.props.deliver(self.content.item_bindings, self.item_aid.pulses[0..self.item_aid.pulse_count], &self.equipment);
             self.doors.route(self.content.doors.bindings, self.props.pressed_circuits[0..self.props.pressed_count]);
             self.doors.route(self.content.doors.bindings, self.operated_controls.pulses[0..self.operated_controls.pulse_count]);
@@ -608,13 +661,28 @@ pub const Scene = struct {
             for (self.robots.actors, self.combat_targets[first_robot .. first_robot + self.robots.actors.len], 0..) |actor, *target, index| {
                 target.* = .{ .id = @fromBackingInt(@as(u16, @intCast(first_robot + index))), .footprint = actor.contact, .facing = actor.pose.facing, .vulnerable = actor.vulnerability(), .active = actor.active and !actor.removed };
             }
-            const first_door = first_robot + self.robots.actors.len;
-            for (self.doors.instances, self.content.doors.definitions, self.combat_targets[first_door..], 0..) |instance, definition, *target, index| {
+            const first_guard = first_robot + self.robots.actors.len;
+            for (self.guards.actors, self.content.guards.definitions, self.combat_targets[first_guard .. first_guard + self.guards.actors.len], 0..) |actor, definition, *target, index| {
+                target.* = .{ .id = @fromBackingInt(@as(u16, @intCast(first_guard + index))), .footprint = actor.contact orelse .{ .room = self.environment.room, .position = actor.pose.position, .width = 0 }, .facing = actor.pose.facing, .vulnerable = actor.vulnerability(self.content.guards.profiles[definition.profile]), .active = actor.active and actor.room != null and actor.activity != .removed };
+            }
+            const first_door = first_guard + self.guards.actors.len;
+            for (self.doors.instances, self.content.doors.definitions, self.combat_targets[first_door .. first_door + self.doors.instances.len], 0..) |instance, definition, *target, index| {
                 target.* = .{ .id = @fromBackingInt(@as(u16, @intCast(first_door + index))), .footprint = definition.footprint, .facing = instance.pose.facing, .vulnerable = instance.vulnerability(self.content.doors.profiles[definition.profile]), .active = instance.active, .category = if (definition.enemy_contact) .enemy else .mechanism };
             }
+            const first_field = first_door + self.doors.instances.len;
+            for (self.force_fields, self.content.force_fields.definitions, self.combat_targets[first_field..], 0..) |field, definition, *target, index| target.* = field.target(definition, @fromBackingInt(@as(u16, @intCast(first_field + index))), self.environment.room);
             try self.gunmen.advance(self.content.gunmen.definitions, self.content.gunmen.profiles, self.terrain.map(), .{ .room = self.environment.room, .position = self.pose.position }, self.distractions[0..distraction_count], self.combat_targets, &self.random);
             for (self.gunmen.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
             self.score +%= self.gunmen.score_requested;
+            self.guards.route(self.content.guard_bindings, self.operated_controls.pulses[0..self.operated_controls.pulse_count]);
+            self.guards.route(self.content.guard_bindings, self.props.pressed_circuits[0..self.props.pressed_count]);
+            self.guards.route(self.content.guard_bindings, self.locks.pulses[0..self.locks.pulse_count]);
+            try self.syncVisibility();
+            try self.guards.advance(self.content.guards.definitions, self.content.guards.profiles, self.terrain.map(), self.props.player_contact, intent.vertical == .down, self.combat_targets, first_guard, &self.visibility, self.content.visibility.guard_entities, &self.random);
+            self.score +%= self.guards.score_requested;
+            for (self.guards.actors) |actor| if (actor.sound) |sound| if (actor.room) |room| {
+                try self.emitSound(sound, room);
+            };
             try self.pistol.advanceWithTargets(self.content.pistolDefinition(), self.controller.shot_requested, self.pose, self.environment.room, self.terrain.view(), self.combat_targets);
             if (self.pistol.hit_requested) |hit| self.deliverHit(hit);
             for (self.gunmen.actors, self.content.gunmen.definitions) |actor, definition| if (actor.shot) |height| self.enemy_fire.fire(definition.weapon, .{ .pose = actor.pose, .room = actor.room, .height = height }, definition.shot_next_step);
@@ -623,6 +691,19 @@ pub const Scene = struct {
                 if (channel.state.hit_requested) |hit| self.deliverHit(hit);
                 if (channel.state.sound_requested) |sound| try self.emitSound(sound, channel.state.effect.?.room);
             }
+            for (self.guards.actors, self.content.guards.definitions) |actor, definition| if (actor.shot) |posture| {
+                self.guard_fire.fire(definition.weapon, .{ .pose = actor.pose, .room = actor.room.?, .height = if (posture == .standing) .standing else .crouched, .airborne = posture == .airborne }, definition.shot_next_step);
+            };
+            try self.guard_fire.advance(self.content.guards.weapons, self.terrain.view(), self.combat_targets);
+            for (self.guard_fire.channels) |channel| {
+                if (channel.state.hit_requested) |hit| self.deliverHit(hit);
+                if (channel.state.sound_requested) |sound| try self.emitSound(sound, channel.state.effect.?.room);
+            }
+            self.barriers.route(self.content.barrier_bindings, self.guards.pulses[0..self.guards.pulse_count]);
+            self.barriers.advance(self.content.barriers.definitions);
+            self.guides.route(self.content.guide_bindings, self.barriers.pulses[0..self.barriers.pulse_count]);
+            self.story_stations.advance(self.content.story_stations.definitions, self.controller.operate_requested and self.interaction == .station);
+            self.guides.route(self.content.guide_bindings, self.story_stations.pulses[0..self.story_stations.pulse_count]);
             try self.ceiling_fire.advance(self.content.ceiling_guns.weapons, self.terrain.view(), self.combat_targets);
             for (self.ceiling_fire.channels) |channel| {
                 if (channel.state.hit_requested) |hit| self.deliverHit(hit);
@@ -631,7 +712,7 @@ pub const Scene = struct {
             self.casings.advance(self.content.casing_definition, self.controller.shot_requested, self.pose, self.environment.room, &self.random);
             try self.doors.advance(self.content.doors.definitions, self.content.doors.profiles, &self.terrain, self.environment.room, self.sensed_contacts[0..sensed_count], .after_fire);
             try self.surfaces.advance(self.content.surfaces, self.content.surfaceClips(), self.terrain.map(), self.props.player_contact, try self.controller.disturbsSurface(self.content.controllerClips()), &self.random);
-            try self.traders.advance(self.content.traders.definitions, self.content.traders.profiles, self.terrain.map(), self.props.player_contact, self.controller.operate_requested and self.trader_selected, &self.equipment, &self.random);
+            try self.traders.advance(self.content.traders.definitions, self.content.traders.profiles, self.terrain.map(), self.props.player_contact, self.controller.operate_requested and self.interaction == .trader, &self.equipment, &self.random);
             try self.inventory_grants.deliver(self.content.inventory_grants.definitions, self.content.inventory_grants.bindings, self.traders.pulses[0..self.traders.pulse_count], &self.equipment);
             try self.exits.advance(self.content.exits, self.terrain.map(), self.props.player_contact, &self.equipment);
             self.triggered_effects.route(self.content.triggered_effects.bindings, self.traders.pulses[0..self.traders.pulse_count]);
@@ -640,8 +721,15 @@ pub const Scene = struct {
             try self.robots.advance(self.content.robots.definitions, self.content.robots.profiles, self.terrain.view(), .{ .room = self.environment.room, .position = self.pose.position }, self.combat_targets, first_robot);
             for (self.robots.outgoing[0..self.robots.outgoing_count]) |hit| self.deliverHit(hit);
             for (self.robots.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
+            const deploy_field = if (selected) |item| if (item.definition.use_action) |action| action == .deploy_field and intent.use_item and !intent.action and !intent.weapon else false else false;
+            for (self.force_fields, self.content.force_fields.definitions) |*field, definition| {
+                try field.advance(definition, deploy_field, self.pose, self.environment.room, self.terrain.view(), self.combat_targets);
+                if (field.sound) |sound| if (field.room) |room| try self.emitSound(sound, room);
+            }
             for (self.triggered_effects.instances) |instance| if (instance.sound) |sound| try self.emitSound(sound, instance.room);
             for (self.traders.actors, self.content.traders.definitions) |actor, definition| if (actor.sound) |sound| try self.emitSound(sound, definition.footprint.room);
+            for (self.story_stations.instances, self.content.story_stations.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
+            for (self.guides.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
             for (self.item_aid.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
             for (self.lifts.instances) |instance| if (instance.sound) |sound| try self.emitSound(sound, instance.room);
             for (self.doors.instances, self.content.doors.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
@@ -667,6 +755,7 @@ pub const Scene = struct {
             if (self.props.movie) |movie| self.pending_movie = movie;
             if (self.traders.movie) |movie| self.pending_movie = movie;
             if (self.inventory_grants.movie) |movie| self.pending_movie = movie;
+            if (self.story_stations.movie) |movie| self.pending_movie = movie;
             if (self.hazards.defeat_requested) self.pending_movie = .disintegration;
             if (self.replay != null or try self.interactionHint() != null) self.level_code_steps = 0 else if (self.level_code_steps != 0) {
                 self.level_code_steps -= 1;
@@ -683,6 +772,9 @@ pub const Scene = struct {
             }
             if (self.traders.notice) |id| {
                 if (request == null or self.traders.notice_priority >= request.?.priority) request = .{ .message = id, .icon = self.message_icon, .priority = self.traders.notice_priority };
+            }
+            if (self.guides.notice) |id| {
+                if (request == null or self.guides.notice_priority >= request.?.priority) request = .{ .message = id, .icon = self.message_icon, .priority = self.guides.notice_priority };
             }
             if (request) |notice| {
                 _ = try self.content.messages.get(notice.message);
@@ -803,16 +895,62 @@ pub const Scene = struct {
         } else try self.zoom.draw(indices, rgba);
         if (self.dialog) |dialog| try dialog.menu.draw(self.content.inventory_art.artwork(), self.menu_entries[0..dialog.menu.count], self.score, indices, room.image.width, room.image.height);
         if (self.options) |options| try options.menu.draw(indices, &self.content.inventory_art.font);
-        try palette.writeRgba(indices, &room.colors, rgba);
+        var colors = room.colors;
+        for (self.guards.actors) |actor| if (actor.room == self.environment.room and actor.activity != .removed) {
+            @memcpy(colors[0x50..0x60], &self.content.guard_colors);
+            break;
+        };
+        try palette.writeRgba(indices, &colors, rgba);
+    }
+
+    fn chooseInteraction(self: *Scene) !Interaction {
+        const entity = try self.visibility.touching(self.terrain.map(), self.content.visibility.player_entity, .interactive) orelse return .none;
+        const owner = self.content.visibility.bindings[@backingInt(entity)].owner;
+        if (owner == .prop) {
+            const definition = self.props.definitions[owner.prop];
+            if (definition.behavior == .collectible) {
+                self.props.pickup_candidate = definition.behavior.collectible.item;
+                self.props.pickup_priority = definition.interaction_priority;
+            }
+            return .none;
+        }
+        self.props.pickup_candidate = null;
+        return switch (owner) {
+            .item_aid => |index| result: {
+                self.item_aid.candidate = index;
+                break :result .item_aid;
+            },
+            .trader => |index| result: {
+                self.traders.candidate = index;
+                break :result .trader;
+            },
+            .guide => |index| result: {
+                self.guides.candidate = index;
+                break :result .guide;
+            },
+            .station => |index| result: {
+                self.story_stations.candidate = index;
+                break :result .station;
+            },
+            else => .none,
+        };
     }
 
     const Hint = struct { icon: @import("../motion.zig").VisualId, label: []const u8 };
     fn interactionHint(self: *const Scene) !?Hint {
-        if (self.trader_selected) {
+        if (self.interaction == .station) {
+            const definition = self.content.story_stations.definitions[self.story_stations.candidate.?];
+            return .{ .icon = definition.hint, .label = definition.label };
+        }
+        if (self.interaction == .guide) {
+            const definition = self.content.guides.definitions[self.guides.candidate.?];
+            return .{ .icon = definition.hint, .label = definition.label };
+        }
+        if (self.interaction == .trader) {
             const definition = self.content.traders.definitions[self.traders.candidate.?];
             return .{ .icon = definition.hint, .label = definition.label };
         }
-        if (self.talk_selected) {
+        if (self.interaction == .item_aid) {
             const definition = self.content.item_aid.definitions[self.item_aid.candidate.?];
             return .{ .icon = definition.hint, .label = definition.label };
         }
@@ -832,6 +970,10 @@ pub const Scene = struct {
         return null;
     }
     fn drawItemAid(self: *const Scene, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8, behind_player: bool) !void {
+        for (self.force_fields, self.content.force_fields.definitions) |field, definition| {
+            if (field.room != self.environment.room or definition.behind_player != behind_player) continue;
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(field.pose.visual.id), @as(i32, field.pose.position.x) + 8, @as(i32, field.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (field.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        }
         for (self.triggered_effects.instances, self.content.triggered_effects.definitions) |instance, definition| {
             if (instance.room != self.environment.room or definition.behind_player != behind_player) continue;
             try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(instance.pose.visual.id), @as(i32, instance.pose.position.x) + 8, @as(i32, instance.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (instance.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
@@ -840,9 +982,44 @@ pub const Scene = struct {
             if (definition.footprint.room != self.environment.room or definition.behind_player != behind_player) continue;
             try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(actor.pose.visual.id), @as(i32, actor.pose.position.x) + 8, @as(i32, actor.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (actor.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
         }
+        for (self.story_stations.instances, self.content.story_stations.definitions) |instance, definition| {
+            if ((instance.phase != .ready and instance.phase != .using) or definition.footprint.room != self.environment.room or definition.behind_player != behind_player) continue;
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(instance.pose.visual.id), @as(i32, instance.pose.position.x) + 8, @as(i32, instance.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (instance.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        }
+        for (self.guides.actors, self.content.guides.definitions) |actor, definition| {
+            if (actor.room != self.environment.room or definition.behind_player != behind_player) continue;
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(actor.pose.visual.id), @as(i32, actor.pose.position.x) + 8, @as(i32, actor.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (actor.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        }
         for (self.item_aid.actors, self.content.item_aid.definitions) |actor, definition| {
             if (actor.phase == .gone or actor.room != self.environment.room or definition.behind_player != behind_player) continue;
             try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(actor.pose.visual.id), @as(i32, actor.pose.position.x) + 8, @as(i32, actor.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (actor.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        }
+    }
+
+    fn syncVisibility(self: *Scene) !void {
+        for (self.content.visibility.bindings) |binding| {
+            const observation: @import("../visibility.zig").Observation = switch (binding.owner) {
+                .force_field => |index| .{ .body = self.force_fields[index].body(self.content.force_fields.definitions[index]), .active = true },
+                .player => .{ .body = self.props.player_contact, .active = true },
+                .guard => |index| blk: {
+                    const actor = self.guards.actors[index];
+                    break :blk .{ .body = if (actor.room) |room| .{ .room = room, .position = actor.pose.position, .width = self.content.guards.definitions[index].contact_width } else null, .active = actor.active and actor.activity != .removed };
+                },
+                .prop => |index| blk: {
+                    const object = self.props.objects[index];
+                    break :blk .{ .body = if (try self.props.visible(index, &self.equipment)) object.contact else null, .active = object.active };
+                },
+                .door => |index| .{ .body = self.content.doors.definitions[index].footprint, .active = self.doors.instances[index].active },
+                .item_aid => |index| blk: {
+                    const actor = self.item_aid.actors[index];
+                    break :blk .{ .body = if (actor.phase != .gone) actor.contact else null, .active = actor.active and actor.phase != .gone };
+                },
+                .trader => |index| .{ .body = self.traders.actors[index].contact, .active = self.traders.actors[index].active },
+                .guide => |index| .{ .body = self.guides.actors[index].contact, .active = self.guides.actors[index].active },
+                .station => |index| .{ .body = if (self.story_stations.instances[index].phase == .ready or self.story_stations.instances[index].phase == .using) self.content.story_stations.definitions[index].footprint else null, .active = self.story_stations.instances[index].active },
+                .unbound => continue,
+            };
+            self.visibility.observe(binding.entity, observation);
         }
     }
 
@@ -855,8 +1032,16 @@ pub const Scene = struct {
         } else if (@backingInt(hit.target) < 1 + self.gunmen.actors.len + self.robots.actors.len) {
             const actor = &self.robots.actors[@backingInt(hit.target) - 1 - self.gunmen.actors.len];
             if (actor.room == hit.sender_room) actor.pending_hits.set(hit.impact);
+        } else if (@backingInt(hit.target) < 1 + self.gunmen.actors.len + self.robots.actors.len + self.guards.actors.len) {
+            const actor = &self.guards.actors[@backingInt(hit.target) - 1 - self.gunmen.actors.len - self.robots.actors.len];
+            if (actor.room == hit.sender_room) actor.pending_hits.set(hit.impact);
         } else {
-            const index = @backingInt(hit.target) - 1 - self.gunmen.actors.len - self.robots.actors.len;
+            const index = @backingInt(hit.target) - 1 - self.gunmen.actors.len - self.robots.actors.len - self.guards.actors.len;
+            if (index >= self.doors.instances.len) {
+                const field = &self.force_fields[index - self.doors.instances.len];
+                if (field.room == hit.sender_room) field.hit = true;
+                return;
+            }
             if (self.content.doors.definitions[index].footprint.room == hit.sender_room) self.doors.hit(self.content.doors.definitions, index);
         }
     }
@@ -864,6 +1049,9 @@ pub const Scene = struct {
     fn drawShot(self: *const Scene, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8, behind_player: bool) !void {
         const definition = self.content.pistolDefinition();
         for (self.enemy_fire.channels, self.content.gunmen.weapons) |channel, weapon| if (weapon.behind_player == behind_player) {
+            if (channel.state.effect) |effect| if (effect.room == self.environment.room) try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(effect.pose.visual.id), @as(i32, effect.pose.position.x) + 8, @as(i32, effect.pose.position.y) + 2, .{ .palette_bank = weapon.palette_bank, .facing = if (effect.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        };
+        for (self.guard_fire.channels, self.content.guards.weapons) |channel, weapon| if (weapon.behind_player == behind_player) {
             if (channel.state.effect) |effect| if (effect.room == self.environment.room) try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(effect.pose.visual.id), @as(i32, effect.pose.position.x) + 8, @as(i32, effect.pose.position.y) + 2, .{ .palette_bank = weapon.palette_bank, .facing = if (effect.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
         };
         for (self.ceiling_fire.channels, self.content.ceiling_guns.weapons) |channel, weapon| if (weapon.behind_player == behind_player) {
@@ -927,6 +1115,10 @@ pub const Scene = struct {
     }
 
     fn drawRobots(self: *const Scene, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8, behind_player: bool) !void {
+        for (self.guards.actors, self.content.guards.definitions) |actor, definition| {
+            if (actor.room != self.environment.room or actor.activity == .removed or definition.behind_player != behind_player) continue;
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(actor.pose.visual.id), @as(i32, actor.pose.position.x) + 8, @as(i32, actor.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (actor.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        }
         for (self.robots.actors, self.content.robots.definitions) |actor, definition| {
             if (actor.removed or actor.room != self.environment.room or definition.behind_player != behind_player) continue;
             try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(actor.pose.visual.id), @as(i32, actor.pose.position.x) + 8, @as(i32, actor.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (actor.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
@@ -968,6 +1160,7 @@ pub const Scene = struct {
         hash.update(&.{ @intFromBool(self.defeated), @intFromBool(self.aborted), self.settings.volume, @intFromBool(self.settings.sound_fx), @intFromBool(self.settings.music), @intFromBool(self.settings.joystick), @backingInt(self.settings.zoom), @intFromBool(self.options != null) });
         if (self.options) |options| hash.update(&.{ @backingInt(options.menu.selection), options.menu.settings.volume, @intFromBool(options.menu.settings.sound_fx), @intFromBool(options.menu.settings.music), @intFromBool(options.menu.settings.joystick), @backingInt(options.menu.settings.zoom) });
         self.equipment.hashInto(&hash);
+        for (self.force_fields) |field| field.hashInto(&hash);
         self.terrain.hashInto(&hash);
         self.pistol.hashInto(&hash);
         self.enemy_fire.hashInto(&hash);
@@ -982,14 +1175,20 @@ pub const Scene = struct {
         self.locks.hashInto(&hash);
         self.platform_sections.hashInto(&hash);
         self.item_aid.hashInto(&hash);
+        self.guides.hashInto(&hash);
+        self.story_stations.hashInto(&hash);
         self.traders.hashInto(&hash);
+        self.guards.hashInto(&hash);
+        self.visibility.hashInto(&hash);
+        self.guard_fire.hashInto(&hash);
+        self.barriers.hashInto(&hash);
         self.inventory_grants.hashInto(&hash);
         self.exits.hashInto(&hash);
         self.triggered_effects.hashInto(&hash);
-        hash.update(&.{@intFromBool(self.trader_selected)});
+
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u16, self.level_code_steps)));
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, @backingInt(self.message_icon))));
-        hash.update(&.{@intFromBool(self.talk_selected)});
+        hash.update(&.{@intCast(@backingInt(self.interaction))});
         hash.update(&.{@intFromBool(self.message != null)});
         if (self.message) |message| message.hashInto(&hash);
         self.energy_stations.hashInto(&hash);

@@ -44,7 +44,18 @@ pub const Pack = struct {
     level_code: [13]u8,
     platform_sections: @import("platform_sections.zig").Assets,
     item_aid: @import("item_aid.zig").Assets,
+    guides: @import("rescued_guides.zig").Assets,
+    guide_bindings: []@import("../actors/rescued_guide.zig").Binding,
+    story_stations: @import("story_stations.zig").Assets,
+    story_station_bindings: []@import("../story_stations.zig").Binding,
     traders: @import("traders.zig").Assets,
+    guards: @import("mobile_guards.zig").Assets,
+    guard_colors: palette.Bank,
+    visibility: @import("visibility.zig").Assets,
+    force_fields: @import("force_fields.zig").Assets,
+    guard_bindings: []@import("../actors/mobile_guard.zig").Binding,
+    barriers: @import("event_barriers.zig").Assets,
+    barrier_bindings: []@import("../event_barriers.zig").Binding,
     inventory_grants: @import("inventory_grants.zig").Assets,
     exits: []@import("../level_exits.zig").Definition,
     triggered_effects: @import("triggered_effects.zig").Assets,
@@ -90,7 +101,17 @@ pub const Pack = struct {
         self.messages.deinit();
         self.platform_sections.deinit();
         self.item_aid.deinit();
+        self.guides.deinit();
+        self.story_stations.deinit();
+        self.allocator.free(self.story_station_bindings);
+        self.allocator.free(self.guide_bindings);
         self.traders.deinit();
+        self.guards.deinit();
+        self.visibility.deinit();
+        self.force_fields.deinit();
+        self.allocator.free(self.guard_bindings);
+        self.barriers.deinit();
+        self.allocator.free(self.barrier_bindings);
         self.inventory_grants.deinit();
         self.allocator.free(self.exits);
         self.triggered_effects.deinit();
@@ -471,6 +492,10 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer locks.deinit();
     var item_aid = try @import("item_aid.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, initial_items, &resolver);
     errdefer item_aid.deinit();
+    var guides = try @import("rescued_guides.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, initial_items, &resolver);
+    errdefer guides.deinit();
+    var story_stations = try @import("story_stations.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, &resolver);
+    errdefer story_stations.deinit();
     var traders = try @import("traders.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, initial_items, &resolver);
     errdefer traders.deinit();
     var lifts = try @import("lifts.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
@@ -479,9 +504,21 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer allocator.free(lift_passengers);
     var riding = try @import("conrad_lift.zig").load(allocator, rules.bytes, player.rule_group, ani.bytes, &resolver);
     errdefer riding.deinit();
+    var guards = try @import("mobile_guards.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
+    errdefer guards.deinit();
+    var barriers = try @import("event_barriers.zig").load(allocator, placement_table, rules.bytes, ani.bytes, difficulty, &connections);
+    errdefer barriers.deinit();
     const combined_connections = try connections.toOwnedSlice(allocator);
     allocator.free(props.connections);
     props.connections = combined_connections;
+    const story_station_bindings = try story_stations.bind(props.connections);
+    errdefer allocator.free(story_station_bindings);
+    const guide_bindings = try guides.bind(props.connections);
+    errdefer allocator.free(guide_bindings);
+    const guard_bindings = try guards.bind(props.connections);
+    errdefer allocator.free(guard_bindings);
+    const barrier_bindings = try barriers.bind(props.connections);
+    errdefer allocator.free(barrier_bindings);
     const item_bindings = try @import("quest_items.zig").bindings(allocator, placement_table, rules.bytes, props, @intCast(initial_items.len), props.connections);
     errdefer allocator.free(item_bindings);
     var inventory_grants = try @import("inventory_grants.zig").load(allocator, placement_table, rules.bytes, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, props.connections);
@@ -502,12 +539,19 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer gunmen.deinit();
     var robots = try @import("ground_robots.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &resolver);
     errdefer robots.deinit();
+    var force_fields = try @import("force_fields.zig").load(allocator, placement_table, rules.bytes, ani.bytes, difficulty, &resolver);
+    errdefer force_fields.deinit();
+    var visibility = try @import("visibility.zig").load(allocator, placement_table, &room_ids, difficulty, .{ .props = props, .guards = guards, .doors = doors, .item_aid = item_aid, .traders = traders, .guides = guides, .story_stations = story_stations, .force_fields = force_fields });
+    errdefer visibility.deinit();
     const supplied = initial_items.len;
     initial_items = try allocator.realloc(initial_items, supplied + props.items.len);
     for (props.items, initial_items[supplied..]) |*item, *destination| {
         destination.* = item.*;
         item.label = &.{};
     }
+    for (initial_items) |*item| if (item.kind == .force_field) {
+        item.use_action = .deploy_field;
+    };
     var room_art: std.ArrayList(RoomArt) = .empty;
     errdefer {
         for (room_art.items) |*room| room.artwork.deinit();
@@ -560,7 +604,18 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .messages = interface.messages orelse .{ .allocator = allocator, .messages = &.{} },
         .platform_sections = platform_sections,
         .item_aid = item_aid,
+        .guides = guides,
+        .guide_bindings = guide_bindings,
+        .story_stations = story_stations,
+        .story_station_bindings = story_station_bindings,
         .traders = traders,
+        .guards = guards,
+        .guard_colors = interface.actor_libraries[1].colors,
+        .visibility = visibility,
+        .force_fields = force_fields,
+        .guard_bindings = guard_bindings,
+        .barriers = barriers,
+        .barrier_bindings = barrier_bindings,
         .inventory_grants = inventory_grants,
         .exits = exits,
         .triggered_effects = triggered_effects,

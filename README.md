@@ -25,7 +25,7 @@ AdLib music now plays through the logo, introduction and menu. Original musical 
 register writes agree across 16,709 observations; native SDL output has been captured. Digital
 effects now play for forest ambience, movement, the floor switch and weapon effects, with
 animated ejected casings. Other actor/mechanism cues, exact presentation/audio synchronization,
-menu fades/blinking and passwords are still unfinished. Continue now displays the original
+menu fades/blinking are still unfinished. Original level codes now select the level and difficulty through the title menu. Continue now displays the original
 floppy screen; retry restarts the level opening, and Abort plays game over before returning
 to the title. Checkpoint restoration and complete defeat-flow timing remain unfinished. Start plays the wake-up animation with music and enters the
 jungle. Turning, walking and the existing movement/inventory development slice are available;
@@ -75,6 +75,11 @@ teleporter to reveal the ID card; the card can be collected and used without bei
 The old man now offers the anti-G belt: hold Shift to talk, select CREDITS with Tab/arrows,
 then press Return beside him to pay 500. The belt is granted automatically; enter the gap
 to play the descent film and reach New Washington. Later city gameplay is still incomplete.
+Ian's memory machine is connected: after his invitation, wait for him to sit, move slightly
+to his right until SEAT appears, and hold Shift. The memory film plays with music; afterward,
+talk to Ian again for his next instructions. Select his FORCE FIELD with Tab/arrows, close
+the inventory, then hold Return to deploy it. It also works while moving or holding the gun;
+holding Return repeats deployment after recovery. The item is reusable.
 Startup also shows the original temporary level code until its timer expires or a nearby
 interaction hint replaces it.
 Ordinary lifts now carry Conrad and board stones through their original contact behavior.

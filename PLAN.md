@@ -72,7 +72,7 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
 - [ ] Preserve the original leftward visibility continuation after a nonmatching contact.
   Recover the observable contact ordering and redirects, isolate compatibility metadata at
   import, and keep original addresses and mutable RAM layouts out of the game state model.
-- [ ] Activate the carried force field through normal inventory use. Recover its deployment,
+- [x] Activate the carried force field through normal inventory use. Recover its deployment,
   animation, lifetime, repeat-use and projectile-blocking behavior from the supplied original;
   implement a shared equipment capability and qualify with a focused native encounter.
 - [ ] City police and rescued civilians: import pursuit, evasive movement, shooting,
