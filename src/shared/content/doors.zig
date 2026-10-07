@@ -28,11 +28,13 @@ const Spec = struct {
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
+    source_indices: []u16,
     profiles: []runtime.Profile,
     bindings: []runtime.Binding,
     clips: []animation.OwnedClip,
     pub fn deinit(self: *Assets) void {
         self.allocator.free(self.definitions);
+        self.allocator.free(self.source_indices);
         self.allocator.free(self.bindings);
         for (self.profiles) |profile| {
             self.allocator.free(profile.opening);
@@ -197,6 +199,8 @@ fn recoverProfile(allocator: std.mem.Allocator, spec: Spec, group: rules.Group, 
     return .{ .closed = try resolve(allocator, animations, spec.closed, clips, resolver), .open = try resolve(allocator, animations, spec.open, clips, resolver), .opening = opening, .closing = closing, .automatic_open = spec.automatic, .shoot_to_open = spec.shoot_to_open, .snap_closed = snap, .keep_open_request = received(group, spec.open, spec.open_message) != null, .hold_player = hold_player, .hold_enemies = hold_enemies, .sleep_closed = has(progress(group, spec.closed).?, 67), .sleep_open = has(progress(group, spec.open).?, 67), .start_closing_clearance = if (received(group, spec.open, spec.close_message)) |r| material(r) else null };
 }
 pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []const u8, animations: []const u8, rooms: *const [64]geometry.RoomId, difficulty: @import("../settings.zig").Difficulty, routes: []const connections.Connection, player_projectile: u16, resolver: anytype) !Assets {
+    var source_indices: std.ArrayList(u16) = .empty;
+    errdefer source_indices.deinit(allocator);
     var definitions: std.ArrayList(runtime.Definition) = .empty;
     errdefer definitions.deinit(allocator);
     var profiles: std.ArrayList(runtime.Profile) = .empty;
@@ -255,6 +259,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
             };
             try bindings.append(allocator, .{ .circuit = route.circuit, .target = definitions.items.len, .action = action, .next_step = route.sender >= i });
         };
+        try source_indices.append(allocator, @intCast(i));
         try definitions.append(allocator, .{ .profile = family.index, .footprint = .{ .room = rooms[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .span = .{ .origin = .{ .room = rooms[record.room], .column = @intCast(column), .row = @intCast(row) }, .length = record.collision_width, .history_weight = collision.snapshotWeight(record.collision_width), .reuse = collision.snapshotReuse(record.collision_width, record.facing_right != 0) }, .initial_phase = phase, .initial_segment = initial_segment, .pass = if (i < player_projectile) .before_fire else .after_fire, .hold_steps = if (spec.hold_parameter) |p| record.parameters[p] else null, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .enemy_contact = record.kind == 10 });
     }
     const defs = try definitions.toOwnedSlice(allocator);
@@ -269,5 +274,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
     }
     const links = try bindings.toOwnedSlice(allocator);
     errdefer allocator.free(links);
-    return .{ .allocator = allocator, .definitions = defs, .profiles = profs, .bindings = links, .clips = try clips.toOwnedSlice(allocator) };
+    const sources = try source_indices.toOwnedSlice(allocator);
+    errdefer allocator.free(sources);
+    return .{ .allocator = allocator, .source_indices = sources, .definitions = defs, .profiles = profs, .bindings = links, .clips = try clips.toOwnedSlice(allocator) };
 }
