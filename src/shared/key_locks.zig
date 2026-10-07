@@ -25,6 +25,7 @@ pub const Definition = struct {
     unlock_down: i16,
     unlock_sound: ?motion.SoundId,
     circuits: []const props.CircuitId,
+    repaired_operation: ?struct { circuit: props.CircuitId, sound: motion.SoundId } = null,
     notice: ?@import("world_messages.zig").Id = null,
     initially_used: bool,
     initially_active: bool,
@@ -63,7 +64,7 @@ pub const World = struct {
             instance.* = .{ .used = definition.initially_used, .active = definition.initially_active, .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } } };
         }
         var capacity: usize = 0;
-        for (definitions) |definition| capacity += definition.circuits.len;
+        for (definitions) |definition| capacity += definition.circuits.len + @intFromBool(definition.repaired_operation != null);
         return .{ .allocator = allocator, .instances = instances, .pulses = try allocator.alloc(props.CircuitId, capacity) };
     }
     pub fn deinit(self: *World) void {
@@ -128,7 +129,15 @@ pub const World = struct {
             instance.sound = null;
             const near = try @import("activation.zig").around(map, room, definition.footprint.room, instance.pose.position.y);
             if (definition.wake_when_near and near.wake) instance.active = true;
-            if (operate and self.candidate == index and !instance.used and definition.notice != null and (instance.active or definition.accepts_signals)) {
+            if (operate and self.candidate == index and instance.used and definition.repaired_operation != null and (instance.active or definition.accepts_signals)) {
+                const operation = definition.repaired_operation.?;
+                instance.active = true;
+                instance.playback.completeDisplacement(definition.used, &instance.pose);
+                instance.playback = .{};
+                instance.sound = operation.sound;
+                self.pulses[self.pulse_count] = operation.circuit;
+                self.pulse_count += 1;
+            } else if (operate and self.candidate == index and !instance.used and definition.notice != null and (instance.active or definition.accepts_signals)) {
                 instance.active = true;
                 instance.playback.completeDisplacement(definition.idle, &instance.pose);
                 instance.playback = .{};

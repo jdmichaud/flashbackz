@@ -519,7 +519,9 @@ pub const Scene = struct {
             self.controller.control_available = self.interaction != .none or self.operated_controls.candidate != null or self.locks.candidate != null or self.energy_stations.candidate != null;
             self.controller.pickup_available = self.props.pickup_candidate != null and self.interaction == .none;
             const selected = try self.equipment.selected();
-            self.controller.use_available = if (selected) |item| item.definition.use_action != null or item.definition.recharge != null else false;
+            // Presenting a possession is a player gesture; its receiver decides whether
+            // it has an applicable use. Even a nonmatching card retains the hand motion.
+            self.controller.use_available = selected != null;
             self.controller.use_reaches = if (selected) |item| item.definition.use_motion == .reach else false;
             self.controller.throw_available = if (selected) |item| if (item.definition.use_action) |action| action == .throw_item else false else false;
             self.controller.weapon_desired = self.weapon_toggle.desired;
@@ -767,6 +769,9 @@ pub const Scene = struct {
             self.zoom.advance(self.pose);
             self.clock.?.consume();
             var request = self.locks.notice;
+            if (request == null) if (self.equipment.notice) |id| {
+                request = .{ .message = id, .icon = self.message_icon, .priority = 0 };
+            };
             if (self.item_aid.notice) |id| {
                 if (request == null or self.item_aid.notice_priority >= request.?.priority) request = .{ .message = id, .icon = self.message_icon, .priority = self.item_aid.notice_priority };
             }

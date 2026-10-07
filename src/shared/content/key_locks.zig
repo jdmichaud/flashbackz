@@ -26,11 +26,33 @@ pub const Assets = struct {
         self.allocator.free(self.receivers);
     }
 };
-pub const Spec = struct { idle: u16, used: u16, target_parameter: u2, input: i16, output: i16, sound: ?motion.SoundId, forward: i16, down: i16, second: ?struct { parameter: u2, signal: i16 } = null, notice: ?@import("../world_messages.zig").Id = null };
+pub const Spec = struct { idle: u16, used: u16, target_parameter: u2, input: i16, output: i16, sound: ?motion.SoundId, forward: i16, down: i16, second: ?struct { parameter: u2, signal: i16 } = null, notice: ?@import("../world_messages.zig").Id = null, repaired_operation: ?struct { parameter: u2, signal: i16, sound: motion.SoundId } = null };
 fn op(value: rules.Operation, code: u8, argument: i16) bool {
     return value.code == code and (code == 0 or value.argument == argument);
 }
+fn repairable(group: rules.Group) ?Spec {
+    if (group.count() != 7) return null;
+    const repair = group.at(0);
+    const broken = group.at(1);
+    const operate = group.at(4);
+    if (repair.source == repair.target or repair.next != 4 or repair.conditions[0].code != 34 or repair.conditions[1].code != 0 or repair.effect.code < 35 or repair.effect.code > 38) return null;
+    if (broken.source != repair.source or broken.target != repair.source or broken.next != 0 or !op(broken.conditions[0], 34, 30) or !op(broken.conditions[1], 90, 24) or broken.effect.code != 123 or broken.effect.argument < 0) return null;
+    if (operate.source != repair.target or operate.target != repair.target or operate.next != 4 or !op(operate.conditions[0], 34, 30) or operate.conditions[1].code != 125 or operate.conditions[1].argument < 0 or operate.conditions[1].argument >= 66 or operate.effect.code < 35 or operate.effect.code > 38) return null;
+    for (0..7) |i| {
+        const r = group.at(i);
+        if (r.flags != 0 or (i != 0 and (r.dx != 0 or r.dy != 0))) return null;
+    }
+    for ([_]usize{ 2, 3, 5, 6 }) |i| {
+        const r = group.at(i);
+        const next: u16 = if (i < 4) 0 else 4;
+        const state = if (i < 4) repair.source else repair.target;
+        const sleep = i == 2 or i == 5;
+        if (r.source != state or r.target != state or r.next != next or !op(r.conditions[0], if (sleep) 77 else 0, 0) or r.conditions[1].code != 0 or !op(r.effect, if (sleep) 67 else 0, 0)) return null;
+    }
+    return .{ .idle = repair.source, .used = repair.target, .target_parameter = @intCast(repair.effect.code - 35), .input = repair.conditions[0].argument, .output = repair.effect.argument, .sound = null, .forward = -@as(i16, repair.dx), .down = repair.dy, .notice = @fromBackingInt(@as(u16, @intCast(broken.effect.argument))), .repaired_operation = .{ .parameter = @intCast(operate.effect.code - 35), .signal = operate.effect.argument, .sound = @fromBackingInt(@as(u8, @intCast(operate.conditions[1].argument))) } };
+}
 pub fn recognize(group: rules.Group) ?Spec {
+    if (repairable(group)) |spec| return spec;
     const instructed = group.count() == 6;
     if (group.count() != 5 and !instructed) return null;
     const begin: usize = if (instructed) 1 else 0;
@@ -86,6 +108,11 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
             if (other < 0 or other >= table.count) return error.InvalidLockConnection;
             circuits[1] = try props.internConnection(allocator, connections, @intCast(i), @intCast(other), output.signal);
         }
+        const repaired_operation: @FieldType(runtime.Definition, "repaired_operation") = if (spec.repaired_operation) |operation| result: {
+            const destination = record.parameters[operation.parameter];
+            if (destination < 0 or destination >= table.count) return error.InvalidRepairedControlConnection;
+            break :result .{ .circuit = try props.internConnection(allocator, connections, @intCast(i), @intCast(destination), operation.signal), .sound = operation.sound };
+        } else null;
         var pair: [2]motion.Clip = undefined;
         for ([_]u16{ spec.idle, spec.used }, &pair) |state, *destination| {
             var source = try animation.decode(allocator, animations, state);
@@ -103,7 +130,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
         table.register(@intCast(i), .key_locks);
-        try definitions.append(allocator, .{ .footprint = .{ .room = room_ids[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .palette_bank = @intCast(record.visual_flags & 3), .layer = if (record.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .idle = pair[0], .used = pair[1], .credential = record.life, .interaction_priority = @intCast(i), .unlock_forward = spec.forward, .unlock_down = spec.down, .unlock_sound = spec.sound, .circuits = circuits, .notice = spec.notice, .initially_used = record.initial_state == spec.used, .initially_active = record.initially_active != 0, .wake_when_near = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .hint = try resolver.icon(record.contact_icon - 1), .label = label });
+        try definitions.append(allocator, .{ .footprint = .{ .room = room_ids[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .palette_bank = @intCast(record.visual_flags & 3), .layer = if (record.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .idle = pair[0], .used = pair[1], .credential = record.life, .interaction_priority = @intCast(i), .unlock_forward = spec.forward, .unlock_down = spec.down, .unlock_sound = spec.sound, .circuits = circuits, .repaired_operation = repaired_operation, .notice = spec.notice, .initially_used = record.initial_state == spec.used, .initially_active = record.initially_active != 0, .wake_when_near = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .hint = try resolver.icon(record.contact_icon - 1), .label = label });
     }
     // Preserve contact selection across all implemented controls, including controls
     // whose normal operation ignores an item's credential signal.

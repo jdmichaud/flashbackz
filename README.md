@@ -66,6 +66,9 @@ route through imported circuits. Ordinary keys can be collected with Shift, sele
 Tab/arrow keys, and used by holding Return through Conrad's hand press at a matching lock.
 Successful use consumes the key. Select SHIELD and hold Return near an energy generator to
 recharge it, with the original animation and music. Releasing Return before the press cancels.
+The city fuse can be collected with Shift. Select FUSE with Tab/arrows, close inventory,
+then hold Return at the broken switch. Repair consumes the fuse and enables the linked lift;
+hold Shift at the repaired switch to call it.
 The magnetic cartridge can be collected, recharged at a generator and used in its lock to
 activate the bridge. Its lock instruction uses the original paged message display; Return,
 Space or Shift acknowledges a page while gameplay is paused. All links and support footprints
@@ -129,3 +132,7 @@ belongs in `../flashback-remaster`. See [PLAN.md](PLAN.md) and [DESIGN.md](DESIG
 
 The generic OPL2/OPL3 synthesizer is reused from vpoolz with its synthetic reference tests and
 LGPL notice. Flashback's original-derived music importer and sample-clock player feed the native PCM queue.
+
+A complete placement/family/connection audit is maintained in
+[the research coverage report](../flashback-re/docs/content-coverage.md). Import registrations
+identify implemented components and gaps; they are separate from behavior qualification.

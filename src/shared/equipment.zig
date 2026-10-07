@@ -5,7 +5,7 @@ const std = @import("std");
 const inventory = @import("inventory.zig");
 const motion = @import("motion.zig");
 pub const ItemHandle = @import("identity.zig").ItemHandle;
-pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone, key, cartridge, id_card, anti_g_belt, force_field };
+pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone, key, cartridge, id_card, anti_g_belt, force_field, fuse };
 pub const Credential = union(enum) { fixed: i16, item_charge };
 pub const Recharge = struct {
     movie_when: enum { start, completion } = .completion,
@@ -15,6 +15,7 @@ pub const Recharge = struct {
 };
 pub const Recharged = struct { item: ItemHandle, health: ?i16, movie: ?@import("story_cue.zig").Cue };
 pub const Definition = struct {
+    consumption_notice: ?@import("world_messages.zig").Id = null,
     recharge: ?Recharge = null,
     use_motion: enum { direct, reach } = .direct,
     kind: Kind,
@@ -40,6 +41,7 @@ pub const Loadout = struct {
     entries: []Item,
     inventory: inventory.Inventory,
     recharged: ?Recharged = null,
+    notice: ?@import("world_messages.zig").Id = null,
 
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !Loadout {
         if (definitions.len > 65535) return error.TooManyStartingItems;
@@ -133,6 +135,7 @@ pub const Loadout = struct {
         if (events.len < self.entries.len) return error.EventBufferTooSmall;
         var count: usize = 0;
         self.recharged = null;
+        self.notice = null;
         for (self.entries, 0..) |*entry, index| {
             switch (entry.state) {
                 .introducing => |remaining| {
@@ -153,6 +156,7 @@ pub const Loadout = struct {
                 if (remaining <= 1) {
                     const handle: ItemHandle = .{ .index = @intCast(index), .generation = 1 };
                     if (!self.inventory.remove(handle)) return error.ItemNotCarried;
+                    self.notice = entry.definition.consumption_notice;
                     entry.state = .consumed;
                     entry.consume_in = null;
                 } else entry.consume_in = remaining - 1;

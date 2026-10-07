@@ -33,6 +33,7 @@ pub const Story = struct {
             .lift_ascent => .{ .film = "LIFT", .entry = 0, .music = "LIFT3" },
             .lift_descent => .{ .film = "LIFT", .entry = 1, .music = "LIFT3" },
             .credits_pickup => .{ .film = "OBJET", .entry = 1, .music = "OBJET3" },
+            .fuse_pickup => .{ .film = "OBJET", .entry = 16, .music = "OBJET3" },
             .key_pickup => .{ .film = "OBJET", .entry = 4, .music = "OBJET3" },
             .holocube_pickup => .{ .film = "OBJET", .entry = 3, .music = "OBJET3" },
             .disintegration => .{ .film = "DESINTEG", .entry = 0, .music = "DESINTE3" },

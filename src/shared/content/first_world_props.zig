@@ -131,8 +131,8 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
                 defer use.deinit();
                 const label = try strings.copy(allocator, names, record.text_id);
                 errdefer allocator.free(label);
-                const item: equipment.Definition = .{ .kind = .key, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label, .use_action = .{ .unlock = .{ .credential = .{ .fixed = record.life }, .consume_after_steps = @intCast(use.frames.len) } } };
-                behavior = .{ .collectible = .{ .item = .{ .index = first_item.index + @as(u16, @intCast(items.items.len)), .generation = first_item.generation }, .idle = idle, .pickup_movie = .key_pickup } };
+                const item: equipment.Definition = .{ .kind = spec.kind, .consumption_notice = spec.completion_notice, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label, .use_action = .{ .unlock = .{ .credential = .{ .fixed = record.life }, .consume_after_steps = @intCast(use.frames.len) } } };
+                behavior = .{ .collectible = .{ .item = .{ .index = first_item.index + @as(u16, @intCast(items.items.len)), .generation = first_item.generation }, .idle = idle, .pickup_movie = spec.pickup } };
                 try items.append(allocator, item);
             } else if (cartridge) |spec| {
                 if (record.initial_state != spec.idle or record.contact_icon != 1 or record.parameters[0] != 5) return error.UnsupportedCartridgePickup;
