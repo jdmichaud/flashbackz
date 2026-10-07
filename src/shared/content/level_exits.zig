@@ -31,6 +31,7 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
             .hold => {},
             .frame => |f| if (f.dx != 0 or f.dy != 0) return error.MovingInventoryExit,
         };
+        table.register(@intCast(index), .level_exits);
         try definitions.append(allocator, .{ .footprint = .{ .room = rooms[record.room], .position = record.position, .width = record.collision_width }, .required_item = item, .destination = destinations[@intCast(a.effect.argument - 1)], .cadence = @intCast(animation.frames.len), .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0 });
     }
     return definitions.toOwnedSlice(allocator);

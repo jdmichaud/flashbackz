@@ -166,6 +166,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         const owned_outputs = try out.toOwnedSlice(allocator);
         errdefer allocator.free(owned_outputs);
         instances[i] = .{ .index = definitions.items.len, .spec = family.spec };
+        table.register(@intCast(i), .detectors);
         try definitions.append(allocator, .{ .profile = family.profile, .room = rooms[record.room], .position = record.position, .facing = if (record.facing_right == 0) .left else .right, .initial_phase = phase, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .outputs = owned_outputs });
     }
     for (routes.items) |route| if (instances[route.recipient]) |instance| {

@@ -102,6 +102,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         }
         const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
+        table.register(@intCast(i), .item_aid);
         try definitions.append(allocator, .{ .profile = profile, .footprint = .{ .room = rooms[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .credential = record.life, .interaction_priority = @intCast(i), .hint = try resolver.icon(record.contact_icon - 1), .label = label, .return_item = return_item, .reward = reward });
     }
     const owned = try definitions.toOwnedSlice(allocator);

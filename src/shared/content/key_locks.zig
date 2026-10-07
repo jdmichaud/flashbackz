@@ -102,6 +102,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         try sources.append(allocator, @intCast(i));
         const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
+        table.register(@intCast(i), .key_locks);
         try definitions.append(allocator, .{ .footprint = .{ .room = room_ids[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .palette_bank = @intCast(record.visual_flags & 3), .layer = if (record.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .idle = pair[0], .used = pair[1], .credential = record.life, .interaction_priority = @intCast(i), .unlock_forward = spec.forward, .unlock_down = spec.down, .unlock_sound = spec.sound, .circuits = circuits, .notice = spec.notice, .initially_used = record.initial_state == spec.used, .initially_active = record.initially_active != 0, .wake_when_near = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .hint = try resolver.icon(record.contact_icon - 1), .label = label });
     }
     // Preserve contact selection across all implemented controls, including controls

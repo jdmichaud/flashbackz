@@ -138,6 +138,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         }
         const family = imported[record.rule_group].?;
         if (record.initial_state != family.initial or record.room >= rooms.len or record.parameters[0] < 1 or record.parameters[0] > 64) return error.UnsupportedRobotPlacement;
+        table.register(@intCast(i), .ground_robots);
         try definitions.append(allocator, .{ .profile = family.index, .footprint = .{ .room = rooms[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .strike_cells = @intCast(record.parameters[0]) });
     }
     const owned_definitions = try definitions.toOwnedSlice(allocator);

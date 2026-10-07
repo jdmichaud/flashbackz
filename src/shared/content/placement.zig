@@ -27,6 +27,11 @@ pub const Record = struct {
 pub const Table = struct {
     bytes: []const u8,
     count: u16,
+    audit: ?*@import("import_audit.zig").Ledger = null,
+
+    pub fn register(self: Table, index: u16, system: @import("import_audit.zig").System) void {
+        if (self.audit) |audit| audit.record(index, system);
+    }
 
     pub fn init(bytes: []const u8) !Table {
         if (bytes.len < 2) return error.InvalidPlacementTable;

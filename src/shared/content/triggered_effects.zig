@@ -56,6 +56,7 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
         for (connections) |connection| if (connection.recipient == index and connection.message == spec.signal) {
             try bindings.append(allocator, .{ .circuit = connection.circuit, .target = definitions.items.len, .next_step = connection.sender >= index });
         };
+        table.register(@intCast(index), .triggered_effects);
         try definitions.append(allocator, .{ .room = rooms[record.room], .position = record.position, .facing = if (record.facing_right == 0) .left else .right, .waiting = resolved[0], .running = resolved[1], .loop_delta = spec.delta, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0 });
     }
     const owned = try definitions.toOwnedSlice(allocator);

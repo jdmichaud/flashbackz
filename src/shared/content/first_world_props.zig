@@ -210,6 +210,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
         errdefer if (behavior == .collectible) {
             if (behavior.collectible.throw_motion) |throw| allocator.free(throw.arc);
         };
+        table.register(@intCast(i), .world_props);
         try definitions.append(allocator, .{ .interaction_priority = @intCast(i), .footprint = .{ .room = room_ids[room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .palette_bank = @intCast(record.visual_flags & 3), .layer = if (record.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .behavior = behavior });
     }
     const owned_clips = try clips.toOwnedSlice(allocator);

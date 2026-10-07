@@ -102,6 +102,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
             // semantic actions and opaque circuit IDs, never source entity indices.
             try bindings.append(allocator, .{ .circuit = route.circuit, .target = definitions.items.len, .action = action, .next_step = route.sender >= index });
         };
+        table.register(@intCast(index), .electrical_hazards);
         try definitions.append(allocator, .{ .footprint = .{ .room = rooms[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .palette_bank = @intCast(record.visual_flags & 3), .layer = if (record.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .cycle = cycle, .contact = contact, .disabled = disabled, .initial_phase = phase, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0 });
     }
     const owned_definitions = try definitions.toOwnedSlice(allocator);

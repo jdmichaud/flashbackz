@@ -36,6 +36,7 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
         const record = try table.record(source);
         const spec = recognize(try rules.group(rule_bytes, record.rule_group)) orelse continue;
         const target = definitions.items.len;
+        table.register(@intCast(source), .inventory_grants);
         try definitions.append(allocator, .{ .item = .{ .index = first_item.index + @as(u16, @intCast(index)), .generation = first_item.generation }, .movie = spec.movie });
         for (routes) |route| if (route.recipient == source and route.message == spec.signal) {
             try bindings.append(allocator, .{ .circuit = route.circuit, .target = target, .next_step = route.sender >= source });

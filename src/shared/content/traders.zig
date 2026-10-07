@@ -103,6 +103,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         }
         const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
+        table.register(@intCast(i), .traders);
         try definitions.append(allocator, .{ .profile = profile_index, .footprint = .{ .room = rooms[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .interaction_priority = @intCast(i), .hint = try resolver.icon(record.contact_icon - 1), .label = label, .price = record.life, .debit = record.parameters[@as(usize, spec.debit_parameter) + 1], .purse = purse, .outputs = outputs });
     }
     const owned = try definitions.toOwnedSlice(allocator);

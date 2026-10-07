@@ -260,6 +260,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
             try bindings.append(allocator, .{ .circuit = route.circuit, .target = definitions.items.len, .action = action, .next_step = route.sender >= i });
         };
         try source_indices.append(allocator, @intCast(i));
+        table.register(@intCast(i), .doors);
         try definitions.append(allocator, .{ .profile = family.index, .footprint = .{ .room = rooms[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .span = .{ .origin = .{ .room = rooms[record.room], .column = @intCast(column), .row = @intCast(row) }, .length = record.collision_width, .history_weight = collision.snapshotWeight(record.collision_width), .reuse = collision.snapshotReuse(record.collision_width, record.facing_right != 0) }, .initial_phase = phase, .initial_segment = initial_segment, .pass = if (i < player_projectile) .before_fire else .after_fire, .hold_steps = if (spec.hold_parameter) |p| record.parameters[p] else null, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .enemy_contact = record.kind == 10 });
     }
     const defs = try definitions.toOwnedSlice(allocator);

@@ -299,6 +299,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         try source_indices.append(allocator, @intCast(i));
         const owned_outputs = try outputs.toOwnedSlice(allocator);
         errdefer allocator.free(owned_outputs);
+        table.register(@intCast(i), .lifts);
         try definitions.append(allocator, .{ .profile = profile_id, .room = rooms[record.room], .position = record.position, .facing = if (record.facing_right == 0) .left else .right, .width = record.collision_width, .floor_row_offset = spec.floor_row, .history_weight = collision.snapshotWeight(record.collision_width), .history_reuse = collision.snapshotReuse(record.collision_width, record.facing_right != 0), .travel_steps = durations, .initial_stop = stop, .initially_disabled = disabled, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .wake_on_contact = record.flags & 2 != 0, .accepts_signals = record.flags & 1 != 0, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .outputs = owned_outputs });
     }
     // All lift outputs must exist before resolving inputs, including backward links.

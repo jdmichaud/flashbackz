@@ -54,6 +54,7 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
         };
         const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
+        table.register(@intCast(i), .energy_stations);
         try definitions.append(allocator, .{ .footprint = .{ .room = rooms[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .palette_bank = @intCast(record.visual_flags & 3), .layer = if (record.visual_flags & 8 != 0) .behind_player else .in_front_of_player, .idle = idle, .initially_active = record.initially_active != 0, .wake_when_near = record.flags & 4 != 0, .hint = if (record.contact_icon != 0) try resolver.icon(record.contact_icon - 1) else null, .label = label });
     }
     const owned = try definitions.toOwnedSlice(allocator);

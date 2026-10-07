@@ -286,6 +286,8 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
             try weapons.append(allocator, weapon);
             weapon_ids[endpoint_index] = id;
         }
+        table.register(@intCast(i), .gunmen);
+        table.register(@intCast(endpoint_index), .weapon_effects);
         try definitions.append(allocator, .{ .weapon = weapon_ids[endpoint_index].?, .shot_next_step = i > endpoint_index, .profile = family.index, .room = room_ids[record.room], .position = record.position, .facing = if (record.facing_right == 0) .left else .right, .initial_action = initial, .contact_width = record.collision_width, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .behind_player = record.visual_flags & 8 != 0, .health = record.life, .aim_delay = record.parameters[@intCast(aim_param)], .posture_range = record.parameters[0], .recovery_delay = record.parameters[@intCast(recovery_param)] });
     }
     const owned_definitions = try definitions.toOwnedSlice(allocator);

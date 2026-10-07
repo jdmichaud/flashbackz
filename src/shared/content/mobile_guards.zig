@@ -215,6 +215,8 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         const output = try routes_mod.internConnection(allocator, routes, @intCast(index), @intCast(recipient), group.at(192).effect.argument);
         const arrival = record.parameters[2];
         if (dormant and (arrival < 0 or arrival >= rooms.len)) return error.InvalidGuardArrival;
+        table.register(@intCast(index), .mobile_guards);
+        table.register(@intCast(endpoint), .weapon_effects);
         try definitions.append(allocator, .{ .profile = profile_id, .room = if (record.room < rooms.len) rooms[record.room] else null, .arrival_room = if (dormant) rooms[@intCast(arrival)] else null, .position = record.position, .facing = if (record.facing_right == 0) .left else .right, .dormant = dormant, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .contact_width = record.collision_width, .health = record.life, .posture_range = record.parameters[0], .weapon = weapon, .shot_next_step = index >= endpoint, .defeat_output = output, .palette_bank = 5, .behind_player = record.visual_flags & 8 != 0 });
         try sources.append(allocator, @intCast(index));
     }

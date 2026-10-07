@@ -109,6 +109,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         try signals.append(allocator, spec.incoming);
         const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
+        table.register(@intCast(index), .rescued_guides);
         try definitions.append(allocator, .{ .profile = profile_index, .initial_phase = initial, .footprint = .{ .room = rooms[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .interaction_priority = @intCast(index), .hint = try resolver.icon(record.contact_icon - 1), .label = label, .offer_threshold = record.life, .path = outputs[0], .station = outputs[1], .reward = outputs[2] });
     }
     const owned = try definitions.toOwnedSlice(allocator);

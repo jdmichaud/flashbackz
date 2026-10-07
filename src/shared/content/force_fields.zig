@@ -78,6 +78,7 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
             try clips.append(allocator, clip);
             destination.* = clip.clip();
         }
+        table.register(@intCast(index), .force_fields);
         try definitions.append(allocator, .{ .rear = rear, .deploy = .{ .x = a.dx, .y = a.dy }, .impact = .{ .x = group.at(2).dx, .y = group.at(2).dy }, .idle = resolved[0], .checking = resolved[1], .shielding = resolved[2], .recovery = resolved[3], .absorption = resolved[4], .rear_range = if (rear) @intCast(-group.at(5).conditions[1].argument) else 0, .width = record.collision_width, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0 });
         try sources.append(allocator, @intCast(index));
     }

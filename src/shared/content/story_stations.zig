@@ -87,6 +87,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         try signals.append(allocator, spec.enable);
         const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
+        table.register(@intCast(index), .story_stations);
         try definitions.append(allocator, .{ .footprint = .{ .room = rooms[@intCast(room)], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .idle = resolved[0], .use = resolved[1], .initially_available = present, .initially_active = record.initially_active != 0, .accepts_signals = record.flags & 1 != 0, .interaction_priority = @intCast(index), .hint = try resolver.icon(record.contact_icon - 1), .label = label, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .movie = spec.movie, .reply = reply });
     }
     const owned = try definitions.toOwnedSlice(allocator);

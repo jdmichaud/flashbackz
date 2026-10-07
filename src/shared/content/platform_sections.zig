@@ -75,6 +75,7 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
             try bindings.append(allocator, .{ .circuit = connection.circuit, .target = definitions.items.len, .next_step = connection.sender >= i });
         };
         const room = rooms[@intCast(destination)];
+        table.register(@intCast(i), .platform_sections);
         try definitions.append(allocator, .{ .footprint = .{ .room = room, .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .span = .{ .origin = .{ .room = room, .column = @intCast(column), .row = @intCast(row) }, .length = record.collision_width, .history_weight = collision.snapshotWeight(record.collision_width), .reuse = collision.snapshotReuse(record.collision_width, record.facing_right != 0) }, .idle = clip, .initially_present = present, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0 });
     }
     const owned = try definitions.toOwnedSlice(allocator);

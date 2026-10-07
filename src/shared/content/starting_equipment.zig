@@ -63,6 +63,7 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
             .label = try strings.copy(allocator, names, source.text_id),
             .show_quantity = source.visual_flags & 4 != 0,
         };
+        placements.register(@intCast(i), .starting_equipment);
         loaded += 1;
     }
     return definitions;

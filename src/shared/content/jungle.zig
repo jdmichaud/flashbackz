@@ -34,6 +34,7 @@ pub const Pack = struct {
     run_strides: []motion.Clip,
     terrain: collision.Layout,
     initial_items: []equipment.Definition,
+    import_audit: @import("import_audit.zig").Ledger,
     initial_health: i16,
     sounds: @import("sound_effects.zig").Bank,
     inventory_art: inventory_artwork.Assets,
@@ -400,7 +401,9 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer sounds.deinit();
     var placements = try readLevel(source, files.actors, "PGE", 16384);
     defer placements.deinit();
-    const placement_table = try placement.Table.init(placements.bytes);
+    var import_audit: @import("import_audit.zig").Ledger = .{};
+    var placement_table = try placement.Table.init(placements.bytes);
+    placement_table.audit = &import_audit;
     const forest_enabled = forest: {
         for (0..placement_table.count) |i| if ((try placement_table.record(@intCast(i))).initial_state == 1143) break :forest true;
         break :forest false;
@@ -444,6 +447,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         if (surface.initial_state != 565) continue;
         if (surface.minimum_difficulty != 0) return error.UnsupportedConditionalSurface;
         if (surface.room >= room_ids.len) return error.InvalidSurfaceRoom;
+        placement_table.register(@intCast(i), .surface_reactions);
         try surfaces.append(allocator, .{ .footprint = .{ .room = room_ids[surface.room], .position = surface.position, .width = surface.collision_width }, .facing = if (surface.facing_right != 0) .right else .left, .palette_bank = @intCast(surface.visual_flags & 3), .behind_player = surface.visual_flags & 8 != 0 });
     }
     const motions = try allocator.alloc(animation.OwnedClip, source_moves.len);
@@ -475,6 +479,12 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     const run = try allocator.alloc(motion.Clip, 4);
     errdefer allocator.free(run);
     for (run, 0..) |*clip, i| clip.* = motions[@backingInt(Move.run_a) + i].clip();
+    placement_table.register(0, .player);
+    placement_table.register(@intCast(gun.parameters[0]), .weapon_effects);
+    placement_table.register(@intCast(shot.parameters[3]), .casings);
+    if (forest_enabled) for (0..placement_table.count) |i| {
+        if ((try placement_table.record(@intCast(i))).initial_state == 1143) placement_table.register(@intCast(i), .ambience);
+    };
     var initial_items = try starting_equipment.recover(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &resolver);
     errdefer starting_equipment.release(allocator, initial_items);
     var props = try prop_import.load(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &room_ids, difficulty, .{ .index = @intCast(initial_items.len), .generation = 1 }, initial_items, &resolver);
@@ -595,6 +605,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .run_strides = run,
         .terrain = terrain,
         .initial_items = initial_items,
+        .import_audit = import_audit,
         .initial_health = player.life,
         .inventory_art = inventory_art,
         .world_props = props,

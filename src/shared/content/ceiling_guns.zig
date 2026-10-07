@@ -175,6 +175,8 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
             };
             try bindings.append(allocator, .{ .circuit = route.circuit, .target = definitions.items.len, .action = action, .next_step = route.sender >= i });
         };
+        table.register(@intCast(i), .ceiling_guns);
+        table.register(@intCast(weapon_index), .weapon_effects);
         try definitions.append(allocator, .{ .profile = family.index, .room = rooms[record.room], .position = record.position, .facing = if (record.facing_right == 0) .left else .right, .initial_wait = record.parameters[spec.initial_parameter], .charge_wait = if (spec.charge_parameter) |p| record.parameters[p] else 0, .repeat_wait = if (spec.repeat_parameter) |p| record.parameters[p] else 0, .weapon = weapon_ids[weapon_index].?, .shot_next_step = i > weapon_index, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0 });
     }
     const owned_definitions = try definitions.toOwnedSlice(allocator);

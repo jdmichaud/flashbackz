@@ -61,6 +61,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         const target = record.parameters[0];
         if (target < 0 or target >= table.count) return error.InvalidBarrierOutput;
         const output = try connections.internConnection(allocator, routes, @intCast(index), @intCast(target), spec.output);
+        table.register(@intCast(index), .event_barriers);
         try definitions.append(allocator, .{ .required_updates = 2, .output = output });
         try sources.append(allocator, @intCast(index));
         try signals.append(allocator, spec.signal);
