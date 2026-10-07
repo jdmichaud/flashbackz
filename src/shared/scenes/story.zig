@@ -27,6 +27,7 @@ pub const Story = struct {
             .android_completed => .{ .film = "MISSIONS", .entry = 8, .music = "MISSION3" },
             .reactor_completed => .{ .film = "MISSIONS", .entry = 9, .music = "MISSION3" },
             .mutant_completed => .{ .film = "MISSIONS", .entry = 10, .music = "MISSION3" },
+            .papers_received => .{ .film = "OBJET", .entry = 15, .music = "DONNER3" },
             .parcel_received => .{ .film = "OBJET", .entry = 12, .music = "DONNER3" },
             .parcel_delivered => .{ .film = "OBJET", .entry = 13, .music = "DONNER3" },
             .card_delivery => .{ .film = "OBJET", .entry = 8, .music = "DONNER3" },

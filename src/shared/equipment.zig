@@ -5,7 +5,7 @@ const std = @import("std");
 const inventory = @import("inventory.zig");
 const motion = @import("motion.zig");
 pub const ItemHandle = @import("identity.zig").ItemHandle;
-pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone, key, cartridge, id_card, anti_g_belt, force_field, fuse, work_permit, parcel };
+pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone, key, cartridge, id_card, anti_g_belt, force_field, fuse, work_permit, parcel, papers };
 pub const Credential = union(enum) { fixed: i16, item_charge };
 pub const Recharge = struct {
     movie_when: enum { start, completion } = .completion,
@@ -15,6 +15,7 @@ pub const Recharge = struct {
 };
 pub const Recharged = struct { item: ItemHandle, health: ?i16, movie: ?@import("story_cue.zig").Cue };
 pub const Definition = struct {
+    consumption_movie: ?@import("story_cue.zig").Cue = null,
     consumption_notice: ?@import("world_messages.zig").Id = null,
     recharge: ?Recharge = null,
     use_motion: enum { direct, reach } = .direct,
@@ -42,6 +43,7 @@ pub const Loadout = struct {
     inventory: inventory.Inventory,
     recharged: ?Recharged = null,
     notice: ?@import("world_messages.zig").Id = null,
+    used_movie: ?@import("story_cue.zig").Cue = null,
 
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !Loadout {
         if (definitions.len > 65535) return error.TooManyStartingItems;
@@ -75,7 +77,7 @@ pub const Loadout = struct {
 
     pub fn grant(self: *Loadout, handle: ItemHandle) !void {
         const entry = try self.item(handle);
-        if (entry.state != .available and entry.state != .carried) return error.ItemNotGrantable;
+        if (entry.state != .available and entry.state != .carried and entry.state != .consumed) return error.ItemNotGrantable;
         try inventory.transfer(handle, if (entry.state == .carried) &self.inventory else null, &self.inventory);
         self.entries[handle.index].state = .carried;
     }
@@ -141,6 +143,7 @@ pub const Loadout = struct {
         var count: usize = 0;
         self.recharged = null;
         self.notice = null;
+        self.used_movie = null;
         for (self.entries, 0..) |*entry, index| {
             switch (entry.state) {
                 .introducing => |remaining| {
@@ -162,6 +165,7 @@ pub const Loadout = struct {
                     const handle: ItemHandle = .{ .index = @intCast(index), .generation = 1 };
                     if (!self.inventory.remove(handle)) return error.ItemNotCarried;
                     self.notice = entry.definition.consumption_notice;
+                    self.used_movie = entry.definition.consumption_movie;
                     entry.state = .consumed;
                     entry.consume_in = null;
                 } else entry.consume_in = remaining - 1;
@@ -249,4 +253,18 @@ test "supplies arrive after their introductions and preserve simultaneous arriva
     try std.testing.expectEqual(@as(u16, 2), loadout.inventory.items()[2].index);
     try std.testing.expectEqual(@as(usize, 0), try loadout.advance(3, &events));
     try std.testing.expectError(error.InvalidItemHandle, loadout.item(.{ .index = 1, .generation = 2 }));
+}
+
+test "a repeatable grant can reissue a consumed possession without duplicating its handle" {
+    const definitions = [_]Definition{.{ .kind = .papers, .icon = @fromBackingInt(0), .introduction_steps = null, .initial_quantity = 51 }};
+    var loadout = try Loadout.init(std.testing.allocator, &definitions);
+    defer loadout.deinit();
+    const handle: ItemHandle = .{ .index = 0, .generation = 1 };
+    try loadout.grant(handle);
+    try loadout.consume(handle);
+    try loadout.grant(handle);
+    try loadout.grant(handle);
+    try std.testing.expectEqual(@as(usize, 1), loadout.inventory.items().len);
+    try std.testing.expect(loadout.inventory.selected().?.eql(handle));
+    try std.testing.expectEqual(@as(i16, 51), (try loadout.item(handle)).quantity);
 }

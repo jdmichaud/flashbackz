@@ -18,12 +18,13 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
         .{ .kind = .shield, .state = 322, .target = 321, .operations = .{ 89, 0, 48 } },
         .{ .kind = .credits, .state = 329, .target = 330, .operations = .{ 0, 48, 67 } },
         .{ .kind = .id_card, .state = 331, .target = 332, .operations = .{ 48, 0, 67 } },
+        .{ .kind = .papers, .state = 340, .target = 338, .operations = .{ 0, 0, 48 } },
         .{ .kind = .force_field, .state = 424, .target = 427, .operations = .{ 0, 48, 0 } },
     };
     var count: usize = 0;
     for (0..placements.count) |i| {
         const record = try placements.record(@intCast(i));
-        for (specs) |spec| if (record.initial_state == spec.state and record.initially_active != 0) {
+        for (specs) |spec| if (record.initial_state == spec.state and record.initially_active != 0 and (spec.kind != .papers or @import("credential_cards.zig").papers(try @import("rule_table.zig").group(rules, record.rule_group)) != null)) {
             count += 1;
         };
     }
@@ -37,7 +38,7 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
         const source = try placements.record(@intCast(i));
         if (source.initially_active == 0) continue;
         const spec = for (specs) |candidate| {
-            if (candidate.state == source.initial_state) break candidate;
+            if (candidate.state == source.initial_state and (candidate.kind != .papers or @import("credential_cards.zig").papers(try @import("rule_table.zig").group(rules, source.rule_group)) != null)) break candidate;
         } else continue;
         const definition = &definitions[loaded];
         if (source.initial_state != spec.state or source.kind != 3 or source.minimum_difficulty != 0 or source.initially_active == 0)
@@ -58,17 +59,24 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
         };
         if (spec.kind == .credits and (@import("credit_wallet.zig").signal(try @import("rule_table.zig").group(rules, source.rule_group)) == null or source.parameters[0] != 3)) return error.UnsupportedCreditUse;
         const card = if (spec.kind == .id_card) @import("credential_cards.zig").starting(try @import("rule_table.zig").group(rules, source.rule_group)) orelse return error.UnsupportedStartingCard else null;
+        const papers = if (spec.kind == .papers) @import("credential_cards.zig").papers(try @import("rule_table.zig").group(rules, source.rule_group)) orelse return error.UnsupportedStartingPapers else null;
         var use_steps: ?u16 = null;
         if (card) |capability| {
             var clip = try animation.decode(allocator, animations, capability.using);
             defer clip.deinit();
             use_steps = @intCast(clip.frames.len);
         }
+        if (papers) |capability| {
+            var clip = try animation.decode(allocator, animations, capability.using);
+            defer clip.deinit();
+            use_steps = @intCast(clip.frames.len);
+        }
         definition.* = .{
+            .consumption_movie = if (papers != null) .card_delivery else null,
             .recharge = if (spec.kind == .shield) try shieldRecharge(allocator, source, rules, animations) else null,
             .use_motion = if (source.object_id == 3) .reach else .direct,
             .kind = spec.kind,
-            .use_action = if (spec.kind == .credits) .pay else if (card != null) .{ .unlock = .{ .credential = .{ .fixed = source.life }, .consume_after_steps = use_steps, .movie = .card_delivery } } else null,
+            .use_action = if (spec.kind == .credits) .pay else if (card != null or papers != null) .{ .unlock = .{ .credential = .{ .fixed = source.life }, .consume_after_steps = use_steps, .movie = if (card != null) .card_delivery else null } } else null,
             .icon = try resolver.icon(source.inventory_icon),
             .introduction_steps = @as(u16, @intCast(introduction.frames.len)),
             .initial_quantity = source.life,

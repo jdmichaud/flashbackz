@@ -93,8 +93,8 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   recipient acknowledgement/removal and linked ambush/mission completion, without room or
   placement-specific scripting. Complete the delivery-and-payment route against the original.
   - Core components and a prepared 420-update route pass. The unmodified street/combat
-    journey remains open, including bar/forger access to the employment route.
-- [ ] City bar and forger progression: recover the bartender's attention/dialogue family,
+    journey remains open; bar/forger access is now connected.
+- [x] City bar and forger progression: recover the bartender's attention/dialogue family,
   signal-based civilian appearance, introductory handoff, payment and papers reward. Import
   shared content definitions and links; qualify normal-input conversations and transactions.
 - [ ] City police and rescued civilians: import pursuit, evasive movement, shooting,

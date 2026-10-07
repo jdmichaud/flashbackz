@@ -71,8 +71,8 @@ Hold Shift for his request, acknowledge the pages with Return, then select ID CA
 Return beside him. The original exchange films play. Mission screens now show their briefings with Shift and
 accept WORK PERMIT with Return. Return, Space or Shift advances film pages; Tab skips.
 The first parcel assignment's conversations, grant, ambush, delivery, 100-credit payment and
-next-terminal unlock are connected. Its prepared route matches the original; normal city
-access through the bar/forger and the remaining assignment consumers are still incomplete.
+next-terminal unlock are connected. Its prepared route matches the original; the remaining
+assignment consumers and full street-route qualification are still incomplete.
 The city fuse can be collected with Shift. Select FUSE with Tab/arrows, close inventory,
 then hold Return at the broken switch. Repair consumes the fuse and enables the linked lift;
 hold Shift at the repaired switch to call it.
@@ -85,6 +85,9 @@ teleporter to reveal the ID card; the card can be collected and used without bei
 The old man now offers the anti-G belt: hold Shift to talk, select CREDITS with Tab/arrows,
 then press Return beside him to pay 500. The belt is granted automatically; enter the gap
 to play the descent film and reach New Washington. Later city gameplay is still incomplete.
+The bartender now reveals Jack. Hold Shift beside BARMAN, acknowledge the pages, then talk
+to FORGER outside to open employment-office access. Select CREDITS and hold Return beside
+the forger to pay 1,500 and receive PAPERS. The papers checkpoint itself remains unfinished.
 Ian's memory machine is connected: after his invitation, wait for him to sit, move slightly
 to his right until SEAT appears, and hold Shift. The memory film plays with music; afterward,
 talk to Ian again for his next instructions. Select his FORCE FIELD with Tab/arrows, close

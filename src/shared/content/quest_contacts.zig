@@ -17,6 +17,8 @@ pub const Spec = struct {
     chances: [4]i16,
     offscreen_choice_first: [4]bool = @splat(false),
     outputs: [2]?Output = @splat(null),
+    departure_outputs: [2]?Output = @splat(null),
+    sale: ?struct { signal: i16, purse_parameter: u2 } = null,
 };
 fn codes(r: rules.Rule, expected: [3]u8) bool {
     return r.conditions[0].code == expected[0] and r.conditions[1].code == expected[1] and r.effect.code == expected[2];
@@ -30,6 +32,30 @@ fn simple(group: rules.Group) bool {
 }
 pub fn recognize(group: rules.Group) ?Spec {
     if (!simple(group)) return null;
+    if (group.count() == 5) {
+        const reveal = group.at(0);
+        const talk = group.at(1);
+        const sleep = group.at(2);
+        const idle = group.at(3);
+        const leave = group.at(4);
+        if (!codes(reveal, .{ 34, 0, 87 }) or !codes(talk, .{ 34, 123, 36 }) or !codes(sleep, .{ 77, 0, 67 }) or !codes(idle, .{ 0, 0, 0 }) or !codes(leave, .{ 35, 0, 75 })) return null;
+        if (reveal.source != reveal.target or talk.source != reveal.source or sleep.source != reveal.source or idle.source != reveal.source or leave.source != talk.target or reveal.next != 0 or talk.next != 4 or sleep.next != 0 or idle.next != 0 or leave.next != 0) return null;
+        if (reveal.effect.argument < 0 or reveal.effect.argument > 3 or talk.conditions[0].argument != 30 or talk.conditions[1].argument < 0 or sleep.conditions[0].argument != 0) return null;
+        return .{ .role = .introducer, .kind = 3, .cycle = .stationary, .idle = @splat(reveal.source), .after = @splat(talk.target), .hidden = .{ .state = reveal.source, .parameter = @intCast(reveal.effect.argument), .signal = reveal.conditions[0].argument }, .notice = talk.conditions[1].argument, .chances = @splat(0), .outputs = .{ .{ .parameter = 1, .signal = talk.effect.argument }, null }, .departure_outputs = .{ .{ .parameter = 0, .signal = leave.conditions[0].argument }, null } };
+    }
+    if (group.count() == 7) {
+        const reveal = group.at(0);
+        const payment = group.at(3);
+        const talk = group.at(4);
+        const operations = [_][3]u8{ .{ 34, 0, 87 }, .{ 77, 0, 67 }, .{ 0, 0, 0 }, .{ 34, 102, 38 }, .{ 34, 0, 123 }, .{ 77, 0, 67 }, .{ 0, 0, 0 } };
+        for (operations, 0..) |ops, i| {
+            const row = group.at(i);
+            const state = if (i < 3) reveal.source else reveal.target;
+            if (row.source != state or row.next != (if (i == 0 or i >= 3) @as(u16, 3) else 0) or !codes(row, ops)) return null;
+        }
+        if (reveal.effect.argument < 0 or reveal.effect.argument > 3 or payment.conditions[1].argument < 0 or payment.conditions[1].argument > 2 or talk.conditions[0].argument != 30 or talk.effect.argument < 0) return null;
+        return .{ .role = .seller, .kind = 3, .cycle = .stationary, .idle = @splat(reveal.target), .after = @splat(reveal.target), .hidden = .{ .state = reveal.source, .parameter = @intCast(reveal.effect.argument), .signal = reveal.conditions[0].argument }, .notice = talk.effect.argument, .chances = @splat(0), .outputs = .{ .{ .parameter = 3, .signal = payment.effect.argument }, null }, .sale = .{ .signal = payment.conditions[0].argument, .purse_parameter = @intCast(payment.conditions[1].argument) } };
+    }
     if (group.count() == 26) {
         const sources = [_]usize{ 0, 0, 0, 0, 4, 4, 4, 7, 7, 7, 7, 11, 11, 11, 14, 14, 14, 17, 17, 19, 19, 19, 22, 22, 24, 24 };
         const next = [_]u16{ 14, 0, 4, 0, 17, 4, 7, 19, 7, 11, 7, 22, 11, 0, 14, 17, 14, 17, 19, 19, 22, 19, 22, 14, 0, 24 };
@@ -104,14 +130,17 @@ pub const Assets = struct {
     sources: []u16,
     inputs: []Inputs,
     clips: []animation.OwnedClip,
+    payments: []runtime.Payment,
     pub fn deinit(self: *Assets) void {
         for (self.definitions) |d| {
             self.allocator.free(d.label);
             self.allocator.free(d.outputs);
+            self.allocator.free(d.departure_outputs);
         }
         self.allocator.free(self.definitions);
         self.allocator.free(self.sources);
         self.allocator.free(self.inputs);
+        self.allocator.free(self.payments);
         for (self.clips) |*clip| clip.deinit();
         self.allocator.free(self.clips);
     }
@@ -125,15 +154,18 @@ pub const Assets = struct {
         return result.toOwnedSlice(self.allocator);
     }
 };
-pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table, bytes: []const u8, animations: []const u8, names: []const u8, rooms: *const [64]@import("../geometry.zig").RoomId, difficulty: @import("../settings.zig").Difficulty, connections: *std.ArrayList(routes.Connection), resolver: anytype) !Assets {
+pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table, bytes: []const u8, animations: []const u8, names: []const u8, rooms: *const [64]@import("../geometry.zig").RoomId, difficulty: @import("../settings.zig").Difficulty, connections: *std.ArrayList(routes.Connection), supplies: []const @import("../equipment.zig").Definition, resolver: anytype) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
     errdefer {
         for (definitions.items) |d| {
             allocator.free(d.label);
             allocator.free(d.outputs);
+            allocator.free(d.departure_outputs);
         }
         definitions.deinit(allocator);
     }
+    var payments: std.ArrayList(runtime.Payment) = .empty;
+    errdefer payments.deinit(allocator);
     var sources: std.ArrayList(u16) = .empty;
     errdefer sources.deinit(allocator);
     var inputs: std.ArrayList(Inputs) = .empty;
@@ -148,7 +180,7 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
         if (record.minimum_difficulty > @backingInt(difficulty)) continue;
         const spec = recognize(try rules.group(bytes, record.rule_group)) orelse continue;
         if (record.kind != spec.kind and !(spec.role == .conversation and record.kind == 5)) continue;
-        const hidden = if (spec.hidden) |h| record.initial_state == h.state else false;
+        const hidden = if (spec.hidden) |h| record.room >= rooms.len and record.initial_state == h.state else false;
         if (!hidden and record.initial_state != spec.idle[0]) return error.UnsupportedQuestContactStart;
         const room = if (hidden) record.parameters[spec.hidden.?.parameter] else @as(i16, record.room);
         if (room < 0 or room >= rooms.len or record.contact_icon == 0) return error.InvalidQuestContactPlacement;
@@ -169,13 +201,35 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
             if (recipient < 0 or recipient >= table.count) return error.InvalidQuestContactOutput;
             try outputs.append(allocator, try routes.internConnection(allocator, connections, @intCast(index), @intCast(recipient), output.signal));
         };
+        var departure: std.ArrayList(@import("../world_props.zig").CircuitId) = .empty;
+        defer departure.deinit(allocator);
+        for (spec.departure_outputs) |optional| if (optional) |output| {
+            const recipient = record.parameters[output.parameter];
+            if (recipient < 0 or recipient >= table.count) return error.InvalidQuestContactOutput;
+            try departure.append(allocator, try routes.internConnection(allocator, connections, @intCast(index), @intCast(recipient), output.signal));
+        };
+        var sale: @FieldType(runtime.Definition, "sale") = null;
+        if (spec.sale) |offer| {
+            const purse_source = record.parameters[offer.purse_parameter];
+            if (purse_source < 0 or purse_source >= table.count) return error.InvalidSellerPurse;
+            const wallet = try table.record(@intCast(purse_source));
+            const signal = @import("credit_wallet.zig").signal(try rules.group(bytes, wallet.rule_group)) orelse return error.UnsupportedSellerPurse;
+            if (signal != offer.signal or wallet.parameters[0] != record.kind) return error.UnsupportedSellerPayment;
+            const purse: @import("../equipment.zig").ItemHandle = for (supplies, 0..) |item, i| {
+                if (item.kind == .credits) break .{ .index = @intCast(i), .generation = 1 };
+            } else return error.MissingSellerPurse;
+            sale = .{ .purse = purse, .price = record.life, .debit = record.parameters[@as(usize, offer.purse_parameter) + 1] };
+            try payments.append(allocator, .{ .item = purse, .contact = definitions.items.len, .next_step = purse_source >= index });
+        }
         try sources.append(allocator, @intCast(index));
         try inputs.append(allocator, .{ .reveal = if (spec.hidden) |h| h.signal else null, .deliver = spec.receive });
         const owned = try outputs.toOwnedSlice(allocator);
         errdefer allocator.free(owned);
+        const owned_departure = try departure.toOwnedSlice(allocator);
+        errdefer allocator.free(owned_departure);
         const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
-        try definitions.append(allocator, .{ .footprint = .{ .room = rooms[@intCast(room)], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .hidden = hidden, .role = spec.role, .cycle = spec.cycle, .idle = resolved[0..4].*, .after = resolved[4..8].*, .hidden_clip = resolved[8], .chances = spec.chances, .offscreen_choice_first = spec.offscreen_choice_first, .notice = @fromBackingInt(@as(u16, @intCast(spec.notice))), .outputs = owned, .hint = try resolver.icon(record.contact_icon - 1), .label = label, .priority = @intCast(index), .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0 });
+        try definitions.append(allocator, .{ .footprint = .{ .room = rooms[@intCast(room)], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .hidden = hidden, .role = spec.role, .cycle = spec.cycle, .idle = resolved[0..4].*, .after = resolved[4..8].*, .hidden_clip = resolved[8], .chances = spec.chances, .offscreen_choice_first = spec.offscreen_choice_first, .notice = @fromBackingInt(@as(u16, @intCast(spec.notice))), .outputs = owned, .departure_outputs = owned_departure, .sale = sale, .hint = try resolver.icon(record.contact_icon - 1), .label = label, .priority = @intCast(index), .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0 });
         table.register(@intCast(index), .quest_contacts);
     }
     const owned = try definitions.toOwnedSlice(allocator);
@@ -183,6 +237,7 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
         for (owned) |d| {
             allocator.free(d.label);
             allocator.free(d.outputs);
+            allocator.free(d.departure_outputs);
         }
         allocator.free(owned);
     }
@@ -190,5 +245,7 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
     errdefer allocator.free(owned_sources);
     const owned_inputs = try inputs.toOwnedSlice(allocator);
     errdefer allocator.free(owned_inputs);
-    return .{ .allocator = allocator, .definitions = owned, .sources = owned_sources, .inputs = owned_inputs, .clips = try clips.toOwnedSlice(allocator) };
+    const owned_payments = try payments.toOwnedSlice(allocator);
+    errdefer allocator.free(owned_payments);
+    return .{ .allocator = allocator, .definitions = owned, .sources = owned_sources, .inputs = owned_inputs, .payments = owned_payments, .clips = try clips.toOwnedSlice(allocator) };
 }

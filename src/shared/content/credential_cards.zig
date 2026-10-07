@@ -57,3 +57,20 @@ pub fn parcel(group: rules.Group) ?Parcel {
     if (a.conditions[0].argument != 102 or a.effect.argument != 33 or b.conditions[1].argument != 32 or b.effect.argument != 0 or group.at(2).conditions[0].argument != 7) return null;
     return .{ .idle = a.source, .using = a.target, .received = b.target, .signal = a.conditions[1].argument, .grant_signal = b.conditions[0].argument, .followup_parameter = 2, .followup_signal = group.at(5).effect.argument };
 }
+
+pub const Papers = struct { idle: u16, using: u16, starting: u16, signal: i16, grant_signal: i16 };
+pub fn papers(group: rules.Group) ?Papers {
+    if (group.count() != 6) return null;
+    const a = group.at(0);
+    const b = group.at(1);
+    const operations = [_][3]u8{ .{ 34, 90, 48 }, .{ 34, 72, 0 }, .{ 80, 0, 0 }, .{ 0, 0, 67 }, .{ 0, 90, 74 }, .{ 0, 0, 48 } };
+    const next = [_]u16{ 0, 4, 0, 0, 0, 0 };
+    for (operations, next, 0..) |ops, target, i| {
+        const row = group.at(i);
+        if (row.target != group.at(target).source or row.next != target or row.dx != 0 or row.dy != 0 or row.flags != 0) return null;
+        if (i < 4 and row.source != a.source or i == 4 and row.source != b.target) return null;
+        if (row.conditions[0].code != ops[0] or row.conditions[1].code != ops[1] or row.effect.code != ops[2]) return null;
+    }
+    if (a.conditions[1].argument != 35 or a.effect.argument != 0 or b.conditions[0].argument != 102 or group.at(2).conditions[0].argument != 7 or group.at(4).conditions[1].argument != 43 or group.at(4).effect.argument != 0 or group.at(5).effect.argument != 0) return null;
+    return .{ .idle = a.source, .using = b.target, .starting = group.at(5).source, .signal = b.conditions[1].argument, .grant_signal = a.conditions[0].argument };
+}
