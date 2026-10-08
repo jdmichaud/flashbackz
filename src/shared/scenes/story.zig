@@ -5,9 +5,10 @@ const vector = @import("vector_player.zig");
 const audio = @import("../audio/soundtrack.zig");
 const props = @import("../world_props.zig");
 pub const Story = struct {
-    kind: props.Movie,
+    /// Null for a film opened by name.
+    kind: ?props.Movie,
     player: vector.Player,
-    music: audio.Soundtrack,
+    music: ?audio.Soundtrack,
     started_ns: u64,
     audio_open: bool = false,
     music_enabled: bool = true,
@@ -62,19 +63,35 @@ pub const Story = struct {
             .disintegration => .{ .film = "DESINTEG", .entry = 0, .music = "DESINTE3" },
             .holocube_recording => .{ .film = "HOLOSEQ", .entry = 0, .music = "HOLO3" },
         };
-        var player = try vector.Player.open(allocator, source, cue.film, cue.entry);
+        var story = try openFilm(allocator, source, cue.film, cue.entry, cue.music, now, activation);
+        story.kind = kind;
+        return story;
+    }
+
+    /// Plays entry `entry` of film `film`, with the music file `music` if any.
+    pub fn openFilm(
+        allocator: std.mem.Allocator,
+        source: platform.AssetSource,
+        film: []const u8,
+        entry: u16,
+        music: ?[]const u8,
+        now: u64,
+        activation: ?platform.Key,
+    ) !Story {
+        var player = try vector.Player.open(allocator, source, film, entry);
         errdefer player.deinit();
         return .{
-            .kind = kind,
+            .kind = null,
             .player = player,
-            .music = try audio.Soundtrack.open(allocator, source, cue.music, 44100),
+            .music = if (music) |name| try audio.Soundtrack.open(allocator, source, name, 44100) else null,
             .started_ns = now,
             .activation_key = activation,
         };
     }
+
     pub fn deinit(self: *Story) void {
         self.player.deinit();
-        self.music.deinit();
+        if (self.music) |*music| music.deinit();
         self.* = undefined;
     }
     pub fn stopAudio(self: *Story, p: *platform.Platform) void {
@@ -86,7 +103,7 @@ pub const Story = struct {
     }
     pub fn update(self: *Story, p: *platform.Platform) !bool {
         if (self.skip or try self.player.update(p.nowNs())) return true;
-        if (!self.music_enabled) {
+        if (!self.music_enabled or self.music == null) {
             self.stopAudio(p);
             return false;
         }
@@ -98,7 +115,7 @@ pub const Story = struct {
             }
             self.audio_open = true;
         }
-        try self.music.pump(p);
+        try self.music.?.pump(p);
         return false;
     }
     pub fn event(self: *Story, input: platform.Event) bool {

@@ -118,6 +118,50 @@ pub fn loadMessages(
     };
 }
 
+/// The film a scene request plays.
+pub const Film = struct { film: []const u8, entry: u8, flagged: bool = false };
+
+/// `scenes.zon`: the film each scene request plays, by scene number, and the scene each level
+/// opens with.
+pub const Scenes = struct {
+    openings: struct {
+        jungle: ?u8,
+        city: ?u8,
+        tower: ?u8,
+        earth_city: ?u8,
+        spaceport: ?u8,
+        alien_surface: ?u8,
+        alien_base: ?u8,
+    },
+    films: []const ?Film,
+
+    pub fn film(self: Scenes, scene: i16) ?Film {
+        if (scene < 0 or scene >= self.films.len) return null;
+        return self.films[@intCast(scene)];
+    }
+};
+
+/// Loads `scenes.zon`. Results live in `arena`.
+pub fn loadScenes(
+    gpa: std.mem.Allocator,
+    arena: std.mem.Allocator,
+    files: *const Files,
+    diagnostic: *Diagnostic,
+) Error!Scenes {
+    const source = files.get("scenes.zon") orelse
+        return fail(diagnostic, "the data set has no scenes.zon", .{});
+    var diagnostics: std.zon.parse.Diagnostics = undefined;
+    return std.zon.parse.fromSlice(Scenes, .{
+        .gpa = gpa,
+        .arena = arena,
+        .source = source,
+        .diagnostics = &diagnostics,
+    }) catch |err| switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        else => fail(diagnostic, "scenes.zon: not openings and films", .{}),
+    };
+}
+
 /// Explains the first failure in words, for the person editing the data set.
 pub const Diagnostic = struct {
     text: [256]u8 = undefined,

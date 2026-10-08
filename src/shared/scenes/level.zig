@@ -45,6 +45,7 @@ pub const Scene = struct {
     level: level_mod.Id,
     data: *const data_set.Level,
     messages: data_set.Messages,
+    scenes: data_set.Scenes,
     pack: level_pack.Pack,
     world: World,
     screen: *Screen,
@@ -63,6 +64,11 @@ pub const Scene = struct {
     /// inventory closes.
     inventory_delay: u8 = 4,
     inventory: ?Inventory = null,
+    /// The scene the last update requested: it plays at the start of the next one.
+    requested_scene: ?i16 = null,
+    /// A film the game must play now; the update waits for it with its input latched.
+    film: ?data_set.Film = null,
+    after_film: u8 = 0,
 
     const Inventory = struct {
         menu: inventory_menu.Menu,
@@ -153,6 +159,15 @@ pub const Scene = struct {
             std.log.err("data set: {s}", .{diagnostic.message()});
             return err;
         };
+        const scenes = data_set.loadScenes(
+            allocator,
+            arena.allocator(),
+            files,
+            &diagnostic,
+        ) catch |err| {
+            std.log.err("data set: {s}", .{diagnostic.message()});
+            return err;
+        };
         const interface = try floppy_interface.load(allocator, assets);
         const first_room = if (start) |s| s.room else data.characters[0].room orelse 0;
         var pack = try level_pack.load(
@@ -181,6 +196,9 @@ pub const Scene = struct {
             .level = level,
             .data = data,
             .messages = messages,
+            .scenes = scenes,
+            // Demos start without their level's opening scene.
+            .requested_scene = if (start != null) null else openingScene(scenes, level),
             .pack = pack,
             .world = world,
             .screen = screen,
@@ -209,7 +227,9 @@ pub const Scene = struct {
     pub fn update(self: *Scene, now_ns: u64) !void {
         if (self.clock == null) self.clock = try step_clock.Clock.init(step_clock.jungle, now_ns);
         var work: usize = 0;
-        while (self.outcome == .playing and self.needsCatchup(now_ns) and work < 8) : (work += 1) {
+        while (self.outcome == .playing and self.film == null and self.needsCatchup(now_ns) and
+            work < 8) : (work += 1)
+        {
             if (self.inventory) |*inventory| {
                 const deadline = inventory.clock.deadline();
                 inventory.clock.consume();
@@ -225,11 +245,17 @@ pub const Scene = struct {
             const deadline = self.clock.?.deadline();
             self.clock.?.consume();
             const controls = try self.step(deadline);
-            if (self.screen.message != null) {
-                try self.openMessage(deadline);
-            } else if (self.outcome == .playing) {
-                try self.checkInventoryKey(controls, deadline);
-            }
+            if (self.film != null) return;
+            try self.afterFrame(controls, deadline);
+        }
+    }
+
+    /// After a presented frame: a world message opens, else the inventory key is checked.
+    fn afterFrame(self: *Scene, controls: u8, now_ns: u64) !void {
+        if (self.screen.message != null) {
+            try self.openMessage(now_ns);
+        } else if (self.outcome == .playing) {
+            try self.checkInventoryKey(controls, now_ns);
         }
     }
 
@@ -269,7 +295,7 @@ pub const Scene = struct {
     }
 
     pub fn needsCatchup(self: *const Scene, now_ns: u64) bool {
-        if (self.outcome != .playing) return false;
+        if (self.outcome != .playing or self.film != null) return false;
         return if (self.nextDeadline()) |time| now_ns >= time else false;
     }
 
@@ -290,6 +316,33 @@ pub const Scene = struct {
             break :byte demo.bytes[demo.cursor - 1];
         } else held;
         const controls = self.keys.collapse(raw);
+        // A scene requested by the last update plays before this update's walk.
+        if (self.requested_scene) |scene| {
+            self.requested_scene = null;
+            if (self.scenes.film(scene)) |film| {
+                self.film = film;
+                self.after_film = controls;
+                return controls;
+            }
+        }
+        try self.walk(controls);
+        return controls;
+    }
+
+    /// The film has played: the view reloads after this update's walk, held keys are
+    /// released, and the inventory waits again.
+    pub fn finishFilm(self: *Scene, now_ns: u64, paused_for: u64) !void {
+        self.film = null;
+        if (self.outcome != .playing) return;
+        self.world.view_dirty = true;
+        self.inventory_delay = 10;
+        self.keys.release();
+        self.clock.?.origin_ns +|= paused_for;
+        try self.walk(self.after_film);
+        try self.afterFrame(self.after_film, now_ns);
+    }
+
+    fn walk(self: *Scene, controls: u8) !void {
         const outcome = try self.world.update(@bitCast(controls), false);
         for (self.world.requests.sounds[0..self.world.requests.sound_count]) |sound| {
             if (self.sound_enabled) self.effects.submit(self.pack.sounds, .{
@@ -298,14 +351,20 @@ pub const Scene = struct {
             });
         }
         switch (outcome) {
-            .played => try self.screen.present(&self.pack, self.messages, &self.world),
-            .defeated => self.outcome = .defeated,
+            .played => {
+                if (self.world.requests.scene) |scene| self.requested_scene = scene;
+                try self.screen.present(&self.pack, self.messages, &self.world);
+            },
+            // The defeat scene plays before the continue screen.
+            .defeated => {
+                self.outcome = .defeated;
+                if (self.world.requests.scene) |scene| self.film = self.scenes.film(scene);
+            },
             .level_changed => self.outcome = .{
                 .level = std.enums.fromInt(level_mod.Id, self.world.requests.level.?) orelse
                     return error.UnknownLevel,
             },
         }
-        return controls;
     }
 
     /// After each presented frame, the inventory key opens the inventory once the delay has
@@ -506,6 +565,13 @@ pub const Keys = struct {
         return raw;
     }
 };
+
+fn openingScene(scenes: data_set.Scenes, level: level_mod.Id) ?i16 {
+    const scene = switch (level) {
+        inline else => |id| @field(scenes.openings, @tagName(id)),
+    };
+    return if (scene) |number| number else null;
+}
 
 fn inputByte(sample: input_recording.Sample) u8 {
     var byte: u8 = 0;

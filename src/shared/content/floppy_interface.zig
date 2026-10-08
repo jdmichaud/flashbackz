@@ -19,6 +19,20 @@ pub const Values = struct {
     /// Per level, which enemy sprite library (an index into `actor_libraries`) each rule group
     /// draws from.
     library_groups: [7]LibraryGroups,
+    /// The film each scene request plays, by scene number.
+    scenes: [scene_count]SceneFilm,
+    /// The scene each level requests when it starts, if any.
+    level_scenes: [7]?u8,
+};
+
+pub const scene_count = 76;
+
+pub const SceneFilm = struct {
+    /// The film file's base name, or empty when the scene plays no film.
+    film: [12]u8 = @splat(0),
+    entry: u8 = 0,
+    /// Set on one scene's film number; its meaning is not decoded.
+    flagged: bool = false,
 };
 
 pub const LibraryGroups = struct {
@@ -166,6 +180,25 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
             table.count += 1;
         }
     }
+    var scenes: [scene_count]SceneFilm = @splat(.{});
+    for (&scenes, 0..) |*scene, number| {
+        const film = word(data, 0x101a + number * 4);
+        if (film == 0xffff) continue;
+        const index = film & 0x7fff;
+        if (index >= 31) return error.InvalidSceneTable;
+        const name = word(data, 0x1195 + index * 2);
+        const length = std.mem.indexOfScalar(u8, data[name..][0..12], 0) orelse
+            return error.InvalidSceneTable;
+        @memcpy(scene.film[0..length], data[name..][0..length]);
+        scene.entry = data[0x101a + number * 4 + 2];
+        scene.flagged = film & 0x8000 != 0;
+    }
+    var level_scenes: [7]?u8 = undefined;
+    for (&level_scenes, 0..) |*scene, level| {
+        const descriptor = word(data, 0xd5b + level * 2);
+        const number = word(data, descriptor + 0x1d);
+        scene.* = if (number < scene_count) @intCast(number) else null;
+    }
     var passwords: [7][3][7]u8 = undefined;
     for (&passwords, 0..) |*level, l| for (level, 0..) |*code, d| {
         for (code, 0..) |*character, c| character.* = data[0x12ad + l * 21 + d * 7 + c] ^ 0x55;
@@ -193,6 +226,8 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
         .interface_colors = interface_colors,
         .level_label = data[0x13e2..0x13e8].*,
         .library_groups = library_groups,
+        .scenes = scenes,
+        .level_scenes = level_scenes,
     };
 }
 

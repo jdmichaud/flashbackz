@@ -330,7 +330,7 @@ pub const Game = struct {
             if (self.story) |story| {
                 var hash = std.hash.Wyhash.init(world);
                 hash.update(&.{
-                    @backingInt(story.kind),
+                    if (story.kind) |kind| @backingInt(kind) else 0xff,
                     @intFromBool(story.skip),
                     @intFromBool(story.player.confirmed),
                 });
@@ -474,7 +474,7 @@ pub const Game = struct {
             }
             if (self.story) |*story| {
                 story.music_enabled = self.preferences.music;
-                story.music.volume = self.preferences.volume;
+                if (story.music) |*music| music.volume = self.preferences.volume;
                 if (try story.update(p)) {
                     const defeated = story.kind == .disintegration or
                         story.kind == .reactor_failure;
@@ -557,6 +557,31 @@ pub const Game = struct {
     fn updateLevel(self: *Game, p: *platform.Platform) !bool {
         const scene = &self.scene.level;
         const now = p.nowNs();
+        if (scene.film) |film| {
+            if (self.story == null) {
+                scene.stopAudio(p);
+                self.story = try story_mod.Story.openFilm(
+                    self.allocator,
+                    self.assets.?,
+                    film.film,
+                    film.entry,
+                    null,
+                    now,
+                    null,
+                );
+            }
+            const story = &self.story.?;
+            story.music_enabled = self.preferences.music;
+            if (!try story.update(p)) {
+                try self.present(p);
+                return true;
+            }
+            const paused = now - story.started_ns;
+            story.stopAudio(p);
+            story.deinit();
+            self.story = null;
+            try scene.finishFilm(now, paused);
+        }
         try scene.update(now);
         switch (scene.outcome) {
             .playing => {
@@ -579,6 +604,7 @@ pub const Game = struct {
                 self.scene = .{ .level = next };
             },
             .defeated => {
+                if (scene.film != null) return false;
                 scene.stopAudio(p);
                 const next = try continue_mod.Scene.init(
                     self.allocator,
@@ -624,7 +650,12 @@ pub const Game = struct {
                         self.phase = .finished;
                         continue;
                     }
-                    if (!story.event(event)) try self.scene.jungle.enqueue(event);
+                    if (story.event(event)) continue;
+                    switch (self.scene) {
+                        .jungle => |*scene| try scene.enqueue(event),
+                        .level => |*scene| try scene.enqueue(event),
+                        else => {},
+                    }
                     continue;
                 }
                 if (self.jungle()) |scene| {
