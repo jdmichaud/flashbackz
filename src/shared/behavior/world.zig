@@ -31,6 +31,14 @@ pub const Room = struct {
     pub const carried: u8 = 0xff;
 };
 
+/// What a character shows: the sprite of the last frame applied to it.
+pub const Look = struct {
+    sprite: u15 = 0,
+    mirrored: bool = false,
+    /// Object artwork composed from parts, rather than a single sprite.
+    composed: bool = false,
+};
+
 pub const Character = struct {
     /// Index into the behavior's states.
     state: u16,
@@ -53,6 +61,7 @@ pub const Character = struct {
     next_item: ?u16 = null,
     /// The next character in the same room's list.
     next_in_room: ?u16 = null,
+    look: Look = .{},
 };
 
 pub const Letter = struct { sender: u16, message: vocabulary.Message, next: ?u16 };
@@ -265,7 +274,9 @@ pub const World = struct {
         }
         // Lists start in descending placement order: each placement goes to the front.
         for (characters, 0..) |character, index| {
-            if (character.present) world.pushToRoom(@intCast(index), character.room);
+            if (!character.present) continue;
+            world.pushToRoom(@intCast(index), character.room);
+            try world.showFrame(@intCast(index));
         }
         world.view_room = characters[0].room;
         world.resetLetters();
@@ -430,9 +441,30 @@ pub const World = struct {
         if (signedByte(animation.count()) < signedByte(character.cursor)) character.cursor = 0;
         const frame = animation.frame(character.cursor);
         character.cursor +%= 1;
-        if (frame.sprite == null) return;
+        const sprite = frame.sprite orelse return;
         character.x +%= if (character.facing_right) -frame.dx else frame.dx;
         character.y +%= frame.dy;
+        // Sprites face left; facing right shows them mirrored.
+        character.look = .{
+            .sprite = @intCast(sprite),
+            .mirrored = frame.mirrored != character.facing_right,
+            .composed = animation.composition,
+        };
+    }
+
+    /// Show the current frame without playing it, as at level start, after `reveal` and after
+    /// `transport`. An animation with frames left restarts; a finished one shows the frame
+    /// past its end. Unlike playing, the mirroring ignores the frame's own flag.
+    pub fn showFrame(self: *World, index: u16) !void {
+        const character = &self.characters[index];
+        const animation = try self.animationOf(index);
+        if (character.cursor < @as(u8, @truncate(animation.count()))) character.cursor = 0;
+        const sprite = animation.frame(character.cursor).sprite orelse return;
+        character.look = .{
+            .sprite = @intCast(sprite),
+            .mirrored = character.facing_right,
+            .composed = animation.composition,
+        };
     }
 
     fn signedByte(value: usize) i8 {

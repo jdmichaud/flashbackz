@@ -205,9 +205,7 @@ pub fn transport(
     }
     // Only the view changes: no room wakes, and the contact window waits for the next update.
     if (definition.kind == .player) world.view_room = character.room;
-    // Showing the new frame restarts an animation that has frames left.
-    const animation = world.animationOf(moved) catch return error.InvalidAnimation;
-    if (character.cursor < @as(u8, @truncate(animation.count()))) character.cursor = 0;
+    world.showFrame(moved) catch return error.InvalidAnimation;
     return true;
 }
 

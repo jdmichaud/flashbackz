@@ -43,10 +43,12 @@ pub fn useUp(world: *World, actor: u16, owner: vocabulary.Character) !bool {
     return true;
 }
 
-/// Moves to the room a placement number names. Revealing Conrad moves the view after the update.
+/// Moves to the room a placement number names and shows its current frame. Revealing Conrad
+/// moves the view after the update.
 pub fn reveal(world: *World, actor: u16, number: vocabulary.Number) !bool {
     world.characters[actor].room = @truncate(@as(u16, @bitCast(world.number(actor, number))));
     if (world.level.characters[actor].kind == .player) world.view_dirty = true;
+    world.showFrame(actor) catch return error.InvalidAnimation;
     return true;
 }
 

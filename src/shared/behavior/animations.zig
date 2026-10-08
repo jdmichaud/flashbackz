@@ -13,7 +13,9 @@ pub const Frame = struct {
 };
 
 pub const Animation = struct {
+    /// The frames, followed by the rest of the file: one check reads a frame past the end.
     frames: []const u8,
+    frame_count: u16,
     /// Sound played when the animation starts, if any.
     sound: ?u8,
     /// Contact pose tag (header byte 3), tested by `touching_in_pose`.
@@ -21,10 +23,15 @@ pub const Animation = struct {
     composition: bool,
 
     pub fn count(self: Animation) usize {
-        return self.frames.len / 4;
+        return self.frame_count;
     }
 
+    /// Frame `index`; past the frames it reads the bytes that follow, as the original does,
+    /// and past the file an empty frame.
     pub fn frame(self: Animation, index: usize) Frame {
+        if (index * 4 + 4 > self.frames.len) {
+            return .{ .sprite = null, .mirrored = false, .dx = 0, .dy = 0 };
+        }
         const record = self.frames[index * 4 ..][0..4];
         const visual = std.mem.readInt(u16, record[0..2], .little);
         return .{
@@ -58,7 +65,8 @@ pub const Animations = struct {
         const available = self.bytes.len - offset - 6;
         if (frames == 0 or frames * 4 > available) return error.InvalidAnimationLength;
         return .{
-            .frames = self.bytes[offset + 6 ..][0 .. frames * 4],
+            .frames = self.bytes[offset + 6 ..],
+            .frame_count = @intCast(frames),
             .sound = if (header[2] == 0) null else header[2] - 1,
             .pose = header[3],
             .composition = std.mem.readInt(u16, header[4..6], .little) != 0,
