@@ -1,12 +1,11 @@
-//! Bounded PGE records for content recovery. These source identifiers and parameters are
-//! temporary import data; world definitions must assign game meanings before using them.
+//! The placement records of a level's PGE file, as the extractor reads them.
 const std = @import("std");
-const motion = @import("../motion.zig");
-const import_audit = @import("import_audit.zig");
+
+pub const Position = struct { x: i16, y: i16 };
 
 pub const Record = struct {
     initial_state: u16,
-    position: motion.Position,
+    position: Position,
     rule_group: u16,
     life: i16,
     parameters: [4]i16,
@@ -28,11 +27,6 @@ pub const Record = struct {
 pub const Table = struct {
     bytes: []const u8,
     count: u16,
-    audit: ?*import_audit.Ledger = null,
-
-    pub fn register(self: Table, index: u16, system: import_audit.System) void {
-        if (self.audit) |audit| audit.record(index, system);
-    }
 
     pub fn init(bytes: []const u8) !Table {
         if (bytes.len < 2) return error.InvalidPlacementTable;

@@ -1,5 +1,4 @@
-//! Content families share room art while carrying their own actor and puzzle definitions.
-const story_cue = @import("../story_cue.zig");
+//! The seven levels and the original files each one reads.
 pub const Id = enum { jungle, city, tower, earth_city, spaceport, alien_surface, alien_base };
 pub const Files = struct { actors: []const u8, rooms: []const u8, tile_bias: u16 = 0 };
 pub fn files(id: Id) Files {
@@ -14,14 +13,3 @@ pub fn files(id: Id) Files {
     };
 }
 
-/// Opening films recovered from the edition's level descriptors. The jungle opening
-/// is owned by the title scene; levels without an entry film begin directly in play.
-pub fn opening(id: Id) ?story_cue.Cue {
-    return switch (id) {
-        .city => .city_arrival,
-        .earth_city => .earth_arrival,
-        .spaceport => .spaceport_arrival,
-        .alien_surface => .alien_arrival,
-        .jungle, .tower, .alien_base => null,
-    };
-}

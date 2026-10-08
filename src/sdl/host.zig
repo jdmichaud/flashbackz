@@ -143,11 +143,9 @@ pub fn run(
         // A window that never painted looks the same as a window whose frames do not reach the
         // display. The renderer's name and the first frame tell them apart.
         if (!announced_first_frame and game.frames_presented > 0) {
-            if (game.sceneKind() == .menu) c.SDL_SetWindowTitle(backend.window.?, "flashbackz");
-            if (game.sceneKind() == .jungle) c.SDL_SetWindowTitle(
-                backend.window.?,
-                "flashbackz — jungle development",
-            );
+            if (game.sceneKind() == .menu or game.sceneKind() == .level) {
+                c.SDL_SetWindowTitle(backend.window.?, "flashbackz");
+            }
             announced_first_frame = true;
             const size = backend.window_size;
             try err.print("{s}: first frame after {d}ms in a {d}x{d} window, renderer {s}{s}\n", .{
@@ -251,7 +249,7 @@ pub fn parseArgs(iter: anytype) ArgError!Options {
             return error.BadArguments;
         }
     }
-    if ((assets_required or options.providers.entry == .jungle_development) and
+    if ((assets_required or options.providers.entry == .level_development) and
         !options.help and
         options.providers.assets == null) return error.MissingAssets;
     return options;
@@ -340,7 +338,7 @@ test "the host options are parsed, bounded and defaulted" {
         "game.ima",
     } });
     try std.testing.expectEqual(
-        flashbackz.game.Entry.jungle_development,
+        flashbackz.game.Entry{ .level_development = .jungle },
         jungle_options.providers.entry,
     );
 }

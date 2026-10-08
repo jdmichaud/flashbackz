@@ -107,9 +107,9 @@ pub const Scene = struct {
         const recording = try demo_mod.load(allocator, assets, index);
         defer allocator.free(recording.controls);
         const start: ?World.Start = if (recording.descriptor.start) |start| .{
-            .room = @intCast(@backingInt(start.room) - 1),
-            .x = start.position.x,
-            .y = start.position.y,
+            .room = start.room,
+            .x = start.x,
+            .y = start.y,
         } else null;
         var scene = try loadWithStart(
             allocator,

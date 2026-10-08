@@ -1,12 +1,9 @@
-//! A story interlude temporarily owns presentation and audio while the world is paused.
+//! A film with its music, which owns presentation and audio while the world waits.
 const std = @import("std");
 const platform = @import("../platform.zig");
 const vector = @import("vector_player.zig");
 const audio = @import("../audio/soundtrack.zig");
-const props = @import("../world_props.zig");
 pub const Story = struct {
-    /// Null for a film opened by name.
-    kind: ?props.Movie,
     player: vector.Player,
     music: ?audio.Soundtrack,
     started_ns: u64,
@@ -14,59 +11,6 @@ pub const Story = struct {
     music_enabled: bool = true,
     skip: bool = false,
     activation_key: ?platform.Key,
-
-    pub fn open(
-        allocator: std.mem.Allocator,
-        source: platform.AssetSource,
-        kind: props.Movie,
-        now: u64,
-        activation: ?platform.Key,
-    ) !Story {
-        const cue: struct { film: []const u8, entry: u16, music: []const u8 } = switch (kind) {
-            .delivery_briefing => .{ .film = "MISSIONS", .entry = 0, .music = "MISSION3" },
-            .escort_briefing => .{ .film = "MISSIONS", .entry = 1, .music = "MISSION3" },
-            .android_briefing => .{ .film = "MISSIONS", .entry = 2, .music = "MISSION3" },
-            .reactor_briefing => .{ .film = "MISSIONS", .entry = 3, .music = "MISSION3" },
-            .mutant_briefing => .{ .film = "MISSIONS", .entry = 4, .music = "MISSION3" },
-            .mission_accepted => .{ .film = "MISSIONS", .entry = 5, .music = "MISVALI3" },
-            .delivery_completed => .{ .film = "MISSIONS", .entry = 6, .music = "MISSION3" },
-            .escort_completed => .{ .film = "MISSIONS", .entry = 7, .music = "MISSION3" },
-            .android_completed => .{ .film = "MISSIONS", .entry = 8, .music = "MISSION3" },
-            .reactor_failure => .{ .film = "GENEXP", .entry = 0, .music = "GENERAT3" },
-            .reactor_completed => .{ .film = "MISSIONS", .entry = 9, .music = "MISSION3" },
-            .mutant_completed => .{ .film = "MISSIONS", .entry = 10, .music = "MISSION3" },
-            .papers_received => .{ .film = "OBJET", .entry = 15, .music = "DONNER3" },
-            .parcel_received => .{ .film = "OBJET", .entry = 12, .music = "DONNER3" },
-            .parcel_delivered => .{ .film = "OBJET", .entry = 13, .music = "DONNER3" },
-            .card_delivery => .{ .film = "OBJET", .entry = 8, .music = "DONNER3" },
-            .permit_received => .{ .film = "OBJET", .entry = 14, .music = "DONNER3" },
-            .memory_restoration => .{ .film = "MEMO", .entry = 0, .music = "MEMORY3" },
-            .earth_arrival => .{ .film = "VOYAGE", .entry = 0, .music = "VOYAGE3" },
-            .spaceport_arrival => .{ .film = "ESPIONS", .entry = 0, .music = "CAPTURE3" },
-            .alien_arrival => .{ .film = "TELEPORT", .entry = 0, .music = "TELEPOR3" },
-            .city_arrival => .{ .film = "CHUTE", .entry = 1, .music = "CHUTE3" },
-            .credit_payment => .{ .film = "OBJET", .entry = 7, .music = "DONNER3" },
-            .anti_g_received => .{ .film = "OBJET", .entry = 9, .music = "DONNER3" },
-            .teleporter_pickup => .{ .film = "OBJET", .entry = 5, .music = "OBJET3" },
-            .teleporter_delivery => .{ .film = "OBJET", .entry = 10, .music = "DONNER3" },
-            .id_card_pickup => .{ .film = "OBJET", .entry = 6, .music = "OBJET3" },
-            .cartridge_pickup => .{ .film = "OBJET", .entry = 11, .music = "OBJET3" },
-            .cartridge_recharge => .{ .film = "GEN", .entry = 1, .music = "RECHAGE3" },
-            .bridge_activation => .{ .film = "PONT", .entry = 0, .music = "PONT3" },
-            .shield_recharge => .{ .film = "GEN", .entry = 0, .music = "RECHAGE3" },
-            .lift_ascent => .{ .film = "LIFT", .entry = 0, .music = "LIFT3" },
-            .lift_descent => .{ .film = "LIFT", .entry = 1, .music = "LIFT3" },
-            .credits_pickup => .{ .film = "OBJET", .entry = 1, .music = "OBJET3" },
-            .fuse_pickup => .{ .film = "OBJET", .entry = 16, .music = "OBJET3" },
-            .key_pickup => .{ .film = "OBJET", .entry = 4, .music = "OBJET3" },
-            .holocube_pickup => .{ .film = "OBJET", .entry = 3, .music = "OBJET3" },
-            .disintegration => .{ .film = "DESINTEG", .entry = 0, .music = "DESINTE3" },
-            .holocube_recording => .{ .film = "HOLOSEQ", .entry = 0, .music = "HOLO3" },
-        };
-        var story = try openFilm(allocator, source, cue.film, cue.entry, cue.music, now, activation);
-        story.kind = kind;
-        return story;
-    }
 
     /// Plays entry `entry` of film `film`, with the music file `music` if any.
     pub fn openFilm(
@@ -81,7 +25,6 @@ pub const Story = struct {
         var player = try vector.Player.open(allocator, source, film, entry);
         errdefer player.deinit();
         return .{
-            .kind = null,
             .player = player,
             .music = if (music) |name| try audio.Soundtrack.open(allocator, source, name, 44100) else null,
             .started_ns = now,

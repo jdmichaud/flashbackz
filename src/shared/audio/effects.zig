@@ -3,8 +3,8 @@
 const std = @import("std");
 const platform = @import("../platform.zig");
 const sounds = @import("../content/sound_effects.zig");
-const SoundId = motion.SoundId;
-const motion = @import("../motion.zig");
+/// A sample of the effects bank.
+pub const SoundId = enum(u16) { _ };
 const output_gain = @import("output_gain.zig");
 pub const Event = struct { sound: SoundId, attenuation: u2 = 0 };
 const Voice = struct { sound: SoundId, cursor: usize = 0, attenuation: u2 };

@@ -7,11 +7,9 @@ const menu_art = @import("content/menu_artwork.zig");
 const front_end = @import("scenes/front_end.zig");
 const continue_mod = @import("scenes/continue_game.zig");
 const story_mod = @import("scenes/story.zig");
-const jungle_mod = @import("scenes/jungle.zig");
 const level_scene = @import("scenes/level.zig");
 const data_set = @import("behavior/data_set.zig");
 const content_level = @import("content/level.zig");
-const demo = @import("content/demo.zig");
 const game_options = @import("scenes/game_options.zig");
 const memory = @import("memory.zig");
 const settings_mod = @import("settings.zig");
@@ -20,16 +18,13 @@ const volume_preference = @import("volume_preference.zig");
 pub const Entry = union(enum) {
     automatic,
     menu_development,
-    jungle_development,
+    /// Straight into a level (needs the data set).
     level_development: content_level.Id,
-    /// A level run from the behavior tables (needs the data set).
-    table_level_development: content_level.Id,
 };
 const Scene = union(enum) {
     smoke,
     menu: front_end.Scene,
-    jungle: jungle_mod.Scene,
-    /// A level run from the behavior tables.
+    /// A level, run from its behavior tables.
     level: level_scene.Scene,
     continue_game: continue_mod.Scene,
 };
@@ -245,8 +240,8 @@ pub const Game = struct {
         );
         errdefer allocator.free(rgba);
         const preferences: game_options.Settings = .{ .volume = volume_preference.load(storage) };
-        if (entry == .table_level_development) {
-            const level = entry.table_level_development;
+        if (entry == .level_development) {
+            const level = entry.level_development;
             var scene = try level_scene.Scene.load(
                 allocator,
                 assets orelse return error.OriginalContentRequired,
@@ -265,27 +260,6 @@ pub const Game = struct {
                 .preferences = preferences,
                 .level = level,
                 .scene = .{ .level = scene },
-            };
-        }
-        if (entry == .jungle_development or entry == .level_development) {
-            const level: content_level.Id = if (entry == .level_development) entry.level_development else .jungle;
-            var scene = try jungle_mod.Scene.loadLevel(
-                allocator,
-                assets orelse return error.OriginalContentRequired,
-                level,
-                .normal,
-            );
-            scene.settings = preferences;
-            return .{
-                .allocator = allocator,
-                .assets = assets,
-                .storage = storage,
-                .data = data,
-                .page = page,
-                .rgba = rgba,
-                .preferences = preferences,
-                .level = level,
-                .scene = .{ .jungle = scene },
             };
         }
         const original_menu = if (assets) |source| try menu_art.load(allocator, source) else null;
@@ -314,7 +288,6 @@ pub const Game = struct {
         switch (self.scene) {
             .smoke => {},
             .menu => |*scene| scene.deinit(),
-            .jungle => |*scene| scene.deinit(),
             .level => |*scene| scene.deinit(),
             .continue_game => |*scene| scene.deinit(),
         }
@@ -328,23 +301,6 @@ pub const Game = struct {
     }
 
     pub fn stateHash(self: *const Game) u64 {
-        if (self.scene == .jungle) {
-            const world = std.hash.Wyhash.hash(
-                self.scene.jungle.stateHash(),
-                &.{ @backingInt(self.level), @backingInt(self.difficulty) },
-            );
-            if (self.story) |story| {
-                var hash = std.hash.Wyhash.init(world);
-                hash.update(&.{
-                    if (story.kind) |kind| @backingInt(kind) else 0xff,
-                    @intFromBool(story.skip),
-                    @intFromBool(story.player.confirmed),
-                });
-                hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, story.player.playback.frame)));
-                return hash.final();
-            }
-            return world;
-        }
         if (self.scene == .level) return self.scene.level.stateHash();
         if (self.scene == .menu) return self.scene.menu.stateHash();
         if (self.scene == .continue_game) return self.scene.continue_game.stateHash();
@@ -355,13 +311,8 @@ pub const Game = struct {
         return std.meta.activeTag(self.scene);
     }
 
-    pub fn jungle(self: *Game) ?*jungle_mod.Scene {
-        return if (self.scene == .jungle) &self.scene.jungle else null;
-    }
-
     pub fn needsCatchup(self: *const Game, now_ns: u64) bool {
         if (self.story) |*story| return story.player.needsCatchup(now_ns);
-        if (self.scene == .jungle) return self.scene.jungle.needsCatchup(now_ns);
         if (self.scene == .level) return self.scene.level.needsCatchup(now_ns);
         if (self.scene == .menu) return self.scene.menu.needsCatchup(now_ns);
         if (self.scene == .continue_game) return self.scene.continue_game.needsCatchup(now_ns);
@@ -385,7 +336,7 @@ pub const Game = struct {
                 if (!original_content) self.audio = p.audioOpen(audio_format) catch null;
                 self.readTitle();
                 self.phase = .playing;
-                if (self.scene == .jungle) try self.consumeEvents(p);
+                if (self.scene == .level) try self.consumeEvents(p);
             },
             .playing => {
                 try self.consumeEvents(p);
@@ -399,7 +350,6 @@ pub const Game = struct {
             if (self.story) |*story| story.stopAudio(p);
             if (self.audio != null) p.audioClose();
             if (self.scene == .menu) self.scene.menu.stopAudio(p);
-            if (self.jungle()) |scene| scene.stopAudio(p);
             if (self.scene == .level) self.scene.level.stopAudio(p);
             return .finished;
         }
@@ -416,7 +366,7 @@ pub const Game = struct {
                 return .finished;
             }
             try front.update(p);
-            if (front.stage == .demo_ready and self.data != null) {
+            if (front.stage == .demo_ready) {
                 if (self.demo_index == 3) {
                     self.demo_index = 0;
                     try front.intro();
@@ -424,7 +374,7 @@ pub const Game = struct {
                     var next = try level_scene.Scene.loadDemo(
                         self.allocator,
                         self.assets.?,
-                        self.data.?,
+                        self.data orelse return error.DataSetRequired,
                         self.demo_index,
                     );
                     next.settings = self.preferences;
@@ -432,11 +382,11 @@ pub const Game = struct {
                     self.scene = .{ .level = next };
                     self.demo_index += 1;
                 }
-            } else if (front.stage == .ready and self.data != null) {
+            } else if (front.stage == .ready) {
                 var next = try level_scene.Scene.load(
                     self.allocator,
                     self.assets.?,
-                    self.data.?,
+                    self.data orelse return error.DataSetRequired,
                     front.selected_level,
                     front.difficulty,
                 );
@@ -445,129 +395,6 @@ pub const Game = struct {
                 self.difficulty = front.difficulty;
                 front.deinit();
                 self.scene = .{ .level = next };
-            } else if (front.stage == .demo_ready) {
-                // Without a data set, the hand-written scene plays the demos.
-                if (self.demo_index == 3) {
-                    self.demo_index = 0;
-                    try front.intro();
-                } else {
-                    const recording = try demo.load(self.allocator, self.assets.?, self.demo_index);
-                    errdefer self.allocator.free(recording.controls);
-                    var next = try jungle_mod.Scene.loadLevel(
-                        self.allocator,
-                        self.assets.?,
-                        recording.descriptor.level,
-                        .normal,
-                    );
-                    next.settings = self.preferences;
-                    next.replay = .{ .samples = recording.controls };
-                    if (recording.descriptor.start) |start| {
-                        next.pose.position = start.position;
-                        next.environment.room = start.room;
-                    }
-                    front.deinit();
-                    self.scene = .{ .jungle = next };
-                    self.demo_index += 1;
-                }
-            } else if (front.stage == .ready) {
-                var next = try jungle_mod.Scene.loadLevel(
-                    self.allocator,
-                    self.assets.?,
-                    front.selected_level,
-                    front.difficulty,
-                );
-                next.pending_movie = content_level.opening(front.selected_level);
-                if (next.pending_movie != null) next.clock = try step_clock.Clock.init(step_clock.jungle, p.nowNs());
-                self.level = front.selected_level;
-                next.settings = self.preferences;
-                self.difficulty = front.difficulty;
-                front.deinit();
-                self.scene = .{ .jungle = next };
-            }
-        }
-        if (self.jungle()) |scene| {
-            self.applyPreferences(scene.settings);
-            const now = p.nowNs();
-            if (self.story == null and
-                scene.message == null and
-                scene.options == null and
-                scene.dialog == null and
-                scene.pending_movie != null and
-                scene.needsCatchup(now))
-            {
-                const movie = scene.pending_movie.?;
-                scene.pending_movie = null;
-                if (try scene.latchMovieInput()) {
-                    scene.stopAudio(p);
-                    self.story = try story_mod.Story.open(
-                        self.allocator,
-                        self.assets.?,
-                        movie,
-                        now,
-                        if (scene.input.use_held) .enter else if (scene.input.left_action) .left_shift else if (scene.input.right_action) .right_shift else null,
-                    );
-                }
-            }
-            if (self.story) |*story| {
-                story.music_enabled = self.preferences.music;
-                if (story.music) |*music| music.volume = self.preferences.volume;
-                if (try story.update(p)) {
-                    const defeated = story.kind == .disintegration or
-                        story.kind == .reactor_failure;
-                    const paused = now - story.started_ns;
-                    story.stopAudio(p);
-                    story.deinit();
-                    try scene.resumeMovie(paused);
-                    self.story = null;
-                    if (defeated) scene.defeated = true;
-                } else {
-                    try self.present(p);
-                    return .running;
-                }
-            }
-            try scene.update(now);
-            self.applyPreferences(scene.settings);
-            if (scene.options) |*options| if (options.menu.free_memory_mb == null) {
-                if (p.availableMemory()) |bytes| options.menu.free_memory_mb = bytes / (1024 * 1024);
-            };
-            if (scene.aborted or (scene.defeated and scene.replay != null)) {
-                scene.stopAudio(p);
-                const art = (try menu_art.load(self.allocator, self.assets.?)) orelse return error.MissingMenu;
-                var next = front_end.Scene.init(self.allocator, self.assets.?, art);
-                next.difficulty = self.difficulty;
-                next.music_enabled = self.preferences.music;
-                scene.deinit();
-                self.scene = .{ .menu = next };
-            } else if (scene.exits.requested) |destination| {
-                var next = try jungle_mod.Scene.loadLevel(
-                    self.allocator,
-                    self.assets.?,
-                    destination,
-                    self.difficulty,
-                );
-                next.settings = scene.settings;
-                next.score = scene.score;
-                next.random = scene.random;
-                next.input = scene.input;
-                std.mem.swap(@TypeOf(next.pending), &next.pending, &scene.pending);
-                next.clock = try step_clock.Clock.init(step_clock.jungle, now);
-                next.pending_movie = content_level.opening(destination);
-                self.level = destination;
-                scene.stopAudio(p);
-                scene.deinit();
-                self.scene = .{ .jungle = next };
-            } else if (scene.defeated) {
-                scene.stopAudio(p);
-                const next = try continue_mod.Scene.init(
-                    self.allocator,
-                    self.assets.?,
-                    scene.score,
-                );
-                scene.deinit();
-                self.scene = .{ .continue_game = next };
-            } else {
-                try scene.pumpAudio(p);
-                if (self.needsCatchup(now)) return .running;
             }
         }
         if (self.scene == .continue_game) {
@@ -717,18 +544,7 @@ pub const Game = struct {
                         continue;
                     }
                     if (story.event(event)) continue;
-                    switch (self.scene) {
-                        .jungle => |*scene| try scene.enqueue(event),
-                        .level => |*scene| try scene.enqueue(event),
-                        else => {},
-                    }
-                    continue;
-                }
-                if (self.jungle()) |scene| {
-                    switch (event.payload) {
-                        .quit => self.phase = .finished,
-                        else => try scene.enqueue(event),
-                    }
+                    if (self.scene == .level) try self.scene.level.enqueue(event);
                     continue;
                 }
                 if (self.scene == .level) {
@@ -803,7 +619,7 @@ pub const Game = struct {
         return switch (self.scene) {
             .smoke => .{ .width = page_width, .height = page_height },
             .menu => |*front| front.resolution(),
-            .jungle, .level, .continue_game => .{ .width = 256, .height = 224 },
+            .level, .continue_game => .{ .width = 256, .height = 224 },
         };
     }
 
@@ -816,20 +632,6 @@ pub const Game = struct {
             try story.player.draw(indices, rgba);
             self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
             try p.present(.{ .width = 256, .height = 224, .stride = 256 * 4, .pixels = rgba });
-            self.frames_presented += 1;
-            return;
-        }
-        if (self.jungle()) |scene| {
-            const indices = self.page[0..57344];
-            const frame = self.rgba[0 .. 57344 * 4];
-            try scene.draw(indices, frame);
-            self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
-            try p.present(.{
-                .width = size.width,
-                .height = size.height,
-                .stride = size.width * 4,
-                .pixels = frame,
-            });
             self.frames_presented += 1;
             return;
         }

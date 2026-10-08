@@ -62,10 +62,7 @@ pub fn main(init: std.process.Init) !void {
             return fail(io);
         }
     }
-    if ((options.entry == .jungle_development or
-        options.entry == .level_development or
-        options.entry == .table_level_development) and
-        options.assets == null) return fail(io);
+    if (options.entry == .level_development and options.assets == null) return fail(io);
 
     // Real providers when the options name them, else in-memory ones. They outlive the game.
     var providers: native.cli.Providers = .empty;
@@ -111,17 +108,6 @@ pub fn main(init: std.process.Init) !void {
     try w.interface.print("{{\"updates\":{d},\"frames_presented\":{d},\"events_consumed\":{d},\"saves\":{d},\"loads\":{d},\"state_hash\":\"{x:0>16}\",\"frame_hash\":\"{x:0>16}\"}}\n", .{
         game.update_count, game.frames_presented, game.events_consumed, game.saves_written, game.loads_done, game.stateHash(), game.last_frame_hash,
     });
-    if (game.jungle()) |scene| {
-        try w.interface.print(
-            "{{\"scene\":\"jungle_development\",\"simulation_steps\":{d},\"x\":{d},\"y\":{d},\"facing\":\"{s}\"}}\n",
-            .{
-                scene.simulation_steps,
-                scene.pose.position.x,
-                scene.pose.position.y,
-                @tagName(scene.pose.facing),
-            },
-        );
-    }
     if (game.scene == .level) {
         const scene = &game.scene.level;
         const conrad = scene.world.characters[0];

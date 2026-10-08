@@ -17,8 +17,7 @@ const data_set = @import("data_set.zig");
 
 pub const usage =
     \\  ASSET_PATH    FAT12 IMG/IMA images or extracted directories; repeat for all disks
-    \\  --scene NAME   development shortcut: menu, a level name, or tables:LEVEL for the level
-    \\                 run from the behavior tables (default: normal startup)
+    \\  --scene NAME   development shortcut: menu or a level name (default: normal startup)
     \\  --saves DIR    where saves are kept (default: the per-user application data directory)
     \\  --data DIR     the data set made by flashbackz-extract (default: extracted at startup)
     \\
@@ -66,14 +65,8 @@ pub const Options = struct {
     }
 
     fn sceneEntry(value: []const u8) TakeError!flashbackz.game.Entry {
-        const Id = flashbackz.content.level.Id;
-        if (std.mem.eql(u8, value, "jungle")) return .jungle_development;
         if (std.mem.eql(u8, value, "menu")) return .menu_development;
-        if (std.mem.startsWith(u8, value, "tables:")) {
-            const level = std.meta.stringToEnum(Id, value["tables:".len..]) orelse
-                return error.UnknownScene;
-            return .{ .table_level_development = level };
-        }
+        const Id = flashbackz.content.level.Id;
         const level = std.meta.stringToEnum(Id, value) orelse return error.UnknownScene;
         return .{ .level_development = level };
     }

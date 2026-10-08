@@ -4,9 +4,8 @@ const platform = @import("../platform.zig");
 const input = @import("../input_recording.zig");
 const level = @import("level.zig");
 const floppy_interface = @import("floppy_interface.zig");
-const geometry = @import("../geometry.zig");
-const motion = @import("../motion.zig");
-pub const Start = struct { room: geometry.RoomId, position: motion.Position };
+/// Where Conrad starts a demo: a room (0-based) and a position.
+pub const Start = struct { room: u8, x: i16, y: i16 };
 pub const Descriptor = struct { filename: [12]u8, level: level.Id, start: ?Start };
 pub const Recording = struct { controls: []input.Sample, descriptor: Descriptor };
 

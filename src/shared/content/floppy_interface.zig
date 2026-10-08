@@ -143,11 +143,9 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
             .filename = filename,
             .level = @fromBackingInt(@as(u3, @intCast(source_level))),
             .start = if (room < 0) null else .{
-                .room = @fromBackingInt(@as(u16, @intCast(room)) + 1),
-                .position = .{
-                    .x = @bitCast(word(data, 0xfee + index * 8)),
-                    .y = @bitCast(word(data, 0xff0 + index * 8)),
-                },
+                .room = @intCast(room),
+                .x = @bitCast(word(data, 0xfee + index * 8)),
+                .y = @bitCast(word(data, 0xff0 + index * 8)),
             },
         };
     }

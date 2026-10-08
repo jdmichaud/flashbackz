@@ -1,35 +1,39 @@
 //! Convert the edition's message directory and formatting bytes into owned dialogue pages.
 const std = @import("std");
-const runtime = @import("../world_messages.zig");
+/// A world message: pages of lines, each with its ink.
+pub const Line = struct { text: []const u8, ink: u8 };
+pub const Page = struct { lines: []const Line };
+pub const Message = struct { pages: []const Page };
+pub const Id = enum(u16) { _ };
 const floppy_interface = @import("floppy_interface.zig");
 const platform = @import("../platform.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
-    messages: []runtime.Message,
+    messages: []Message,
     pub fn deinit(self: *Assets) void {
         for (self.messages) |message| releaseMessage(self.allocator, message);
         self.allocator.free(self.messages);
     }
-    pub fn get(self: Assets, id: runtime.Id) !runtime.Message {
+    pub fn get(self: Assets, id: Id) !Message {
         if (@backingInt(id) >= self.messages.len) return error.UnknownWorldMessage;
         return self.messages[@backingInt(id)];
     }
 };
-fn releasePage(allocator: std.mem.Allocator, page: runtime.Page) void {
+fn releasePage(allocator: std.mem.Allocator, page: Page) void {
     for (page.lines) |line| allocator.free(line.text);
     allocator.free(page.lines);
 }
-fn releaseMessage(allocator: std.mem.Allocator, message: runtime.Message) void {
+fn releaseMessage(allocator: std.mem.Allocator, message: Message) void {
     for (message.pages) |page| releasePage(allocator, page);
     allocator.free(message.pages);
 }
-fn parse(allocator: std.mem.Allocator, bytes: []const u8) !runtime.Message {
-    var pages: std.ArrayList(runtime.Page) = .empty;
+fn parse(allocator: std.mem.Allocator, bytes: []const u8) !Message {
+    var pages: std.ArrayList(Page) = .empty;
     errdefer {
         for (pages.items) |page| releasePage(allocator, page);
         pages.deinit(allocator);
     }
-    var lines: std.ArrayList(runtime.Line) = .empty;
+    var lines: std.ArrayList(Line) = .empty;
     errdefer {
         for (lines.items) |line| allocator.free(line.text);
         lines.deinit(allocator);
@@ -76,7 +80,7 @@ pub fn decode(allocator: std.mem.Allocator, table: []const u8) !Assets {
         first % 2 != 0 or
         first > table.len or
         first / 2 > 256) return error.InvalidMessageDirectory;
-    var messages: std.ArrayList(runtime.Message) = .empty;
+    var messages: std.ArrayList(Message) = .empty;
     errdefer {
         for (messages.items) |message| releaseMessage(allocator, message);
         messages.deinit(allocator);
