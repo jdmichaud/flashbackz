@@ -86,6 +86,89 @@ pub const Outcome = enum {
     level_changed,
 };
 
+// Terrain history and checkpoint (used by operations/carriers.zig) -------------------------
+
+/// The cells `make_solid`, `make_empty` and `make_low_passage` replaced, so that
+/// `restore_terrain` can put them back. One change is kept per starting cell: the first write
+/// there saves the cells it replaces; later writes at the same start keep those and only set
+/// how many cells a restore puts back. The original keeps the changes for the whole level in a
+/// fixed pool: a change costs 3 + width / 2 words, and a new one is admitted while fewer than
+/// 762 words are used, so the last one admitted may cross the bound. Nothing is ever freed.
+/// (flashback-re `docs/rules/codes-034-072.md` 54/55, `docs/terrain-port-map.md`.)
+pub const TerrainHistory = struct {
+    pub const capacity_words = 762;
+    /// Every change costs at least 3 words.
+    const max_changes = (capacity_words + 2) / 3;
+    /// The last change admitted may take up to 3 + 255 / 2 words past the pool.
+    const max_saved = 2 * (capacity_words + 3 + 255 / 2);
+
+    pub const Change = struct {
+        /// The first cell, as an index into the grid layout (`grid.Grid.bytes`).
+        start: i32,
+        /// Cells a restore puts back.
+        width: u8,
+        /// The cells first replaced are `saved[saved_from..][0..saved_count]`.
+        saved_from: u16,
+        saved_count: u8,
+    };
+
+    changes: [max_changes]Change = undefined,
+    change_count: u16 = 0,
+    used_words: u16 = 0,
+    saved: [max_saved]u8 = undefined,
+    saved_len: u16 = 0,
+
+    /// The newest change starting at `start`; with `newest_only`, only the newest change is
+    /// looked at.
+    pub fn find(self: *TerrainHistory, start: i32, newest_only: bool) ?*Change {
+        var i = self.change_count;
+        while (i > 0) {
+            i -= 1;
+            if (self.changes[i].start == start) return &self.changes[i];
+            if (newest_only) return null;
+        }
+        return null;
+    }
+
+    pub fn admitsMore(self: *const TerrainHistory) bool {
+        return self.used_words < capacity_words;
+    }
+
+    /// Remembers a new change; the caller fills the returned cells with what it replaces.
+    pub fn add(self: *TerrainHistory, start: i32, width: u8) []u8 {
+        const from = self.saved_len;
+        self.changes[self.change_count] = .{
+            .start = start,
+            .width = width,
+            .saved_from = from,
+            .saved_count = width,
+        };
+        self.change_count += 1;
+        self.used_words += 3 + width / 2;
+        self.saved_len += width;
+        return self.saved[from..][0..width];
+    }
+
+    pub fn savedCells(self: *const TerrainHistory, change: Change) []const u8 {
+        return self.saved[change.saved_from..][0..change.saved_count];
+    }
+};
+
+/// What `checkpoint` saves for a continue: every character's live state, the score, the
+/// collision grid and the terrain history (flashback-re `docs/rules/engine-level.md` 3.3).
+/// The original also saves the level and the difficulty, which cannot differ within a World.
+/// A continue restores these, rebuilds the room lists in placement order and the awake set
+/// from the saved `active` flags, then restarts as after any continue (engine-level.md 3.4).
+/// Not saved: the random state, messages, countdowns, weapon mode, protection, shake.
+pub const Checkpoint = struct {
+    /// The original's character table holds 256 characters.
+    pub const max_characters = 256;
+    characters: [max_characters]Character,
+    score: u32,
+    grid: grid.Grid,
+    terrain_history: TerrainHistory,
+};
+
 pub const World = struct {
     allocator: std.mem.Allocator,
     level: *const data_set.Level,
@@ -126,6 +209,10 @@ pub const World = struct {
     /// The vocabulary name that stopped the engine, when one is not implemented yet.
     missing_operation: ?[]const u8 = null,
     scratch: std.ArrayList(u16) = .empty,
+    // Terrain history and checkpoint (see `TerrainHistory` and `Checkpoint` above).
+    terrain_history: TerrainHistory = .{},
+    /// The last checkpoint of this level, if one was reached.
+    checkpoint: ?Checkpoint = null,
 
     /// Where Conrad starts instead of his placement, as a demo does.
     pub const Start = struct { room: u8, x: i16, y: i16 };
@@ -464,7 +551,7 @@ pub const World = struct {
     }
 
     /// Moves the character only if it is in the old room's list, as the original does.
-    fn moveBetweenRooms(self: *World, index: u16, from: u8, to: u8) void {
+    pub fn moveBetweenRooms(self: *World, index: u16, from: u8, to: u8) void {
         var cursor = &self.room_lists[from];
         while (cursor.*) |current| : (cursor = &self.characters[current].next_in_room) {
             if (current != index) continue;
