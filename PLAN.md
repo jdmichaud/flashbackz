@@ -75,6 +75,21 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
 - [x] Activate the carried force field through normal inventory use. Recover its deployment,
   animation, lifetime, repeat-use and projectile-blocking behavior from the supplied original;
   implement a shared equipment capability and qualify with a focused native encounter.
+- [ ] **Behavior as data (user decision, 2026-10-08; current priority).** Replace hand-coded
+  behavior families with declarative behavior tables run by one engine (see DESIGN.md 3-4).
+  - [ ] Vocabulary survey: every condition and effect used across all levels and difficulties,
+    with counts, recovered meaning and our name; measure the evaluation order (animation
+    completion, reacting transitions, signal timing, authored order).
+  - [ ] Extractor: disks to a ZON data set outside Git (characters, behavior tables, text),
+    plus a committed naming overlay. Gate: deterministic output, synthetic tests, all seven
+    levels extract, and every unnamed condition or effect is reported.
+  - [ ] Behavior engine: tables load into the content pack and run with the stated evaluation
+    order. Gate: the android ambush (civilian, gunman, defensive fields) runs from tables and
+    matches its 260-update capture and the whole-world replay.
+  - [ ] Migrate implemented families to tables one at a time, deleting their Zig components.
+    Gate for each: golden traces and the whole-world comparison are unchanged.
+  - [ ] Complete the vocabulary for the remaining unmapped families (95 at the start),
+    guided by the whole-world gap reports.
 - [ ] **Systematic gap detection (user concern, 2026-10-08):** replace reliance on manual play
   with a family-agnostic world comparison. On every update, compare each placement's presence,
   room and position with the original, and report placements that act in the original but have
