@@ -48,14 +48,18 @@ pub const Animations = struct {
 
     pub fn init(bytes: []const u8) !Animations {
         if (bytes.len < 2) return error.TruncatedAnimationDirectory;
-        const count = std.mem.readInt(u16, bytes[0..2], .little);
-        if (2 + @as(usize, count) * 2 > bytes.len) return error.TruncatedAnimationDirectory;
+        const entries = std.mem.readInt(u16, bytes[0..2], .little);
+        if (2 + @as(usize, entries) * 2 > bytes.len) return error.TruncatedAnimationDirectory;
         return .{ .bytes = bytes };
     }
 
+    /// The number of animations in the directory.
+    pub fn count(self: Animations) usize {
+        return std.mem.readInt(u16, self.bytes[0..2], .little);
+    }
+
     pub fn get(self: Animations, id: u16) !Animation {
-        const count = std.mem.readInt(u16, self.bytes[0..2], .little);
-        if (id >= count) return error.MissingAnimation;
+        if (id >= self.count()) return error.MissingAnimation;
         const entry = self.bytes[2 + @as(usize, id) * 2 ..][0..2];
         const offset = 2 + @as(usize, std.mem.readInt(u16, entry, .little));
         const fits = offset <= self.bytes.len and self.bytes.len - offset >= 6;
