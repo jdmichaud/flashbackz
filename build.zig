@@ -48,12 +48,24 @@ pub fn build(b: *std.Build) void {
         .imports = &.{.{ .name = "flashbackz", .module = shared }},
     });
 
-    // Native I/O: the directory asset source and the directory storage over std.Io. The executables import it; `flashbackz` never does.
+    // The extractor's core: the user's game files to the readable data set, in memory.
+    const extract_library = b.addModule("extract", .{
+        .root_source_file = b.path("src/extract/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{.{ .name = "flashbackz", .module = shared }},
+    });
+
+    // Native I/O: the directory asset source, the directory storage and the data set over
+    // std.Io. The executables import it; `flashbackz` never does.
     const native = b.addModule("native", .{
         .root_source_file = b.path("src/native/root.zig"),
         .target = target,
         .optimize = optimize,
-        .imports = &.{.{ .name = "flashbackz", .module = shared }},
+        .imports = &.{
+            .{ .name = "flashbackz", .module = shared },
+            .{ .name = "extract", .module = extract_library },
+        },
     });
 
     // SDL platform: the only module that links SDL2, and thus libc. It imports `native` for the
@@ -108,8 +120,8 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .imports = &.{
-            .{ .name = "flashbackz", .module = shared },
             .{ .name = "native", .module = native },
+            .{ .name = "extract", .module = extract_library },
         },
     });
     const extract_exe = b.addExecutable(.{ .name = "flashbackz-extract", .root_module = extract_module });
@@ -132,7 +144,14 @@ pub fn build(b: *std.Build) void {
     ).dependOn(&b.addInstallArtifact(sdl_exe, .{}).step);
     // Unit tests of every module. The tests of the SDL module link SDL2 as the host does.
     const test_step = b.step("test", "Run the unit tests of every module");
-    const unit_modules = [_]*std.Build.Module{ shared, agent, native, sdl, extract_module };
+    const unit_modules = [_]*std.Build.Module{
+        shared,
+        agent,
+        native,
+        sdl,
+        extract_library,
+        extract_module,
+    };
     for (unit_modules) |m| {
         const t = b.addTest(.{ .root_module = m });
         test_step.dependOn(&b.addRunArtifact(t).step);
