@@ -56,6 +56,37 @@ pub const Level = struct {
 
 pub const BehaviorSource = struct { name: []const u8, source: [:0]const u8 };
 
+/// The data set's files by path (`city/characters.zon`, `city/behaviors/NAME.zon`), as the host
+/// provides them: read from the user's directory or extracted in memory.
+pub const Files = std.StringArrayHashMapUnmanaged([:0]const u8);
+
+/// Loads one level (`city`) from the data set's files. Behaviors load in name order, so
+/// runs are reproducible whatever order the host listed them in.
+pub fn loadLevel(
+    gpa: std.mem.Allocator,
+    arena: std.mem.Allocator,
+    files: *const Files,
+    level: []const u8,
+    diagnostic: *Diagnostic,
+) Error!Level {
+    const characters_path = try std.fmt.allocPrint(arena, "{s}/characters.zon", .{level});
+    const characters = files.get(characters_path) orelse
+        return fail(diagnostic, "the data set has no {s}", .{characters_path});
+    const prefix = try std.fmt.allocPrint(arena, "{s}/behaviors/", .{level});
+    var behaviors: std.ArrayList(BehaviorSource) = .empty;
+    defer behaviors.deinit(gpa);
+    for (files.keys(), files.values()) |path, source| {
+        if (!std.mem.startsWith(u8, path, prefix)) continue;
+        try behaviors.append(gpa, .{ .name = path[prefix.len..], .source = source });
+    }
+    std.mem.sort(BehaviorSource, behaviors.items, {}, struct {
+        fn less(_: void, a: BehaviorSource, b: BehaviorSource) bool {
+            return std.mem.lessThan(u8, a.name, b.name);
+        }
+    }.less);
+    return load(gpa, arena, characters, behaviors.items, diagnostic);
+}
+
 /// Explains the first failure in words, for the person editing the data set.
 pub const Diagnostic = struct {
     text: [256]u8 = undefined,
