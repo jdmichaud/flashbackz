@@ -39,47 +39,47 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   Include forest ambience, movement, switches, weapons and every other original effect; bind
   cues to original animation/interaction timing through one shared sound system. Do not stop
   at gunfire. Keep missing world behavior and full movement coverage explicitly tracked.
+  - Since 2026-10-09 casings are characters run from their tables, and every effect is the
+    engine's sound request at the moment a rule fires (animation entry sounds and
+    `play_sound`), mixed by the shared effects player. Open: compare the request order and
+    timing with an original sound-request capture.
 - [ ] Recover floppy music/effects sequencing and integrate AdLib plus PCM. Gate: exact event
   timing and sound comparisons against the pinned original execution profile.
 - [x] Import compact LEV/BNQ/SGD room descriptions directly into owned artwork for gameplay.
   Gate: all decoded room pixels and palette selectors match the original installer’s five
   MAP outputs. Preserve compact content boundaries; reproducing the installer’s compression
   choices is unnecessary for runtime artwork.
-- [ ] Restore the jungle holocube as an animated world item: contact indication, pickup,
-  inventory transfer and recording playback, with explicit scene pause/resume. Gate: original
-  floppy observations agree on object visibility, action/transfer order and cinematic selection;
-  native input can collect and use the item from direct disk images.
-- [ ] **Conrad movement pass: complete before further world mechanisms.**
-  Cover walk/run blends and reversals, running jumps and edge departures, jump landings and
-  catches, crouch/roll chaining, ledge movement, falls/recovery, room handoffs and input
-  combinations; include locomotion with the weapon drawn. Gate: original floppy comparisons
-  cover each transition, and native exploration no longer terminates on valid movement input.
+- [x] **Superseded 2026-10-09 by behavior as data (below):** the items that implemented or
+  qualified one hand-written family or mechanism. Every character now runs from its extracted
+  behavior table, and the engine regression checks all of them against each capture. They were:
+  the jungle holocube; the Conrad movement pass; demo playback through the shared simulation;
+  collectibles, credits and stones; the leftward visibility continuation; the carried force
+  field; fuse repair; identity card and employment; interactive film pages; mission terminals;
+  the courier, android, reactor and escort assignments; the bar and forger; city police and
+  rescued civilians; shared enemy families (robots and ceiling guns included); energy
+  generators; the item-aid NPCs; trading; world messages; keys, cards and locks; the
+  systematic mechanism import; relay and pressure outputs; pressure plates; and requalifying
+  the gameplay imports.
 - [x] Persist master volume across application restarts. Load before startup audio and save
   applied changes through the shared storage interface; check a native close/relaunch.
 - [ ] Game Options: pause/resume, original settings and abort flow, host free memory in MB,
   plus user-requested master volume (0–100%). Gate: native menu input, pause behavior and
   both music/effect output levels are verified; original-only settings retain measured semantics.
+  - The level scene opens it on Esc after the update's walk and abandons to the continue
+    screen, as the original does.
 - [x] Extend the existing native development scene shortcut to named levels so later-level
   mechanisms can be checked in the actual executable without remapping original assets.
-- [ ] Original DEMO playback through the shared gameplay simulation: recover recording selection,
-  initial state, input cadence, interruption and completion. Use the three original recordings
-  as regression drivers; report divergences and resolve missing features through shared,
-  data-imported systems, never recording-specific behavior.
-- [ ] Shared collectible pickup, credit grants to the existing purse, and throwable stones,
-  imported by behavior family. Loose credit pickups also participate in enemy distraction. Use the
-  original demo to expose the next missing interaction; validate increments with quick native
-  play checks, per the user's iteration preference.
-- [ ] Preserve the original leftward visibility continuation after a nonmatching contact.
-  Recover the observable contact ordering and redirects, isolate compatibility metadata at
-  import, and keep original addresses and mutable RAM layouts out of the game state model.
-- [x] Activate the carried force field through normal inventory use. Recover its deployment,
-  animation, lifetime, repeat-use and projectile-blocking behavior from the supplied original;
-  implement a shared equipment capability and qualify with a focused native encounter.
-- [ ] **Behavior as data (user decision, 2026-10-08; current priority).** Replace hand-coded
+- [ ] Title-menu level codes: match the supplied edition’s codes, select their level and
+  difficulty, play the appropriate entry sequence and let the user test all seven levels.
+  Invalid codes return safely to the title; retry restarts the selected level.
+- [x] Original temporary level-code display: import the level/difficulty codes and show
+  the startup notice until its timer expires or a contact hint replaces it.
+- [x] **Behavior as data (user decision, 2026-10-08).** Replace hand-coded
   behavior families with declarative behavior tables run by one engine (see DESIGN.md 3-4).
-  - [ ] Vocabulary survey: every condition and effect used across all levels and difficulties,
+  - [x] Vocabulary survey: every condition and effect used across all levels and difficulties,
     with counts, recovered meaning and our name; measure the evaluation order (animation
     completion, reacting transitions, signal timing, authored order).
+    - flashback-re `docs/rule-vocabulary.md`, `docs/rules/` (codes, engine-update, -level).
   - [x] Extractor: disks to a ZON data set outside Git (characters, behavior tables, text),
     plus a committed naming overlay. Gate: deterministic output, synthetic tests, all seven
     levels extract, and every unnamed condition or effect is reported.
@@ -105,115 +105,27 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     - `src/shared/scenes/level.zig`: playfield, HUD, labels, password, world messages, inventory,
       options, films from the scene table, continue from checkpoints, shake, demos and new games.
       flashback-re `engine_regression.py`: 9,116 updates (every character, inventory links
-      included), 788 gameplay frames and 234 message frames match. Not yet: film and level
-      music (research running), the zoom view, the ending sequence, catch-up walks.
-  - [ ] Remove the hand-coded families, their importers and their tests once the scene
+      included), 788 gameplay frames and 234 message frames match. Films play with their
+      music (flashback-re `docs/rules/engine-music.md`: no music during play).
+  - [x] Remove the hand-coded families, their importers and their tests once the scene
     replaces them. Golden traces are re-recorded and each difference is explained.
+    - 2026-10-09: 129 files (about 29,000 lines) removed. The golden traces recorded the
+      removed scene's output, so they are retired rather than re-recorded: the engine
+      regression compares with the original itself, update by update and frame by frame.
 - [ ] **Systematic gap detection (user concern, 2026-10-08):** replace reliance on manual play
-  with a family-agnostic world comparison. On every update, compare each placement's presence,
-  room and position with the original, and report placements that act in the original but have
-  no modern owner, plus each implemented placement's first divergence. Drive it with the
-  original demos, every retained capture and a per-room sweep of all levels. Gate: synthetic
-  tests detect planted gaps; the report covers every level and room from recorded inputs.
-- [x] Audit every original placement, behavior family and static connection across all
-  levels and difficulties against actual importer registrations. Keep optional, hidden and
-  difficulty-excluded content visible; imported content is not automatically fidelity-qualified.
-- [x] Fuse repair: recover the pickup, use predicate, receiver connection and completion
-  movie/message; integrate it through shared collectibles and credential interactions.
-- [x] Starting identity-card capability and employment registration: bind initial supplies
-  through the same credential catalog as pickups; recover animated service counters and
-  their linked work-permit grant. Preserve consumption, dialogue and movie/signal ordering.
-- [x] Interactive cinematic pages: recover confirmation/release loops into immutable frames
-  with explicit input gates; retain normal film playback and avoid runtime source-script
-  execution. Qualify mission briefing/acceptance pages and fresh-key behavior in native play.
-- [x] Mission-terminal family: import briefing, permit acceptance, assignment activation,
-  completion, payout and data-linked successor unlocking for every placed terminal. Qualify
-  through ordinary input and original completion signals, retaining unused/optional entries.
-- [ ] Courier assignment: shared revealed civilian conversations, issued delivery items,
-  recipient acknowledgement/removal and linked ambush/mission completion, without room or
-  placement-specific scripting. Complete the delivery-and-payment route against the original.
-  - Core components and a prepared 420-update route pass. The unmodified street/combat
-    journey remains open; bar/forger access is now connected.
-- [x] City bar and forger progression: recover the bartender's attention/dialogue family,
-  signal-based civilian appearance, introductory handoff, payment and papers reward. Import
-  shared content definitions and links; qualify normal-input conversations and transactions.
-- [ ] City police and rescued civilians: import pursuit, evasive movement, shooting,
-  damage/death signals, encounter-clearance relays and the Ian conversation/seat/recording
-  sequence. Preserve family-wide rules and data links; qualify with original city input
-  and focused native encounters, without per-placement scripting.
-- [ ] Android assignment: recover issued photo credentials, revealed civilian/police
-  conversations, rescue/hostile handoffs, enemy activation, dropped access keys and counted
-  defeat completion. Import shared actor/item/relay behaviors and preserve optional photo
-  witnesses and decorative variants in the coverage audit; qualify the connected route.
-  - Photo grant, informant/policeman first/repeat dialogue and decorative patrons match
-    705 original updates with native checks. Rescue, live guard handoff, dropped key,
-    two android fights, counted completion and optional photo witnesses remain open.
-    Preserve same-update contact-to-guard delivery when connecting the handoff.
-  - Compile authored character update order into typed actor tasks for contacts, hosts,
-    service counters and enemies; deliver each actor's new circuit outputs before later
-    recipients advance, without a source-instruction interpreter.
-    - Done for gunmen, guards, quest/rescue contacts, hosts, service counters and the
-      player's shot. The prepared civilian-alert/ambush route matches 260 original updates;
-      all 24 retained city captures still agree. Rescue acknowledgement, defensive-field
-      deployment and the guard handoff are not yet exercised against the original.
-- [ ] Reactor assignment: recover contact-gated transport, the carried countdown and its
-  expiry, terminal-card grants/use, linked terminal outputs, alarm and failure presentation.
-  Compile shared transport, timed-item and credential components; connect completion/payment
-  through original links. Qualify focused original/native scenarios and retain full-route gaps.
-  - Entry/countdown, card completion and expiry components match 663 original updates and
-    22 ordered sound requests. GENEXP matches 51/52 frames; one-pixel edge differences in
-    one frame are documented. Native success/expiry pass; full unmodified maze travel remains open.
-- [ ] Escort assignment: import follower spacing, turns, obstacle/support decisions,
-  dialogue and lift boarding/release. Bind arrival to the original destination sensor,
-  mission payment and player return effect. Exclude the original protection wrapper while
-  preserving the underlying transport; qualify through original observations and native input.
-  - Core follower/lift/arrival/payment/return components match 770 prepared original updates
-    and native input. Full unmodified mission travel remains open.
-  - Retain the early weapon-toggle mismatch when Space is pressed before starting equipment
-    is granted; the settled armed transport wait is qualified separately.
-- [ ] Shared enemy families: import every matching placement, animation library and behavior
-  profile from original data. Implement perception, stone distractions, locomotion, shooting
-  and damage through independent actor/combat components; qualify with quick native encounters.
-  Include the robots and ceiling laser guns as distinct behavior families (user reminder);
-  gunman completion alone does not close enemy coverage.
-- [ ] Import energy-generator fixtures and shared item recharge capabilities. Restore the
-  shield through its authored use delay, healing value and recharge cinematic/music; reuse
-  the capability for rechargeable puzzle items. Verify nearby and out-of-range use.
-- [x] Rechargeable cartridge puzzle: pickup, charge completion after its film, credential
-  matching, consumption, lock instruction and both linked bridge sections. Import the full
-  behavior families and preserve their event order.
-- [x] Item-aid NPCs and reactive quest items: import the wounded-man behavior family,
-  teleporter delivery/acknowledgement, ID-card appearance/pickup and reusable card use.
-  Preserve dialogue, perception, animation and same/next-update links through shared systems.
-- [ ] Title-menu level codes: match the supplied edition’s codes, select their level and
-  difficulty, play the appropriate entry sequence and let the user test all seven levels.
-  Invalid codes return safely to the title; retry restarts the selected level.
-- [x] Original temporary level-code display: import the level/difficulty codes and show
-  the startup notice until its timer expires or a contact hint replaces it.
-- [x] Trading NPC family and credit payment: original price checks, debit, sale dialogue,
-  item grants, anti-G-belt films and linked visual effects. Preserve repeated-payment and
-  insufficient-funds behavior; connect the belt-dependent exit through shared progression.
-  Focused 560-update trade checks and native trade-to-city flow pass. Full arrival-film
-  pixel/audio and inter-level timestamp qualification remain part of whole-game acceptance.
-- [ ] Shared world-message display for item/control instructions and NPC dialogue, including
-  original pages, colors, input and world pause/resume.
-- [ ] Shared key/card pickups and credential locks: match original item codes at contact,
-  consume successful uses, and route lock outputs through the normal door circuits.
-  Preserve pickup movies, sounds and data-defined activation order.
-- [ ] **Systematic mechanism import (user direction):** enumerate all level placements,
-  shared rule groups and connections; classify behaviour families and translate them to typed
-  definitions for shared switch/door/lift components. Gate: every instance is accounted for,
-  known families are imported without per-object special cases, and unknown rule patterns are
-  reported explicitly. Keep original instruction dispatch out of the modern runtime.
-- [ ] Wire imported relay/pressure outputs to shared hazard consumers, preserving activation,
-  event ordering, animation, sound and contact consequences. Qualify disintegration and the
-  floppy Continue flow before exposing a hazard contact path that cannot return safely to play.
-- [ ] Connect pressure-plate signals to independently modeled gate animation and terrain
-  changes. Recover startup gate/platform footprints as behavior, not permanent level edits.
-  Gate: original floppy object transitions, signal order and complete collision-grid changes
-  agree through plate activation, collection, release and gate settling.
-- [ ] Requalify gameplay imports and executable-backed metadata against this release before
-  claiming that earlier movement, scene or inventory evidence applies.
+  with a family-agnostic world comparison.
+  - [x] Every character, every update: flashback-re `engine_regression.py` compares the whole
+    world (state, position, room, cursor, health, counter, flags, sprite, inventory links)
+    with every retained capture and the jungle demo, plus the recorded frames.
+  - [ ] Cover every level: capture the two other original demos (alien surface, tower) and a
+    per-room sweep of all seven levels (enter each room through normal input), then add them
+    to the regression. Gate: the regression reports every level and room against the original.
+- [ ] The ending: scene 61's film list under END31, the final score screen (scene 73) and the
+  return to the title. Gate: compared with an original capture of the ending.
+- [ ] The zoom view option (flashback-re engine-presentation 4.3), including the automatic
+  combat zoom. Gate: original frames with the option on.
+- [ ] Catch-up walks: when a frame is late the original repeats the walk without presenting.
+  Decide with the user whether the modern cadence should reproduce it; record the decision.
 
 ## Historical CD implementation/research milestones
 
