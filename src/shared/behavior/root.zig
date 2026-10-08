@@ -3,6 +3,7 @@
 pub const vocabulary = @import("vocabulary.zig");
 pub const data_set = @import("data_set.zig");
 pub const grid = @import("grid.zig");
+pub const animations = @import("animations.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());
