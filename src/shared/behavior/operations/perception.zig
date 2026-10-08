@@ -515,8 +515,7 @@ fn occupants(world: *World, named: ?u8) ?contacts.Contacts.Occupants {
 /// The byte `before` bytes ahead of a placement's record in the original's placement table
 /// (32 bytes per placement), rebuilt from the data set. Before the first record lies the wake
 /// list: a word per character, zero while it sleeps, else the address of its live record.
-/// Null where the data set does not keep the byte: the label's text number (bytes 30-31), a
-/// minimum difficulty past expert, and bytes 2-17, which a scan of 16 cells never reaches.
+/// Null for bytes 2-17, which a scan of 16 cells never reaches.
 fn placementByte(world: *const World, record: u16, before: i32) ?u8 {
     const position = @as(i32, record) * 32 - before;
     if (position >= 0) {
@@ -546,18 +545,15 @@ fn recordByte(world: *const World, index: u16, offset: u5) ?u8 {
         22 => placement.contact_icon,
         23 => placement.inventory_icon,
         24 => placement.object,
-        25 => switch (placement.minimum_difficulty) {
-            .easy => 0,
-            .normal => 1,
-            .expert => 2,
-            .never => null,
-        },
+        25 => @backingInt(placement.minimum_difficulty),
         26 => @intFromBool(placement.facing == .right),
         27 => @as(u8, @intFromBool(placement.wakes_on_message)) |
             @as(u8, @intFromBool(placement.wakes_on_contact)) << 1 |
             @as(u8, @intFromBool(placement.wakes_when_near)) << 2 | placement.other_flags,
         28 => placement.width,
         29 => placement.unknown_byte_29,
+        30 => @truncate(placement.label_number),
+        31 => @truncate(placement.label_number >> 8),
         else => null,
     };
 }
@@ -998,15 +994,16 @@ test "sight to the left continues through the placement bytes before a passed ch
         testing.character(.interactive, 1, 10, 214, false),
     };
     characters[2].active = false;
+    characters[2].label_number = 0x8180; // Both bytes name no slot.
     characters[2].unknown_byte_29 = 0; // Conrad registers first: slot 0.
     const level = testing.levelOf(&characters);
     var w = try testing.world(&level);
     defer w.deinit();
     try testing.register(&w, &.{ 0, 1, 2, 3 });
     // Columns 11 and 10 (the awake character), then placement 2's bytes 31 and 30 (its
-    // label's text number, which the data set does not keep) and 29, which names slot 0.
+    // label's text number) and 29, which names slot 0.
     try std.testing.expect(!try testing.look(&w, 1, .player, 4));
-    try std.testing.expectEqual(@as(u32, 2), w.unmodeled_reads);
+    try std.testing.expectEqual(@as(u32, 0), w.unmodeled_reads);
     try std.testing.expect(try testing.look(&w, 1, .player, 5));
     characters[2].unknown_byte_29 = 0x80;
     try std.testing.expect(!try testing.look(&w, 1, .player, 5));

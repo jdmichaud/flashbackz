@@ -560,6 +560,7 @@ fn writeCharacters(level: *Level, out: *std.Io.Writer) !void {
         try w.line(".placement = {d},", .{index});
         const label = labelOf(level, record);
         if (label.len != 0) try w.line(".label = {f},", .{zon.string(label)});
+        if (record.text_id != 0) try w.line(".label_number = {d},", .{record.text_id});
         try w.line(
             ".kind = {f},",
             .{zon.identifier(codes.kindName(&buffer, @as(i16, record.kind)))},
@@ -587,12 +588,12 @@ fn writeCharacters(level: *Level, out: *std.Io.Writer) !void {
         if (record.flags & 4 != 0) try w.line(".wakes_when_near = true,", .{});
         const other_flags = record.flags & ~@as(u8, 7);
         if (other_flags != 0) try w.line(".other_flags = {d},", .{other_flags});
-        try w.line(".minimum_difficulty = .{s},", .{switch (record.minimum_difficulty) {
-            0 => "easy",
-            1 => "normal",
-            2 => "expert",
-            else => "never",
-        }});
+        switch (record.minimum_difficulty) {
+            0 => try w.line(".minimum_difficulty = .easy,", .{}),
+            1 => try w.line(".minimum_difficulty = .normal,", .{}),
+            2 => try w.line(".minimum_difficulty = .expert,", .{}),
+            else => |value| try w.line(".minimum_difficulty = {d}, // never placed", .{value}),
+        }
         if (record.visual_flags & 3 != 0) try w.line(
             ".palette_bank = {d},",
             .{record.visual_flags & 3},

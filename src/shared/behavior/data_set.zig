@@ -5,13 +5,16 @@ const vocabulary = @import("vocabulary.zig");
 const Zoir = std.zig.Zoir;
 const Node = Zoir.Node;
 
-pub const Difficulty = enum { easy, normal, expert, never };
+/// Above expert: never placed.
+pub const Difficulty = enum(u8) { easy, normal, expert, _ };
 pub const Facing = enum { left, right };
 
 pub const Character = struct {
     name: []const u8,
     placement: u16,
     label: []const u8 = "",
+    /// The label's number in the level's text.
+    label_number: u16 = 0,
     kind: vocabulary.Kind,
     behavior: u16,
     start: u16,
@@ -564,12 +567,15 @@ const Loader = struct {
             .wakes_on_contact = fields.flag("wakes_on_contact"),
             .wakes_when_near = fields.flag("wakes_when_near"),
             .behind_player = fields.flag("behind_player"),
-            .minimum_difficulty = try fields.choice(Difficulty, "minimum_difficulty"),
+            .minimum_difficulty = try fields.difficulty(),
         };
         if (tree.field(fields.node, "label")) |label| result.label = switch (tree.get(label)) {
             .string_literal => |text| try self.arena.dupe(u8, text),
             else => return fail(self.diagnostic, "{s}: label must be a string", .{name}),
         };
+        if (tree.field(fields.node, "label_number") != null) {
+            result.label_number = try fields.integer(u16, "label_number");
+        }
         inline for (.{
             "other_flags",
             "palette_bank",
@@ -693,6 +699,18 @@ const Fields = struct {
     fn flag(self: Fields, comptime field: []const u8) bool {
         const value = self.tree.field(self.node, field) orelse return false;
         return self.tree.get(value) == .true;
+    }
+
+    /// A difficulty name, or a number above expert.
+    fn difficulty(self: Fields) Error!Difficulty {
+        const value = try self.required("minimum_difficulty");
+        if (self.tree.int(value)) |number| {
+            if (number > 2 and number < 256) return @fromBackingInt(@as(u8, @intCast(number)));
+            return fail(self.loader.diagnostic, "{s}: minimum_difficulty out of range", .{
+                self.owner,
+            });
+        }
+        return self.choice(Difficulty, "minimum_difficulty");
     }
 
     fn choice(self: Fields, comptime T: type, comptime field: []const u8) Error!T {
