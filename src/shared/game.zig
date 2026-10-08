@@ -627,7 +627,7 @@ pub const Game = struct {
                     self.assets.?,
                     film.film,
                     film.entry,
-                    null,
+                    film.music,
                     now,
                     null,
                 );

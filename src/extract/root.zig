@@ -102,15 +102,14 @@ fn writeScenes(
         const film = std.mem.sliceTo(&scene.film, 0);
         if (film.len == 0) {
             try w.line("null, // scene {d}", .{number});
-        } else if (scene.flagged) {
-            try w.line(
-                ".{{ .film = {f}, .entry = {d}, .flagged = true }}, // scene {d}",
-                .{ zon.string(film), scene.entry, number },
-            );
-        } else try w.line(
-            ".{{ .film = {f}, .entry = {d} }}, // scene {d}",
-            .{ zon.string(film), scene.entry, number },
-        );
+            continue;
+        }
+        var fields: std.Io.Writer.Allocating = .init(arena);
+        try fields.writer.print(".film = {f}, .entry = {d}", .{ zon.string(film), scene.entry });
+        const music = std.mem.sliceTo(&scene.music, 0);
+        if (music.len != 0) try fields.writer.print(", .music = {f}", .{zon.string(music)});
+        if (scene.flagged) try fields.writer.writeAll(", .flagged = true");
+        try w.line(".{{ {s} }}, // scene {d}", .{ fields.written(), number });
     }
     try w.close();
     try w.close();

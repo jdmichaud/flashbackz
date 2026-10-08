@@ -31,8 +31,10 @@ pub const SceneFilm = struct {
     /// The film file's base name, or empty when the scene plays no film.
     film: [12]u8 = @splat(0),
     entry: u8 = 0,
-    /// Set on one scene's film number; its meaning is not decoded.
+    /// Set on one scene's film number; no code reads it.
     flagged: bool = false,
+    /// The music file played with the film, upper case, or empty for none.
+    music: [8]u8 = @splat(0),
 };
 
 pub const LibraryGroups = struct {
@@ -192,6 +194,17 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
         @memcpy(scene.film[0..length], data[name..][0..length]);
         scene.entry = data[0x101a + number * 4 + 2];
         scene.flagged = film & 0x8000 != 0;
+        // Scene 75 has a film but lies past the music table.
+        const cue = if (number < 75) data[0x114a + number] else 0xff;
+        if (cue == 0xff) continue;
+        if (cue >= 26) return error.InvalidSceneTable;
+        const music = data[0x760 + @as(usize, cue) * 9 ..][0..9];
+        const music_length = std.mem.indexOfScalar(u8, music, 0) orelse
+            return error.InvalidSceneTable;
+        if (music_length > scene.music.len) return error.InvalidSceneTable;
+        for (music[0..music_length], scene.music[0..music_length]) |c, *out| {
+            out.* = std.ascii.toUpper(c);
+        }
     }
     var level_scenes: [7]?u8 = undefined;
     for (&level_scenes, 0..) |*scene, level| {

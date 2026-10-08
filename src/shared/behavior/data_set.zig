@@ -118,8 +118,13 @@ pub fn loadMessages(
     };
 }
 
-/// The film a scene request plays.
-pub const Film = struct { film: []const u8, entry: u8, flagged: bool = false };
+/// The film a scene request plays, and the music played with it.
+pub const Film = struct {
+    film: []const u8,
+    entry: u8,
+    music: ?[]const u8 = null,
+    flagged: bool = false,
+};
 
 /// `scenes.zon`: the film each scene request plays, by scene number, and the scene each level
 /// opens with.
