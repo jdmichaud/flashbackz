@@ -7,6 +7,19 @@ const equipment = @import("../equipment.zig");
 const world = @import("../world_props.zig");
 const geometry = @import("../geometry.zig");
 const strings = @import("string_table.zig");
+const cartridges = @import("cartridges.zig");
+const credential_cards = @import("credential_cards.zig");
+const credit_pickups = @import("credit_pickups.zig");
+const credit_wallet = @import("credit_wallet.zig");
+const inventory_grants = @import("inventory_grants.zig");
+const key_pickups = @import("key_pickups.zig");
+const motion = @import("../motion.zig");
+const pressure_controls = @import("pressure_controls.zig");
+const quest_items = @import("quest_items.zig");
+const rule_table = @import("rule_table.zig");
+const settings = @import("../settings.zig");
+const thrown_item = @import("thrown_item.zig");
+const timed_items = @import("timed_items.zig");
 
 // Import-only endpoints let other content importers bind the same opaque circuit.
 pub const Connection = struct {
@@ -23,7 +36,7 @@ pub const Assets = struct {
     connections: []Connection,
     /// Import-only item provenance for binding item-to-mechanism delivery order.
     item_sources: []u16,
-    hint_icon: @import("../motion.zig").VisualId,
+    hint_icon: motion.VisualId,
     pub fn deinit(self: *Assets) void {
         releaseThrows(self.allocator, self.definitions);
         self.allocator.free(self.definitions);
@@ -84,7 +97,7 @@ pub fn load(
     rules: []const u8,
     names: []const u8,
     room_ids: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     first_item: equipment.ItemHandle,
     supplied_items: []const equipment.Definition,
     resolver: anytype,
@@ -112,8 +125,8 @@ pub fn load(
     for (0..table.count) |i| {
         const record = try table.record(@intCast(i));
         if (record.minimum_difficulty > @backingInt(difficulty)) continue;
-        const group = try @import("rule_table.zig").group(rules, record.rule_group);
-        if (@import("timed_items.zig").recognize(group)) |timer| {
+        const group = try rule_table.group(rules, record.rule_group);
+        if (timed_items.recognize(group)) |timer| {
             if (record.kind != 3 or
                 record.room < room_ids.len or
                 record.initial_state != timer.states[0]) return error.UnsupportedTimedItemPlacement;
@@ -133,7 +146,7 @@ pub fn load(
             );
             continue;
         }
-        if (@import("inventory_grants.zig").recognize(group)) |grant| {
+        if (inventory_grants.recognize(group)) |grant| {
             if (grant.starting != null and
                 record.initial_state == grant.starting.? and
                 record.initially_active != 0) continue;
@@ -145,17 +158,17 @@ pub fn load(
             errdefer allocator.free(label);
             try item_sources.append(allocator, @intCast(i));
             var consumption_steps: ?u16 = null;
-            if (@import("credential_cards.zig").parcel(group)) |parcel| {
+            if (credential_cards.parcel(group)) |parcel| {
                 var use = try animation.decode(allocator, animations, parcel.using);
                 defer use.deinit();
                 consumption_steps = @intCast(use.frames.len);
             }
-            if (@import("credential_cards.zig").terminal(group)) |card| {
+            if (credential_cards.terminal(group)) |card| {
                 var use = try animation.decode(allocator, animations, card.using);
                 defer use.deinit();
                 consumption_steps = @intCast(use.frames.len);
             }
-            if (@import("credential_cards.zig").papers(group)) |papers| {
+            if (credential_cards.papers(group)) |papers| {
                 var use = try animation.decode(allocator, animations, papers.using);
                 defer use.deinit();
                 consumption_steps = @intCast(use.frames.len);
@@ -183,7 +196,7 @@ pub fn load(
             );
             continue;
         }
-        const gift = @import("quest_items.zig").card(group);
+        const gift = quest_items.card(group);
         var room = record.room;
         if (room >= room_ids.len) {
             const spec = gift orelse continue;
@@ -191,7 +204,7 @@ pub fn load(
             if (destination < 0 or destination >= room_ids.len) return error.InvalidGiftRoom;
             room = @intCast(destination);
         }
-        const pressure_spec = @import("pressure_controls.zig").recognize(try @import("rule_table.zig").group(
+        const pressure_spec = pressure_controls.recognize(try rule_table.group(
             rules,
             record.rule_group,
         ));
@@ -200,19 +213,19 @@ pub fn load(
         var behavior: @FieldType(world.Definition, "behavior") = undefined;
         if (record.kind == 3) {
             const stone = isThrowablePickup(rules, record.rule_group, record.initial_state, rule);
-            const credit = @import("credit_pickups.zig").recognize(try @import("rule_table.zig").group(
+            const credit = credit_pickups.recognize(try rule_table.group(
                 rules,
                 record.rule_group,
             ));
-            const key = @import("key_pickups.zig").recognize(try @import("rule_table.zig").group(
+            const key = key_pickups.recognize(try rule_table.group(
                 rules,
                 record.rule_group,
             ));
-            const cartridge = @import("cartridges.zig").recognize(try @import("rule_table.zig").group(
+            const cartridge = cartridges.recognize(try rule_table.group(
                 rules,
                 record.rule_group,
             ));
-            const device = @import("quest_items.zig").teleporter(group);
+            const device = quest_items.teleporter(group);
             if (record.initial_state != 328 and
                 !stone and
                 credit == null and
@@ -228,7 +241,7 @@ pub fn load(
                 const purse = try table.record(@intCast(recipient));
                 if (purse.kind != 3 or
                     purse.initially_active == 0 or
-                    @import("credit_wallet.zig").signal(try @import("rule_table.zig").group(
+                    credit_wallet.signal(try rule_table.group(
                         rules,
                         purse.rule_group,
                     )) == null) return error.UnsupportedCreditRecipient;
@@ -393,9 +406,9 @@ pub fn load(
                     record.initial_state,
                     resolver,
                 );
-                const trajectory = try @import("thrown_item.zig").load(
+                const trajectory = try thrown_item.load(
                     allocator,
-                    try @import("rule_table.zig").group(rules, record.rule_group),
+                    try rule_table.group(rules, record.rule_group),
                     record.initial_state,
                     word(rule, 4),
                     animations,
@@ -574,7 +587,7 @@ fn appendClip(
     animations: []const u8,
     id: u16,
     resolver: anytype,
-) !@import("../motion.zig").Clip {
+) !motion.Clip {
     var source = try animation.decode(allocator, animations, id);
     defer source.deinit();
     for (source.frames) |frame| switch (frame) {
@@ -595,7 +608,7 @@ fn isThrowablePickup(bytes: []const u8, group: u16, initial: u16, pickup: []cons
         12,
     ) != 30 or pickup[6] != 90 or word(pickup, 14) != 8 or pickup[9] != 48) return false;
     const carried = word(pickup, 4);
-    const view = @import("rule_table.zig").group(bytes, group) catch return false;
+    const view = rule_table.group(bytes, group) catch return false;
     var throws = false;
     var drops = false;
     for (0..view.count()) |i| {

@@ -37,9 +37,10 @@ pub const step_clock = @import("step_clock.zig");
 pub const jungle_scene = @import("scenes/jungle.zig");
 pub const game = @import("game.zig");
 pub const Game = game.Game;
+const std = @import("std");
 
 test {
-    @import("std").testing.refAllDecls(@This());
+    std.testing.refAllDecls(@This());
 }
 
 pub const pistol_casing = @import("pistol_casing.zig");

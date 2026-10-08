@@ -4,6 +4,11 @@ const rules = @import("rule_table.zig");
 const runtime = @import("../credential_terminals.zig");
 const animation = @import("animation.zig");
 const routes = @import("first_world_props.zig");
+const geometry = @import("../geometry.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
+const string_table = @import("string_table.zig");
+const world_props = @import("../world_props.zig");
 pub const Spec = struct { idle: u16, signal: i16, outputs: [2]rules.Operation, notice: i16 };
 pub fn recognize(group: rules.Group) ?Spec {
     if (group.count() != 3) return null;
@@ -67,12 +72,12 @@ pub const Assets = struct {
 };
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     bytes: []const u8,
     animations: []const u8,
     names: []const u8,
-    rooms: *const [64]@import("../geometry.zig").RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: settings.Difficulty,
     connections: *std.ArrayList(routes.Connection),
     resolver: anytype,
 ) !Assets {
@@ -98,7 +103,7 @@ pub fn load(
         const spec = recognize(try rules.group(bytes, record.rule_group)) orelse continue;
         if (record.initial_state != spec.idle or
             record.contact_icon == 0) return error.UnsupportedCredentialTerminal;
-        var outputs: [2]@import("../world_props.zig").CircuitId = undefined;
+        var outputs: [2]world_props.CircuitId = undefined;
         for (spec.outputs, &outputs) |op, *circuit| {
             const target = record.parameters[op.code - 35];
             if (target < 0 or target >= table.count) return error.InvalidTerminalTarget;
@@ -124,7 +129,7 @@ pub fn load(
         };
         try sources.append(allocator, @intCast(index));
         try signals.append(allocator, spec.signal);
-        const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
+        const label = try string_table.copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
         try definitions.append(
             allocator,

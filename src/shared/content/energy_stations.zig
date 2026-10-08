@@ -4,6 +4,9 @@ const runtime = @import("../energy_stations.zig");
 const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
 const geometry = @import("../geometry.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
+const string_table = @import("string_table.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -39,12 +42,12 @@ pub fn recognize(group: rules.Group) ?u16 {
 }
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     rule_bytes: []const u8,
     animations: []const u8,
     names: []const u8,
     rooms: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     resolver: anytype,
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
@@ -79,7 +82,7 @@ pub fn load(
             try clips.append(allocator, clip);
             break :blk clip.clip();
         };
-        const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
+        const label = try string_table.copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
         table.register(@intCast(i), .energy_stations);
         try definitions.append(

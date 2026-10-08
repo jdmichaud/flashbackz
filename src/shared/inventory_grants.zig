@@ -1,16 +1,18 @@
 //! Circuit-triggered inventory rewards, with no invented world placement for offstage items.
 const std = @import("std");
 const equipment = @import("equipment.zig");
-pub const Followup = struct { steps: u16, circuit: @import("world_props.zig").CircuitId };
+const story_cue = @import("story_cue.zig");
+const world_props = @import("world_props.zig");
+pub const Followup = struct { steps: u16, circuit: world_props.CircuitId };
 pub const Definition = struct {
     followup: ?Followup = null,
-    on_grant: ?@import("world_props.zig").CircuitId = null,
-    on_consumed: ?@import("world_props.zig").CircuitId = null,
+    on_grant: ?world_props.CircuitId = null,
+    on_consumed: ?world_props.CircuitId = null,
     item: equipment.ItemHandle,
-    movie: ?@import("story_cue.zig").Cue,
+    movie: ?story_cue.Cue,
 };
 pub const Binding = struct {
-    circuit: @import("world_props.zig").CircuitId,
+    circuit: world_props.CircuitId,
     target: usize,
     next_step: bool,
 };
@@ -20,9 +22,9 @@ pub const World = struct {
     applied: []bool,
     waiting_consumption: []bool,
     followup_in: []?u16,
-    pulses: []@import("world_props.zig").CircuitId,
+    pulses: []world_props.CircuitId,
     pulse_count: usize = 0,
-    movie: ?@import("story_cue.zig").Cue = null,
+    movie: ?story_cue.Cue = null,
     pub fn init(allocator: std.mem.Allocator, count: usize) !World {
         const pending = try allocator.alloc(bool, count);
         errdefer allocator.free(pending);
@@ -42,7 +44,7 @@ pub const World = struct {
             .applied = applied,
             .waiting_consumption = waiting_consumption,
             .followup_in = followup_in,
-            .pulses = try allocator.alloc(@import("world_props.zig").CircuitId, count * 3),
+            .pulses = try allocator.alloc(world_props.CircuitId, count * 3),
         };
     }
     pub fn deinit(self: *World) void {
@@ -93,7 +95,7 @@ pub const World = struct {
         self: *World,
         definitions: []const Definition,
         bindings: []const Binding,
-        pulses: []const @import("world_props.zig").CircuitId,
+        pulses: []const world_props.CircuitId,
         items: *equipment.Loadout,
     ) !void {
         for (pulses) |pulse| for (bindings) |binding| {

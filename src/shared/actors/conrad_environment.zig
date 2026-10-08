@@ -3,6 +3,7 @@
 const geometry = @import("../geometry.zig");
 const terrain = @import("../terrain.zig");
 const motion = @import("../motion.zig");
+const std = @import("std");
 pub const Height = enum { above_head, head, torso, support, lower_support };
 
 pub const Environment = struct {
@@ -59,7 +60,6 @@ pub const Environment = struct {
 };
 
 test "changing a gate material changes rolling clearance without losing standing collision" {
-    const std = @import("std");
     const id: geometry.RoomId = @fromBackingInt(41);
     const empty: [18]bool = @splat(false);
     const cells: [18]terrain.Material = @splat(.empty);

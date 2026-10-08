@@ -5,6 +5,7 @@ const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const combat = @import("combat.zig");
 const pistol = @import("pistol_shot.zig");
+const terrain_mod = @import("terrain.zig");
 pub const Request = struct {
     pose: motion.Pose,
     room: geometry.RoomId,
@@ -52,7 +53,7 @@ pub const World = struct {
     pub fn advance(
         self: *World,
         definitions: []const pistol.Definition,
-        terrain: @import("terrain.zig").View,
+        terrain: terrain_mod.View,
         targets: []const combat.Target,
     ) !void {
         for (self.channels, definitions) |*channel, definition| {

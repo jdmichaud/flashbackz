@@ -7,6 +7,7 @@ const placement = @import("placement.zig");
 const geometry = @import("../geometry.zig");
 const motion = @import("../motion.zig");
 const connections = @import("first_world_props.zig");
+const settings = @import("../settings.zig");
 const Route = struct { parameter: u2, message: i16 };
 const Spec = struct {
     states: [5]u16,
@@ -152,7 +153,7 @@ pub fn load(
     rule_bytes: []const u8,
     animations: []const u8,
     rooms: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     routes: *std.ArrayList(connections.Connection),
     resolver: anytype,
 ) !Assets {

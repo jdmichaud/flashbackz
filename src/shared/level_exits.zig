@@ -3,7 +3,9 @@ const std = @import("std");
 const contacts = @import("contacts.zig");
 const geometry = @import("geometry.zig");
 const equipment = @import("equipment.zig");
-pub const Destination = @import("content/level.zig").Id;
+pub const Destination = level.Id;
+const activation = @import("activation.zig");
+const level = @import("content/level.zig");
 pub const Definition = struct {
     footprint: contacts.Footprint,
     required_item: equipment.Kind,
@@ -37,7 +39,7 @@ pub const World = struct {
     ) !void {
         const layout: contacts.Layout = .{};
         for (self.gates, definitions) |*gate, definition| {
-            const near = try @import("activation.zig").around(
+            const near = try activation.around(
                 map,
                 player.room,
                 definition.footprint.room,

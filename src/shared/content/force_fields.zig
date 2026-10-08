@@ -3,6 +3,9 @@ const std = @import("std");
 const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
 const runtime = @import("../force_fields.zig");
+const motion = @import("../motion.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -27,10 +30,10 @@ fn op(code: u8, argument: i16) rules.Operation {
 }
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     bytes: []const u8,
     animations: []const u8,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     resolver: anytype,
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
@@ -130,7 +133,7 @@ pub fn load(
         ) or
             group.at(5).source != recovered or
             group.at(5).target != idle) return error.UnsupportedForceFieldRecovery;
-        var resolved: [5]@import("../motion.zig").Clip = undefined;
+        var resolved: [5]motion.Clip = undefined;
         for (
             [_]u16{ idle, if (rear) a.target else idle, active, recovered, absorbed },
             &resolved,

@@ -6,6 +6,11 @@ const animation = @import("animation.zig");
 const placement = @import("placement.zig");
 const geometry = @import("../geometry.zig");
 const routes_mod = @import("first_world_props.zig");
+const credit_wallet = @import("credit_wallet.zig");
+const equipment = @import("../equipment.zig");
+const settings = @import("../settings.zig");
+const string_table = @import("string_table.zig");
+const world_props = @import("../world_props.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -179,9 +184,9 @@ pub fn load(
     animations: []const u8,
     names: []const u8,
     rooms: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     routes: *std.ArrayList(routes_mod.Connection),
-    supplies: []const @import("../equipment.zig").Definition,
+    supplies: []const equipment.Definition,
     resolver: anytype,
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
@@ -233,7 +238,7 @@ pub fn load(
         }
         const profile_index = profiles.items.len;
         try profiles.append(allocator, profile);
-        var outputs: [3]@import("../world_props.zig").CircuitId = undefined;
+        var outputs: [3]world_props.CircuitId = undefined;
         for (&outputs, spec.outputs, 0..) |*output, signal, parameter| {
             const target = record.parameters[parameter];
             if (target < 0 or target >= table.count) return error.InvalidGuideConnection;
@@ -248,7 +253,7 @@ pub fn load(
         for (0..table.count) |source| {
             const item = try table.record(@intCast(source));
             if (item.initially_active == 0 or item.parameters[0] != record.kind) continue;
-            const signal = @import("credit_wallet.zig").signal(try rules.group(
+            const signal = credit_wallet.signal(try rules.group(
                 rule_bytes,
                 item.rule_group,
             )) orelse continue;
@@ -267,7 +272,7 @@ pub fn load(
         }
         try sources.append(allocator, @intCast(index));
         try signals.append(allocator, spec.incoming);
-        const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
+        const label = try string_table.copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
         table.register(@intCast(index), .rescued_guides);
         try definitions.append(

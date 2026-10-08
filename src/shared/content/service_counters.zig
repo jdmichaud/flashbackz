@@ -4,6 +4,11 @@ const rules = @import("rule_table.zig");
 const runtime = @import("../service_counters.zig");
 const animation = @import("animation.zig");
 const routes = @import("first_world_props.zig");
+const geometry = @import("../geometry.zig");
+const motion = @import("../motion.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
+const string_table = @import("string_table.zig");
 pub const Spec = struct {
     states: [4]u16,
     signal: i16,
@@ -99,12 +104,12 @@ pub const Assets = struct {
 };
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     rule_bytes: []const u8,
     animations: []const u8,
     names: []const u8,
-    rooms: *const [64]@import("../geometry.zig").RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: settings.Difficulty,
     connections: *std.ArrayList(routes.Connection),
     resolver: anytype,
 ) !Assets {
@@ -132,7 +137,7 @@ pub fn load(
             record.contact_icon == 0) return error.UnsupportedCounterStart;
         const recipient = record.parameters[spec.parameter];
         if (recipient < 0 or recipient >= table.count) return error.InvalidCounterRecipient;
-        var resolved: [4]@import("../motion.zig").Clip = undefined;
+        var resolved: [4]motion.Clip = undefined;
         for (spec.states, &resolved) |state, *destination| {
             var source = try animation.decode(allocator, animations, state);
             defer source.deinit();
@@ -154,7 +159,7 @@ pub fn load(
         );
         try sources.append(allocator, @intCast(index));
         try signals.append(allocator, spec.signal);
-        const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
+        const label = try string_table.copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
         try definitions.append(
             allocator,

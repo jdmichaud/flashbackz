@@ -5,6 +5,7 @@ const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const combat = @import("combat.zig");
 const contacts = @import("contacts.zig");
+const terrain = @import("terrain.zig");
 pub const Phase = enum { ready, checking_rear, shielding, recovering, absorbing };
 pub const Definition = struct {
     rear: bool,
@@ -91,7 +92,7 @@ pub const Emitter = struct {
         deploy: bool,
         player: motion.Pose,
         room: geometry.RoomId,
-        view: @import("terrain.zig").View,
+        view: terrain.View,
         targets: []const combat.Target,
     ) !void {
         self.sound = null;
@@ -156,7 +157,7 @@ pub const Emitter = struct {
 /// Rear deployment is conditional on a living actor along the unobstructed rear ray.
 /// Unlike a shot, this query does not require a damage-vulnerable animation pose.
 fn enemyBehind(
-    view: @import("terrain.zig").View,
+    view: terrain.View,
     room: geometry.RoomId,
     pose: motion.Pose,
     range: u16,

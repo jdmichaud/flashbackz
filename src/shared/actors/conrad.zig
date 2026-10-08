@@ -13,7 +13,13 @@ const wounds = @import("conrad_wound.zig");
 const combat = @import("../combat.zig");
 const recoil = @import("conrad_recoil.zig");
 const rolling = @import("conrad_roll.zig");
-pub const Intent = @import("controls.zig").Intent;
+pub const Intent = controls.Intent;
+const conrad_environment = @import("conrad_environment.zig");
+const controls = @import("controls.zig");
+const geometry = @import("../geometry.zig");
+const lifts = @import("../lifts.zig");
+const pistol_shot = @import("../pistol_shot.zig");
+const terrain = @import("../terrain.zig");
 
 pub const WalkMotion = struct {
     clip: motion.Clip,
@@ -126,7 +132,7 @@ pub const Controller = struct {
     grant_protection: bool = false,
     weapon_desired: bool = false,
     sound_requested: ?motion.SoundId = null,
-    shot_requested: ?@import("../pistol_shot.zig").Height = null,
+    shot_requested: ?pistol_shot.Height = null,
     playback: motion.Playback = .{},
     /// Ordered consequences of the latest step; the session applies them before equipment.
     fatal_landing: bool = false,
@@ -136,7 +142,7 @@ pub const Controller = struct {
     ride_available: bool = false,
     ride_acknowledged: bool = false,
     ride_arrived: bool = false,
-    ride_requested: ?@import("../lifts.zig").Stop = null,
+    ride_requested: ?lifts.Stop = null,
     ride_boarded: bool = false,
     ride_left: bool = false,
     use_available: bool = false,
@@ -1010,9 +1016,7 @@ test "walking commits a stride and requests room handoff only at its boundary" {
 }
 
 test "a low passage permits crouch-to-roll while an equally occupied solid wall does not" {
-    const geometry = @import("../geometry.zig");
-    const terrain = @import("../terrain.zig");
-    const Environment = @import("conrad_environment.zig").Environment;
+    const Environment = conrad_environment.Environment;
     const id: geometry.RoomId = @fromBackingInt(30);
     const blocking: [18]bool = @splat(false);
     const rooms = [_]geometry.Room{.{

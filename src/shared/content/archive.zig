@@ -1,7 +1,8 @@
 //! ABA installation archives become ordinary owned assets before scene loading.
 const std = @import("std");
-const Pack = @import("../asset_pack.zig").Pack;
+const Pack = asset_pack.Pack;
 const codec = @import("backward_stream.zig");
+const asset_pack = @import("../asset_pack.zig");
 
 pub fn expand(pack: *Pack, bytes: []const u8, prefix: []const u8) !void {
     if (bytes.len < 4) return error.TruncatedArchive;

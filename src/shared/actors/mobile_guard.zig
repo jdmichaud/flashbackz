@@ -8,9 +8,14 @@ const combat = @import("../combat.zig");
 const perception = @import("perception.zig");
 const flight = @import("guard_flight.zig");
 const wound = @import("guard_wound.zig");
-const Environment = @import("conrad_environment.zig").Environment;
-const shift = @import("conrad_roll.zig").shiftForward;
-const Circuit = @import("../world_props.zig").CircuitId;
+const Environment = conrad_environment.Environment;
+const shift = conrad_roll.shiftForward;
+const Circuit = world_props.CircuitId;
+const activation = @import("../activation.zig");
+const conrad_environment = @import("conrad_environment.zig");
+const conrad_roll = @import("conrad_roll.zig");
+const visibility_mod = @import("../visibility.zig");
+const world_props = @import("../world_props.zig");
 pub const Posture = enum { standing, crouched, airborne };
 pub const Firing = struct {
     posture: Posture,
@@ -360,7 +365,7 @@ pub const World = struct {
         self.score_requested = 0;
         for (self.actors, definitions) |*actor, definition| {
             if (actor.activity != .removed and definition.wake_nearby) if (actor.room) |room| {
-                if ((try @import("../activation.zig").around(
+                if ((try activation.around(
                     map,
                     player_room,
                     room,
@@ -393,8 +398,8 @@ pub const World = struct {
         player_down: bool,
         targets: []combat.Target,
         first_target: usize,
-        visibility: *@import("../visibility.zig").World,
-        visibility_entities: []const @import("../visibility.zig").Entity,
+        visibility: *visibility_mod.World,
+        visibility_entities: []const visibility_mod.Entity,
         random: anytype,
     ) !void {
         return self.advanceRange(
@@ -422,8 +427,8 @@ pub const World = struct {
         player_down: bool,
         targets: []combat.Target,
         first_target: usize,
-        visibility: *@import("../visibility.zig").World,
-        visibility_entities: []const @import("../visibility.zig").Entity,
+        visibility: *visibility_mod.World,
+        visibility_entities: []const visibility_mod.Entity,
         random: anytype,
     ) !void {
         return self.advanceRange(
@@ -450,8 +455,8 @@ pub const World = struct {
         player_down: bool,
         targets: []combat.Target,
         first_target: usize,
-        visibility: *@import("../visibility.zig").World,
-        visibility_entities: []const @import("../visibility.zig").Entity,
+        visibility: *visibility_mod.World,
+        visibility_entities: []const visibility_mod.Entity,
         random: anytype,
         range_start: usize,
         range_end: usize,
@@ -462,7 +467,7 @@ pub const World = struct {
             if (actor.activity == .removed) continue;
             if (actor.ready and definition.accepts_signals) actor.active = true;
             if (actor.room) |room| {
-                const neighborhood = try @import("../activation.zig").around(
+                const neighborhood = try activation.around(
                     map,
                     player.room,
                     room,
@@ -559,7 +564,7 @@ pub const World = struct {
                                 ally,
                             );
                             if (actor.activity == .standing and !same) {
-                                const neighborhood = try @import("../activation.zig").around(
+                                const neighborhood = try activation.around(
                                     map,
                                     player.room,
                                     room,

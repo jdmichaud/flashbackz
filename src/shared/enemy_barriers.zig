@@ -5,6 +5,7 @@ const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
 const combat = @import("combat.zig");
+const world_props = @import("world_props.zig");
 pub const Owner = struct { pose: motion.Pose, room: geometry.RoomId };
 pub const Phase = enum { ready, shielding, recovering, absorbing };
 pub const Definition = struct {
@@ -19,7 +20,7 @@ pub const Definition = struct {
     behind_player: bool,
 };
 pub const Binding = struct {
-    circuit: @import("world_props.zig").CircuitId,
+    circuit: world_props.CircuitId,
     emitter: usize,
     owner: usize,
     next_step: bool,
@@ -95,7 +96,7 @@ pub const World = struct {
     pub fn route(
         self: *World,
         bindings: []const Binding,
-        pulses: []const @import("world_props.zig").CircuitId,
+        pulses: []const world_props.CircuitId,
     ) void {
         for (pulses) |pulse| for (bindings) |binding| if (pulse == binding.circuit) {
             if (binding.next_step) self.emitters[binding.emitter].pending = binding.owner else self.emitters[binding.emitter].requester = binding.owner;

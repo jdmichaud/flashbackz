@@ -3,11 +3,14 @@
 const std = @import("std");
 const platform = @import("platform.zig");
 const clock = @import("step_clock.zig");
+const content_font = @import("content/font.zig");
+const motion = @import("motion.zig");
+const render_text = @import("render/text.zig");
 pub const Id = enum(u16) { _ };
 pub const Line = struct { text: []const u8, ink: u8 };
 pub const Page = struct { lines: []const Line };
 pub const Message = struct { pages: []const Page };
-pub const Request = struct { message: Id, icon: @import("motion.zig").VisualId, priority: u16 = 0 };
+pub const Request = struct { message: Id, icon: motion.VisualId, priority: u16 = 0 };
 pub const State = struct {
     request: Request,
     page: usize = 0,
@@ -58,7 +61,7 @@ pub const State = struct {
     pub fn draw(
         self: State,
         message: Message,
-        font: *const @import("content/font.zig").Font,
+        font: *const content_font.Font,
         background: []const u8,
         pixels: []u8,
     ) !void {
@@ -71,7 +74,7 @@ pub const State = struct {
         );
         for (message.pages[self.page].lines, 0..) |line, index| {
             const x = 88 - @as(i32, @intCast(line.text.len)) * 4;
-            try @import("render/text.zig").draw(
+            try render_text.draw(
                 pixels,
                 256,
                 224,

@@ -4,7 +4,10 @@
 const std = @import("std");
 const inventory = @import("inventory.zig");
 const motion = @import("motion.zig");
-pub const ItemHandle = @import("identity.zig").ItemHandle;
+pub const ItemHandle = identity.ItemHandle;
+const identity = @import("identity.zig");
+const story_cue = @import("story_cue.zig");
+const world_messages = @import("world_messages.zig");
 pub const Kind = enum {
     gun,
     shield,
@@ -30,16 +33,16 @@ pub const Recharge = struct {
     movie_when: enum { start, completion } = .completion,
     delay_steps: u16,
     restore: union(enum) { player_health: i16, item_charge: i16 },
-    movie: @import("story_cue.zig").Cue,
+    movie: story_cue.Cue,
 };
 pub const Recharged = struct {
     item: ItemHandle,
     health: ?i16,
-    movie: ?@import("story_cue.zig").Cue,
+    movie: ?story_cue.Cue,
 };
 pub const Definition = struct {
-    consumption_movie: ?@import("story_cue.zig").Cue = null,
-    consumption_notice: ?@import("world_messages.zig").Id = null,
+    consumption_movie: ?story_cue.Cue = null,
+    consumption_notice: ?world_messages.Id = null,
     recharge: ?Recharge = null,
     use_motion: enum { direct, reach } = .direct,
     kind: Kind,
@@ -50,7 +53,7 @@ pub const Definition = struct {
     label: []const u8 = "",
     show_quantity: bool = false,
     use_action: ?union(enum) {
-        story: @import("story_cue.zig").Cue,
+        story: story_cue.Cue,
         throw_item,
         pay,
         deploy_field,
@@ -58,7 +61,7 @@ pub const Definition = struct {
         unlock: struct {
             credential: Credential,
             consume_after_steps: ?u16,
-            movie: ?@import("story_cue.zig").Cue = null,
+            movie: ?story_cue.Cue = null,
         },
     } = null,
 };
@@ -76,8 +79,8 @@ pub const Loadout = struct {
     entries: []Item,
     inventory: inventory.Inventory,
     recharged: ?Recharged = null,
-    notice: ?@import("world_messages.zig").Id = null,
-    used_movie: ?@import("story_cue.zig").Cue = null,
+    notice: ?world_messages.Id = null,
+    used_movie: ?story_cue.Cue = null,
 
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !Loadout {
         if (definitions.len > 65535) return error.TooManyStartingItems;

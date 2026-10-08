@@ -4,6 +4,7 @@ const std = @import("std");
 const contacts = @import("contacts.zig");
 const geometry = @import("geometry.zig");
 const motion = @import("motion.zig");
+const activation = @import("activation.zig");
 pub const Entity = enum(u16) { _ };
 pub const Group = enum(u7) { _ };
 pub const Category = enum { player, enemy, interactive, other };
@@ -104,7 +105,7 @@ pub const World = struct {
         self.group_count = 0;
         for (self.entries, self.definitions) |*entry, definition| if (definition.wake_nearby) {
             if (entry.observation.body) |body| {
-                const near = try @import("activation.zig").around(
+                const near = try activation.around(
                     map,
                     view_room,
                     body.room,

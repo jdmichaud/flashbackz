@@ -1,6 +1,7 @@
 //! Discrete motion clips. A simulation step advances artwork and displacement together;
 //! behaviors choose clips and transitions, while the renderer resolves opaque visual IDs.
 const std = @import("std");
+const combat = @import("combat.zig");
 
 pub const SoundId = enum(u16) { _ };
 pub const VisualId = enum(u32) { _ };
@@ -22,7 +23,7 @@ pub const Step = union(enum) {
     },
 };
 
-pub const Clip = struct { hit_profile: ?@import("combat.zig").ProfileId = null, steps: []const Step, presses_floor_switches: bool = false, ordinary_contact: bool = false, sound: ?SoundId = null, disturbs_surface: bool = false };
+pub const Clip = struct { hit_profile: ?combat.ProfileId = null, steps: []const Step, presses_floor_switches: bool = false, ordinary_contact: bool = false, sound: ?SoundId = null, disturbs_surface: bool = false };
 
 pub const Playback = struct {
     next_step: usize = 0,

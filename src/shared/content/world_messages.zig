@@ -1,6 +1,8 @@
 //! Convert the edition's message directory and formatting bytes into owned dialogue pages.
 const std = @import("std");
 const runtime = @import("../world_messages.zig");
+const floppy_interface = @import("floppy_interface.zig");
+const platform = @import("../platform.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     messages: []runtime.Message,
@@ -90,8 +92,8 @@ pub fn decode(allocator: std.mem.Allocator, table: []const u8) !Assets {
     }
     return .{ .allocator = allocator, .messages = try messages.toOwnedSlice(allocator) };
 }
-pub fn load(allocator: std.mem.Allocator, source: @import("../platform.zig").AssetSource) !Assets {
-    const image = try @import("floppy_interface.zig").loadImage(allocator, source);
+pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Assets {
+    const image = try floppy_interface.loadImage(allocator, source);
     defer allocator.free(image);
     return decode(allocator, image[0x1bcc0 + 0x13e9 ..]);
 }

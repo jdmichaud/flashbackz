@@ -4,6 +4,11 @@ const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
 const runtime = @import("../attentive_contacts.zig");
 const routes = @import("first_world_props.zig");
+const geometry = @import("../geometry.zig");
+const motion = @import("../motion.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
+const string_table = @import("string_table.zig");
 const Spec = struct {
     states: [2][7]u16,
     speech: [2]u16,
@@ -312,12 +317,12 @@ pub const Assets = struct {
 };
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     bytes: []const u8,
     animations: []const u8,
     names: []const u8,
-    rooms: *const [64]@import("../geometry.zig").RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: settings.Difficulty,
     connections: *std.ArrayList(routes.Connection),
     resolver: anytype,
 ) !Assets {
@@ -344,8 +349,8 @@ pub fn load(
             record.contact_icon == 0) return error.UnsupportedHostStart;
         const target = record.parameters[spec.parameter];
         if (target < 0 or target >= table.count) return error.InvalidHostOutput;
-        var idle: [2][7]@import("../motion.zig").Clip = undefined;
-        var speech: [2]@import("../motion.zig").Clip = undefined;
+        var idle: [2][7]motion.Clip = undefined;
+        var speech: [2]motion.Clip = undefined;
         for (spec.states, &idle) |states, *stage| for (states, stage) |state, *destination| {
             var source = try animation.decode(allocator, animations, state);
             defer source.deinit();
@@ -370,7 +375,7 @@ pub fn load(
             spec.signal,
         );
         try sources.append(allocator, @intCast(index));
-        const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
+        const label = try string_table.copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
         try definitions.append(
             allocator,

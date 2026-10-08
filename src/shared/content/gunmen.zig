@@ -10,6 +10,14 @@ const geometry = @import("../geometry.zig");
 const motion = @import("../motion.zig");
 const Action = actor.Action;
 const routes = @import("first_world_props.zig");
+const combat = @import("../combat.zig");
+const defeat_import = @import("gunman_defeat.zig");
+const gunman_defeat = @import("../actors/gunman_defeat.zig");
+const perception = @import("../actors/perception.zig");
+const pistol_shot = @import("../pistol_shot.zig");
+const settings = @import("../settings.zig");
+const weapon_effects = @import("weapon_effects.zig");
+const world_props = @import("../world_props.zig");
 const Sources = [actor.action_count]u16;
 
 pub const Assets = struct {
@@ -18,7 +26,7 @@ pub const Assets = struct {
     sources: []u16,
     activation_signals: []?i16,
     profiles: []actor.Profile,
-    weapons: []@import("../pistol_shot.zig").Definition,
+    weapons: []pistol_shot.Definition,
     clips: []animation.OwnedClip,
     unclassified: usize,
     pub fn deinit(self: *Assets) void {
@@ -248,8 +256,8 @@ fn discover(group: rules.Group) !?Sources {
 fn postureSenses(
     group: rules.Group,
     state: u16,
-) ![4]?@import("../actors/perception.zig").PostureSense {
-    var result: [4]?@import("../actors/perception.zig").PostureSense = @splat(null);
+) ![4]?perception.PostureSense {
+    var result: [4]?perception.PostureSense = @splat(null);
     var count: usize = 0;
     for (0..group.count()) |i| {
         const rule = group.at(i);
@@ -277,9 +285,9 @@ fn profile(
     group: rules.Group,
     sources: Sources,
     clips: actor.Clips,
-    hit_priority: [actor.action_count][4]@import("../combat.zig").Impact,
+    hit_priority: [actor.action_count][4]combat.Impact,
     reactions: [actor.action_count][4]?actor.Reaction,
-    defeat: @import("../actors/gunman_defeat.zig").Definition,
+    defeat: gunman_defeat.Definition,
 ) !actor.Profile {
     if (opportunistic(group)) {
         return .{
@@ -392,7 +400,7 @@ pub fn load(
     rule_bytes: []const u8,
     animations: []const u8,
     room_ids: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     score_awards: [16]u16,
     connections: *std.ArrayList(routes.Connection),
     resolver: anytype,
@@ -410,7 +418,7 @@ pub fn load(
         for (clips.items) |*clip| clip.deinit();
         clips.deinit(allocator);
     }
-    var weapons: std.ArrayList(@import("../pistol_shot.zig").Definition) = .empty;
+    var weapons: std.ArrayList(pistol_shot.Definition) = .empty;
     errdefer weapons.deinit(allocator);
     var weapon_ids: [256]?usize = @splat(null);
     var imported: [256]?struct { index: usize, sources: Sources } = @splat(null);
@@ -436,7 +444,7 @@ pub fn load(
                 destination.* = clip.clip();
             }
             var reactions: [actor.action_count][4]?actor.Reaction = @splat(@splat(null));
-            var hit_priority: [actor.action_count][4]@import("../combat.zig").Impact = undefined;
+            var hit_priority: [actor.action_count][4]combat.Impact = undefined;
             var impacts: [2]?u16 = @splat(null);
             for (sources, &reactions, &hit_priority) |state, *responses, *priority| {
                 var first_rule: [4]usize = @splat(std.math.maxInt(usize));
@@ -476,14 +484,13 @@ pub fn load(
                     var position = slot;
                     while (position > 0 and
                         first_rule[@backingInt(priority[position])] < first_rule[@backingInt(priority[position - 1])]) : (position -= 1) std.mem.swap(
-                        @import("../combat.zig").Impact,
+                        combat.Impact,
                         &priority[position],
                         &priority[position - 1],
                     );
                 }
             }
-            const defeat_import = @import("gunman_defeat.zig");
-            const defeat: @import("../actors/gunman_defeat.zig").Definition = .{
+            const defeat: gunman_defeat.Definition = .{
                 .forward = try defeat_import.track(
                     allocator,
                     group,
@@ -549,8 +556,8 @@ pub fn load(
             aim_delay = record.parameters[@intCast(aim_param)];
             recovery_delay = record.parameters[@intCast(recovery_param)];
         }
-        var cover_output: ?@import("../world_props.zig").CircuitId = null;
-        var defeat_output: ?@import("../world_props.zig").CircuitId = null;
+        var cover_output: ?world_props.CircuitId = null;
+        var defeat_output: ?world_props.CircuitId = null;
         if (reactive) {
             if (record.parameters[2] < 0 or
                 record.parameters[2] >= table.count or
@@ -577,7 +584,7 @@ pub fn load(
         if (endpoint < 0 or endpoint >= table.count) return error.InvalidEnemyWeaponBinding;
         const endpoint_index: usize = @intCast(endpoint);
         if (weapon_ids[endpoint_index] == null) {
-            const weapon = try @import("weapon_effects.zig").load(
+            const weapon = try weapon_effects.load(
                 allocator,
                 try table.record(@intCast(endpoint)),
                 rule_bytes,

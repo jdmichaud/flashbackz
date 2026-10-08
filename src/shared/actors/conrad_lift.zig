@@ -4,6 +4,7 @@ const std = @import("std");
 const motion = @import("../motion.zig");
 const controls = @import("controls.zig");
 const rolling = @import("conrad_roll.zig");
+const pistol_shot = @import("../pistol_shot.zig");
 pub const Phase = enum {
     waiting,
     standing,
@@ -46,7 +47,7 @@ pub const Outcome = union(enum) {
     continued,
     boarded,
     leave: Ground,
-    fire: @import("../pistol_shot.zig").Height,
+    fire: pistol_shot.Height,
 };
 pub const State = struct {
     phase: Phase = .waiting,

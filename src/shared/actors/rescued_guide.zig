@@ -3,8 +3,13 @@ const std = @import("std");
 const motion = @import("../motion.zig");
 const geometry = @import("../geometry.zig");
 const contacts = @import("../contacts.zig");
-const Circuit = @import("../world_props.zig").CircuitId;
-const Message = @import("../world_messages.zig").Id;
+const Circuit = world_props.CircuitId;
+const Message = world_messages.Id;
+const activation = @import("../activation.zig");
+const equipment = @import("../equipment.zig");
+const perception = @import("perception.zig");
+const world_messages = @import("../world_messages.zig");
+const world_props = @import("../world_props.zig");
 pub const Phase = enum {
     watching,
     retreating,
@@ -32,7 +37,7 @@ pub const Profile = struct {
 pub const Definition = struct { profile: usize, initial_phase: Phase, footprint: contacts.Footprint, facing: motion.Facing, palette_bank: u4, behind_player: bool, initially_active: bool, wake_nearby: bool, accepts_signals: bool, interaction_priority: u16, hint: motion.VisualId, label: []const u8, offer_threshold: i16, path: Circuit, station: Circuit, reward: Circuit };
 pub const Binding = struct { circuit: Circuit, actor: usize, next_step: bool };
 pub const Payment = struct {
-    item: @import("../equipment.zig").ItemHandle,
+    item: equipment.ItemHandle,
     actor: usize,
     next_step: bool,
 };
@@ -112,7 +117,7 @@ pub const World = struct {
                 .position = actor.pose.position,
                 .width = definition.footprint.width,
             };
-            const near = try @import("../activation.zig").around(
+            const near = try activation.around(
                 map,
                 player.room,
                 actor.room,
@@ -132,7 +137,7 @@ pub const World = struct {
         self: *World,
         definitions: []const Definition,
         payments: []const Payment,
-        item: @import("../equipment.zig").ItemHandle,
+        item: equipment.ItemHandle,
         amount: i16,
     ) bool {
         const index = self.candidate orelse return false;
@@ -175,7 +180,7 @@ pub const World = struct {
                 &actor.pose,
             );
             if (actor.playback.exhausted(clip)) {
-                const near = try @import("../activation.zig").around(
+                const near = try activation.around(
                     map,
                     player.room,
                     actor.room,
@@ -183,7 +188,7 @@ pub const World = struct {
                 );
                 switch (actor.phase) {
                     .watching => {
-                        const awareness = try @import("perception.zig").observe(
+                        const awareness = try perception.observe(
                             map,
                             .{ .room = actor.room, .pose = actor.pose },
                             player,

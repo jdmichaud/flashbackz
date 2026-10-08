@@ -2,6 +2,7 @@
 //! temporary import data; world definitions must assign game meanings before using them.
 const std = @import("std");
 const motion = @import("../motion.zig");
+const import_audit = @import("import_audit.zig");
 
 pub const Record = struct {
     initial_state: u16,
@@ -27,9 +28,9 @@ pub const Record = struct {
 pub const Table = struct {
     bytes: []const u8,
     count: u16,
-    audit: ?*@import("import_audit.zig").Ledger = null,
+    audit: ?*import_audit.Ledger = null,
 
-    pub fn register(self: Table, index: u16, system: @import("import_audit.zig").System) void {
+    pub fn register(self: Table, index: u16, system: import_audit.System) void {
         if (self.audit) |audit| audit.record(index, system);
     }
 

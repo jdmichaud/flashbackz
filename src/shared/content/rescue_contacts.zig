@@ -4,6 +4,12 @@ const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
 const runtime = @import("../rescue_contacts.zig");
 const routes = @import("first_world_props.zig");
+const geometry = @import("../geometry.zig");
+const motion = @import("../motion.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
+const string_table = @import("string_table.zig");
+const world_props = @import("../world_props.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -91,12 +97,12 @@ fn recognize(group: rules.Group) bool {
 }
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     bytes: []const u8,
     animations: []const u8,
     names: []const u8,
-    rooms: *const [64]@import("../geometry.zig").RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: settings.Difficulty,
     connections: *std.ArrayList(routes.Connection),
     resolver: anytype,
 ) !Assets {
@@ -127,7 +133,7 @@ pub fn load(
         if (room < 0 or
             room >= rooms.len or
             record.contact_icon == 0) return error.InvalidRescueContact;
-        var resolved: [8]@import("../motion.zig").Clip = undefined;
+        var resolved: [8]motion.Clip = undefined;
         var initial: ?runtime.Phase = null;
         for ([_]usize{ 0, 4, 5, 8, 9, 10, 11, 14 }, &resolved, 0..) |row, *destination, phase| {
             const state = group.at(row).source;
@@ -141,7 +147,7 @@ pub fn load(
         }
         if (initial == null or
             (hidden and initial.? != .watching)) return error.UnsupportedRescueContactStart;
-        var output: [2]@import("../world_props.zig").CircuitId = undefined;
+        var output: [2]world_props.CircuitId = undefined;
         for (
             [_]rules.Operation{ group.at(1).effect, group.at(12).effect },
             &output,
@@ -158,7 +164,7 @@ pub fn load(
         }
         try sources.append(allocator, @intCast(index));
         try signals.append(allocator, group.at(0).conditions[0].argument);
-        const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
+        const label = try string_table.copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
         try definitions.append(
             allocator,

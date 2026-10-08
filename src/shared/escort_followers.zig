@@ -4,7 +4,11 @@ const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
 const platforms = @import("lifts.zig");
-const Environment = @import("actors/conrad_environment.zig").Environment;
+const Environment = conrad_environment.Environment;
+const activation = @import("activation.zig");
+const conrad_environment = @import("actors/conrad_environment.zig");
+const perception = @import("actors/perception.zig");
+const world_messages = @import("world_messages.zig");
 pub const Phase = enum { waiting, walk_first, walk_second, turning, boarding, riding };
 pub const Definition = struct {
     footprint: contacts.Footprint,
@@ -14,7 +18,7 @@ pub const Definition = struct {
     stride_advance: i16,
     hint: motion.VisualId,
     label: []const u8,
-    notice: @import("world_messages.zig").Id,
+    notice: world_messages.Id,
     priority: u16,
     palette_bank: u4,
     behind_player: bool,
@@ -43,7 +47,7 @@ pub const World = struct {
     weighted_contacts: []contacts.Footprint,
     weighted_count: usize = 0,
     candidate: ?usize = null,
-    notice: ?@import("world_messages.zig").Request = null,
+    notice: ?world_messages.Request = null,
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {
         const actors = try allocator.alloc(Actor, definitions.len);
         errdefer allocator.free(actors);
@@ -98,7 +102,7 @@ pub const World = struct {
             actor.pending_release = false;
             actor.late_displacement = 0;
             actor.sound = null;
-            const near = try @import("activation.zig").around(
+            const near = try activation.around(
                 map,
                 player.room,
                 actor.room,
@@ -188,7 +192,7 @@ pub const World = struct {
             );
             if (actor.playback.exhausted(clip)) {
                 const env: Environment = .{ .map = map, .room = actor.room };
-                const awareness = try @import("actors/perception.zig").observe(
+                const awareness = try perception.observe(
                     map,
                     .{ .room = actor.room, .pose = actor.pose },
                     player,
@@ -243,7 +247,7 @@ pub const World = struct {
                             shift(actor, definition.stride_advance);
                             actor.phase = .walk_first;
                         } else if (!same) {
-                            const near = try @import("activation.zig").around(
+                            const near = try activation.around(
                                 map,
                                 player.room,
                                 actor.room,

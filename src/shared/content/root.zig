@@ -25,9 +25,10 @@ pub const backward_stream = @import("backward_stream.zig");
 pub const animation = @import("animation.zig");
 pub const collision = @import("collision.zig");
 pub const jungle = @import("jungle.zig");
+const std = @import("std");
 
 test {
-    @import("std").testing.refAllDecls(@This());
+    std.testing.refAllDecls(@This());
 }
 
 pub const sound_effects = @import("sound_effects.zig");

@@ -4,6 +4,10 @@ const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
 const runtime = @import("../timed_items.zig");
 const routes = @import("first_world_props.zig");
+const geometry = @import("../geometry.zig");
+const motion = @import("../motion.zig");
+const placement = @import("placement.zig");
+const world_props = @import("../world_props.zig");
 pub const Spec = struct {
     states: [3]u16,
     start: i16,
@@ -55,7 +59,7 @@ pub const Assets = struct {
     sources: []u16,
     signals: [][2]i16,
     clips: []animation.OwnedClip,
-    audible_rooms: []@import("../geometry.zig").RoomId,
+    audible_rooms: []geometry.RoomId,
     pub fn deinit(self: *Assets) void {
         self.allocator.free(self.definitions);
         self.allocator.free(self.sources);
@@ -92,11 +96,11 @@ pub const Assets = struct {
 };
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     bytes: []const u8,
     animations: []const u8,
     collision: []const u8,
-    rooms: *const [64]@import("../geometry.zig").RoomId,
+    rooms: *const [64]geometry.RoomId,
     item_sources: []const u16,
     first_item: u16,
     connections: *std.ArrayList(routes.Connection),
@@ -120,7 +124,7 @@ pub fn load(
             spec.failure != 62 or
             record.parameters[3] != 0 or
             record.flags & 1 == 0) return error.UnsupportedTimedItem;
-        var resolved: [3]@import("../motion.zig").Clip = undefined;
+        var resolved: [3]motion.Clip = undefined;
         for (spec.states, &resolved) |state, *destination| {
             var src = try animation.decode(allocator, animations, state);
             defer src.deinit();
@@ -133,7 +137,7 @@ pub fn load(
             try clips.append(allocator, clip);
             destination.* = clip.clip();
         }
-        var output: [3]@import("../world_props.zig").CircuitId = undefined;
+        var output: [3]world_props.CircuitId = undefined;
         for (spec.outputs, &output) |op, *circuit| {
             const target = record.parameters[op.code - 35];
             if (target < 0 or target >= table.count) return error.InvalidTimedItemConnection;
@@ -168,7 +172,7 @@ pub fn load(
     errdefer allocator.free(owned_signals);
     // The original spatial mixer compares carried-item location against raw room
     // neighbors. Empty exits alias that location and make inventory cues audible.
-    var audible: std.ArrayList(@import("../geometry.zig").RoomId) = .empty;
+    var audible: std.ArrayList(geometry.RoomId) = .empty;
     errdefer audible.deinit(allocator);
     for (rooms, 0..) |room, index| for (0..4) |side| {
         if (collision[side * 64 + index] == 255) {

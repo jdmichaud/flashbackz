@@ -3,10 +3,11 @@
 const std = @import("std");
 const platform = @import("../platform.zig");
 const sprite = @import("sprite.zig");
+const palette = @import("palette.zig");
 
 pub const Library = struct {
     name: [12]u8,
-    colors: @import("palette.zig").Bank,
+    colors: palette.Bank,
 };
 const Archive = struct {
     sprites: platform.OwnedBytes,

@@ -3,8 +3,10 @@ const std = @import("std");
 const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
-const Circuit = @import("world_props.zig").CircuitId;
-pub const Definition = struct { footprint: contacts.Footprint, clip: motion.Clip, outputs: [2]Circuit, notice: @import("world_messages.zig").Id, hint: motion.VisualId, label: []const u8, priority: u16, initially_active: bool, accepts_signals: bool };
+const Circuit = world_props.CircuitId;
+const world_messages = @import("world_messages.zig");
+const world_props = @import("world_props.zig");
+pub const Definition = struct { footprint: contacts.Footprint, clip: motion.Clip, outputs: [2]Circuit, notice: world_messages.Id, hint: motion.VisualId, label: []const u8, priority: u16, initially_active: bool, accepts_signals: bool };
 pub const Binding = struct { circuit: Circuit, target: usize, next_step: bool };
 pub const Instance = struct {
     active: bool,
@@ -18,7 +20,7 @@ pub const World = struct {
     pulses: []Circuit,
     pulse_count: usize = 0,
     candidate: ?usize = null,
-    notice: ?@import("world_messages.zig").Request = null,
+    notice: ?world_messages.Request = null,
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);

@@ -6,6 +6,9 @@ const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
 const geometry = @import("../geometry.zig");
 const collision = @import("collision.zig");
+const first_world_props = @import("first_world_props.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -73,12 +76,12 @@ fn recognize(group: rules.Group, initial: u16) ?Pair {
 }
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     rule_bytes: []const u8,
     animations: []const u8,
     rooms: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
-    connections: []const @import("first_world_props.zig").Connection,
+    difficulty: settings.Difficulty,
+    connections: []const first_world_props.Connection,
     resolver: anytype,
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;

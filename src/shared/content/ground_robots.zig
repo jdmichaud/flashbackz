@@ -7,6 +7,8 @@ const rules = @import("rule_table.zig");
 const placement = @import("placement.zig");
 const geometry = @import("../geometry.zig");
 const Phase = runtime.Phase;
+const motion = @import("../motion.zig");
+const settings = @import("../settings.zig");
 const Sources = [runtime.phase_count]u16;
 pub const Assets = struct {
     allocator: std.mem.Allocator,
@@ -89,7 +91,7 @@ fn discover(group: rules.Group) !?Sources {
 fn profile(
     group: rules.Group,
     sources: Sources,
-    clips: [runtime.phase_count]@import("../motion.zig").Clip,
+    clips: [runtime.phase_count]motion.Clip,
 ) !runtime.Profile {
     const closed = source(sources, .closed_idle);
     const idle = source(sources, .open_idle_a);
@@ -137,7 +139,7 @@ pub fn load(
     rule_bytes: []const u8,
     animations: []const u8,
     rooms: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     resolver: anytype,
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
@@ -157,7 +159,7 @@ pub fn load(
         if (imported[record.rule_group] == null) {
             const group = try rules.group(rule_bytes, record.rule_group);
             const sources = try discover(group) orelse continue;
-            var resolved: [runtime.phase_count]@import("../motion.zig").Clip = undefined;
+            var resolved: [runtime.phase_count]motion.Clip = undefined;
             for (sources, &resolved) |state, *destination| {
                 var raw = try animation.decode(allocator, animations, state);
                 defer raw.deinit();

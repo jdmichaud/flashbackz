@@ -4,6 +4,8 @@ const std = @import("std");
 const platform = @import("../platform.zig");
 const palette = @import("palette.zig");
 const font_mod = @import("font.zig");
+const floppy_interface = @import("floppy_interface.zig");
+const vector_cinematic = @import("vector_cinematic.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     pixels: []u8,
@@ -23,8 +25,8 @@ pub const Assets = struct {
     }
 };
 pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Assets {
-    const interface = try @import("floppy_interface.zig").load(allocator, source);
-    var film = try @import("vector_cinematic.zig").load(allocator, source, "SCORE", 0);
+    const interface = try floppy_interface.load(allocator, source);
+    var film = try vector_cinematic.load(allocator, source, "SCORE", 0);
     defer film.deinit();
     var font_data = try source.readAll("DATA/FB_TXT.FNT", 16384);
     defer font_data.deinit();

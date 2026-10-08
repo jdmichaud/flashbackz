@@ -2,6 +2,7 @@
 //! of contact cells; world ownership and filtering are handled by interaction systems.
 const geometry = @import("geometry.zig");
 const motion = @import("motion.zig");
+const std = @import("std");
 pub const Cell = struct { room: geometry.RoomId, column: u16, row: u16 };
 pub const Footprint = struct { room: geometry.RoomId, position: motion.Position, width: u8 = 1 };
 pub const Kind = enum { player, enemy, interactable, mechanism };
@@ -86,7 +87,6 @@ pub const Layout = struct {
 };
 
 test "contact bands resolve one seam before quantization and stop a clipped footprint" {
-    const std = @import("std");
     const empty: [12]bool = @splat(false);
     const first: geometry.RoomId = @fromBackingInt(31);
     const next: geometry.RoomId = @fromBackingInt(70);

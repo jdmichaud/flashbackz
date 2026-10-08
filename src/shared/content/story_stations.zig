@@ -5,6 +5,11 @@ const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
 const placement = @import("placement.zig");
 const routes_mod = @import("first_world_props.zig");
+const geometry = @import("../geometry.zig");
+const motion = @import("../motion.zig");
+const settings = @import("../settings.zig");
+const story_cue = @import("../story_cue.zig");
+const string_table = @import("string_table.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -38,7 +43,7 @@ const Spec = struct {
     room_parameter: u2,
     enable: i16,
     reply: i16,
-    movie: @import("../story_cue.zig").Cue,
+    movie: story_cue.Cue,
 };
 fn recognize(group: rules.Group) ?Spec {
     if (group.count() != 5) return null;
@@ -99,8 +104,8 @@ pub fn load(
     rule_bytes: []const u8,
     animations: []const u8,
     names: []const u8,
-    rooms: *const [64]@import("../geometry.zig").RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: settings.Difficulty,
     routes: *std.ArrayList(routes_mod.Connection),
     resolver: anytype,
 ) !Assets {
@@ -130,7 +135,7 @@ pub fn load(
             room >= rooms.len or
             record.contact_icon == 0 or
             record.collision_width == 0) return error.InvalidStoryStation;
-        var resolved: [2]@import("../motion.zig").Clip = undefined;
+        var resolved: [2]motion.Clip = undefined;
         for ([_]u16{ spec.ready, spec.using }, &resolved) |state, *destination| {
             var source = try animation.decode(allocator, animations, state);
             defer source.deinit();
@@ -154,7 +159,7 @@ pub fn load(
         );
         try sources.append(allocator, @intCast(index));
         try signals.append(allocator, spec.enable);
-        const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
+        const label = try string_table.copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
         table.register(@intCast(index), .story_stations);
         try definitions.append(

@@ -4,8 +4,11 @@ const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
 const equipment = @import("equipment.zig");
-const Circuit = @import("world_props.zig").CircuitId;
-const Cue = @import("story_cue.zig").Cue;
+const Circuit = world_props.CircuitId;
+const Cue = story_cue.Cue;
+const activation = @import("activation.zig");
+const story_cue = @import("story_cue.zig");
+const world_props = @import("world_props.zig");
 pub const Phase = enum { locked, available, assigned, paying, completed };
 pub const Action = enum { unlock, accept, complete };
 pub const Definition = struct {
@@ -102,7 +105,7 @@ pub const World = struct {
             instance.ready = instance.pending;
             instance.pending = .{};
             instance.sound = null;
-            const near = try @import("activation.zig").around(
+            const near = try activation.around(
                 map,
                 player.room,
                 definition.footprint.room,
@@ -142,7 +145,7 @@ pub const World = struct {
             var clip = definition.clips[@backingInt(instance.phase)];
             if (requested or reading) instance.playback.completeDisplacement(clip, &instance.pose);
             if (instance.playback.exhausted(clip)) {
-                const near = try @import("activation.zig").around(
+                const near = try activation.around(
                     map,
                     room,
                     definition.footprint.room,

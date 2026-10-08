@@ -6,8 +6,11 @@ const geometry = @import("../geometry.zig");
 const contacts = @import("../contacts.zig");
 const combat = @import("../combat.zig");
 const perception = @import("perception.zig");
-const Environment = @import("conrad_environment.zig").Environment;
-const shift = @import("conrad_roll.zig").shiftForward;
+const Environment = conrad_environment.Environment;
+const shift = conrad_roll.shiftForward;
+const conrad_environment = @import("conrad_environment.zig");
+const conrad_roll = @import("conrad_roll.zig");
+const terrain_mod = @import("../terrain.zig");
 pub const Phase = enum {
     closed_idle,
     closed_walk,
@@ -126,7 +129,7 @@ pub const World = struct {
         self: *World,
         actor: *const Actor,
         definition: Definition,
-        terrain: @import("../terrain.zig").View,
+        terrain: terrain_mod.View,
         targets: []const combat.Target,
         first_target: usize,
     ) !bool {
@@ -152,7 +155,7 @@ pub const World = struct {
         self: *World,
         definitions: []const Definition,
         profiles: []const Profile,
-        terrain: @import("../terrain.zig").View,
+        terrain: terrain_mod.View,
         player: contacts.Footprint,
         targets: []combat.Target,
         first_target: usize,

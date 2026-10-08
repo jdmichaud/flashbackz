@@ -4,6 +4,14 @@ const rules = @import("rule_table.zig");
 const runtime = @import("../quest_contacts.zig");
 const animation = @import("animation.zig");
 const routes = @import("first_world_props.zig");
+const credit_wallet = @import("credit_wallet.zig");
+const equipment = @import("../equipment.zig");
+const geometry = @import("../geometry.zig");
+const motion = @import("../motion.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
+const string_table = @import("string_table.zig");
+const world_props = @import("../world_props.zig");
 const Output = struct { parameter: u2, signal: i16 };
 pub const Spec = struct {
     speech: ?[3]u16 = null,
@@ -706,14 +714,14 @@ pub const Assets = struct {
 };
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     bytes: []const u8,
     animations: []const u8,
     names: []const u8,
-    rooms: *const [64]@import("../geometry.zig").RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: settings.Difficulty,
     connections: *std.ArrayList(routes.Connection),
-    supplies: []const @import("../equipment.zig").Definition,
+    supplies: []const equipment.Definition,
     resolver: anytype,
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
@@ -754,7 +762,7 @@ pub fn load(
         if (room < 0 or
             room >= rooms.len or
             record.contact_icon == 0) return error.InvalidQuestContactPlacement;
-        var resolved: [9]@import("../motion.zig").Clip = undefined;
+        var resolved: [9]motion.Clip = undefined;
         const states = spec.idle ++ spec.after ++ [1]u16{if (spec.hidden) |h| h.state else spec.idle[0]};
         for (states, &resolved) |state, *destination| {
             var source = try animation.decode(allocator, animations, state);
@@ -766,7 +774,7 @@ pub fn load(
         }
         var speech: ?runtime.Speech = null;
         if (spec.speech) |speech_states| {
-            var speech_clips: [3]@import("../motion.zig").Clip = undefined;
+            var speech_clips: [3]motion.Clip = undefined;
             for (speech_states, &speech_clips) |state, *destination| {
                 var source = try animation.decode(allocator, animations, state);
                 defer source.deinit();
@@ -781,7 +789,7 @@ pub fn load(
                 .recovery = speech_clips[2],
             };
         }
-        var reveal_outputs: std.ArrayList(@import("../world_props.zig").CircuitId) = .empty;
+        var reveal_outputs: std.ArrayList(world_props.CircuitId) = .empty;
         defer reveal_outputs.deinit(allocator);
         for (spec.reveal_outputs) |optional| if (optional) |output| {
             const recipient = record.parameters[output.parameter];
@@ -797,7 +805,7 @@ pub fn load(
                 ),
             );
         };
-        var outputs: std.ArrayList(@import("../world_props.zig").CircuitId) = .empty;
+        var outputs: std.ArrayList(world_props.CircuitId) = .empty;
         defer outputs.deinit(allocator);
         for (spec.outputs) |optional| if (optional) |output| {
             const recipient = record.parameters[output.parameter];
@@ -813,7 +821,7 @@ pub fn load(
                 ),
             );
         };
-        var departure: std.ArrayList(@import("../world_props.zig").CircuitId) = .empty;
+        var departure: std.ArrayList(world_props.CircuitId) = .empty;
         defer departure.deinit(allocator);
         for (spec.departure_outputs) |optional| if (optional) |output| {
             const recipient = record.parameters[output.parameter];
@@ -834,13 +842,13 @@ pub fn load(
             const purse_source = record.parameters[offer.purse_parameter];
             if (purse_source < 0 or purse_source >= table.count) return error.InvalidSellerPurse;
             const wallet = try table.record(@intCast(purse_source));
-            const signal = @import("credit_wallet.zig").signal(try rules.group(
+            const signal = credit_wallet.signal(try rules.group(
                 bytes,
                 wallet.rule_group,
             )) orelse return error.UnsupportedSellerPurse;
             if (signal != offer.signal or
                 wallet.parameters[0] != record.kind) return error.UnsupportedSellerPayment;
-            const purse: @import("../equipment.zig").ItemHandle = for (supplies, 0..) |item, i| {
+            const purse: equipment.ItemHandle = for (supplies, 0..) |item, i| {
                 if (item.kind == .credits) break .{ .index = @intCast(i), .generation = 1 };
             } else return error.MissingSellerPurse;
             sale = .{
@@ -868,7 +876,7 @@ pub fn load(
         errdefer allocator.free(owned);
         const owned_departure = try departure.toOwnedSlice(allocator);
         errdefer allocator.free(owned_departure);
-        const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
+        const label = try string_table.copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
         try definitions.append(
             allocator,

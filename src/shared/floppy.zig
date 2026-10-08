@@ -1,7 +1,9 @@
 //! Read-only FAT12 import. Validate geometry, both FAT copies, cluster ownership and lengths
 //! before exposing files. No DOS execution, installation or host filesystem writes.
 const std = @import("std");
-const Pack = @import("asset_pack.zig").Pack;
+const Pack = asset_pack.Pack;
+const asset_pack = @import("asset_pack.zig");
+const platform = @import("platform.zig");
 
 fn word(bytes: []const u8, offset: usize) u16 {
     return std.mem.readInt(u16, bytes[offset..][0..2], .little);
@@ -71,7 +73,7 @@ const Volume = struct {
                 .{ prefix, stem, if (ext.len == 0) "" else ".", ext },
             );
             defer allocator.free(name);
-            try @import("platform.zig").validateAssetName(name);
+            try platform.validateAssetName(name);
             const size = std.mem.readInt(u32, record[28..32], .little);
             const is_directory = record[11] & 0x10 != 0;
             if (is_directory and size != 0) return error.InvalidDirectory;

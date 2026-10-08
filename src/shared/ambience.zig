@@ -1,6 +1,7 @@
 //! An environmental call sequence: quiet intervals, ordered chances and optional repeats.
 const geometry = @import("geometry.zig");
-pub const SoundId = @import("motion.zig").SoundId;
+pub const SoundId = motion.SoundId;
+const motion = @import("motion.zig");
 pub const Call = struct { sound: SoundId, duration: u16, chance: u16, repeat_chance: ?u16 = null };
 pub const Definition = struct { quiet_steps: u16, calls: []const Call };
 pub const Event = struct { sound: SoundId, room: geometry.RoomId };

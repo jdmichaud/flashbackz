@@ -2,7 +2,8 @@
 //! the resulting screen geometry. Degree ties are explicit, so host floating-point rounding
 //! cannot change the original Q8 table's integer-valued boundary cases.
 const std = @import("std");
-const Point = @import("../render/indexed_shapes.zig").Point;
+const Point = indexed_shapes.Point;
+const indexed_shapes = @import("../render/indexed_shapes.zig");
 
 const sine_table: [360]i16 = table: {
     @setEvalBranchQuota(200000);

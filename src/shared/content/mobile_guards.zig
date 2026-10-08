@@ -11,11 +11,14 @@ const animation = @import("animation.zig");
 const placement = @import("placement.zig");
 const geometry = @import("../geometry.zig");
 const routes_mod = @import("first_world_props.zig");
+const pistol_shot = @import("../pistol_shot.zig");
+const settings = @import("../settings.zig");
+const weapon_effects = @import("weapon_effects.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
     profiles: []runtime.Profile,
-    weapons: []@import("../pistol_shot.zig").Definition,
+    weapons: []pistol_shot.Definition,
     clips: []animation.OwnedClip,
     sources: []u16,
     activation_signal: i16,
@@ -272,7 +275,7 @@ pub fn load(
     rule_bytes: []const u8,
     animations: []const u8,
     rooms: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     routes: *std.ArrayList(routes_mod.Connection),
     resolver: anytype,
 ) !Assets {
@@ -288,7 +291,7 @@ pub fn load(
         for (clips.items) |*clip| clip.deinit();
         clips.deinit(allocator);
     }
-    var weapons: std.ArrayList(@import("../pistol_shot.zig").Definition) = .empty;
+    var weapons: std.ArrayList(pistol_shot.Definition) = .empty;
     errdefer weapons.deinit(allocator);
     var sources: std.ArrayList(u16) = .empty;
     errdefer sources.deinit(allocator);
@@ -328,7 +331,7 @@ pub fn load(
         const endpoint = record.parameters[1];
         if (endpoint < 0 or endpoint >= table.count) return error.InvalidGuardWeapon;
         const weapon = weapon_ids.get(@intCast(endpoint)) orelse new: {
-            const result = try @import("weapon_effects.zig").load(
+            const result = try weapon_effects.load(
                 allocator,
                 try table.record(@intCast(endpoint)),
                 rule_bytes,

@@ -3,7 +3,9 @@
 const std = @import("std");
 const platform = @import("../platform.zig");
 const sounds = @import("../content/sound_effects.zig");
-const SoundId = @import("../motion.zig").SoundId;
+const SoundId = motion.SoundId;
+const motion = @import("../motion.zig");
+const output_gain = @import("output_gain.zig");
 pub const Event = struct { sound: SoundId, attenuation: u2 = 0 };
 const Voice = struct { sound: SoundId, cursor: usize = 0, attenuation: u2 };
 pub const Mixer = struct {
@@ -108,7 +110,7 @@ pub const Output = struct {
                 self.end = frames * 2;
                 self.mixer.render(bank, self.pending[0..self.end], self.rate);
             }
-            const accepted = try @import("output_gain.zig").queue(
+            const accepted = try output_gain.queue(
                 p,
                 self.pending[self.begin..self.end],
                 self.volume,

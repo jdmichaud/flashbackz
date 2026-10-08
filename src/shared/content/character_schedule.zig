@@ -1,6 +1,7 @@
 //! Preserve authored placement order while discarding source identifiers from runtime tasks.
 const std = @import("std");
-const Task = @import("../character_schedule.zig").Task;
+const Task = character_schedule.Task;
+const character_schedule = @import("../character_schedule.zig");
 const Entry = struct { source: u16, task: Task };
 pub fn build(allocator: std.mem.Allocator, owners: anytype, player_shot: u16) ![]Task {
     var entries: std.ArrayList(Entry) = .empty;

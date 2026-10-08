@@ -4,8 +4,11 @@ const std = @import("std");
 const geometry = @import("geometry.zig");
 const motion = @import("motion.zig");
 const terrain = @import("terrain.zig");
+const activation = @import("activation.zig");
+const contacts = @import("contacts.zig");
+const world_props = @import("world_props.zig");
 pub const Definition = struct {
-    footprint: @import("contacts.zig").Footprint,
+    footprint: contacts.Footprint,
     facing: motion.Facing,
     span: terrain.Span,
     idle: motion.Clip,
@@ -17,7 +20,7 @@ pub const Definition = struct {
     behind_player: bool,
 };
 pub const Binding = struct {
-    circuit: @import("world_props.zig").CircuitId,
+    circuit: world_props.CircuitId,
     target: usize,
     next_step: bool,
 };
@@ -70,7 +73,7 @@ pub const World = struct {
     pub fn route(
         self: *World,
         bindings: []const Binding,
-        pulses: []const @import("world_props.zig").CircuitId,
+        pulses: []const world_props.CircuitId,
     ) void {
         for (pulses) |pulse| for (bindings) |binding| {
             if (binding.circuit != pulse) continue;
@@ -84,7 +87,7 @@ pub const World = struct {
         room: geometry.RoomId,
     ) !void {
         for (self.instances, definitions) |*instance, definition| {
-            const near = try @import("activation.zig").around(
+            const near = try activation.around(
                 world.map(),
                 room,
                 definition.footprint.room,

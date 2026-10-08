@@ -16,6 +16,59 @@ const props_mod = @import("../world_props.zig");
 const text_renderer = @import("../render/text.zig");
 const options_mod = @import("game_options.zig");
 const terrain_mod = @import("../terrain.zig");
+const actors_item_aid = @import("../actors/item_aid.zig");
+const actors_trader = @import("../actors/trader.zig");
+const ambience_mod = @import("../ambience.zig");
+const ambient_people_mod = @import("../ambient_people.zig");
+const arrival_triggers_mod = @import("../arrival_triggers.zig");
+const attentive_contacts_mod = @import("../attentive_contacts.zig");
+const audio_effects = @import("../audio/effects.zig");
+const ceiling_guns_mod = @import("../ceiling_guns.zig");
+const combat = @import("../combat.zig");
+const contacts = @import("../contacts.zig");
+const content_level = @import("../content/level.zig");
+const content_visibility = @import("../content/visibility.zig");
+const credential_terminals_mod = @import("../credential_terminals.zig");
+const detectors_mod = @import("../detectors.zig");
+const doors_mod = @import("../doors.zig");
+const electrical_hazards = @import("../electrical_hazards.zig");
+const enemy_barriers_mod = @import("../enemy_barriers.zig");
+const energy_stations_mod = @import("../energy_stations.zig");
+const environmental_alarms_mod = @import("../environmental_alarms.zig");
+const escort_followers_mod = @import("../escort_followers.zig");
+const event_barriers = @import("../event_barriers.zig");
+const force_fields_mod = @import("../force_fields.zig");
+const geometry = @import("../geometry.zig");
+const ground_robot = @import("../actors/ground_robot.zig");
+const gunman = @import("../actors/gunman.zig");
+const input_recording = @import("../input_recording.zig");
+const inventory_grants_mod = @import("../inventory_grants.zig");
+const key_locks = @import("../key_locks.zig");
+const level_exits = @import("../level_exits.zig");
+const lift_passengers = @import("../lift_passengers.zig");
+const lifts_mod = @import("../lifts.zig");
+const mission_terminals_mod = @import("../mission_terminals.zig");
+const mobile_guard = @import("../actors/mobile_guard.zig");
+const operated_controls_mod = @import("../operated_controls.zig");
+const pistol_casing = @import("../pistol_casing.zig");
+const pistol_shot = @import("../pistol_shot.zig");
+const platform_sections_mod = @import("../platform_sections.zig");
+const quest_contacts_mod = @import("../quest_contacts.zig");
+const random_mod = @import("../random.zig");
+const rescue_contacts_mod = @import("../rescue_contacts.zig");
+const rescued_guide = @import("../actors/rescued_guide.zig");
+const room_artwork = @import("../content/room_artwork.zig");
+const scripted_transport_mod = @import("../scripted_transport.zig");
+const service_counters_mod = @import("../service_counters.zig");
+const settings_mod = @import("../settings.zig");
+const story_stations_mod = @import("../story_stations.zig");
+const surface_reactions = @import("../surface_reactions.zig");
+const timed_items_mod = @import("../timed_items.zig");
+const triggered_effects_mod = @import("../triggered_effects.zig");
+const visibility_mod = @import("../visibility.zig");
+const weapon_fire = @import("../weapon_fire.zig");
+const world_messages = @import("../world_messages.zig");
+const zoom_camera = @import("zoom_camera.zig");
 
 pub const HeldInput = struct {
     left: bool = false,
@@ -54,7 +107,7 @@ pub const HeldInput = struct {
             else => {},
         }
     }
-    pub fn recorded(self: *HeldInput, sample: @import("../input_recording.zig").Sample) void {
+    pub fn recorded(self: *HeldInput, sample: input_recording.Sample) void {
         self.left = sample.left;
         self.right = sample.right;
         self.up = sample.up;
@@ -120,67 +173,67 @@ pub const Scene = struct {
     content: content.Pack,
     controller: conrad.Controller = .{},
     weapon_toggle: conrad.armed.Toggle = .{},
-    pistol: @import("../pistol_shot.zig").State = .{},
-    enemy_fire: @import("../weapon_fire.zig").World,
+    pistol: pistol_shot.State = .{},
+    enemy_fire: weapon_fire.World,
     protection_steps: u8 = 0,
-    effects: @import("../audio/effects.zig").Output = .{},
-    sound_events: [16]@import("../audio/effects.zig").Event = undefined,
+    effects: audio_effects.Output = .{},
+    sound_events: [16]audio_effects.Event = undefined,
     sound_event_count: usize = 0,
-    ambience: @import("../ambience.zig").State = .{},
-    last_ambient: ?@import("../ambience.zig").Event = null,
-    casings: @import("../pistol_casing.zig").State = .{},
-    random: @import("../random.zig").Stream = .{},
+    ambience: ambience_mod.State = .{},
+    last_ambient: ?ambience_mod.Event = null,
+    casings: pistol_casing.State = .{},
+    random: random_mod.Stream = .{},
     environment: environment_mod.Environment,
     terrain: terrain_mod.State,
     props: props_mod.World,
-    operated_controls: @import("../operated_controls.zig").World,
-    locks: @import("../key_locks.zig").World,
-    credential_terminals: @import("../credential_terminals.zig").World,
-    environmental_alarms: @import("../environmental_alarms.zig").World,
-    timed_items: @import("../timed_items.zig").World,
-    scripted_transport: @import("../scripted_transport.zig").World,
-    arrival_triggers: @import("../arrival_triggers.zig").World,
-    escort_followers: @import("../escort_followers.zig").World,
-    enemy_barriers: @import("../enemy_barriers.zig").World,
-    barrier_owners: []@import("../enemy_barriers.zig").Owner,
-    rescue_contacts: @import("../rescue_contacts.zig").World,
-    weighted_characters: []@import("../contacts.zig").Footprint,
-    ambient_people: @import("../ambient_people.zig").World,
-    attentive_contacts: @import("../attentive_contacts.zig").World,
-    quest_contacts: @import("../quest_contacts.zig").World,
-    mission_terminals: @import("../mission_terminals.zig").World,
-    service_counters: @import("../service_counters.zig").World,
-    platform_sections: @import("../platform_sections.zig").World,
-    item_aid: @import("../actors/item_aid.zig").World,
+    operated_controls: operated_controls_mod.World,
+    locks: key_locks.World,
+    credential_terminals: credential_terminals_mod.World,
+    environmental_alarms: environmental_alarms_mod.World,
+    timed_items: timed_items_mod.World,
+    scripted_transport: scripted_transport_mod.World,
+    arrival_triggers: arrival_triggers_mod.World,
+    escort_followers: escort_followers_mod.World,
+    enemy_barriers: enemy_barriers_mod.World,
+    barrier_owners: []enemy_barriers_mod.Owner,
+    rescue_contacts: rescue_contacts_mod.World,
+    weighted_characters: []contacts.Footprint,
+    ambient_people: ambient_people_mod.World,
+    attentive_contacts: attentive_contacts_mod.World,
+    quest_contacts: quest_contacts_mod.World,
+    mission_terminals: mission_terminals_mod.World,
+    service_counters: service_counters_mod.World,
+    platform_sections: platform_sections_mod.World,
+    item_aid: actors_item_aid.World,
     interaction: Interaction = .none,
-    guides: @import("../actors/rescued_guide.zig").World,
-    story_stations: @import("../story_stations.zig").World,
-    traders: @import("../actors/trader.zig").World,
-    guards: @import("../actors/mobile_guard.zig").World,
-    visibility: @import("../visibility.zig").World,
-    guard_fire: @import("../weapon_fire.zig").World,
-    barriers: @import("../event_barriers.zig").World,
-    inventory_grants: @import("../inventory_grants.zig").World,
-    exits: @import("../level_exits.zig").World,
-    triggered_effects: @import("../triggered_effects.zig").World,
-    message_icon: @import("../motion.zig").VisualId,
+    guides: rescued_guide.World,
+    story_stations: story_stations_mod.World,
+    traders: actors_trader.World,
+    guards: mobile_guard.World,
+    visibility: visibility_mod.World,
+    guard_fire: weapon_fire.World,
+    barriers: event_barriers.World,
+    inventory_grants: inventory_grants_mod.World,
+    exits: level_exits.World,
+    triggered_effects: triggered_effects_mod.World,
+    message_icon: motion.VisualId,
     level_code_steps: u16 = 150,
-    message: ?@import("../world_messages.zig").State = null,
-    energy_stations: @import("../energy_stations.zig").World,
-    hazards: @import("../electrical_hazards.zig").World,
-    detectors: @import("../detectors.zig").World,
-    ceiling_guns: @import("../ceiling_guns.zig").World,
-    doors: @import("../doors.zig").World,
-    lifts: @import("../lifts.zig").World,
-    passengers: @import("../lift_passengers.zig").State,
-    ceiling_fire: @import("../weapon_fire.zig").World,
-    sensed_contacts: []@import("../contacts.zig").Participant,
-    gunmen: @import("../actors/gunman.zig").World,
-    robots: @import("../actors/ground_robot.zig").World,
-    distractions: []@import("../contacts.zig").Footprint,
-    force_fields: []@import("../force_fields.zig").Emitter,
-    combat_targets: []@import("../combat.zig").Target,
-    surfaces: @import("../surface_reactions.zig").World,
+    message: ?world_messages.State = null,
+    energy_stations: energy_stations_mod.World,
+    hazards: electrical_hazards.World,
+    detectors: detectors_mod.World,
+    ceiling_guns: ceiling_guns_mod.World,
+    doors: doors_mod.World,
+    lifts: lifts_mod.World,
+    passengers: lift_passengers.State,
+    ceiling_fire: weapon_fire.World,
+    sensed_contacts: []contacts.Participant,
+    gunmen: gunman.World,
+    robots: ground_robot.World,
+    distractions: []contacts.Footprint,
+    force_fields: []force_fields_mod.Emitter,
+    combat_targets: []combat.Target,
+    surfaces: surface_reactions.World,
     pending_movie: ?props_mod.Movie = null,
     movie_intent: ?controls.Intent = null,
     pose: motion.Pose,
@@ -189,8 +242,8 @@ pub const Scene = struct {
     defeated: bool = false,
     aborted: bool = false,
     settings: options_mod.Settings = .{},
-    zoom: @import("zoom_camera.zig").Camera = .{},
-    zoom_room: ?@import("../geometry.zig").RoomId = null,
+    zoom: zoom_camera.Camera = .{},
+    zoom_room: ?geometry.RoomId = null,
     options: ?struct { menu: options_mod.Menu, clock: clock_mod.Clock } = null,
     equipment: equipment_mod.Loadout,
     received_items: []equipment_mod.Received,
@@ -199,7 +252,7 @@ pub const Scene = struct {
     pending: std.ArrayList(platform.Event) = .empty,
     clock: ?clock_mod.Clock = null,
     simulation_steps: u64 = 0,
-    replay: ?@import("../input_recording.zig").Playback = null,
+    replay: ?input_recording.Playback = null,
     score: u32 = 0,
     inventory_cooldown: u8 = 0,
     menu_entries: []inventory_menu.Entry,
@@ -216,7 +269,7 @@ pub const Scene = struct {
     pub fn loadWithDifficulty(
         allocator: std.mem.Allocator,
         source: platform.AssetSource,
-        difficulty: @import("../settings.zig").Difficulty,
+        difficulty: settings_mod.Difficulty,
     ) !Scene {
         return loadLevel(allocator, source, .jungle, difficulty);
     }
@@ -224,8 +277,8 @@ pub const Scene = struct {
     pub fn loadLevel(
         allocator: std.mem.Allocator,
         source: platform.AssetSource,
-        level: @import("../content/level.zig").Id,
-        difficulty: @import("../settings.zig").Difficulty,
+        level: content_level.Id,
+        difficulty: settings_mod.Difficulty,
     ) !Scene {
         var pack = try content.loadLevelWithDifficulty(allocator, source, level, difficulty);
         errdefer pack.deinit();
@@ -240,242 +293,242 @@ pub const Scene = struct {
         errdefer terrain.deinit();
         var props = try props_mod.World.init(allocator, pack.world_props.definitions);
         errdefer props.deinit();
-        var operated = try @import("../operated_controls.zig").World.init(
+        var operated = try operated_controls_mod.World.init(
             allocator,
             pack.controls.definitions,
         );
         errdefer operated.deinit();
-        var locks = try @import("../key_locks.zig").World.init(
+        var locks = try key_locks.World.init(
             allocator,
             pack.locks.definitions,
             pack.locks.receivers,
         );
         errdefer locks.deinit();
-        var credential_terminals = try @import("../credential_terminals.zig").World.init(
+        var credential_terminals = try credential_terminals_mod.World.init(
             allocator,
             pack.credential_terminals.definitions,
         );
         errdefer credential_terminals.deinit();
-        var environmental_alarms = try @import("../environmental_alarms.zig").World.init(
+        var environmental_alarms = try environmental_alarms_mod.World.init(
             allocator,
             pack.environmental_alarms.definitions,
         );
         errdefer environmental_alarms.deinit();
-        var timed_items = try @import("../timed_items.zig").World.init(
+        var timed_items = try timed_items_mod.World.init(
             allocator,
             pack.timed_items.definitions.len,
         );
         errdefer timed_items.deinit();
-        var scripted_transport = try @import("../scripted_transport.zig").World.init(
+        var scripted_transport = try scripted_transport_mod.World.init(
             allocator,
             pack.scripted_transport.definitions.len,
             pack.scripted_transport.effects.len,
         );
         errdefer scripted_transport.deinit();
-        var arrival_triggers = try @import("../arrival_triggers.zig").World.init(
+        var arrival_triggers = try arrival_triggers_mod.World.init(
             allocator,
             pack.arrival_triggers.definitions,
         );
         errdefer arrival_triggers.deinit();
-        var escort_followers = try @import("../escort_followers.zig").World.init(
+        var escort_followers = try escort_followers_mod.World.init(
             allocator,
             pack.escort_followers.definitions,
         );
         errdefer escort_followers.deinit();
-        var enemy_barriers = try @import("../enemy_barriers.zig").World.init(
+        var enemy_barriers = try enemy_barriers_mod.World.init(
             allocator,
             pack.enemy_barriers.definitions,
         );
         errdefer enemy_barriers.deinit();
         const barrier_owners = try allocator.alloc(
-            @import("../enemy_barriers.zig").Owner,
+            enemy_barriers_mod.Owner,
             pack.gunmen.definitions.len,
         );
         errdefer allocator.free(barrier_owners);
-        var rescue_contacts = try @import("../rescue_contacts.zig").World.init(
+        var rescue_contacts = try rescue_contacts_mod.World.init(
             allocator,
             pack.rescue_contacts.definitions,
         );
         errdefer rescue_contacts.deinit();
         const weighted_characters = try allocator.alloc(
-            @import("../contacts.zig").Footprint,
+            contacts.Footprint,
             pack.rescue_contacts.definitions.len + pack.escort_followers.definitions.len,
         );
         errdefer allocator.free(weighted_characters);
-        var ambient_people = try @import("../ambient_people.zig").World.init(
+        var ambient_people = try ambient_people_mod.World.init(
             allocator,
             pack.ambient_people.definitions,
             pack.ambient_people.profiles,
         );
         errdefer ambient_people.deinit();
-        var attentive_contacts = try @import("../attentive_contacts.zig").World.init(
+        var attentive_contacts = try attentive_contacts_mod.World.init(
             allocator,
             pack.attentive_contacts.definitions,
         );
         errdefer attentive_contacts.deinit();
-        var quest_contacts = try @import("../quest_contacts.zig").World.init(
+        var quest_contacts = try quest_contacts_mod.World.init(
             allocator,
             pack.quest_contacts.definitions,
         );
         errdefer quest_contacts.deinit();
-        var mission_terminals = try @import("../mission_terminals.zig").World.init(
+        var mission_terminals = try mission_terminals_mod.World.init(
             allocator,
             pack.mission_terminals.definitions,
         );
         errdefer mission_terminals.deinit();
-        var service_counters = try @import("../service_counters.zig").World.init(
+        var service_counters = try service_counters_mod.World.init(
             allocator,
             pack.service_counters.definitions,
         );
         errdefer service_counters.deinit();
-        var platform_sections = try @import("../platform_sections.zig").World.init(
+        var platform_sections = try platform_sections_mod.World.init(
             allocator,
             pack.platform_sections.definitions,
         );
         errdefer platform_sections.deinit();
-        var item_aid = try @import("../actors/item_aid.zig").World.init(
+        var item_aid = try actors_item_aid.World.init(
             allocator,
             pack.item_aid.definitions,
             pack.item_aid.profiles,
         );
         errdefer item_aid.deinit();
-        var guides = try @import("../actors/rescued_guide.zig").World.init(
+        var guides = try rescued_guide.World.init(
             allocator,
             pack.guides.definitions,
             pack.guides.profiles,
         );
         errdefer guides.deinit();
-        var story_stations = try @import("../story_stations.zig").World.init(
+        var story_stations = try story_stations_mod.World.init(
             allocator,
             pack.story_stations.definitions,
         );
         errdefer story_stations.deinit();
-        var traders = try @import("../actors/trader.zig").World.init(
+        var traders = try actors_trader.World.init(
             allocator,
             pack.traders.definitions,
             pack.traders.profiles,
         );
         errdefer traders.deinit();
-        var guards = try @import("../actors/mobile_guard.zig").World.init(
+        var guards = try mobile_guard.World.init(
             allocator,
             pack.guards.definitions,
             pack.guards.profiles,
         );
         errdefer guards.deinit();
-        var visibility = try @import("../visibility.zig").World.init(
+        var visibility = try visibility_mod.World.init(
             allocator,
             pack.visibility.definitions,
             256,
         );
         errdefer visibility.deinit();
-        var guard_fire = try @import("../weapon_fire.zig").World.init(
+        var guard_fire = try weapon_fire.World.init(
             allocator,
             pack.guards.weapons.len,
         );
         errdefer guard_fire.deinit();
-        var barriers = try @import("../event_barriers.zig").World.init(
+        var barriers = try event_barriers.World.init(
             allocator,
             pack.barriers.definitions.len,
         );
         errdefer barriers.deinit();
-        var inventory_grants = try @import("../inventory_grants.zig").World.init(
+        var inventory_grants = try inventory_grants_mod.World.init(
             allocator,
             pack.inventory_grants.definitions.len,
         );
         errdefer inventory_grants.deinit();
-        var exits = try @import("../level_exits.zig").World.init(allocator, pack.exits);
+        var exits = try level_exits.World.init(allocator, pack.exits);
         errdefer exits.deinit();
-        var triggered_effects = try @import("../triggered_effects.zig").World.init(
+        var triggered_effects = try triggered_effects_mod.World.init(
             allocator,
             pack.triggered_effects.definitions,
         );
         errdefer triggered_effects.deinit();
-        var energy_stations = try @import("../energy_stations.zig").World.init(
+        var energy_stations = try energy_stations_mod.World.init(
             allocator,
             pack.energy_stations.definitions,
         );
         errdefer energy_stations.deinit();
-        var hazards = try @import("../electrical_hazards.zig").World.init(
+        var hazards = try electrical_hazards.World.init(
             allocator,
             pack.hazards.definitions,
         );
         errdefer hazards.deinit();
-        var gunmen = try @import("../actors/gunman.zig").World.init(
+        var gunmen = try gunman.World.init(
             allocator,
             pack.gunmen.definitions,
             pack.gunmen.profiles,
         );
         errdefer gunmen.deinit();
-        var robots = try @import("../actors/ground_robot.zig").World.init(
+        var robots = try ground_robot.World.init(
             allocator,
             pack.robots.definitions,
             pack.robots.profiles,
         );
         errdefer robots.deinit();
-        var enemy_fire = try @import("../weapon_fire.zig").World.init(
+        var enemy_fire = try weapon_fire.World.init(
             allocator,
             pack.gunmen.weapons.len,
         );
         errdefer enemy_fire.deinit();
         const contact_capacity = pack.gunmen.definitions.len + pack.robots.definitions.len + pack.guards.definitions.len + pack.world_props.definitions.len + pack.doors.definitions.len + pack.escort_followers.definitions.len + pack.quest_contacts.definitions.len + pack.attentive_contacts.definitions.len + pack.item_aid.definitions.len + pack.guides.definitions.len + pack.traders.definitions.len + pack.rescue_contacts.definitions.len + pack.enemy_barriers.definitions.len + 1;
         const sensed_contacts = try allocator.alloc(
-            @import("../contacts.zig").Participant,
+            contacts.Participant,
             contact_capacity,
         );
         errdefer allocator.free(sensed_contacts);
-        var detectors = try @import("../detectors.zig").World.init(
+        var detectors = try detectors_mod.World.init(
             allocator,
             pack.detectors.definitions,
             pack.detectors.profiles,
             contact_capacity,
         );
         errdefer detectors.deinit();
-        var ceiling_guns = try @import("../ceiling_guns.zig").World.init(
+        var ceiling_guns = try ceiling_guns_mod.World.init(
             allocator,
             pack.ceiling_guns.definitions,
             pack.ceiling_guns.profiles,
         );
         errdefer ceiling_guns.deinit();
-        var doors = try @import("../doors.zig").World.init(
+        var doors = try doors_mod.World.init(
             allocator,
             pack.doors.definitions,
             pack.doors.profiles,
         );
         errdefer doors.deinit();
-        var lifts = try @import("../lifts.zig").World.init(
+        var lifts = try lifts_mod.World.init(
             allocator,
             pack.lifts.definitions,
             pack.lifts.profiles,
         );
         errdefer lifts.deinit();
-        var passengers = try @import("../lift_passengers.zig").State.init(
+        var passengers = try lift_passengers.State.init(
             allocator,
             pack.lifts.definitions.len,
             pack.world_props.definitions.len,
         );
         errdefer passengers.deinit();
-        var ceiling_fire = try @import("../weapon_fire.zig").World.init(
+        var ceiling_fire = try weapon_fire.World.init(
             allocator,
             pack.ceiling_guns.weapons.len,
         );
         errdefer ceiling_fire.deinit();
         const force_fields = try allocator.alloc(
-            @import("../force_fields.zig").Emitter,
+            force_fields_mod.Emitter,
             pack.force_fields.definitions.len,
         );
         errdefer allocator.free(force_fields);
         @memset(force_fields, .{});
         const combat_targets = try allocator.alloc(
-            @import("../combat.zig").Target,
+            combat.Target,
             pack.gunmen.definitions.len + pack.robots.definitions.len + pack.guards.definitions.len + pack.doors.definitions.len + pack.force_fields.definitions.len + pack.enemy_barriers.definitions.len + 1,
         );
         errdefer allocator.free(combat_targets);
         const distractions = try allocator.alloc(
-            @import("../contacts.zig").Footprint,
+            contacts.Footprint,
             pack.world_props.definitions.len,
         );
         errdefer allocator.free(distractions);
-        var surfaces = try @import("../surface_reactions.zig").World.init(
+        var surfaces = try surface_reactions.World.init(
             allocator,
             pack.surfaces,
             pack.surfaceClips(),
@@ -552,13 +605,13 @@ pub const Scene = struct {
     fn emitSound(
         self: *Scene,
         sound: motion.SoundId,
-        room: @import("../geometry.zig").RoomId,
+        room: geometry.RoomId,
     ) !void {
         var attenuation: u2 = 0;
         if (room != self.environment.room) {
             const current = try self.environment.map.room(self.environment.room);
             var adjacent = false;
-            for ([_]@import("../geometry.zig").Edge{
+            for ([_]geometry.Edge{
                 current.edges.left,
                 current.edges.right,
                 current.edges.up,
@@ -571,7 +624,7 @@ pub const Scene = struct {
         }
         try self.emitEffect(.{ .sound = sound, .attenuation = attenuation });
     }
-    fn emitEffect(self: *Scene, event: @import("../audio/effects.zig").Event) !void {
+    fn emitEffect(self: *Scene, event: audio_effects.Event) !void {
         if (self.sound_event_count == self.sound_events.len) return error.TooManySoundEvents;
         self.sound_events[self.sound_event_count] = event;
         self.sound_event_count += 1;
@@ -1809,7 +1862,7 @@ pub const Scene = struct {
                 self.timed_items.pulses[0..self.timed_items.pulse_count],
             );
             if (std.mem.indexOfScalar(
-                @import("../geometry.zig").RoomId,
+                geometry.RoomId,
                 self.content.timed_items.audible_rooms,
                 self.environment.room,
             ) != null) {
@@ -2118,7 +2171,7 @@ pub const Scene = struct {
                 if (try self.interactionHint()) |hint| self.message_icon = hint.icon;
                 var presentation = notice;
                 presentation.icon = self.message_icon;
-                self.message = try @import("../world_messages.zig").State.init(
+                self.message = try world_messages.State.init(
                     presentation,
                     deadline,
                 );
@@ -2194,7 +2247,7 @@ pub const Scene = struct {
         distraction_count: usize,
         first_guard: usize,
     ) !void {
-        const player: @import("../contacts.zig").Footprint = .{
+        const player: contacts.Footprint = .{
             .room = self.environment.room,
             .position = self.pose.position,
             .width = self.content.player_contact_width,
@@ -2563,7 +2616,7 @@ pub const Scene = struct {
         };
     }
 
-    const Hint = struct { icon: @import("../motion.zig").VisualId, label: []const u8 };
+    const Hint = struct { icon: motion.VisualId, label: []const u8 };
     fn interactionHint(self: *const Scene) !?Hint {
         if (self.interaction == .station) {
             const definition = self.content.story_stations.definitions[self.story_stations.candidate.?];
@@ -2629,7 +2682,7 @@ pub const Scene = struct {
     }
     fn drawItemAid(
         self: *const Scene,
-        room: *const @import("../content/room_artwork.zig").Artwork,
+        room: *const room_artwork.Artwork,
         indices: []u8,
         behind_player: bool,
     ) !void {
@@ -2939,8 +2992,8 @@ pub const Scene = struct {
     /// Current body and activity of one placement's modern owner; null when no component owns it.
     pub fn placementObservation(
         self: *Scene,
-        owner: @import("../content/visibility.zig").Owner,
-    ) !?@import("../visibility.zig").Observation {
+        owner: content_visibility.Owner,
+    ) !?visibility_mod.Observation {
         return switch (owner) {
             .enemy_barrier => |index| .{
                 .body = self.enemy_barriers.emitters[index].body(self.content.enemy_barriers.definitions[index]),
@@ -3039,7 +3092,7 @@ pub const Scene = struct {
         };
     }
 
-    fn deliverHit(self: *Scene, hit: @import("../combat.zig").Hit) void {
+    fn deliverHit(self: *Scene, hit: combat.Hit) void {
         if (@backingInt(hit.target) == 0) {
             if (self.protection_steps == 0 and
                 self.environment.room == hit.sender_room) self.controller.pending_hits.set(hit.impact);
@@ -3074,7 +3127,7 @@ pub const Scene = struct {
 
     fn drawShot(
         self: *const Scene,
-        room: *const @import("../content/room_artwork.zig").Artwork,
+        room: *const room_artwork.Artwork,
         indices: []u8,
         behind_player: bool,
     ) !void {
@@ -3153,7 +3206,7 @@ pub const Scene = struct {
 
     fn drawCasing(
         self: *const Scene,
-        room: *const @import("../content/room_artwork.zig").Artwork,
+        room: *const room_artwork.Artwork,
         indices: []u8,
         behind_player: bool,
     ) !void {
@@ -3178,7 +3231,7 @@ pub const Scene = struct {
 
     fn drawSurfaces(
         self: *const Scene,
-        room: *const @import("../content/room_artwork.zig").Artwork,
+        room: *const room_artwork.Artwork,
         indices: []u8,
         behind_player: bool,
     ) !void {
@@ -3204,7 +3257,7 @@ pub const Scene = struct {
     fn drawProps(
         self: *const Scene,
         layer: props_mod.Layer,
-        room: *const @import("../content/room_artwork.zig").Artwork,
+        room: *const room_artwork.Artwork,
         indices: []u8,
     ) !void {
         // Keep content order within each layer, with Conrad drawn between layers.
@@ -3235,7 +3288,7 @@ pub const Scene = struct {
     fn drawControls(
         self: *const Scene,
         layer: props_mod.Layer,
-        room: *const @import("../content/room_artwork.zig").Artwork,
+        room: *const room_artwork.Artwork,
         indices: []u8,
     ) !void {
         try self.drawControlSet(
@@ -3266,7 +3319,7 @@ pub const Scene = struct {
         instances: anytype,
         definitions: anytype,
         layer: props_mod.Layer,
-        room: *const @import("../content/room_artwork.zig").Artwork,
+        room: *const room_artwork.Artwork,
         indices: []u8,
     ) !void {
         for (instances, definitions) |instance, definition| {
@@ -3291,7 +3344,7 @@ pub const Scene = struct {
     fn drawHazards(
         self: *const Scene,
         layer: props_mod.Layer,
-        room: *const @import("../content/room_artwork.zig").Artwork,
+        room: *const room_artwork.Artwork,
         indices: []u8,
     ) !void {
         for (self.hazards.instances, self.content.hazards.definitions) |instance, definition| {
@@ -3315,7 +3368,7 @@ pub const Scene = struct {
 
     fn drawGunmen(
         self: *const Scene,
-        room: *const @import("../content/room_artwork.zig").Artwork,
+        room: *const room_artwork.Artwork,
         indices: []u8,
         behind_player: bool,
     ) !void {
@@ -3342,7 +3395,7 @@ pub const Scene = struct {
 
     fn drawRobots(
         self: *const Scene,
-        room: *const @import("../content/room_artwork.zig").Artwork,
+        room: *const room_artwork.Artwork,
         indices: []u8,
         behind_player: bool,
     ) !void {
@@ -3386,7 +3439,7 @@ pub const Scene = struct {
 
     fn drawPlatformSections(
         self: *const Scene,
-        room: *const @import("../content/room_artwork.zig").Artwork,
+        room: *const room_artwork.Artwork,
         indices: []u8,
         behind_player: bool,
     ) !void {
@@ -3415,7 +3468,7 @@ pub const Scene = struct {
 
     fn drawLifts(
         self: *const Scene,
-        room: *const @import("../content/room_artwork.zig").Artwork,
+        room: *const room_artwork.Artwork,
         indices: []u8,
         behind_player: bool,
     ) !void {
@@ -3440,7 +3493,7 @@ pub const Scene = struct {
 
     fn drawDoors(
         self: *const Scene,
-        room: *const @import("../content/room_artwork.zig").Artwork,
+        room: *const room_artwork.Artwork,
         indices: []u8,
         behind_player: bool,
     ) !void {
@@ -3467,7 +3520,7 @@ pub const Scene = struct {
         self: *const Scene,
         instances: anytype,
         definitions: anytype,
-        room: *const @import("../content/room_artwork.zig").Artwork,
+        room: *const room_artwork.Artwork,
         indices: []u8,
         behind_player: bool,
     ) !void {

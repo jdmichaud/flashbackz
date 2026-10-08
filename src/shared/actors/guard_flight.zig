@@ -1,8 +1,10 @@
 //! Powered movement over platforms: takeoff, vertical search, drift and landing.
 //! The guard's decisions start a flight; this component owns its motion boundaries.
 const motion = @import("../motion.zig");
-const Environment = @import("conrad_environment.zig").Environment;
-const shift = @import("conrad_roll.zig").shiftForward;
+const Environment = conrad_environment.Environment;
+const shift = conrad_roll.shiftForward;
+const conrad_environment = @import("conrad_environment.zig");
+const conrad_roll = @import("conrad_roll.zig");
 pub const Kind = enum { across, ascend, descend };
 pub const Phase = enum {
     starting,

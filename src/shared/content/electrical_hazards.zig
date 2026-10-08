@@ -8,6 +8,7 @@ const animation = @import("animation.zig");
 const geometry = @import("../geometry.zig");
 const motion = @import("../motion.zig");
 const connections = @import("first_world_props.zig");
+const settings = @import("../settings.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -137,7 +138,7 @@ pub fn load(
     rule_bytes: []const u8,
     animations: []const u8,
     rooms: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     routes: []const connections.Connection,
     resolver: anytype,
 ) !Assets {

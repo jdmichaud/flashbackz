@@ -3,7 +3,11 @@ const std = @import("std");
 const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
-const Circuit = @import("world_props.zig").CircuitId;
+const Circuit = world_props.CircuitId;
+const activation = @import("activation.zig");
+const perception = @import("actors/perception.zig");
+const world_messages = @import("world_messages.zig");
+const world_props = @import("world_props.zig");
 pub const Posture = enum {
     centered,
     watching_behind,
@@ -19,7 +23,7 @@ pub const Definition = struct {
     facing: motion.Facing,
     idle: [2][7]motion.Clip,
     speech: [2]motion.Clip,
-    messages: [2]@import("world_messages.zig").Id,
+    messages: [2]world_messages.Id,
     chances: [2][4]i16,
     attention_distance: i16,
     output: Circuit,
@@ -51,7 +55,7 @@ pub const World = struct {
     pulses: []Circuit,
     pulse_count: usize = 0,
     candidate: ?usize = null,
-    notice: ?@import("world_messages.zig").Request = null,
+    notice: ?world_messages.Request = null,
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);
@@ -95,7 +99,7 @@ pub const World = struct {
         const layout: contacts.Layout = .{};
         for (self.instances, definitions, 0..) |*instance, definition, index| {
             instance.sound = null;
-            const near = try @import("activation.zig").around(
+            const near = try activation.around(
                 map,
                 player.room,
                 definition.footprint.room,
@@ -196,7 +200,7 @@ pub const World = struct {
                         self.pulse_count += 1;
                     }
                 } else {
-                    const near = try @import("activation.zig").around(
+                    const near = try activation.around(
                         map,
                         player.room,
                         definition.footprint.room,
@@ -212,7 +216,7 @@ pub const World = struct {
                             contact_snapshot,
                             definition.footprint,
                         );
-                        const awareness = try @import("actors/perception.zig").observe(
+                        const awareness = try perception.observe(
                             map,
                             .{ .room = definition.footprint.room, .pose = instance.pose },
                             player,

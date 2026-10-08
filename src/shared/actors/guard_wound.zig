@@ -1,8 +1,10 @@
 //! Clearance-dependent guard knockback. Recovery, health loss and defeat are distinct
 //! outcomes so encounter signals cannot run before the authored death animation finishes.
 const motion = @import("../motion.zig");
-const Environment = @import("conrad_environment.zig").Environment;
-const shift = @import("conrad_roll.zig").shiftForward;
+const Environment = conrad_environment.Environment;
+const shift = conrad_roll.shiftForward;
+const conrad_environment = @import("conrad_environment.zig");
+const conrad_roll = @import("conrad_roll.zig");
 pub const Direction = enum { forward, backward };
 pub const Phase = enum { impact, recovery, fatal_launch, fatal_landing };
 pub const Landing = struct { clip: motion.Clip, forward: i16 = 0, down: i16 = 0 };

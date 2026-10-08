@@ -4,6 +4,7 @@ const std = @import("std");
 const platform = @import("../platform.zig");
 const content = @import("../content/vector_cinematic.zig");
 const film = @import("../vector_film.zig");
+const palette = @import("../content/palette.zig");
 
 const Cadence = struct {
     // English reference profile: calibrated hold ticks and the measured video cadence.
@@ -120,7 +121,7 @@ test "confirmation loops keep animating and one confirmation cannot skip the nex
     const allocator = std.testing.allocator;
     const arena = try allocator.create(std.heap.ArenaAllocator);
     arena.* = .init(allocator);
-    const colors: @import("../content/palette.zig").Palette = @splat(.{ .r = 0, .g = 0, .b = 0 });
+    const colors: palette.Palette = @splat(.{ .r = 0, .g = 0, .b = 0 });
     const frames = [_]film.Frame{
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4 },
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 8, .input_loop_start = 0 },

@@ -1,10 +1,13 @@
 //! Intermittent environmental rumble, driven by circuits and the shared random stream.
 const std = @import("std");
 const motion = @import("motion.zig");
-const Circuit = @import("world_props.zig").CircuitId;
+const Circuit = world_props.CircuitId;
+const geometry = @import("geometry.zig");
+const random_mod = @import("random.zig");
+const world_props = @import("world_props.zig");
 pub const Phase = enum { dormant, waiting, burst };
 pub const Definition = struct {
-    room: ?@import("geometry.zig").RoomId,
+    room: ?geometry.RoomId,
     clips: [3]motion.Clip,
     chance_denominator: i16,
     burst_cycles: i16,
@@ -65,7 +68,7 @@ pub const World = struct {
     pub fn advance(
         self: *World,
         definitions: []const Definition,
-        random: *@import("random.zig").Stream,
+        random: *random_mod.Stream,
     ) void {
         for (self.instances, definitions) |*instance, definition| {
             if ((instance.ready.start or instance.ready.stop) and

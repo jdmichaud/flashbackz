@@ -4,6 +4,7 @@ const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
 const terrain = @import("terrain.zig");
+const std = @import("std");
 pub const Id = enum(u16) { _ };
 pub const ProfileId = enum(u16) { _ };
 pub const Height = enum { standing, crouched };
@@ -101,7 +102,6 @@ pub fn trace(
 }
 
 test "shots skip immune poses, pass low clearance only when crouched, and hit before the wall" {
-    const std = @import("std");
     const room: geometry.RoomId = @fromBackingInt(17);
     const empty: [48]bool = @splat(false);
     const rooms = [_]geometry.Room{.{

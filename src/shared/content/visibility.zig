@@ -4,6 +4,7 @@ const std = @import("std");
 const runtime = @import("../visibility.zig");
 const placement = @import("placement.zig");
 const geometry = @import("../geometry.zig");
+const settings = @import("../settings.zig");
 pub const Owner = union(enum) {
     player,
     prop: usize,
@@ -70,7 +71,7 @@ pub fn load(
     allocator: std.mem.Allocator,
     table: placement.Table,
     rooms: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     owners: anytype,
 ) !Assets {
     const identities = try allocator.alloc(?runtime.Entity, table.count);

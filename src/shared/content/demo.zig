@@ -3,16 +3,19 @@ const std = @import("std");
 const platform = @import("../platform.zig");
 const input = @import("../input_recording.zig");
 const level = @import("level.zig");
+const floppy_interface = @import("floppy_interface.zig");
+const geometry = @import("../geometry.zig");
+const motion = @import("../motion.zig");
 pub const Start = struct {
-    room: @import("../geometry.zig").RoomId,
-    position: @import("../motion.zig").Position,
+    room: geometry.RoomId,
+    position: motion.Position,
 };
 pub const Descriptor = struct { filename: [12]u8, level: level.Id, start: ?Start };
 pub const Recording = struct { controls: []input.Sample, descriptor: Descriptor };
 
 pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource, index: usize) !Recording {
     if (index >= 3) return error.InvalidDemoIndex;
-    const metadata = try @import("floppy_interface.zig").load(allocator, source);
+    const metadata = try floppy_interface.load(allocator, source);
     const descriptor = metadata.demos[index];
     var path: [64]u8 = undefined;
     var data = try source.readAll(

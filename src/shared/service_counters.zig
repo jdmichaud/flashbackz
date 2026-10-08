@@ -3,7 +3,10 @@ const std = @import("std");
 const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
-const Circuit = @import("world_props.zig").CircuitId;
+const Circuit = world_props.CircuitId;
+const activation = @import("activation.zig");
+const world_messages = @import("world_messages.zig");
+const world_props = @import("world_props.zig");
 pub const Phase = enum { neutral, turning, turned, returning };
 pub const Definition = struct {
     footprint: contacts.Footprint,
@@ -12,7 +15,7 @@ pub const Definition = struct {
     gesture_chance: i16,
     return_chance: i16,
     output: Circuit,
-    notice: @import("world_messages.zig").Id,
+    notice: world_messages.Id,
     hint: motion.VisualId,
     label: []const u8,
     priority: u16,
@@ -38,7 +41,7 @@ pub const World = struct {
     pulses: []Circuit,
     pulse_count: usize = 0,
     candidate: ?usize = null,
-    notice: ?@import("world_messages.zig").Request = null,
+    notice: ?world_messages.Request = null,
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);
@@ -83,7 +86,7 @@ pub const World = struct {
             instance.ready = instance.pending;
             instance.pending = false;
             instance.sound = null;
-            const near = try @import("activation.zig").around(
+            const near = try activation.around(
                 map,
                 player.room,
                 definition.footprint.room,
@@ -152,7 +155,7 @@ pub const World = struct {
                     };
                     if (instance.phase == .turning) instance.phase = .turned else if (instance.phase == .returning) instance.phase = .neutral;
                 } else {
-                    const near = try @import("activation.zig").around(
+                    const near = try activation.around(
                         map,
                         room,
                         definition.footprint.room,

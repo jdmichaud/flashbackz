@@ -1,5 +1,6 @@
 //! Recognize pressure controls by their full contact/press/recovery rule topology.
 const rules = @import("rule_table.zig");
+const std = @import("std");
 pub const Spec = struct {
     rest: u16,
     pressed: u16,
@@ -61,7 +62,6 @@ pub fn recognize(group: rules.Group) ?Spec {
 }
 
 test "pressure recognition preserves player-only filtering and parameter-selected outputs" {
-    const std = @import("std");
     var records: [90]u8 = @splat(0);
     for (0..5) |i| {
         const at = i * 18;

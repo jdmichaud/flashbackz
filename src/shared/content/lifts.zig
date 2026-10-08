@@ -9,6 +9,7 @@ const geometry = @import("../geometry.zig");
 const motion = @import("../motion.zig");
 const connections = @import("first_world_props.zig");
 const collision = @import("collision.zig");
+const settings = @import("../settings.zig");
 const TripSpec = struct {
     transfer: ?runtime.Transfer = null,
     parked: u16,
@@ -441,7 +442,7 @@ pub fn load(
     rule_bytes: []const u8,
     animations: []const u8,
     rooms: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     routes: *std.ArrayList(connections.Connection),
     resolver: anytype,
 ) !Assets {

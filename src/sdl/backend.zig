@@ -13,6 +13,7 @@ const flashbackz = @import("flashbackz");
 const platform = flashbackz.platform;
 const c = @import("sdl.zig");
 const eventlog = @import("eventlog.zig");
+const memory = @import("memory.zig");
 
 pub const SdlBackend = struct {
     allocator: std.mem.Allocator,
@@ -137,7 +138,7 @@ pub const SdlBackend = struct {
     }
 
     fn availableMemory(_: *anyopaque) ?u64 {
-        return @import("memory.zig").availableBytes();
+        return memory.availableBytes();
     }
 
     const vtable = platform.Platform.VTable{

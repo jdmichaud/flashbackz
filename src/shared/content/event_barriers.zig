@@ -4,6 +4,8 @@ const runtime = @import("../event_barriers.zig");
 const rules = @import("rule_table.zig");
 const placement = @import("placement.zig");
 const connections = @import("first_world_props.zig");
+const animation = @import("animation.zig");
+const settings = @import("../settings.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -73,7 +75,7 @@ pub fn load(
     table: placement.Table,
     rule_bytes: []const u8,
     animations: []const u8,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     routes: *std.ArrayList(connections.Connection),
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
@@ -91,7 +93,7 @@ pub fn load(
             record.initial_state != spec.waiting or
             record.flags & 1 == 0) return error.UnsupportedEventBarrier;
         for ([_]u16{ spec.waiting, spec.armed }) |state| {
-            var clip = try @import("animation.zig").decode(allocator, animations, state);
+            var clip = try animation.decode(allocator, animations, state);
             defer clip.deinit();
             if (clip.frames.len != 1 or clip.sound != null) return error.UnsupportedBarrierTiming;
             switch (clip.frames[0]) {

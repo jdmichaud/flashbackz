@@ -5,7 +5,11 @@ const geometry = @import("../geometry.zig");
 const contacts = @import("../contacts.zig");
 const equipment = @import("../equipment.zig");
 const messages = @import("../world_messages.zig");
-const Circuit = @import("../world_props.zig").CircuitId;
+const Circuit = world_props.CircuitId;
+const activation = @import("../activation.zig");
+const perception = @import("perception.zig");
+const story_cue = @import("../story_cue.zig");
+const world_props = @import("../world_props.zig");
 pub const Phase = enum { watching, idle, looking, fidgeting, looking_back, talking, selling };
 pub const Profile = struct {
     clips: [7]motion.Clip,
@@ -14,7 +18,7 @@ pub const Profile = struct {
     fidget_chance: i16,
     introduction: messages.Id,
     thanks: messages.Id,
-    payment_movie: @import("../story_cue.zig").Cue,
+    payment_movie: story_cue.Cue,
 };
 pub const Definition = struct {
     profile: usize,
@@ -54,7 +58,7 @@ pub const World = struct {
     candidate: ?usize = null,
     notice: ?messages.Id = null,
     notice_priority: u16 = 0,
-    movie: ?@import("../story_cue.zig").Cue = null,
+    movie: ?story_cue.Cue = null,
     pulses: []Circuit,
     pulse_count: usize = 0,
     pub fn init(
@@ -113,7 +117,7 @@ pub const World = struct {
             actor.sound = null;
             actor.contact = definition.footprint;
             actor.contact.position = actor.pose.position;
-            const near = try @import("../activation.zig").around(
+            const near = try activation.around(
                 map,
                 player.room,
                 definition.footprint.room,
@@ -165,7 +169,7 @@ pub const World = struct {
         random: anytype,
     ) !void {
         for (self.actors, definitions, 0..) |*actor, definition, index| {
-            const near = try @import("../activation.zig").around(
+            const near = try activation.around(
                 map,
                 player.room,
                 definition.footprint.room,
@@ -187,18 +191,18 @@ pub const World = struct {
                 &actor.pose,
             );
             if (actor.playback.exhausted(clip)) {
-                const observer: @import("perception.zig").Observer = .{
+                const observer: perception.Observer = .{
                     .room = definition.footprint.room,
                     .pose = actor.pose,
                 };
-                const front = if (try @import("perception.zig").scanObjects(
+                const front = if (try perception.scanObjects(
                     map,
                     player.room,
                     observer,
                     &.{player},
                     false,
                 )) |distance| distance <= profile.sight_cells else false;
-                const back = if (try @import("perception.zig").scanObjects(
+                const back = if (try perception.scanObjects(
                     map,
                     player.room,
                     observer,

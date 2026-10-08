@@ -20,6 +20,72 @@ const prop_import = @import("first_world_props.zig");
 const art_bank = @import("art_bank.zig");
 const object_art = @import("object_artwork.zig");
 const inventory_artwork = @import("inventory_artwork.zig");
+const actor_art = @import("actor_art.zig");
+const ambience = @import("../ambience.zig");
+const ambient_people_mod = @import("ambient_people.zig");
+const arrival_triggers_mod = @import("arrival_triggers.zig");
+const attentive_contacts_mod = @import("attentive_contacts.zig");
+const ceiling_guns_mod = @import("ceiling_guns.zig");
+const character_schedule_mod = @import("../character_schedule.zig");
+const character_schedule_module = @import("character_schedule.zig");
+const conrad_lift = @import("conrad_lift.zig");
+const conrad_wound = @import("conrad_wound.zig");
+const credential_terminals_mod = @import("credential_terminals.zig");
+const credential_terminals_module = @import("../credential_terminals.zig");
+const detectors_mod = @import("detectors.zig");
+const doors_mod = @import("doors.zig");
+const electrical_hazards = @import("electrical_hazards.zig");
+const enemy_barriers_mod = @import("enemy_barriers.zig");
+const energy_stations_mod = @import("energy_stations.zig");
+const environmental_alarms_mod = @import("environmental_alarms.zig");
+const environmental_alarms_module = @import("../environmental_alarms.zig");
+const escort_followers_mod = @import("escort_followers.zig");
+const event_barriers = @import("event_barriers.zig");
+const event_barriers_mod = @import("../event_barriers.zig");
+const force_fields_mod = @import("force_fields.zig");
+const ground_robots = @import("ground_robots.zig");
+const gunman = @import("../actors/gunman.zig");
+const gunmen_mod = @import("gunmen.zig");
+const import_audit_mod = @import("import_audit.zig");
+const inventory_grants_mod = @import("inventory_grants.zig");
+const item_aid_mod = @import("item_aid.zig");
+const key_locks = @import("key_locks.zig");
+const level_exits = @import("../level_exits.zig");
+const level_exits_mod = @import("level_exits.zig");
+const lift_passengers_mod = @import("../lift_passengers.zig");
+const lift_passengers_module = @import("lift_passengers.zig");
+const lifts_mod = @import("lifts.zig");
+const mission_terminals_mod = @import("mission_terminals.zig");
+const mission_terminals_module = @import("../mission_terminals.zig");
+const mobile_guard = @import("../actors/mobile_guard.zig");
+const mobile_guards = @import("mobile_guards.zig");
+const operated_controls = @import("operated_controls.zig");
+const pistol_casing = @import("../pistol_casing.zig");
+const pistol_shot = @import("../pistol_shot.zig");
+const platform_sections_mod = @import("platform_sections.zig");
+const quest_contacts_mod = @import("quest_contacts.zig");
+const quest_contacts_module = @import("../quest_contacts.zig");
+const quest_items = @import("quest_items.zig");
+const rescue_contacts_mod = @import("rescue_contacts.zig");
+const rescue_contacts_module = @import("../rescue_contacts.zig");
+const rescued_guide = @import("../actors/rescued_guide.zig");
+const rescued_guides = @import("rescued_guides.zig");
+const scripted_transport_mod = @import("scripted_transport.zig");
+const scripted_transport_module = @import("../scripted_transport.zig");
+const service_counters_mod = @import("service_counters.zig");
+const service_counters_module = @import("../service_counters.zig");
+const settings = @import("../settings.zig");
+const sound_effects = @import("sound_effects.zig");
+const story_stations_mod = @import("story_stations.zig");
+const story_stations_module = @import("../story_stations.zig");
+const surface_reactions = @import("../surface_reactions.zig");
+const timed_items_mod = @import("timed_items.zig");
+const timed_items_module = @import("../timed_items.zig");
+const traders_mod = @import("traders.zig");
+const triggered_effects_mod = @import("triggered_effects.zig");
+const visibility_mod = @import("visibility.zig");
+const world_messages = @import("world_messages.zig");
+const world_props_mod = @import("../world_props.zig");
 
 const Move = enum {
     throw_item,
@@ -310,72 +376,72 @@ pub const Pack = struct {
     run_strides: []motion.Clip,
     terrain: collision.Layout,
     initial_items: []equipment.Definition,
-    import_audit: @import("import_audit.zig").Ledger,
+    import_audit: import_audit_mod.Ledger,
     initial_health: i16,
-    sounds: @import("sound_effects.zig").Bank,
+    sounds: sound_effects.Bank,
     inventory_art: inventory_artwork.Assets,
     world_props: prop_import.Assets,
-    controls: @import("operated_controls.zig").Assets,
-    locks: @import("key_locks.zig").Assets,
-    credential_terminals: @import("credential_terminals.zig").Assets,
-    credential_terminal_bindings: []@import("../credential_terminals.zig").Binding,
-    environmental_alarms: @import("environmental_alarms.zig").Assets,
-    alarm_bindings: []@import("../environmental_alarms.zig").Binding,
-    timed_items: @import("timed_items.zig").Assets,
-    timed_item_bindings: []@import("../timed_items.zig").Binding,
-    scripted_transport: @import("scripted_transport.zig").Assets,
-    transport_bindings: []@import("../scripted_transport.zig").Binding,
-    arrival_triggers: @import("arrival_triggers.zig").Assets,
-    escort_followers: @import("escort_followers.zig").Assets,
-    ambient_people: @import("ambient_people.zig").Assets,
-    attentive_contacts: @import("attentive_contacts.zig").Assets,
-    quest_contacts: @import("quest_contacts.zig").Assets,
-    quest_contact_bindings: []@import("../quest_contacts.zig").Binding,
-    mission_terminals: @import("mission_terminals.zig").Assets,
-    mission_terminal_bindings: []@import("../mission_terminals.zig").Binding,
-    service_counters: @import("service_counters.zig").Assets,
-    service_counter_bindings: []@import("../service_counters.zig").Binding,
-    messages: @import("world_messages.zig").Assets,
+    controls: operated_controls.Assets,
+    locks: key_locks.Assets,
+    credential_terminals: credential_terminals_mod.Assets,
+    credential_terminal_bindings: []credential_terminals_module.Binding,
+    environmental_alarms: environmental_alarms_mod.Assets,
+    alarm_bindings: []environmental_alarms_module.Binding,
+    timed_items: timed_items_mod.Assets,
+    timed_item_bindings: []timed_items_module.Binding,
+    scripted_transport: scripted_transport_mod.Assets,
+    transport_bindings: []scripted_transport_module.Binding,
+    arrival_triggers: arrival_triggers_mod.Assets,
+    escort_followers: escort_followers_mod.Assets,
+    ambient_people: ambient_people_mod.Assets,
+    attentive_contacts: attentive_contacts_mod.Assets,
+    quest_contacts: quest_contacts_mod.Assets,
+    quest_contact_bindings: []quest_contacts_module.Binding,
+    mission_terminals: mission_terminals_mod.Assets,
+    mission_terminal_bindings: []mission_terminals_module.Binding,
+    service_counters: service_counters_mod.Assets,
+    service_counter_bindings: []service_counters_module.Binding,
+    messages: world_messages.Assets,
     level_code: [13]u8,
-    platform_sections: @import("platform_sections.zig").Assets,
-    item_aid: @import("item_aid.zig").Assets,
-    guides: @import("rescued_guides.zig").Assets,
-    guide_bindings: []@import("../actors/rescued_guide.zig").Binding,
-    story_stations: @import("story_stations.zig").Assets,
-    story_station_bindings: []@import("../story_stations.zig").Binding,
-    traders: @import("traders.zig").Assets,
-    guards: @import("mobile_guards.zig").Assets,
+    platform_sections: platform_sections_mod.Assets,
+    item_aid: item_aid_mod.Assets,
+    guides: rescued_guides.Assets,
+    guide_bindings: []rescued_guide.Binding,
+    story_stations: story_stations_mod.Assets,
+    story_station_bindings: []story_stations_module.Binding,
+    traders: traders_mod.Assets,
+    guards: mobile_guards.Assets,
     guard_colors: palette.Bank,
-    visibility: @import("visibility.zig").Assets,
-    force_fields: @import("force_fields.zig").Assets,
-    guard_bindings: []@import("../actors/mobile_guard.zig").Binding,
-    barriers: @import("event_barriers.zig").Assets,
-    barrier_bindings: []@import("../event_barriers.zig").Binding,
-    inventory_grants: @import("inventory_grants.zig").Assets,
-    exits: []@import("../level_exits.zig").Definition,
-    triggered_effects: @import("triggered_effects.zig").Assets,
-    item_bindings: []@import("../world_props.zig").ItemBinding,
-    energy_stations: @import("energy_stations.zig").Assets,
-    hazards: @import("electrical_hazards.zig").Assets,
-    detectors: @import("detectors.zig").Assets,
-    ceiling_guns: @import("ceiling_guns.zig").Assets,
-    doors: @import("doors.zig").Assets,
-    lifts: @import("lifts.zig").Assets,
-    lift_passengers: []@import("../lift_passengers.zig").Binding,
-    riding: @import("conrad_lift.zig").Assets,
-    enemy_barriers: @import("enemy_barriers.zig").Assets,
-    rescue_contacts: @import("rescue_contacts.zig").Assets,
-    rescue_contact_bindings: []@import("../rescue_contacts.zig").Binding,
-    gunman_bindings: []@import("../actors/gunman.zig").Binding,
-    character_schedule: []@import("../character_schedule.zig").Task,
-    gunmen: @import("gunmen.zig").Assets,
-    robots: @import("ground_robots.zig").Assets,
-    wounds: @import("conrad_wound.zig").Assets,
+    visibility: visibility_mod.Assets,
+    force_fields: force_fields_mod.Assets,
+    guard_bindings: []mobile_guard.Binding,
+    barriers: event_barriers.Assets,
+    barrier_bindings: []event_barriers_mod.Binding,
+    inventory_grants: inventory_grants_mod.Assets,
+    exits: []level_exits.Definition,
+    triggered_effects: triggered_effects_mod.Assets,
+    item_bindings: []world_props_mod.ItemBinding,
+    energy_stations: energy_stations_mod.Assets,
+    hazards: electrical_hazards.Assets,
+    detectors: detectors_mod.Assets,
+    ceiling_guns: ceiling_guns_mod.Assets,
+    doors: doors_mod.Assets,
+    lifts: lifts_mod.Assets,
+    lift_passengers: []lift_passengers_mod.Binding,
+    riding: conrad_lift.Assets,
+    enemy_barriers: enemy_barriers_mod.Assets,
+    rescue_contacts: rescue_contacts_mod.Assets,
+    rescue_contact_bindings: []rescue_contacts_module.Binding,
+    gunman_bindings: []gunman.Binding,
+    character_schedule: []character_schedule_mod.Task,
+    gunmen: gunmen_mod.Assets,
+    robots: ground_robots.Assets,
+    wounds: conrad_wound.Assets,
     player_contact_width: u8,
-    surfaces: []@import("../surface_reactions.zig").Definition,
-    forest_calls: []@import("../ambience.zig").Call,
+    surfaces: []surface_reactions.Definition,
+    forest_calls: []ambience.Call,
     forest_quiet_steps: u16,
-    casing_definition: @import("../pistol_casing.zig").Definition,
+    casing_definition: pistol_casing.Definition,
     pistol_range: u16,
     pistol_palette: u4,
     pistol_behind_player: bool,
@@ -461,11 +527,11 @@ pub const Pack = struct {
         return self.motions[@backingInt(move)].clip();
     }
 
-    pub fn surfaceClips(self: *const Pack) @import("../surface_reactions.zig").Clips {
+    pub fn surfaceClips(self: *const Pack) surface_reactions.Clips {
         return .{ .resting = self.clip(.surface_rest), .burst = self.clip(.surface_burst) };
     }
 
-    pub fn pistolDefinition(self: *const Pack) @import("../pistol_shot.zig").Definition {
+    pub fn pistolDefinition(self: *const Pack) pistol_shot.Definition {
         return .{
             .ignition = self.clip(.shot_ignition),
             .standing_flash = self.clip(.shot_flash),
@@ -662,7 +728,7 @@ const Resolver = struct {
     allocator: std.mem.Allocator,
     sprites: []const u8,
     offsets: []const u8,
-    extra_art: @import("actor_art.zig").Catalog,
+    extra_art: actor_art.Catalog,
     icons: []const u8,
     compositions: []const u8,
     bindings: []const u8,
@@ -727,7 +793,7 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
 pub fn loadWithDifficulty(
     allocator: std.mem.Allocator,
     source: platform.AssetSource,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
 ) !Pack {
     return loadLevelWithDifficulty(allocator, source, .jungle, difficulty);
 }
@@ -744,13 +810,13 @@ pub fn loadLevelWithDifficulty(
     allocator: std.mem.Allocator,
     source: platform.AssetSource,
     level: level_mod.Id,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
 ) !Pack {
     const values = try floppy_interface.load(allocator, source);
     var level_code: [13]u8 = @splat(0);
     @memcpy(level_code[0..6], &values.password_prefix);
     @memcpy(level_code[6..13], &values.passwords[@backingInt(level)][@backingInt(difficulty)]);
-    var messages = try @import("world_messages.zig").load(allocator, source);
+    var messages = try world_messages.load(allocator, source);
     errdefer messages.deinit();
     return assembleLevel(
         allocator,
@@ -775,9 +841,9 @@ pub fn loadLevelWithDifficulty(
 pub const Interface = struct {
     level_code: [13]u8 = @splat(0),
     /// Ownership transfers to the pack only on successful assembly.
-    messages: ?@import("world_messages.zig").Assets = null,
+    messages: ?world_messages.Assets = null,
     actor_colors: [2]palette.Bank,
-    actor_libraries: []const @import("actor_art.zig").Library,
+    actor_libraries: []const actor_art.Library,
     score_awards: [16]u16,
     text_colors: palette.Bank,
     interface_colors: palette.Bank,
@@ -796,7 +862,7 @@ fn assembleLevel(
     allocator: std.mem.Allocator,
     source: platform.AssetSource,
     level: level_mod.Id,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     interface: Interface,
 ) !Pack {
     const files = level_mod.files(level);
@@ -829,11 +895,11 @@ fn assembleLevel(
     defer names.deinit();
     var sound_bytes = try read(source, "DATA/GLOBAL.FIB", 4 * 1024 * 1024);
     defer sound_bytes.deinit();
-    var sounds = try @import("sound_effects.zig").decode(allocator, sound_bytes.bytes);
+    var sounds = try sound_effects.decode(allocator, sound_bytes.bytes);
     errdefer sounds.deinit();
     var placements = try readLevel(source, files.actors, "PGE", 16384);
     defer placements.deinit();
-    var import_audit: @import("import_audit.zig").Ledger = .{};
+    var import_audit: import_audit_mod.Ledger = .{};
     var placement_table = try placement.Table.init(placements.bytes);
     placement_table.audit = &import_audit;
     const forest_enabled = forest: {
@@ -841,7 +907,7 @@ fn assembleLevel(
         break :forest false;
     };
     const forest_calls = try allocator.alloc(
-        @import("../ambience.zig").Call,
+        ambience.Call,
         if (forest_enabled) 5 else 0,
     );
     errdefer allocator.free(forest_calls);
@@ -901,7 +967,7 @@ fn assembleLevel(
         .ids = std.AutoHashMap(u16, motion.VisualId).init(allocator),
     };
     defer resolver.deinit();
-    var surfaces: std.ArrayList(@import("../surface_reactions.zig").Definition) = .empty;
+    var surfaces: std.ArrayList(surface_reactions.Definition) = .empty;
     errdefer surfaces.deinit(allocator);
     for (0..placement_table.count) |i| {
         const surface = try placement_table.record(@intCast(i));
@@ -948,7 +1014,7 @@ fn assembleLevel(
         motions[i] = try clip.resolve(allocator, &resolver);
         loaded += 1;
     }
-    var wounds = try @import("conrad_wound.zig").load(
+    var wounds = try conrad_wound.load(
         allocator,
         rules.bytes,
         player.rule_group,
@@ -1001,7 +1067,7 @@ fn assembleLevel(
     var connections: std.ArrayList(prop_import.Connection) = .empty;
     defer connections.deinit(allocator);
     try connections.appendSlice(allocator, props.connections);
-    var operated = try @import("operated_controls.zig").load(
+    var operated = try operated_controls.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1013,7 +1079,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer operated.deinit();
-    var detectors = try @import("detectors.zig").load(
+    var detectors = try detectors_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1024,7 +1090,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer detectors.deinit();
-    var energy_stations = try @import("energy_stations.zig").load(
+    var energy_stations = try energy_stations_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1042,7 +1108,7 @@ fn assembleLevel(
     defer allocator.free(credential_sources);
     @memcpy(credential_sources[0..starting.sources.len], starting.sources);
     @memcpy(credential_sources[starting.sources.len..], props.item_sources);
-    var credential_terminals = try @import("credential_terminals.zig").load(
+    var credential_terminals = try credential_terminals_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1054,7 +1120,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer credential_terminals.deinit();
-    var environmental_alarms = try @import("environmental_alarms.zig").load(
+    var environmental_alarms = try environmental_alarms_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1064,7 +1130,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer environmental_alarms.deinit();
-    var timed_items = try @import("timed_items.zig").load(
+    var timed_items = try timed_items_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1077,7 +1143,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer timed_items.deinit();
-    var scripted_transport = try @import("scripted_transport.zig").load(
+    var scripted_transport = try scripted_transport_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1088,7 +1154,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer scripted_transport.deinit();
-    var arrival_triggers = try @import("arrival_triggers.zig").load(
+    var arrival_triggers = try arrival_triggers_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1099,7 +1165,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer arrival_triggers.deinit();
-    var ambient_people = try @import("ambient_people.zig").load(
+    var ambient_people = try ambient_people_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1109,7 +1175,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer ambient_people.deinit();
-    var attentive_contacts = try @import("attentive_contacts.zig").load(
+    var attentive_contacts = try attentive_contacts_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1121,7 +1187,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer attentive_contacts.deinit();
-    var quest_contacts = try @import("quest_contacts.zig").load(
+    var quest_contacts = try quest_contacts_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1134,14 +1200,14 @@ fn assembleLevel(
         &resolver,
     );
     errdefer quest_contacts.deinit();
-    try @import("inventory_grants.zig").outputs(
+    try inventory_grants_mod.outputs(
         allocator,
         placement_table,
         rules.bytes,
         props.item_sources,
         &connections,
     );
-    var mission_terminals = try @import("mission_terminals.zig").load(
+    var mission_terminals = try mission_terminals_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1154,7 +1220,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer mission_terminals.deinit();
-    var service_counters = try @import("service_counters.zig").load(
+    var service_counters = try service_counters_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1166,7 +1232,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer service_counters.deinit();
-    var locks = try @import("key_locks.zig").load(
+    var locks = try key_locks.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1181,7 +1247,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer locks.deinit();
-    var item_aid = try @import("item_aid.zig").load(
+    var item_aid = try item_aid_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1196,7 +1262,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer item_aid.deinit();
-    var guides = try @import("rescued_guides.zig").load(
+    var guides = try rescued_guides.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1209,7 +1275,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer guides.deinit();
-    var story_stations = try @import("story_stations.zig").load(
+    var story_stations = try story_stations_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1221,7 +1287,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer story_stations.deinit();
-    var traders = try @import("traders.zig").load(
+    var traders = try traders_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1234,7 +1300,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer traders.deinit();
-    var lifts = try @import("lifts.zig").load(
+    var lifts = try lifts_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1245,7 +1311,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer lifts.deinit();
-    var escort_followers = try @import("escort_followers.zig").load(
+    var escort_followers = try escort_followers_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1257,7 +1323,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer escort_followers.deinit();
-    const lift_passengers = try @import("lift_passengers.zig").load(
+    const lift_passengers = try lift_passengers_module.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1266,7 +1332,7 @@ fn assembleLevel(
         lifts.source_indices,
     );
     errdefer allocator.free(lift_passengers);
-    var riding = try @import("conrad_lift.zig").load(
+    var riding = try conrad_lift.load(
         allocator,
         rules.bytes,
         player.rule_group,
@@ -1274,7 +1340,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer riding.deinit();
-    var guards = try @import("mobile_guards.zig").load(
+    var guards = try mobile_guards.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1285,7 +1351,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer guards.deinit();
-    var barriers = try @import("event_barriers.zig").load(
+    var barriers = try event_barriers.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1294,7 +1360,7 @@ fn assembleLevel(
         &connections,
     );
     errdefer barriers.deinit();
-    var gunmen = try @import("gunmen.zig").load(
+    var gunmen = try gunmen_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1306,7 +1372,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer gunmen.deinit();
-    var rescue_contacts = try @import("rescue_contacts.zig").load(
+    var rescue_contacts = try rescue_contacts_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1347,7 +1413,7 @@ fn assembleLevel(
     errdefer allocator.free(guard_bindings);
     const barrier_bindings = try barriers.bind(props.connections);
     errdefer allocator.free(barrier_bindings);
-    const item_bindings = try @import("quest_items.zig").bindings(
+    const item_bindings = try quest_items.bindings(
         allocator,
         placement_table,
         rules.bytes,
@@ -1356,7 +1422,7 @@ fn assembleLevel(
         props.connections,
     );
     errdefer allocator.free(item_bindings);
-    var inventory_grants = try @import("inventory_grants.zig").load(
+    var inventory_grants = try inventory_grants_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1366,7 +1432,7 @@ fn assembleLevel(
         props.connections,
     );
     errdefer inventory_grants.deinit();
-    var triggered_effects = try @import("triggered_effects.zig").load(
+    var triggered_effects = try triggered_effects_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1377,7 +1443,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer triggered_effects.deinit();
-    const exits = try @import("level_exits.zig").load(
+    const exits = try level_exits_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1386,7 +1452,7 @@ fn assembleLevel(
         difficulty,
     );
     errdefer allocator.free(exits);
-    var hazards = try @import("electrical_hazards.zig").load(
+    var hazards = try electrical_hazards.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1397,7 +1463,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer hazards.deinit();
-    var ceiling_guns = try @import("ceiling_guns.zig").load(
+    var ceiling_guns = try ceiling_guns_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1408,7 +1474,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer ceiling_guns.deinit();
-    var platform_sections = try @import("platform_sections.zig").load(
+    var platform_sections = try platform_sections_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1419,7 +1485,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer platform_sections.deinit();
-    var doors = try @import("doors.zig").load(
+    var doors = try doors_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1431,7 +1497,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer doors.deinit();
-    var robots = try @import("ground_robots.zig").load(
+    var robots = try ground_robots.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1441,7 +1507,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer robots.deinit();
-    var enemy_barriers = try @import("enemy_barriers.zig").load(
+    var enemy_barriers = try enemy_barriers_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1452,7 +1518,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer enemy_barriers.deinit();
-    var force_fields = try @import("force_fields.zig").load(
+    var force_fields = try force_fields_mod.load(
         allocator,
         placement_table,
         rules.bytes,
@@ -1461,7 +1527,7 @@ fn assembleLevel(
         &resolver,
     );
     errdefer force_fields.deinit();
-    const character_schedule = try @import("character_schedule.zig").build(
+    const character_schedule = try character_schedule_module.build(
         allocator,
         .{
             .gunmen = gunmen,
@@ -1475,7 +1541,7 @@ fn assembleLevel(
         @intCast(gun.parameters[0]),
     );
     errdefer allocator.free(character_schedule);
-    var visibility = try @import("visibility.zig").load(
+    var visibility = try visibility_mod.load(
         allocator,
         placement_table,
         &room_ids,

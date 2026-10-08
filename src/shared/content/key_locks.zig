@@ -8,6 +8,21 @@ const animation = @import("animation.zig");
 const geometry = @import("../geometry.zig");
 const motion = @import("../motion.zig");
 const props = @import("first_world_props.zig");
+const cartridges = @import("cartridges.zig");
+const contacts = @import("../contacts.zig");
+const credential_cards = @import("credential_cards.zig");
+const credential_terminals = @import("credential_terminals.zig");
+const equipment = @import("../equipment.zig");
+const key_pickups = @import("key_pickups.zig");
+const mission_terminals = @import("mission_terminals.zig");
+const operated_controls = @import("operated_controls.zig");
+const quest_contacts_mod = @import("quest_contacts.zig");
+const quest_items = @import("quest_items.zig");
+const service_counters = @import("service_counters.zig");
+const settings = @import("../settings.zig");
+const string_table = @import("string_table.zig");
+const world_messages = @import("../world_messages.zig");
+const world_props = @import("../world_props.zig");
 pub const QuestReceiver = struct { receiver: usize, contact: usize };
 pub const Assets = struct {
     allocator: std.mem.Allocator,
@@ -39,7 +54,7 @@ pub const Spec = struct {
     forward: i16,
     down: i16,
     second: ?struct { parameter: u2, signal: i16 } = null,
-    notice: ?@import("../world_messages.zig").Id = null,
+    notice: ?world_messages.Id = null,
     repaired_operation: ?struct { parameter: u2, signal: i16, sound: motion.SoundId } = null,
 };
 fn op(value: rules.Operation, code: u8, argument: i16) bool {
@@ -187,11 +202,11 @@ pub fn load(
     animations: []const u8,
     names: []const u8,
     room_ids: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     connections: *std.ArrayList(props.Connection),
     item_sources: []const u16,
-    quest_contacts: @import("quest_contacts.zig").Assets,
-    first_item: @import("../equipment.zig").ItemHandle,
+    quest_contacts: quest_contacts_mod.Assets,
+    first_item: equipment.ItemHandle,
     resolver: anytype,
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
@@ -226,7 +241,7 @@ pub fn load(
         const target = record.parameters[spec.target_parameter];
         if (target < 0 or target >= table.count) return error.InvalidLockConnection;
         const circuits = try allocator.alloc(
-            @import("../world_props.zig").CircuitId,
+            world_props.CircuitId,
             if (spec.second != null) 2 else 1,
         );
         errdefer allocator.free(circuits);
@@ -280,7 +295,7 @@ pub fn load(
             destination.* = clip.clip();
         }
         try sources.append(allocator, @intCast(i));
-        const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
+        const label = try string_table.copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
         table.register(@intCast(i), .key_locks);
         try definitions.append(
@@ -320,18 +335,18 @@ pub fn load(
         if (record.kind != 5 or record.minimum_difficulty > @backingInt(difficulty)) continue;
         const quest_index = std.mem.indexOfScalar(u16, quest_contacts.sources, @intCast(i));
         if (quest_index == null and record.room >= room_ids.len) continue;
-        const footprint: @import("../contacts.zig").Footprint = if (quest_index) |index| quest_contacts.definitions[index].footprint else .{
+        const footprint: contacts.Footprint = if (quest_index) |index| quest_contacts.definitions[index].footprint else .{
             .room = room_ids[record.room],
             .position = record.position,
             .width = record.collision_width,
         };
         const group = try rules.group(rule_bytes, record.rule_group);
         const lock = std.mem.indexOfScalar(u16, sources.items, @intCast(i));
-        const manual = @import("operated_controls.zig").recognize(group);
-        const service = @import("service_counters.zig").recognize(group);
-        const mission = @import("mission_terminals.zig").recognize(group);
-        const quest = @import("quest_contacts.zig").recognize(group);
-        const terminal = @import("credential_terminals.zig").recognize(group);
+        const manual = operated_controls.recognize(group);
+        const service = service_counters.recognize(group);
+        const mission = mission_terminals.recognize(group);
+        const quest = quest_contacts_mod.recognize(group);
+        const terminal = credential_terminals.recognize(group);
         const external_signal: ?i16 = if (service) |value| value.signal else if (mission) |value| value.signals[1] else if (quest) |value| value.receive else if (terminal) |value| value.signal else null;
         if (lock == null and
             external_signal == null and
@@ -354,7 +369,7 @@ pub fn load(
             const item = try table.record(source);
             if (item.parameters[0] != record.kind) continue;
             const item_rules = try rules.group(rule_bytes, item.rule_group);
-            const signal = if (@import("key_pickups.zig").recognize(item_rules)) |key| key.signal else if (@import("cartridges.zig").recognize(item_rules)) |cartridge| cartridge.signal else if (@import("quest_items.zig").card(item_rules)) |card| card.signal else if (@import("credential_cards.zig").starting(item_rules)) |card| card.signal else if (@import("credential_cards.zig").permit(item_rules)) |card| card.signal else if (@import("credential_cards.zig").parcel(item_rules)) |parcel| parcel.signal else if (@import("credential_cards.zig").papers(item_rules)) |papers| papers.signal else if (@import("credential_cards.zig").terminal(item_rules)) |card| card.signal else if (@import("credential_cards.zig").issued(item_rules)) |card| card.signal else continue;
+            const signal = if (key_pickups.recognize(item_rules)) |key| key.signal else if (cartridges.recognize(item_rules)) |cartridge| cartridge.signal else if (quest_items.card(item_rules)) |card| card.signal else if (credential_cards.starting(item_rules)) |card| card.signal else if (credential_cards.permit(item_rules)) |card| card.signal else if (credential_cards.parcel(item_rules)) |parcel| parcel.signal else if (credential_cards.papers(item_rules)) |papers| papers.signal else if (credential_cards.terminal(item_rules)) |card| card.signal else if (credential_cards.issued(item_rules)) |card| card.signal else continue;
             if (lock == null and signal == 30) return error.UnsupportedItemOperatedControl;
             const circuit = if (external_signal != null and
                 signal == external_signal.?) try props.internConnection(

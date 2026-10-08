@@ -3,7 +3,9 @@
 const motion = @import("../motion.zig");
 const combat = @import("../combat.zig");
 const controls = @import("controls.zig");
-const shift = @import("conrad_roll.zig").shiftForward;
+const shift = conrad_roll.shiftForward;
+const conrad_roll = @import("conrad_roll.zig");
+const std = @import("std");
 
 pub const Phase = enum {
     front_impact,
@@ -83,7 +85,7 @@ pub const Policy = struct {
     pub fn vulnerability(self: Policy) combat.Vulnerability {
         var result: combat.Vulnerability = .{};
         for (
-            @import("std").enums.values(combat.Impact),
+            std.enums.values(combat.Impact),
             self.responses,
         ) |impact, response| if (response.normal != null or response.obstructed != null) {
             result.set(impact);

@@ -5,7 +5,10 @@ const geometry = @import("geometry.zig");
 const motion = @import("motion.zig");
 const contacts = @import("contacts.zig");
 const equipment = @import("equipment.zig");
-pub const Movie = @import("story_cue.zig").Cue;
+pub const Movie = story_cue.Cue;
+const activation = @import("activation.zig");
+const story_cue = @import("story_cue.zig");
+const thrown_item = @import("thrown_item.zig");
 pub const CircuitId = enum(u16) { _ };
 pub const Layer = enum { behind_player, in_front_of_player };
 pub const Response = union(enum) { reveal, redeem: Movie };
@@ -27,7 +30,7 @@ pub const Definition = struct {
             item: equipment.ItemHandle,
             idle: motion.Clip,
             pickup_movie: ?Movie = null,
-            throw_motion: ?@import("thrown_item.zig").Definition = null,
+            throw_motion: ?thrown_item.Definition = null,
             quantity_grant: ?struct { target: equipment.ItemHandle, amount: i16 } = null,
             initially_active: bool = true,
             wake_nearby: bool = false,
@@ -47,7 +50,7 @@ pub const Object = struct {
     pose: motion.Pose,
     room: geometry.RoomId,
     contact: contacts.Footprint,
-    flight: ?@import("thrown_item.zig").State = null,
+    flight: ?thrown_item.State = null,
     lost: bool = false,
     present: bool = true,
     playback: motion.Playback = .{},
@@ -145,7 +148,7 @@ pub const World = struct {
             if (definition.behavior == .collectible) {
                 const item = definition.behavior.collectible;
                 if (!object.contact_present) object.active = false else if (item.wake_nearby) {
-                    const near = try @import("activation.zig").around(
+                    const near = try activation.around(
                         map,
                         player.room,
                         object.room,

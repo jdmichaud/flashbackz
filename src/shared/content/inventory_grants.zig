@@ -2,30 +2,37 @@
 const std = @import("std");
 const rules = @import("rule_table.zig");
 const runtime = @import("../inventory_grants.zig");
+const animation = @import("animation.zig");
+const credential_cards = @import("credential_cards.zig");
+const equipment = @import("../equipment.zig");
+const first_world_props = @import("first_world_props.zig");
+const placement = @import("placement.zig");
+const story_cue = @import("../story_cue.zig");
+const world_props = @import("../world_props.zig");
 pub const Spec = struct {
     idle: u16,
     signal: i16,
-    kind: @import("../equipment.zig").Kind,
+    kind: equipment.Kind,
     object_kind: u8,
     starting: ?u16 = null,
-    movie: ?@import("../story_cue.zig").Cue,
+    movie: ?story_cue.Cue,
 };
 pub fn recognize(group: rules.Group) ?Spec {
-    if (@import("credential_cards.zig").issued(group)) |card| return .{
+    if (credential_cards.issued(group)) |card| return .{
         .idle = card.idle,
         .signal = card.grant_signal,
         .kind = .photo,
         .object_kind = 3,
         .movie = null,
     };
-    if (@import("credential_cards.zig").terminal(group)) |card| return .{
+    if (credential_cards.terminal(group)) |card| return .{
         .idle = card.idle,
         .signal = card.grant_signal,
         .kind = .terminal_card,
         .object_kind = 3,
         .movie = null,
     };
-    if (@import("credential_cards.zig").papers(group)) |p| return .{
+    if (credential_cards.papers(group)) |p| return .{
         .idle = p.idle,
         .starting = p.starting,
         .signal = p.grant_signal,
@@ -33,14 +40,14 @@ pub fn recognize(group: rules.Group) ?Spec {
         .object_kind = 3,
         .movie = .papers_received,
     };
-    if (@import("credential_cards.zig").parcel(group)) |p| return .{
+    if (credential_cards.parcel(group)) |p| return .{
         .idle = p.idle,
         .signal = p.grant_signal,
         .kind = .parcel,
         .object_kind = 3,
         .movie = .parcel_received,
     };
-    if (@import("credential_cards.zig").permit(group) != null) return .{
+    if (credential_cards.permit(group) != null) return .{
         .idle = group.at(0).source,
         .signal = group.at(0).conditions[0].argument,
         .kind = .work_permit,
@@ -107,25 +114,25 @@ pub const Assets = struct {
 /// Register delayed grant outputs before the level freezes its complete circuit catalog.
 pub fn outputs(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     bytes: []const u8,
     sources: []const u16,
-    connections: *std.ArrayList(@import("first_world_props.zig").Connection),
+    connections: *std.ArrayList(first_world_props.Connection),
 ) !void {
     for (sources) |source| {
         const record = try table.record(source);
         const group = try rules.group(bytes, record.rule_group);
-        if (@import("credential_cards.zig").terminal(group)) |card| {
+        if (credential_cards.terminal(group)) |card| {
             const target = record.parameters[card.output_parameter];
             if (target < 0 or target >= table.count) return error.InvalidGrantOutput;
-            _ = try @import("first_world_props.zig").internConnection(
+            _ = try first_world_props.internConnection(
                 allocator,
                 connections,
                 source,
                 @intCast(target),
                 card.granted,
             );
-            _ = try @import("first_world_props.zig").internConnection(
+            _ = try first_world_props.internConnection(
                 allocator,
                 connections,
                 source,
@@ -133,10 +140,10 @@ pub fn outputs(
                 card.consumed,
             );
         }
-        const spec = @import("credential_cards.zig").parcel(group) orelse continue;
+        const spec = credential_cards.parcel(group) orelse continue;
         const target = record.parameters[spec.followup_parameter];
         if (target < 0 or target >= table.count) return error.InvalidGrantFollowup;
-        _ = try @import("first_world_props.zig").internConnection(
+        _ = try first_world_props.internConnection(
             allocator,
             connections,
             source,
@@ -147,12 +154,12 @@ pub fn outputs(
 }
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     rule_bytes: []const u8,
     animations: []const u8,
     sources: []const u16,
-    first_item: @import("../equipment.zig").ItemHandle,
-    routes: []const @import("first_world_props.zig").Connection,
+    first_item: equipment.ItemHandle,
+    routes: []const first_world_props.Connection,
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
     errdefer definitions.deinit(allocator);
@@ -163,11 +170,11 @@ pub fn load(
         const spec = recognize(try rules.group(rule_bytes, record.rule_group)) orelse continue;
         const target = definitions.items.len;
         var followup: ?runtime.Followup = null;
-        if (@import("credential_cards.zig").parcel(try rules.group(
+        if (credential_cards.parcel(try rules.group(
             rule_bytes,
             record.rule_group,
         ))) |parcel| {
-            var clip = try @import("animation.zig").decode(allocator, animations, parcel.received);
+            var clip = try animation.decode(allocator, animations, parcel.received);
             defer clip.deinit();
             const recipient = record.parameters[parcel.followup_parameter];
             const circuit = for (routes) |route| {
@@ -177,9 +184,9 @@ pub fn load(
             } else return error.MissingGrantFollowup;
             followup = .{ .steps = @intCast(clip.frames.len), .circuit = circuit };
         }
-        var on_grant: ?@import("../world_props.zig").CircuitId = null;
-        var on_consumed: ?@import("../world_props.zig").CircuitId = null;
-        if (@import("credential_cards.zig").terminal(try rules.group(
+        var on_grant: ?world_props.CircuitId = null;
+        var on_consumed: ?world_props.CircuitId = null;
+        if (credential_cards.terminal(try rules.group(
             rule_bytes,
             record.rule_group,
         ))) |card| {

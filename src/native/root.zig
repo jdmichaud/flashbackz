@@ -10,7 +10,8 @@ pub const contract = @import("contract.zig");
 pub const DirectoryAssetSource = directory.DirectoryAssetSource;
 pub const DirectoryStorage = storage.DirectoryStorage;
 pub const Providers = cli.Providers;
+const std = @import("std");
 
 test {
-    @import("std").testing.refAllDecls(@This());
+    std.testing.refAllDecls(@This());
 }

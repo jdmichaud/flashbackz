@@ -3,6 +3,11 @@ const std = @import("std");
 const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
 const runtime = @import("../ambient_people.zig");
+const geometry = @import("../geometry.zig");
+const motion = @import("../motion.zig");
+const placement = @import("placement.zig");
+const quest_contacts = @import("quest_contacts.zig");
+const settings = @import("../settings.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -27,7 +32,7 @@ fn resolve(
     animations: []const u8,
     state: u16,
     resolver: anytype,
-) !@import("../motion.zig").Clip {
+) !motion.Clip {
     var source = try animation.decode(allocator, animations, state);
     defer source.deinit();
     var clip = try source.resolve(allocator, resolver);
@@ -36,7 +41,7 @@ fn resolve(
     return clip.clip();
 }
 fn validate(group: rules.Group) bool {
-    if (group.count() != 70 or @import("quest_contacts.zig").recognize(group) == null) return false;
+    if (group.count() != 70 or quest_contacts.recognize(group) == null) return false;
     const sources = [_]usize{
         26,
         26,
@@ -158,11 +163,11 @@ fn validate(group: rules.Group) bool {
 }
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     bytes: []const u8,
     animations: []const u8,
-    rooms: *const [64]@import("../geometry.zig").RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: settings.Difficulty,
     resolver: anytype,
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;

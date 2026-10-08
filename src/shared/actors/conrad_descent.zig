@@ -3,7 +3,8 @@
 const std = @import("std");
 const motion = @import("../motion.zig");
 const controls = @import("controls.zig");
-const shift = @import("conrad_roll.zig").shiftForward;
+const shift = conrad_roll.shiftForward;
+const conrad_roll = @import("conrad_roll.zig");
 pub const Phase = enum { running, reversing, unbalanced, short_jump, gliding, vertical };
 pub const Clips = struct {
     running: motion.Clip,

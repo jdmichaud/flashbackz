@@ -3,7 +3,9 @@
 const std = @import("std");
 const motion = @import("motion.zig");
 const equipment = @import("equipment.zig");
-const Circuit = @import("world_props.zig").CircuitId;
+const Circuit = world_props.CircuitId;
+const story_cue = @import("story_cue.zig");
+const world_props = @import("world_props.zig");
 pub const Phase = enum { dormant, counting, finishing, removed };
 pub const Definition = struct {
     item: equipment.ItemHandle,
@@ -11,7 +13,7 @@ pub const Definition = struct {
     started: Circuit,
     completed: Circuit,
     cleanup: Circuit,
-    failure: @import("story_cue.zig").Cue,
+    failure: story_cue.Cue,
 };
 pub const Action = enum { start, complete };
 pub const Binding = struct { circuit: Circuit, target: usize, action: Action, next_step: bool };
@@ -37,7 +39,7 @@ pub const World = struct {
     instances: []Instance,
     pulses: []Circuit,
     pulse_count: usize = 0,
-    failure: ?@import("story_cue.zig").Cue = null,
+    failure: ?story_cue.Cue = null,
     pub fn init(allocator: std.mem.Allocator, count: usize) !World {
         const instances = try allocator.alloc(Instance, count);
         errdefer allocator.free(instances);

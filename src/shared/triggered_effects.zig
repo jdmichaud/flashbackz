@@ -2,6 +2,8 @@
 const std = @import("std");
 const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
+const activation = @import("activation.zig");
+const world_props = @import("world_props.zig");
 pub const Definition = struct {
     room: geometry.RoomId,
     position: motion.Position,
@@ -16,7 +18,7 @@ pub const Definition = struct {
     accepts_signals: bool,
 };
 pub const Binding = struct {
-    circuit: @import("world_props.zig").CircuitId,
+    circuit: world_props.CircuitId,
     target: usize,
     next_step: bool,
 };
@@ -69,7 +71,7 @@ pub const World = struct {
     pub fn route(
         self: *World,
         bindings: []const Binding,
-        pulses: []const @import("world_props.zig").CircuitId,
+        pulses: []const world_props.CircuitId,
     ) void {
         for (pulses) |pulse| for (bindings) |binding| {
             if (binding.circuit != pulse) continue;
@@ -83,7 +85,7 @@ pub const World = struct {
         player_room: geometry.RoomId,
     ) !void {
         for (self.instances, definitions) |*instance, definition| {
-            const near = try @import("activation.zig").around(
+            const near = try activation.around(
                 map,
                 player_room,
                 instance.room,

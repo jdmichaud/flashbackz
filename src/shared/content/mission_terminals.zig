@@ -4,7 +4,15 @@ const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
 const runtime = @import("../mission_terminals.zig");
 const routes = @import("first_world_props.zig");
-const Cue = @import("../story_cue.zig").Cue;
+const Cue = story_cue.Cue;
+const credit_wallet = @import("credit_wallet.zig");
+const equipment = @import("../equipment.zig");
+const geometry = @import("../geometry.zig");
+const motion = @import("../motion.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
+const story_cue = @import("../story_cue.zig");
+const string_table = @import("string_table.zig");
 pub const Spec = struct {
     states: [5]u16,
     signals: [3]i16,
@@ -142,14 +150,14 @@ pub const Assets = struct {
 };
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     bytes: []const u8,
     animations: []const u8,
     names: []const u8,
-    rooms: *const [64]@import("../geometry.zig").RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: settings.Difficulty,
     connections: *std.ArrayList(routes.Connection),
-    supplies: []const @import("../equipment.zig").Definition,
+    supplies: []const equipment.Definition,
     resolver: anytype,
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
@@ -175,7 +183,7 @@ pub fn load(
         const initial: runtime.Phase = for (spec.states, 0..) |state, phase| {
             if (state == record.initial_state) break @fromBackingInt(@as(u3, @intCast(phase)));
         } else return error.UnsupportedMissionTerminalStart;
-        var resolved: [5]@import("../motion.zig").Clip = undefined;
+        var resolved: [5]motion.Clip = undefined;
         for (spec.states, &resolved) |state, *destination| {
             var source = try animation.decode(allocator, animations, state);
             defer source.deinit();
@@ -191,11 +199,11 @@ pub fn load(
         const purse_source = record.parameters[spec.purse_parameter];
         if (purse_source < 0 or purse_source >= table.count) return error.InvalidMissionPurse;
         const wallet = try table.record(@intCast(purse_source));
-        if (@import("credit_wallet.zig").signal(try rules.group(
+        if (credit_wallet.signal(try rules.group(
             bytes,
             wallet.rule_group,
         )) == null) return error.UnsupportedMissionPurse;
-        const purse: @import("../equipment.zig").ItemHandle = for (supplies, 0..) |item, i| {
+        const purse: equipment.ItemHandle = for (supplies, 0..) |item, i| {
             if (item.kind == .credits) break .{ .index = @intCast(i), .generation = 1 };
         } else return error.MissingMissionPurse;
         const assignment = record.parameters[spec.assignment_parameter];
@@ -221,7 +229,7 @@ pub fn load(
         );
         try sources.append(allocator, @intCast(index));
         try signals.append(allocator, spec.signals);
-        const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
+        const label = try string_table.copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
         try definitions.append(
             allocator,

@@ -2,6 +2,7 @@
 //! probes choose a confined fall, ground recovery, or a fall off the supporting platform.
 const motion = @import("../motion.zig");
 const controls = @import("controls.zig");
+const std = @import("std");
 
 pub const Landing = enum { confined, staggered, prone };
 pub const Phase = union(enum) {
@@ -108,7 +109,6 @@ pub const State = struct {
 };
 
 test "impact retreats in physical facing once, then preserves the selected recovery" {
-    const std = @import("std");
     const held = [_]motion.Step{.hold};
     const clip: motion.Clip = .{ .steps = &held };
     const recovery: Recovery = .{ .settle = clip, .rest = clip };

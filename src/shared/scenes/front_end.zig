@@ -8,7 +8,10 @@ const text = @import("../render/text.zig");
 const menu_mod = @import("menu.zig");
 const soundtrack = @import("../audio/soundtrack.zig");
 const vector_player = @import("vector_player.zig");
-pub const Difficulty = @import("../settings.zig").Difficulty;
+pub const Difficulty = settings.Difficulty;
+const content_level = @import("../content/level.zig");
+const level_codes = @import("../content/level_codes.zig");
+const settings = @import("../settings.zig");
 pub const Stage = enum {
     branding,
     introduction,
@@ -38,7 +41,7 @@ pub const Scene = struct {
     stage: Stage = .menu,
     view: View = .main,
     difficulty: Difficulty = .normal,
-    selected_level: @import("../content/level.zig").Id = .jungle,
+    selected_level: content_level.Id = .jungle,
     pending_difficulty: Difficulty = .normal,
     activation_key: ?platform.Key = null,
     password: [6]u8 = @splat(0),
@@ -217,7 +220,7 @@ pub const Scene = struct {
 
     pub fn startLevel(
         self: *Scene,
-        level: @import("../content/level.zig").Id,
+        level: content_level.Id,
         key: ?platform.Key,
     ) !void {
         self.selected_level = level;
@@ -315,7 +318,7 @@ pub const Scene = struct {
     }
 
     fn submitPassword(self: *Scene, key: platform.Key) !void {
-        const destination = try @import("../content/level_codes.zig").lookup(
+        const destination = try level_codes.lookup(
             self.allocator,
             self.source,
             self.password[0..self.password_length],

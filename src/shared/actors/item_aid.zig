@@ -6,7 +6,10 @@ const geometry = @import("../geometry.zig");
 const contacts = @import("../contacts.zig");
 const equipment = @import("../equipment.zig");
 const messages = @import("../world_messages.zig");
-const Circuit = @import("../world_props.zig").CircuitId;
+const Circuit = world_props.CircuitId;
+const activation = @import("../activation.zig");
+const perception = @import("perception.zig");
+const world_props = @import("../world_props.zig");
 pub const Phase = enum {
     idle,
     calling,
@@ -115,7 +118,7 @@ pub const World = struct {
             actor.contact.room = actor.room;
             actor.contact.position = actor.pose.position;
             if (actor.phase == .gone) continue;
-            const near = try @import("../activation.zig").around(
+            const near = try activation.around(
                 map,
                 player.room,
                 actor.room,
@@ -173,7 +176,7 @@ pub const World = struct {
         const layout: contacts.Layout = .{};
         for (self.actors, definitions, 0..) |*actor, definition, index| {
             if (actor.phase == .gone) continue;
-            const near = try @import("../activation.zig").around(
+            const near = try activation.around(
                 map,
                 player.room,
                 actor.room,
@@ -191,7 +194,7 @@ pub const World = struct {
                     actor.ready;
             if (interrupt) actor.playback.completeDisplacement(clip, &actor.pose);
             if (actor.playback.exhausted(clip)) {
-                const seen = if (try @import("perception.zig").scanObjects(
+                const seen = if (try perception.scanObjects(
                     map,
                     player.room,
                     .{ .room = actor.room, .pose = actor.pose },

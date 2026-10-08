@@ -4,6 +4,10 @@ const runtime = @import("../triggered_effects.zig");
 const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
 const geometry = @import("../geometry.zig");
+const first_world_props = @import("first_world_props.zig");
+const motion = @import("../motion.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -20,7 +24,7 @@ const Spec = struct {
     waiting: u16,
     running: u16,
     signal: i16,
-    delta: @import("../motion.zig").Position,
+    delta: motion.Position,
 };
 fn recognize(group: rules.Group) ?Spec {
     if (group.count() != 4) return null;
@@ -68,12 +72,12 @@ fn recognize(group: rules.Group) ?Spec {
 }
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     rule_bytes: []const u8,
     animations: []const u8,
     rooms: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
-    connections: []const @import("first_world_props.zig").Connection,
+    difficulty: settings.Difficulty,
+    connections: []const first_world_props.Connection,
     resolver: anytype,
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
@@ -92,7 +96,7 @@ pub fn load(
             record.kind != 0) continue;
         const spec = recognize(try rules.group(rule_bytes, record.rule_group)) orelse continue;
         if (record.initial_state != spec.waiting) return error.UnsupportedEffectStart;
-        var resolved: [2]@import("../motion.zig").Clip = undefined;
+        var resolved: [2]motion.Clip = undefined;
         for ([_]u16{ spec.waiting, spec.running }, &resolved) |state, *destination| {
             var source = try animation.decode(allocator, animations, state);
             defer source.deinit();

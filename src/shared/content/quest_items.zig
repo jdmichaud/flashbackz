@@ -2,6 +2,9 @@
 //! card appears at its authored location and remains reusable after ordinary lock use.
 const std = @import("std");
 const rules = @import("rule_table.zig");
+const first_world_props = @import("first_world_props.zig");
+const placement = @import("placement.zig");
+const world_props = @import("../world_props.zig");
 pub const Teleporter = struct { idle: u16, carried: u16, signal: i16, acknowledgement: i16 };
 pub const Card = struct {
     hidden: u16,
@@ -149,13 +152,13 @@ pub fn card(group: rules.Group) ?Card {
 }
 pub fn bindings(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     rule_bytes: []const u8,
-    objects: @import("first_world_props.zig").Assets,
+    objects: first_world_props.Assets,
     first_item: u16,
-    routes: []const @import("first_world_props.zig").Connection,
-) ![]@import("../world_props.zig").ItemBinding {
-    var result: std.ArrayList(@import("../world_props.zig").ItemBinding) = .empty;
+    routes: []const first_world_props.Connection,
+) ![]world_props.ItemBinding {
+    var result: std.ArrayList(world_props.ItemBinding) = .empty;
     errdefer result.deinit(allocator);
     for (objects.definitions, 0..) |definition, index| {
         if (definition.behavior != .collectible) continue;

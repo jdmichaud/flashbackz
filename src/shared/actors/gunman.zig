@@ -6,9 +6,13 @@ const geometry = @import("../geometry.zig");
 const perception = @import("perception.zig");
 const combat = @import("../combat.zig");
 const defeat_mod = @import("gunman_defeat.zig");
-const Circuit = @import("../world_props.zig").CircuitId;
+const Circuit = world_props.CircuitId;
+const conrad_environment = @import("conrad_environment.zig");
+const contacts = @import("../contacts.zig");
+const visibility_mod = @import("../visibility.zig");
+const world_props = @import("../world_props.zig");
 pub const Binding = struct { circuit: Circuit, actor: usize, next_step: bool };
-const Environment = @import("conrad_environment.zig").Environment;
+const Environment = conrad_environment.Environment;
 
 pub const Action = enum {
     relaxed,
@@ -137,7 +141,7 @@ pub const Actor = struct {
     shot: ?combat.Height = null,
     defeat: ?defeat_mod.State = null,
     pending_hits: combat.ImpactSet = .{},
-    contact: @import("../contacts.zig").Footprint,
+    contact: contacts.Footprint,
     lost: bool = false,
 
     pub fn vulnerability(self: Actor, profile: Profile) combat.Vulnerability {
@@ -455,11 +459,11 @@ pub const World = struct {
         definitions: []const Definition,
         profiles: []const Profile,
         map: geometry.Map,
-        player: @import("../contacts.zig").Footprint,
-        distractions: []const @import("../contacts.zig").Footprint,
+        player: contacts.Footprint,
+        distractions: []const contacts.Footprint,
         targets: []combat.Target,
-        visibility: *@import("../visibility.zig").World,
-        visibility_entities: []const @import("../visibility.zig").Entity,
+        visibility: *visibility_mod.World,
+        visibility_entities: []const visibility_mod.Entity,
         random: anytype,
     ) !void {
         self.score_requested = 0;
@@ -483,11 +487,11 @@ pub const World = struct {
         definitions: []const Definition,
         profiles: []const Profile,
         map: geometry.Map,
-        player: @import("../contacts.zig").Footprint,
-        distractions: []const @import("../contacts.zig").Footprint,
+        player: contacts.Footprint,
+        distractions: []const contacts.Footprint,
         targets: []combat.Target,
-        visibility: *@import("../visibility.zig").World,
-        visibility_entities: []const @import("../visibility.zig").Entity,
+        visibility: *visibility_mod.World,
+        visibility_entities: []const visibility_mod.Entity,
         random: anytype,
     ) !void {
         return self.advanceRange(
@@ -509,11 +513,11 @@ pub const World = struct {
         definitions: []const Definition,
         profiles: []const Profile,
         map: geometry.Map,
-        player: @import("../contacts.zig").Footprint,
-        distractions: []const @import("../contacts.zig").Footprint,
+        player: contacts.Footprint,
+        distractions: []const contacts.Footprint,
         targets: []combat.Target,
-        visibility: *@import("../visibility.zig").World,
-        visibility_entities: []const @import("../visibility.zig").Entity,
+        visibility: *visibility_mod.World,
+        visibility_entities: []const visibility_mod.Entity,
         random: anytype,
         range_start: usize,
         range_end: usize,

@@ -2,6 +2,8 @@
 const std = @import("std");
 const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
+const activation = @import("activation.zig");
+const random_mod = @import("random.zig");
 pub const Posture = enum { resting, leaning, watching };
 pub const Part = enum { beginning, waiting, ending };
 pub const Activity = union(enum) {
@@ -93,11 +95,11 @@ pub const World = struct {
         profiles: []const Profile,
         map: geometry.Map,
         player_room: geometry.RoomId,
-        random: *@import("random.zig").Stream,
+        random: *random_mod.Stream,
     ) !void {
         for (self.actors, definitions) |*actor, definition| {
             actor.sound = null;
-            const near = try @import("activation.zig").around(
+            const near = try activation.around(
                 map,
                 player_room,
                 actor.room,

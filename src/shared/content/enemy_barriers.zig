@@ -3,6 +3,11 @@ const std = @import("std");
 const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
 const runtime = @import("../enemy_barriers.zig");
+const first_world_props = @import("first_world_props.zig");
+const gunmen_mod = @import("gunmen.zig");
+const motion = @import("../motion.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -59,12 +64,12 @@ fn recognize(group: rules.Group) bool {
 }
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     bytes: []const u8,
     animations: []const u8,
-    difficulty: @import("../settings.zig").Difficulty,
-    connections: []const @import("first_world_props.zig").Connection,
-    gunmen: @import("gunmen.zig").Assets,
+    difficulty: settings.Difficulty,
+    connections: []const first_world_props.Connection,
+    gunmen: gunmen_mod.Assets,
     resolver: anytype,
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
@@ -87,7 +92,7 @@ pub fn load(
             record.room < 64 or
             record.parameters[0] != 64 or
             record.flags & 1 == 0) return error.UnsupportedEnemyBarrierStart;
-        var resolved: [4]@import("../motion.zig").Clip = undefined;
+        var resolved: [4]motion.Clip = undefined;
         for ([_]usize{ 0, 2, 5, 6 }, &resolved) |row, *destination| {
             var source = try animation.decode(allocator, animations, group.at(row).source);
             defer source.deinit();

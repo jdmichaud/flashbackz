@@ -3,14 +3,16 @@
 const std = @import("std");
 const platform = @import("../platform.zig");
 const palette = @import("palette.zig");
+const actor_art = @import("actor_art.zig");
+const demo = @import("demo.zig");
 pub const Values = struct {
     passwords: [7][3][7]u8,
     password_prefix: [6]u8,
     continue_labels: [5][48]u8,
-    demos: [3]@import("demo.zig").Descriptor,
+    demos: [3]demo.Descriptor,
     actor_colors: [2]palette.Bank,
     score_awards: [16]u16,
-    actor_libraries: [4]@import("actor_art.zig").Library,
+    actor_libraries: [4]actor_art.Library,
     text_colors: palette.Bank,
     interface_colors: palette.Bank,
     level_label: [6]u8,
@@ -95,7 +97,7 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
         .g = palette.expandComponent(data[0xf92 + i * 3]),
         .b = palette.expandComponent(data[0xf93 + i * 3]),
     };
-    var demos: [3]@import("demo.zig").Descriptor = undefined;
+    var demos: [3]demo.Descriptor = undefined;
     for (&demos, 0..) |*descriptor, index| {
         const name = word(data, 0xfe0 + index * 4);
         const source_level = word(data, 0xfe2 + index * 4);
@@ -132,7 +134,7 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
     }
     var score_awards: [16]u16 = undefined;
     for (&score_awards, 0..) |*score, i| score.* = word(data, 0xd3b + i * 2);
-    var actor_libraries: [4]@import("actor_art.zig").Library = undefined;
+    var actor_libraries: [4]actor_art.Library = undefined;
     for (&actor_libraries, 0..) |*library, i| {
         const name = word(data, 0xe42 + i * 2);
         const length = std.mem.indexOfScalar(

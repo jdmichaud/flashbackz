@@ -6,7 +6,8 @@ const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
 const perception = @import("actors/perception.zig");
 const activation = @import("activation.zig");
-pub const CircuitId = @import("world_props.zig").CircuitId;
+pub const CircuitId = world_props.CircuitId;
+const world_props = @import("world_props.zig");
 pub const Phase = enum { disabled, enabling, monitoring, detecting, disabling };
 pub const Sense = union(enum) {
     player_front: i16,

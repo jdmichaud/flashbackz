@@ -3,7 +3,9 @@ const std = @import("std");
 const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
-const Circuit = @import("world_props.zig").CircuitId;
+const Circuit = world_props.CircuitId;
+const story_cue = @import("story_cue.zig");
+const world_props = @import("world_props.zig");
 pub const Phase = enum { dormant, ready, using, spent };
 pub const Definition = struct {
     footprint: contacts.Footprint,
@@ -18,7 +20,7 @@ pub const Definition = struct {
     label: []const u8,
     palette_bank: u4,
     behind_player: bool,
-    movie: @import("story_cue.zig").Cue,
+    movie: story_cue.Cue,
     reply: Circuit,
 };
 pub const Binding = struct { circuit: Circuit, target: usize, next_step: bool };
@@ -35,7 +37,7 @@ pub const World = struct {
     allocator: std.mem.Allocator,
     instances: []Instance,
     candidate: ?usize = null,
-    movie: ?@import("story_cue.zig").Cue = null,
+    movie: ?story_cue.Cue = null,
     pulses: []Circuit,
     pulse_count: usize = 0,
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {

@@ -6,6 +6,8 @@ const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
 const equipment = @import("equipment.zig");
 const props = @import("world_props.zig");
+const activation = @import("activation.zig");
+const world_messages = @import("world_messages.zig");
 pub const Receiver = struct {
     footprint: contacts.Footprint,
     credential: i16,
@@ -32,7 +34,7 @@ pub const Definition = struct {
     unlock_sound: ?motion.SoundId,
     circuits: []const props.CircuitId,
     repaired_operation: ?struct { circuit: props.CircuitId, sound: motion.SoundId } = null,
-    notice: ?@import("world_messages.zig").Id = null,
+    notice: ?world_messages.Id = null,
     initially_used: bool,
     initially_active: bool,
     wake_when_near: bool,
@@ -59,7 +61,7 @@ pub const World = struct {
     candidate: ?usize = null,
     use_candidate: ?usize = null,
     receiver_bodies: []?contacts.Footprint,
-    notice: ?@import("world_messages.zig").Request = null,
+    notice: ?world_messages.Request = null,
     pub fn setReceiverBody(self: *World, index: usize, body: ?contacts.Footprint) void {
         self.receiver_bodies[index] = body;
     }
@@ -130,7 +132,7 @@ pub const World = struct {
             if (receiver.target == .lock) {
                 const lock = receiver.target.lock;
                 footprint.position = self.instances[lock].pose.position;
-                const near = try @import("activation.zig").around(
+                const near = try activation.around(
                     map,
                     player.room,
                     footprint.room,
@@ -179,7 +181,7 @@ pub const World = struct {
         } else if (binding.activates) {
             const lock = receiver.target.lock;
             const definition = definitions[lock];
-            const near = try @import("activation.zig").around(
+            const near = try activation.around(
                 map,
                 room,
                 definition.footprint.room,
@@ -209,7 +211,7 @@ pub const World = struct {
         self.notice = null;
         for (self.instances, definitions, 0..) |*instance, definition, index| {
             instance.sound = null;
-            const near = try @import("activation.zig").around(
+            const near = try activation.around(
                 map,
                 room,
                 definition.footprint.room,

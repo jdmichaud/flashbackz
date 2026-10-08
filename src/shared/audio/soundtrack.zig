@@ -4,6 +4,7 @@ const platform = @import("../platform.zig");
 const content = @import("../content/music.zig");
 const score = @import("score.zig");
 const music = @import("music_player.zig");
+const output_gain = @import("output_gain.zig");
 
 pub const Soundtrack = struct {
     owned: score.Owned,
@@ -40,7 +41,7 @@ pub const Soundtrack = struct {
                 self.pending_end = frames * 2;
                 self.player.render(self.pending[0..self.pending_end]);
             }
-            const accepted = try @import("output_gain.zig").queue(
+            const accepted = try output_gain.queue(
                 p,
                 self.pending[self.pending_start..self.pending_end],
                 self.volume,

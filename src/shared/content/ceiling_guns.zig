@@ -7,6 +7,9 @@ const placement = @import("placement.zig");
 const geometry = @import("../geometry.zig");
 const motion = @import("../motion.zig");
 const connections = @import("first_world_props.zig");
+const pistol_shot = @import("../pistol_shot.zig");
+const settings = @import("../settings.zig");
+const weapon_effects = @import("weapon_effects.zig");
 const Spec = struct {
     states: [7]u16,
     cycle: runtime.Cycle,
@@ -24,7 +27,7 @@ pub const Assets = struct {
     definitions: []runtime.Definition,
     profiles: []runtime.Profile,
     bindings: []runtime.Binding,
-    weapons: []@import("../pistol_shot.zig").Definition,
+    weapons: []pistol_shot.Definition,
     clips: []animation.OwnedClip,
     pub fn deinit(self: *Assets) void {
         self.allocator.free(self.definitions);
@@ -162,7 +165,7 @@ pub fn load(
     rule_bytes: []const u8,
     animations: []const u8,
     rooms: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     routes: []const connections.Connection,
     resolver: anytype,
 ) !Assets {
@@ -177,7 +180,7 @@ pub fn load(
     }
     var bindings: std.ArrayList(runtime.Binding) = .empty;
     errdefer bindings.deinit(allocator);
-    var weapons: std.ArrayList(@import("../pistol_shot.zig").Definition) = .empty;
+    var weapons: std.ArrayList(pistol_shot.Definition) = .empty;
     errdefer weapons.deinit(allocator);
     var families: [256]?struct { index: usize, spec: Spec } = @splat(null);
     var weapon_ids: [256]?usize = @splat(null);
@@ -215,7 +218,7 @@ pub fn load(
         if (weapon_ids[weapon_index] == null) {
             const target = try table.record(@intCast(endpoint));
             if (target.flags & 1 == 0) return error.UnsupportedCeilingGunEmitter;
-            const weapon = try @import("weapon_effects.zig").load(
+            const weapon = try weapon_effects.load(
                 allocator,
                 target,
                 rule_bytes,

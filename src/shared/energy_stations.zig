@@ -4,11 +4,13 @@ const std = @import("std");
 const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
+const activation = @import("activation.zig");
+const world_props = @import("world_props.zig");
 pub const Definition = struct {
     footprint: contacts.Footprint,
     facing: motion.Facing,
     palette_bank: u4,
-    layer: @import("world_props.zig").Layer,
+    layer: world_props.Layer,
     idle: motion.Clip,
     initially_active: bool,
     wake_when_near: bool,
@@ -75,7 +77,7 @@ pub const World = struct {
     ) !void {
         for (self.instances, definitions) |*instance, definition| {
             instance.sound = null;
-            const near = try @import("activation.zig").around(
+            const near = try activation.around(
                 map,
                 player_room,
                 definition.footprint.room,

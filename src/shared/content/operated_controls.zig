@@ -8,6 +8,9 @@ const animation = @import("animation.zig");
 const geometry = @import("../geometry.zig");
 const motion = @import("../motion.zig");
 const props = @import("first_world_props.zig");
+const settings = @import("../settings.zig");
+const string_table = @import("string_table.zig");
+const world_props = @import("../world_props.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -83,7 +86,7 @@ pub fn load(
     animations: []const u8,
     names: []const u8,
     room_ids: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     connections: *std.ArrayList(props.Connection),
     resolver: anytype,
 ) !Assets {
@@ -112,7 +115,7 @@ pub fn load(
                 connection.recipient == target and
                 connection.message == relay.signal) break connection.circuit;
         } else fresh: {
-            const id: @import("../world_props.zig").CircuitId = @fromBackingInt(@as(
+            const id: world_props.CircuitId = @fromBackingInt(@as(
                 u16,
                 @intCast(connections.items.len),
             ));
@@ -140,7 +143,7 @@ pub fn load(
             try clips.append(allocator, clip);
             destination.* = clip.clip();
         }
-        const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
+        const label = try string_table.copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
         table.register(@intCast(i), .operated_controls);
         try definitions.append(

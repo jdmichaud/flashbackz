@@ -1,6 +1,7 @@
 //! Incomplete floppy resources fail explicitly; menu preview remains independently usable.
 const std = @import("std");
 const game = @import("flashbackz");
+const backend_mod = @import("backend.zig");
 
 test "floppy menu preview rejects missing introduction and wake-up resources" {
     const allocator = std.testing.allocator;
@@ -94,7 +95,7 @@ test "normal startup completes three vector chapters and skipping introduction r
     try source.add("DATA/PRESENT3.PRF", &profile);
     try source.add("DATA/INTROL3.PRF", &profile);
     try source.add("DATA/OPTION3.PRF", &profile);
-    const Backend = @import("backend.zig").AgentBackend;
+    const Backend = backend_mod.AgentBackend;
     var backend = Backend.init(allocator, .{});
     defer backend.deinit();
     var platform = backend.asPlatform();

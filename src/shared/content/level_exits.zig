@@ -2,13 +2,18 @@
 const std = @import("std");
 const runtime = @import("../level_exits.zig");
 const rules = @import("rule_table.zig");
+const animation_mod = @import("animation.zig");
+const equipment = @import("../equipment.zig");
+const geometry = @import("../geometry.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     rule_bytes: []const u8,
     animations: []const u8,
-    rooms: *const [64]@import("../geometry.zig").RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: settings.Difficulty,
 ) ![]runtime.Definition {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
     errdefer definitions.deinit(allocator);
@@ -55,7 +60,7 @@ pub fn load(
         }) |rule| if (rule.dx != 0 or
             rule.dy != 0 or
             rule.flags != 0) return error.MovingInventoryExit;
-        const item: @import("../equipment.zig").Kind = switch (a.conditions[1].argument) {
+        const item: equipment.Kind = switch (a.conditions[1].argument) {
             10 => .anti_g_belt,
             else => return error.UnsupportedExitItem,
         };
@@ -70,7 +75,7 @@ pub fn load(
         };
         if (a.effect.argument < 1 or
             a.effect.argument > destinations.len) return error.InvalidExitDestination;
-        var animation = try @import("animation.zig").decode(allocator, animations, a.source);
+        var animation = try animation_mod.decode(allocator, animations, a.source);
         defer animation.deinit();
         if (animation.frames.len == 0 or
             animation.sound != null) return error.UnsupportedExitAnimation;

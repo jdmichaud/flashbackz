@@ -6,9 +6,12 @@ const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const terrain = @import("terrain.zig");
 const props = @import("world_props.zig");
+const activation = @import("activation.zig");
+const contacts_mod = @import("contacts.zig");
+const story_cue = @import("story_cue.zig");
 pub const Stop = enum { top, bottom };
 pub const Phase = enum { parked, departing, travelling, arriving, disabled };
-pub const Transfer = struct { movie: @import("story_cue.zig").Cue, displacement: i16 };
+pub const Transfer = struct { movie: story_cue.Cue, displacement: i16 };
 pub const Trip = struct {
     transfer: ?Transfer = null,
     departure: motion.Clip,
@@ -104,7 +107,7 @@ pub const Instance = struct {
     release_passengers: bool = false,
     sound: ?motion.SoundId = null,
     event: ?Event = null,
-    movie: ?@import("story_cue.zig").Cue = null,
+    movie: ?story_cue.Cue = null,
     pub fn clip(self: Instance, profile: Profile) motion.Clip {
         const trip = profile.trips[@backingInt(self.destination)];
         return switch (self.phase) {
@@ -115,7 +118,7 @@ pub const Instance = struct {
             .disabled => profile.disabled.?,
         };
     }
-    pub fn footprint(self: Instance, definition: Definition) @import("contacts.zig").Footprint {
+    pub fn footprint(self: Instance, definition: Definition) contacts_mod.Footprint {
         return .{ .room = self.room, .position = self.pose.position, .width = definition.width };
     }
     fn floor(self: Instance, definition: Definition) terrain.Span {
@@ -320,7 +323,7 @@ pub const World = struct {
         player_room: geometry.RoomId,
     ) !void {
         for (self.instances, definitions, occupancy) |*instance, definition, contact| {
-            const near = try @import("activation.zig").around(
+            const near = try activation.around(
                 world.map(),
                 player_room,
                 instance.room,

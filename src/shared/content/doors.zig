@@ -10,6 +10,7 @@ const motion = @import("../motion.zig");
 const terrain = @import("../terrain.zig");
 const collision = @import("collision.zig");
 const connections = @import("first_world_props.zig");
+const settings = @import("../settings.zig");
 const Spec = struct {
     closed: u16,
     open: u16,
@@ -323,7 +324,7 @@ pub fn load(
     rule_bytes: []const u8,
     animations: []const u8,
     rooms: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     routes: []const connections.Connection,
     player_projectile: u16,
     resolver: anytype,

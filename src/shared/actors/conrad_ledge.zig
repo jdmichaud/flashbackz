@@ -2,6 +2,7 @@
 //! distance below the ledge; source animation/state identifiers remain in content import.
 const motion = @import("../motion.zig");
 const controls = @import("controls.zig");
+const std = @import("std");
 
 pub const Phase = enum {
     running_approach,
@@ -249,7 +250,6 @@ pub const State = struct {
 };
 
 test "grip depth aligns climbing and release to the same ledge across hang styles" {
-    const std = @import("std");
     const held = [_]motion.Step{.hold};
     const clip: motion.Clip = .{ .steps = &held };
     const clips: Clips = .{

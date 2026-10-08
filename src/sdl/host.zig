@@ -10,7 +10,8 @@ const flashbackz = @import("flashbackz");
 const native = @import("native");
 const c = @import("sdl.zig");
 const version = @import("root.zig");
-const SdlBackend = @import("backend.zig").SdlBackend;
+const SdlBackend = backend_mod.SdlBackend;
+const backend_mod = @import("backend.zig");
 
 /// The rate of the fallback pacer, when the display does not pace the presentation.
 pub const fallback_hz: u32 = 60;

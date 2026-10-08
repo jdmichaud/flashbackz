@@ -4,6 +4,11 @@ const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
 const runtime = @import("../arrival_triggers.zig");
 const routes = @import("first_world_props.zig");
+const contacts = @import("../contacts.zig");
+const geometry = @import("../geometry.zig");
+const motion = @import("../motion.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -18,11 +23,11 @@ pub const Assets = struct {
 };
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     bytes: []const u8,
     animations: []const u8,
-    rooms: *const [64]@import("../geometry.zig").RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: settings.Difficulty,
     connections: *std.ArrayList(routes.Connection),
     resolver: anytype,
 ) !Assets {
@@ -80,7 +85,7 @@ pub fn load(
             e.conditions[0].code < 35 or
             e.conditions[0].code > 38 or
             e.conditions[1].code != 0) return error.UnsupportedArrivalTrigger;
-        const category: @import("../contacts.zig").Kind = switch (a.conditions[0].argument) {
+        const category: contacts.Kind = switch (a.conditions[0].argument) {
             1 => .player,
             3 => .interactable,
             else => return error.UnsupportedArrivalCategory,
@@ -106,7 +111,7 @@ pub fn load(
             @intCast(finish),
             e.conditions[0].argument,
         );
-        var resolved: [3]@import("../motion.zig").Clip = undefined;
+        var resolved: [3]motion.Clip = undefined;
         for ([_]u16{ a.source, d.source, e.source }, &resolved) |state, *destination| {
             var source = try animation.decode(allocator, animations, state);
             defer source.deinit();

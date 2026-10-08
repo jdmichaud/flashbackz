@@ -1,12 +1,15 @@
 //! Consumable keys are recognized from pickup, credential check and removal paths.
 const rules = @import("rule_table.zig");
+const equipment = @import("../equipment.zig");
+const story_cue = @import("../story_cue.zig");
+const world_messages = @import("../world_messages.zig");
 pub const Spec = struct {
     idle: u16,
     using: u16,
     signal: i16,
-    kind: @import("../equipment.zig").Kind,
-    pickup: @import("../story_cue.zig").Cue,
-    completion_notice: ?@import("../world_messages.zig").Id = null,
+    kind: equipment.Kind,
+    pickup: story_cue.Cue,
+    completion_notice: ?world_messages.Id = null,
 };
 fn op(value: rules.Operation, code: u8, argument: i16) bool {
     return value.code == code and (code == 0 or value.argument == argument);

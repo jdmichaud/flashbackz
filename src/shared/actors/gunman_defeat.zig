@@ -1,8 +1,10 @@
 //! Directional knockdown with authored clearance variants. Terrain chooses a short
 //! collision trajectory or an unobstructed fall; the settled body remains world artwork.
 const motion = @import("../motion.zig");
-const Environment = @import("conrad_environment.zig").Environment;
-const shift = @import("conrad_roll.zig").shiftForward;
+const Environment = conrad_environment.Environment;
+const shift = conrad_roll.shiftForward;
+const conrad_environment = @import("conrad_environment.zig");
+const conrad_roll = @import("conrad_roll.zig");
 pub const Move = struct {
     clip: motion.Clip,
     forward: i16 = 0,

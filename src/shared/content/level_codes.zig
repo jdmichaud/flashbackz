@@ -1,9 +1,12 @@
 //! Resolve supplied level codes to a named level and difficulty.
 const std = @import("std");
 const level = @import("level.zig");
+const floppy_interface = @import("floppy_interface.zig");
+const platform = @import("../platform.zig");
+const settings = @import("../settings.zig");
 pub const Destination = struct {
     level: level.Id,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
 };
 pub const Table = [7][3][7]u8;
 
@@ -21,10 +24,10 @@ pub fn match(codes: Table, input: []const u8) ?Destination {
 
 pub fn lookup(
     allocator: std.mem.Allocator,
-    source: @import("../platform.zig").AssetSource,
+    source: platform.AssetSource,
     input: []const u8,
 ) !?Destination {
-    const values = try @import("floppy_interface.zig").load(allocator, source);
+    const values = try floppy_interface.load(allocator, source);
     return match(values.passwords, input);
 }
 

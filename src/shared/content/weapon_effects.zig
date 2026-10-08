@@ -4,6 +4,7 @@ const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
 const motion = @import("../motion.zig");
 const pistol = @import("../pistol_shot.zig");
+const placement = @import("placement.zig");
 fn clip(
     allocator: std.mem.Allocator,
     animations: []const u8,
@@ -20,7 +21,7 @@ fn clip(
 }
 pub fn load(
     allocator: std.mem.Allocator,
-    record: @import("placement.zig").Record,
+    record: placement.Record,
     rule_bytes: []const u8,
     animations: []const u8,
     owned: *std.ArrayList(animation.OwnedClip),

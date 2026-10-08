@@ -5,6 +5,9 @@ const equipment = @import("../equipment.zig");
 const placement = @import("placement.zig");
 const animation = @import("animation.zig");
 const strings = @import("string_table.zig");
+const credential_cards = @import("credential_cards.zig");
+const credit_wallet = @import("credit_wallet.zig");
+const table = @import("rule_table.zig");
 
 pub const Recovered = struct { definitions: []equipment.Definition, sources: []u16 };
 
@@ -36,7 +39,7 @@ pub fn recover(
             record.initially_active != 0 and
             matchesKind(
                 spec.kind,
-                try @import("rule_table.zig").group(rules, record.rule_group),
+                try table.group(rules, record.rule_group),
             ))
         {
             count += 1;
@@ -54,7 +57,7 @@ pub fn recover(
         const spec = for (specs) |candidate| {
             if (candidate.state == source.initial_state and matchesKind(
                 candidate.kind,
-                try @import("rule_table.zig").group(rules, source.rule_group),
+                try table.group(rules, source.rule_group),
             )) break candidate;
         } else continue;
         const definition = &definitions[loaded];
@@ -86,15 +89,15 @@ pub fn recover(
                 (value.dx != 0 or value.dy != 0)) return error.UnsupportedEquipmentIntroduction,
         };
         if (spec.kind == .credits and
-            (@import("credit_wallet.zig").signal(try @import("rule_table.zig").group(
+            (credit_wallet.signal(try table.group(
                 rules,
                 source.rule_group,
             )) == null or source.parameters[0] != 3)) return error.UnsupportedCreditUse;
-        const card = if (spec.kind == .id_card) @import("credential_cards.zig").starting(try @import("rule_table.zig").group(
+        const card = if (spec.kind == .id_card) credential_cards.starting(try table.group(
             rules,
             source.rule_group,
         )) orelse return error.UnsupportedStartingCard else null;
-        const papers = if (spec.kind == .papers) @import("credential_cards.zig").papers(try @import("rule_table.zig").group(
+        const papers = if (spec.kind == .papers) credential_cards.papers(try table.group(
             rules,
             source.rule_group,
         )) orelse return error.UnsupportedStartingPapers else null;
@@ -140,10 +143,10 @@ pub fn recover(
     return .{ .definitions = definitions, .sources = sources };
 }
 
-fn matchesKind(kind: equipment.Kind, group: @import("rule_table.zig").Group) bool {
+fn matchesKind(kind: equipment.Kind, group: table.Group) bool {
     return switch (kind) {
-        .papers => @import("credential_cards.zig").papers(group) != null,
-        .work_permit => @import("credential_cards.zig").permit(group) != null,
+        .papers => credential_cards.papers(group) != null,
+        .work_permit => credential_cards.permit(group) != null,
         else => true,
     };
 }
@@ -154,7 +157,6 @@ fn shieldRecharge(
     rule_bytes: []const u8,
     animations: []const u8,
 ) !equipment.Recharge {
-    const table = @import("rule_table.zig");
     const group = try table.group(rule_bytes, record.rule_group);
     if (group.count() != 4) return error.UnsupportedShieldRecharge;
     const intro = group.at(0);

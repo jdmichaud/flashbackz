@@ -8,9 +8,11 @@ const std = @import("std");
 const builtin = @import("builtin");
 const flashbackz = @import("flashbackz");
 const platform = flashbackz.platform;
-const DirectoryAssetSource = @import("directory.zig").DirectoryAssetSource;
-const DirectoryStorage = @import("storage.zig").DirectoryStorage;
+const DirectoryAssetSource = directory_mod.DirectoryAssetSource;
+const DirectoryStorage = storage_mod.DirectoryStorage;
 const Pack = flashbackz.asset_pack.Pack;
+const directory_mod = @import("directory.zig");
+const storage_mod = @import("storage.zig");
 
 pub const usage =
     \\  ASSET_PATH    FAT12 IMG/IMA images or extracted directories; repeat for all disks
@@ -308,7 +310,7 @@ test "the options open a game directory, or none" {
     try tmp.dir.createDirPath(io, "game");
     var game_dir = try tmp.dir.openDir(io, "game", .{ .iterate = true });
     defer game_dir.close(io);
-    try @import("directory.zig").writeFixture(io, game_dir);
+    try directory_mod.writeFixture(io, game_dir);
 
     var env = try testEnviron(allocator, &.{.{ "XDG_DATA_HOME", "/unused" }});
     defer env.deinit();

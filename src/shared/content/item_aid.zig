@@ -6,6 +6,11 @@ const animation = @import("animation.zig");
 const placement = @import("placement.zig");
 const geometry = @import("../geometry.zig");
 const props = @import("first_world_props.zig");
+const credit_wallet = @import("credit_wallet.zig");
+const equipment = @import("../equipment.zig");
+const quest_items = @import("quest_items.zig");
+const settings = @import("../settings.zig");
+const string_table = @import("string_table.zig");
 pub const Spec = struct {
     states: [14]u16,
     range: i16,
@@ -191,11 +196,11 @@ pub fn load(
     animations: []const u8,
     names: []const u8,
     rooms: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     routes: *std.ArrayList(props.Connection),
     item_sources: []const u16,
-    first_item: @import("../equipment.zig").ItemHandle,
-    supplies: []const @import("../equipment.zig").Definition,
+    first_item: equipment.ItemHandle,
+    supplies: []const equipment.Definition,
     resolver: anytype,
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
@@ -268,7 +273,7 @@ pub fn load(
         );
         for (item_sources, 0..) |source, index| {
             const item = try table.record(source);
-            const offer = @import("quest_items.zig").teleporter(try rules.group(
+            const offer = quest_items.teleporter(try rules.group(
                 rule_bytes,
                 item.rule_group,
             )) orelse continue;
@@ -290,7 +295,7 @@ pub fn load(
         for (0..table.count) |source| {
             const item = try table.record(@intCast(source));
             if (item.initially_active == 0 or item.parameters[0] != record.kind) continue;
-            const signal = @import("credit_wallet.zig").signal(try rules.group(
+            const signal = credit_wallet.signal(try rules.group(
                 rule_bytes,
                 item.rule_group,
             )) orelse continue;
@@ -307,7 +312,7 @@ pub fn load(
                 break;
             };
         }
-        const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
+        const label = try string_table.copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
         table.register(@intCast(i), .item_aid);
         try definitions.append(

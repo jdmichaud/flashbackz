@@ -3,13 +3,15 @@ const std = @import("std");
 const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
-const Circuit = @import("world_props.zig").CircuitId;
+const Circuit = world_props.CircuitId;
+const world_messages = @import("world_messages.zig");
+const world_props = @import("world_props.zig");
 pub const Phase = enum { waiting, announcing, completing, removed };
 pub const Definition = struct {
     footprint: contacts.Footprint,
     category: contacts.Kind,
     clips: [3]motion.Clip,
-    notice: @import("world_messages.zig").Id,
+    notice: world_messages.Id,
     begin: Circuit,
     complete: Circuit,
     priority: u16,
@@ -26,7 +28,7 @@ pub const World = struct {
     instances: []Instance,
     pulses: []Circuit,
     pulse_count: usize = 0,
-    notice: ?@import("world_messages.zig").Request = null,
+    notice: ?world_messages.Request = null,
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);

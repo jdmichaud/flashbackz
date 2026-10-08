@@ -3,7 +3,11 @@ const std = @import("std");
 const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
-const Circuit = @import("world_props.zig").CircuitId;
+const Circuit = world_props.CircuitId;
+const activation = @import("activation.zig");
+const perception = @import("actors/perception.zig");
+const world_messages = @import("world_messages.zig");
+const world_props = @import("world_props.zig");
 pub const Phase = enum {
     watching,
     retreating,
@@ -14,7 +18,7 @@ pub const Phase = enum {
     ready,
     informed,
 };
-pub const Definition = struct { room: geometry.RoomId, position: motion.Position, facing: motion.Facing, width: u8, clips: [8]motion.Clip, initial: Phase, hidden: bool, trigger_distance: i16, alert: Circuit, acknowledged: Circuit, messages: [2]@import("world_messages.zig").Id, hint: motion.VisualId, label: []const u8, priority: u16, palette_bank: u4, behind_player: bool, initially_active: bool, wake_nearby: bool, accepts_signals: bool };
+pub const Definition = struct { room: geometry.RoomId, position: motion.Position, facing: motion.Facing, width: u8, clips: [8]motion.Clip, initial: Phase, hidden: bool, trigger_distance: i16, alert: Circuit, acknowledged: Circuit, messages: [2]world_messages.Id, hint: motion.VisualId, label: []const u8, priority: u16, palette_bank: u4, behind_player: bool, initially_active: bool, wake_nearby: bool, accepts_signals: bool };
 pub const Binding = struct { circuit: Circuit, target: usize, next_step: bool };
 pub const Actor = struct {
     room: geometry.RoomId,
@@ -45,7 +49,7 @@ pub const World = struct {
     pulses: []Circuit,
     pulse_count: usize = 0,
     candidate: ?usize = null,
-    notice: ?@import("world_messages.zig").Request = null,
+    notice: ?world_messages.Request = null,
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {
         const actors = try allocator.alloc(Actor, definitions.len);
         errdefer allocator.free(actors);
@@ -104,7 +108,7 @@ pub const World = struct {
                 .width = definition.width,
             };
             if (actor.hidden or actor.removed) continue;
-            const near = try @import("activation.zig").around(
+            const near = try activation.around(
                 map,
                 player.room,
                 actor.room,
@@ -143,7 +147,7 @@ pub const World = struct {
             &actor.pose,
         );
         if (actor.playback.exhausted(clip)) {
-            const near = try @import("activation.zig").around(
+            const near = try activation.around(
                 map,
                 player.room,
                 actor.room,
@@ -154,7 +158,7 @@ pub const World = struct {
                 if (actor.ready) actor.hidden = false else actor.active = false;
             } else switch (actor.phase) {
                 .watching => {
-                    const awareness = try @import("actors/perception.zig").observe(
+                    const awareness = try perception.observe(
                         map,
                         .{ .room = actor.room, .pose = actor.pose },
                         player,

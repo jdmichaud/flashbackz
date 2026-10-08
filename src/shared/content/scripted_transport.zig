@@ -6,6 +6,10 @@ const animation = @import("animation.zig");
 const runtime = @import("../scripted_transport.zig");
 const routes = @import("first_world_props.zig");
 const motion = @import("../motion.zig");
+const geometry = @import("../geometry.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
+const world_props = @import("../world_props.zig");
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -84,11 +88,11 @@ fn validRows(
 }
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     bytes: []const u8,
     animations: []const u8,
-    rooms: *const [64]@import("../geometry.zig").RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: settings.Difficulty,
     connections: *std.ArrayList(routes.Connection),
     resolver: anytype,
 ) !Assets {
@@ -228,7 +232,7 @@ pub fn load(
             try effect_sources.append(allocator, @intCast(effect_id));
             break :create effects.items.len - 1;
         };
-        var completion: ?@import("../world_props.zig").CircuitId = null;
+        var completion: ?world_props.CircuitId = null;
         if (contact_gate) {
             if (record.room >= rooms.len or
                 request.conditions[0].argument != 1 or

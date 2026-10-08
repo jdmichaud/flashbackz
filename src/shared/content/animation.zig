@@ -2,6 +2,7 @@
 //! animation and sprite indices stop at this boundary; playback sees opaque visual IDs.
 const std = @import("std");
 const motion = @import("../motion.zig");
+const combat = @import("../combat.zig");
 
 pub const VisualKind = enum { sprite, composition };
 pub const SourceFrame = union(enum) {
@@ -58,7 +59,7 @@ pub const SourceClip = struct {
 };
 
 pub const OwnedClip = struct {
-    hit_profile: ?@import("../combat.zig").ProfileId = null,
+    hit_profile: ?combat.ProfileId = null,
     allocator: std.mem.Allocator,
     steps: []motion.Step,
     presses_floor_switches: bool,

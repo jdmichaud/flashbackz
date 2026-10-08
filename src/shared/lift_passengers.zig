@@ -6,6 +6,7 @@ const props = @import("world_props.zig");
 const equipment = @import("equipment.zig");
 const contacts = @import("contacts.zig");
 const geometry = @import("geometry.zig");
+const motion = @import("motion.zig");
 pub const Binding = struct {
     prop: usize,
     platform: usize,
@@ -216,7 +217,7 @@ pub const State = struct {
         map: geometry.Map,
         objects: *props.World,
         equipment_: *const equipment.Loadout,
-        player: *@import("motion.zig").Pose,
+        player: *motion.Pose,
         player_room: geometry.RoomId,
     ) !void {
         for (platforms.instances, 0..) |instance, index| {

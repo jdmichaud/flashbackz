@@ -1,7 +1,8 @@
 //! An actor's ordered possessions. The first item is selected; selecting another item
 //! moves it to the front while preserving the relative order of all remaining items.
 const std = @import("std");
-pub const ItemHandle = @import("identity.zig").ItemHandle;
+pub const ItemHandle = identity.ItemHandle;
+const identity = @import("identity.zig");
 
 pub const Inventory = struct {
     allocator: std.mem.Allocator,

@@ -3,6 +3,7 @@
 const motion = @import("../motion.zig");
 const controls = @import("controls.zig");
 const rolling = @import("conrad_roll.zig");
+const std = @import("std");
 pub const Phase = enum {
     clearing_draw,
     roll_recovery,
@@ -286,7 +287,6 @@ pub const State = struct {
 };
 
 test "weapon toggle commits a short press once and does not repeat while held" {
-    const std = @import("std");
     var toggle: Toggle = .{};
     toggle.advance(true, false);
     try std.testing.expectEqual(.ready, toggle.phase);
@@ -302,7 +302,6 @@ test "weapon toggle commits a short press once and does not repeat while held" {
 }
 
 test "an occupied wall edge blocks an aimed turn before the fire request" {
-    const std = @import("std");
     const Wall = struct {
         pub fn at(_: @This(), _: motion.Pose, height: anytype, ahead: i16) !bool {
             return height == .support or (height == .torso and ahead == 0);

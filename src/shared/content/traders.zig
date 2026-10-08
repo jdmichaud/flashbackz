@@ -7,6 +7,10 @@ const placement = @import("placement.zig");
 const geometry = @import("../geometry.zig");
 const equipment = @import("../equipment.zig");
 const routes_mod = @import("first_world_props.zig");
+const credit_wallet = @import("credit_wallet.zig");
+const settings = @import("../settings.zig");
+const string_table = @import("string_table.zig");
+const world_props = @import("../world_props.zig");
 pub const Spec = struct {
     states: [7]u16,
     sight: i16,
@@ -190,7 +194,7 @@ pub fn load(
     animations: []const u8,
     names: []const u8,
     rooms: *const [64]geometry.RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    difficulty: settings.Difficulty,
     routes: *std.ArrayList(routes_mod.Connection),
     supplies: []const equipment.Definition,
     resolver: anytype,
@@ -246,7 +250,7 @@ pub fn load(
         const source_purse = record.parameters[spec.debit_parameter];
         if (source_purse < 0 or source_purse >= table.count) return error.InvalidTraderPurse;
         const purse_record = try table.record(@intCast(source_purse));
-        const signal = @import("credit_wallet.zig").signal(try rules.group(
+        const signal = credit_wallet.signal(try rules.group(
             rule_bytes,
             purse_record.rule_group,
         )) orelse return error.UnsupportedTraderPurse;
@@ -262,7 +266,7 @@ pub fn load(
             .{ .item = purse, .trader = definitions.items.len, .next_step = source_purse >= i },
         );
         const outputs = try allocator.alloc(
-            @import("../world_props.zig").CircuitId,
+            world_props.CircuitId,
             spec.outputs.len,
         );
         errdefer allocator.free(outputs);
@@ -277,7 +281,7 @@ pub fn load(
                 output.signal,
             );
         }
-        const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
+        const label = try string_table.copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
         table.register(@intCast(i), .traders);
         try definitions.append(

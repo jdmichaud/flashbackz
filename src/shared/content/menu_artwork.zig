@@ -5,6 +5,7 @@ const bitmap = @import("bitmap.zig");
 const palette = @import("palette.zig");
 const font_mod = @import("font.zig");
 const menu = @import("../scenes/menu.zig");
+const memory = @import("../memory.zig");
 
 pub const Assets = struct {
     background: bitmap.IndexedImage,
@@ -80,7 +81,6 @@ pub fn loadNamed(
 }
 
 test "missing menu is distinguishable from incomplete supplied content" {
-    const memory = @import("../memory.zig");
     var source = memory.MemoryAssetSource.init(std.testing.allocator);
     defer source.deinit();
     try std.testing.expect((try load(std.testing.allocator, source.assetSource())) == null);

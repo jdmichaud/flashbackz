@@ -3,7 +3,8 @@
 const std = @import("std");
 const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
-pub const Height = @import("combat.zig").Height;
+pub const Height = combat.Height;
+const combat = @import("combat.zig");
 pub const Path = enum { standing_a, standing_b, crouched_a, crouched_b };
 pub const Definition = struct {
     trajectories: [4]motion.Clip,

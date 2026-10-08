@@ -3,6 +3,12 @@ const std = @import("std");
 const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
 const runtime = @import("../escort_followers.zig");
+const geometry = @import("../geometry.zig");
+const lifts_mod = @import("lifts.zig");
+const motion = @import("../motion.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
+const string_table = @import("string_table.zig");
 const Spec = struct { states: [6]u16, gap: i16, advance: i16, message: i16 };
 fn recognize(group: rules.Group) ?Spec {
     if (group.count() != 44) return null;
@@ -214,13 +220,13 @@ pub const Assets = struct {
 };
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     bytes: []const u8,
     animations: []const u8,
     names: []const u8,
-    rooms: *const [64]@import("../geometry.zig").RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
-    lifts: @import("lifts.zig").Assets,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: settings.Difficulty,
+    lifts: lifts_mod.Assets,
     resolver: anytype,
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
@@ -246,7 +252,7 @@ pub fn load(
         if (record.initial_state != spec.states[0] or
             record.contact_icon == 0 or
             spec.message < 0) return error.UnsupportedEscortStart;
-        var resolved: [6]@import("../motion.zig").Clip = undefined;
+        var resolved: [6]motion.Clip = undefined;
         for (spec.states, &resolved) |state, *destination| {
             var source = try animation.decode(allocator, animations, state);
             defer source.deinit();
@@ -260,7 +266,7 @@ pub fn load(
             .{ .actor = definitions.items.len, .platform = platform, .next_step = source >= index },
         );
         try sources.append(allocator, @intCast(index));
-        const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
+        const label = try string_table.copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
         try definitions.append(
             allocator,

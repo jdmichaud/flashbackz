@@ -1,7 +1,8 @@
 //! One-shot event barriers release a circuit after the required number of signal updates.
 //! Multiple pulses in one update coalesce, matching the authored encounter relays.
 const std = @import("std");
-const Circuit = @import("world_props.zig").CircuitId;
+const Circuit = world_props.CircuitId;
+const world_props = @import("world_props.zig");
 pub const Definition = struct { required_updates: u8, output: Circuit };
 pub const Binding = struct { circuit: Circuit, target: usize, next_step: bool };
 pub const State = struct {

@@ -4,6 +4,7 @@ const geometry = @import("../geometry.zig");
 const motion = @import("../motion.zig");
 const contacts = @import("../contacts.zig");
 const combat = @import("../combat.zig");
+const std = @import("std");
 
 pub const PostureSense = struct {
     category: combat.Category,
@@ -189,7 +190,6 @@ pub fn scanObjects(
 }
 
 test "loose-item search retains the full range and tests the visited terrain cell" {
-    const std = @import("std");
     const room: geometry.RoomId = @fromBackingInt(17);
     var blocking: [16 * 7]bool = @splat(false);
     const rooms = [_]geometry.Room{.{

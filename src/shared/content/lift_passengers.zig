@@ -3,9 +3,11 @@ const std = @import("std");
 const rules = @import("rule_table.zig");
 const props = @import("first_world_props.zig");
 const runtime = @import("../lift_passengers.zig");
+const placement = @import("placement.zig");
+const quest_items = @import("quest_items.zig");
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     rule_bytes: []const u8,
     objects: props.Assets,
     first_item_index: u16,
@@ -29,7 +31,7 @@ pub fn load(
                 r.conditions[1].argument == 8 and
                 r.effect.code == 67) break true;
         } else false;
-        const automatic = @import("quest_items.zig").teleporter(group) != null;
+        const automatic = quest_items.teleporter(group) != null;
         if (!boards and !automatic) continue;
         for (platform_sources, 0..) |platform, index| try bindings.append(
             allocator,

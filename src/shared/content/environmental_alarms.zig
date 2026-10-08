@@ -4,12 +4,16 @@ const rules = @import("rule_table.zig");
 const animation = @import("animation.zig");
 const runtime = @import("../environmental_alarms.zig");
 const routes = @import("first_world_props.zig");
+const geometry = @import("../geometry.zig");
+const motion = @import("../motion.zig");
+const placement = @import("placement.zig");
+const settings = @import("../settings.zig");
 pub const Spec = struct {
     states: [3]u16,
     signals: [2]i16,
     chance: i16,
     count_parameter: u2,
-    sound: @import("../motion.zig").SoundId,
+    sound: motion.SoundId,
 };
 fn recognize(group: rules.Group) ?Spec {
     if (group.count() != 8) return null;
@@ -93,11 +97,11 @@ pub const Assets = struct {
 };
 pub fn load(
     allocator: std.mem.Allocator,
-    table: @import("placement.zig").Table,
+    table: placement.Table,
     bytes: []const u8,
     animations: []const u8,
-    rooms: *const [64]@import("../geometry.zig").RoomId,
-    difficulty: @import("../settings.zig").Difficulty,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: settings.Difficulty,
     resolver: anytype,
 ) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
@@ -116,7 +120,7 @@ pub fn load(
         if (record.kind != 6 or record.minimum_difficulty > @backingInt(difficulty)) continue;
         const spec = recognize(try rules.group(bytes, record.rule_group)) orelse continue;
         if (record.initial_state != spec.states[0]) return error.UnsupportedAlarmStart;
-        var resolved: [3]@import("../motion.zig").Clip = undefined;
+        var resolved: [3]motion.Clip = undefined;
         for (spec.states, &resolved) |state, *destination| {
             var src = try animation.decode(allocator, animations, state);
             defer src.deinit();

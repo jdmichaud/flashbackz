@@ -3,7 +3,11 @@ const std = @import("std");
 const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
-const Circuit = @import("world_props.zig").CircuitId;
+const Circuit = world_props.CircuitId;
+const activation = @import("activation.zig");
+const equipment = @import("equipment.zig");
+const world_messages = @import("world_messages.zig");
+const world_props = @import("world_props.zig");
 pub const Pose = enum { resting, fidgeting, leaning, recovering };
 pub const Stage = enum {
     hidden,
@@ -19,7 +23,7 @@ pub const Role = enum { giver, recipient, conversation, introducer, seller };
 pub const Speech = struct { introduction: motion.Clip, reply: motion.Clip, recovery: motion.Clip };
 pub const Definition = struct {
     speech: ?Speech = null,
-    reply_notice: ?@import("world_messages.zig").Id = null,
+    reply_notice: ?world_messages.Id = null,
     after_chances: ?[4]i16 = null,
     release_unless_chance: bool = false,
     talking_forward: [4]i16 = @splat(0),
@@ -38,10 +42,10 @@ pub const Definition = struct {
     hidden_clip: motion.Clip,
     chances: [4]i16,
     offscreen_choice_first: [4]bool = @splat(false),
-    notice: @import("world_messages.zig").Id,
+    notice: world_messages.Id,
     outputs: []const Circuit,
     departure_outputs: []const Circuit = &.{},
-    sale: ?struct { purse: @import("equipment.zig").ItemHandle, price: i16, debit: i16 } = null,
+    sale: ?struct { purse: equipment.ItemHandle, price: i16, debit: i16 } = null,
     hint: motion.VisualId,
     label: []const u8,
     priority: u16,
@@ -52,7 +56,7 @@ pub const Definition = struct {
     accepts_signals: bool,
 };
 pub const Payment = struct {
-    item: @import("equipment.zig").ItemHandle,
+    item: equipment.ItemHandle,
     contact: usize,
     next_step: bool,
 };
@@ -93,7 +97,7 @@ pub const World = struct {
     pulses: []Circuit,
     pulse_count: usize = 0,
     candidate: ?usize = null,
-    notice: ?@import("world_messages.zig").Request = null,
+    notice: ?world_messages.Request = null,
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);
@@ -146,7 +150,7 @@ pub const World = struct {
             instance.payment = instance.pending_payment;
             instance.pending_payment = false;
             if (instance.body(definition)) |body| {
-                const near = try @import("activation.zig").around(
+                const near = try activation.around(
                     map,
                     player.room,
                     body.room,
@@ -174,7 +178,7 @@ pub const World = struct {
         self: *World,
         definitions: []const Definition,
         payments: []const Payment,
-        item: @import("equipment.zig").ItemHandle,
+        item: equipment.ItemHandle,
         amount: i16,
     ) bool {
         const index = self.candidate orelse return false;
@@ -223,7 +227,7 @@ pub const World = struct {
         map: geometry.Map,
         room: geometry.RoomId,
         talk: bool,
-        items: *@import("equipment.zig").Loadout,
+        items: *equipment.Loadout,
         random: anytype,
     ) !void {
         return self.advanceRange(
@@ -246,7 +250,7 @@ pub const World = struct {
         map: geometry.Map,
         room: geometry.RoomId,
         talk: bool,
-        items: *@import("equipment.zig").Loadout,
+        items: *equipment.Loadout,
         random: anytype,
     ) !void {
         return self.advanceRange(
@@ -268,7 +272,7 @@ pub const World = struct {
         map: geometry.Map,
         room: geometry.RoomId,
         talk: bool,
-        items: *@import("equipment.zig").Loadout,
+        items: *equipment.Loadout,
         random: anytype,
         range_start: usize,
         range_end: usize,
@@ -300,7 +304,7 @@ pub const World = struct {
                 &instance.pose,
             );
             if (instance.playback.exhausted(clip)) {
-                const near = try @import("activation.zig").around(
+                const near = try activation.around(
                     map,
                     room,
                     definition.footprint.room,
