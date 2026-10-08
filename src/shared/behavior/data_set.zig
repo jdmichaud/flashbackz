@@ -376,7 +376,15 @@ const Loader = struct {
                 );
             } else inline for (.{ "turn", "damage", "heal", "kill" }) |flag| {
                 if (std.mem.eql(u8, name, flag)) {
-                    @field(result, flag) = tree.get(value) == .true;
+                    @field(result, flag) = switch (tree.get(value)) {
+                        .true => true,
+                        .false => false,
+                        else => return fail(
+                            self.diagnostic,
+                            "{s}: {s} must be true or false",
+                            .{ context.file, name },
+                        ),
+                    };
                     break;
                 }
             } else inline for (.{ "score", "forward", "down" }) |number| {

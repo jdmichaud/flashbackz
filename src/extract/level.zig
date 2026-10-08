@@ -388,8 +388,8 @@ fn writeRule(level: *Level, behavior: Behavior, rule: rule_table.Rule, w: *zon.W
         try w.line(".then = {s},", .{effect.written()});
     }
     if (rule.flags & 1 != 0) try w.line(".turn = true,", .{});
-    if (rule.flags & 2 != 0) try w.line(".damage = 1,", .{});
-    if (rule.flags & 4 != 0) try w.line(".heal = 1,", .{});
+    if (rule.flags & 2 != 0) try w.line(".damage = true,", .{});
+    if (rule.flags & 4 != 0) try w.line(".heal = true,", .{});
     if (rule.flags & 8 != 0) try w.line(".kill = true,", .{});
     if (rule.flags >> 4 != 0) try w.line(
         ".score = {d},",
@@ -725,7 +725,7 @@ test "a synthetic level becomes named, linked, valid ZON with dead rules dropped
         ".then = .{ .send = .{ .to = .link_0, .message = .call } },",
         ".turn = true,",
         ".forward = -16,",
-        ".damage = 1,",
+        ".damage = true,",
         ".score = 200,",
         ".then = .remove,",
     }) |expected| try std.testing.expect(std.mem.indexOf(u8, guest, expected) != null);
