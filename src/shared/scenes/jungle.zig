@@ -1357,41 +1357,46 @@ pub const Scene = struct {
 
     fn syncVisibility(self: *Scene) !void {
         for (self.content.visibility.bindings) |binding| {
-            const observation: @import("../visibility.zig").Observation = switch (binding.owner) {
-                .enemy_barrier => |index| .{ .body = self.enemy_barriers.emitters[index].body(self.content.enemy_barriers.definitions[index]), .active = self.enemy_barriers.emitters[index].active },
-                .rescue_contact => |index| .{ .body = self.rescue_contacts.actors[index].body(self.content.rescue_contacts.definitions[index]), .active = self.rescue_contacts.actors[index].active },
-                .ambient_person => |index| .{ .body = .{ .room = self.ambient_people.actors[index].room, .position = self.ambient_people.actors[index].pose.position, .width = self.content.ambient_people.definitions[index].width }, .active = self.ambient_people.actors[index].active },
-                .escort => |index| .{ .body = self.escort_followers.actors[index].contact, .active = self.escort_followers.actors[index].active },
-                .attentive_contact => |index| .{ .body = self.content.attentive_contacts.definitions[index].footprint, .active = self.attentive_contacts.instances[index].active },
-                .quest_contact => |index| .{ .body = self.quest_contacts.instances[index].body(self.content.quest_contacts.definitions[index]), .active = self.quest_contacts.instances[index].active },
-                .mission_terminal => |index| .{ .body = self.content.mission_terminals.definitions[index].footprint, .active = self.mission_terminals.instances[index].active },
-                .service_counter => |index| .{ .body = self.content.service_counters.definitions[index].footprint, .active = self.service_counters.instances[index].active },
-                .force_field => |index| .{ .body = self.force_fields[index].body(self.content.force_fields.definitions[index]), .active = true },
-                .player => .{ .body = self.props.player_contact, .active = true },
-                .gunman => |index| blk: {
-                    const actor = self.gunmen.actors[index];
-                    break :blk .{ .body = if (actor.dormant or actor.lost) null else actor.contact, .active = actor.active and !actor.lost and !actor.dormant };
-                },
-                .guard => |index| blk: {
-                    const actor = self.guards.actors[index];
-                    break :blk .{ .body = if (actor.room) |room| .{ .room = room, .position = actor.pose.position, .width = self.content.guards.definitions[index].contact_width } else null, .active = actor.active and actor.activity != .removed };
-                },
-                .prop => |index| blk: {
-                    const object = self.props.objects[index];
-                    break :blk .{ .body = if (try self.props.visible(index, &self.equipment)) object.contact else null, .active = object.active };
-                },
-                .door => |index| .{ .body = self.content.doors.definitions[index].footprint, .active = self.doors.instances[index].active },
-                .item_aid => |index| blk: {
-                    const actor = self.item_aid.actors[index];
-                    break :blk .{ .body = if (actor.phase != .gone) actor.contact else null, .active = actor.active and actor.phase != .gone };
-                },
-                .trader => |index| .{ .body = self.traders.actors[index].contact, .active = self.traders.actors[index].active },
-                .guide => |index| .{ .body = self.guides.actors[index].contact, .active = self.guides.actors[index].active },
-                .station => |index| .{ .body = if (self.story_stations.instances[index].phase == .ready or self.story_stations.instances[index].phase == .using) self.content.story_stations.definitions[index].footprint else null, .active = self.story_stations.instances[index].active },
-                .unbound => continue,
-            };
+            const observation = try self.placementObservation(binding.owner) orelse continue;
             self.visibility.observe(binding.entity, observation);
         }
+    }
+
+    /// Current body and activity of one placement's modern owner; null when no component owns it.
+    pub fn placementObservation(self: *Scene, owner: @import("../content/visibility.zig").Owner) !?@import("../visibility.zig").Observation {
+        return switch (owner) {
+            .enemy_barrier => |index| .{ .body = self.enemy_barriers.emitters[index].body(self.content.enemy_barriers.definitions[index]), .active = self.enemy_barriers.emitters[index].active },
+            .rescue_contact => |index| .{ .body = self.rescue_contacts.actors[index].body(self.content.rescue_contacts.definitions[index]), .active = self.rescue_contacts.actors[index].active },
+            .ambient_person => |index| .{ .body = .{ .room = self.ambient_people.actors[index].room, .position = self.ambient_people.actors[index].pose.position, .width = self.content.ambient_people.definitions[index].width }, .active = self.ambient_people.actors[index].active },
+            .escort => |index| .{ .body = self.escort_followers.actors[index].contact, .active = self.escort_followers.actors[index].active },
+            .attentive_contact => |index| .{ .body = self.content.attentive_contacts.definitions[index].footprint, .active = self.attentive_contacts.instances[index].active },
+            .quest_contact => |index| .{ .body = self.quest_contacts.instances[index].body(self.content.quest_contacts.definitions[index]), .active = self.quest_contacts.instances[index].active },
+            .mission_terminal => |index| .{ .body = self.content.mission_terminals.definitions[index].footprint, .active = self.mission_terminals.instances[index].active },
+            .service_counter => |index| .{ .body = self.content.service_counters.definitions[index].footprint, .active = self.service_counters.instances[index].active },
+            .force_field => |index| .{ .body = self.force_fields[index].body(self.content.force_fields.definitions[index]), .active = true },
+            .player => .{ .body = self.props.player_contact, .active = true },
+            .gunman => |index| blk: {
+                const actor = self.gunmen.actors[index];
+                break :blk .{ .body = if (actor.dormant or actor.lost) null else actor.contact, .active = actor.active and !actor.lost and !actor.dormant };
+            },
+            .guard => |index| blk: {
+                const actor = self.guards.actors[index];
+                break :blk .{ .body = if (actor.room) |room| .{ .room = room, .position = actor.pose.position, .width = self.content.guards.definitions[index].contact_width } else null, .active = actor.active and actor.activity != .removed };
+            },
+            .prop => |index| blk: {
+                const object = self.props.objects[index];
+                break :blk .{ .body = if (try self.props.visible(index, &self.equipment)) object.contact else null, .active = object.active };
+            },
+            .door => |index| .{ .body = self.content.doors.definitions[index].footprint, .active = self.doors.instances[index].active },
+            .item_aid => |index| blk: {
+                const actor = self.item_aid.actors[index];
+                break :blk .{ .body = if (actor.phase != .gone) actor.contact else null, .active = actor.active and actor.phase != .gone };
+            },
+            .trader => |index| .{ .body = self.traders.actors[index].contact, .active = self.traders.actors[index].active },
+            .guide => |index| .{ .body = self.guides.actors[index].contact, .active = self.guides.actors[index].active },
+            .station => |index| .{ .body = if (self.story_stations.instances[index].phase == .ready or self.story_stations.instances[index].phase == .using) self.content.story_stations.definitions[index].footprint else null, .active = self.story_stations.instances[index].active },
+            .unbound => null,
+        };
     }
 
     fn deliverHit(self: *Scene, hit: @import("../combat.zig").Hit) void {
