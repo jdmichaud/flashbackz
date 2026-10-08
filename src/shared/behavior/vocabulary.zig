@@ -49,7 +49,8 @@ pub const Operation = union(enum) {
     input_forward_and: Button,
     input_none,
     input_button: Button,
-    input_shift_any_direction,
+    /// Shift held (any direction, no other button) and no floor that many cells ahead.
+    shift_over_gap: i16,
     input_buttons_only: Button,
     // Terrain around the character; "ahead" follows its facing.
     ceiling_ahead: i16,
@@ -94,7 +95,7 @@ pub const Operation = union(enum) {
     send_to_selected_item: Message,
     send_to_touching_facing_opposite: Message,
     send_to_touching_facing_same: Message,
-    send_to_matching_device: Message,
+    send_to_matching_device: struct { message: Message, kind: Number },
     acknowledge: Message,
     send_to_touching_device: Message,
     broadcast: Message,
@@ -105,7 +106,7 @@ pub const Operation = union(enum) {
     defeated,
     set_charge: i16,
     add_charge: i16,
-    copy_health_to: Character,
+    copy_health_to: struct { character: Character, health: Number },
     mirror_health: Character,
     credit: struct { purse: Link, amount: Number },
     debit: struct { purse: Link, amount: Number },
@@ -137,18 +138,18 @@ pub const Operation = union(enum) {
     // Chance: one random draw, true when the value is divisible by the argument.
     chance: i16,
     // Combat.
-    shoot: Height,
+    shoot: struct { height: Height, range: Number },
     hit: HitSide,
-    strike,
+    strike: struct { height: Height, range: Number },
     snap_to_wall_ahead,
     start_defeat: i16,
-    start_defeat_with_scene: i16,
+    start_defeat_with_scene: struct { scene: i16, delay: Number },
     // Inventory and items.
     carried_by: Character,
     drop_at: Character,
     selected_item_is: i16,
-    offer_payment,
-    touching_pickup,
+    offer_payment: struct { message: Message, seller: Number },
+    touching_pickup: i16,
     player_has_item: i16,
     // Lifts and carriers.
     move_with_riders: i16,

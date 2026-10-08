@@ -231,8 +231,8 @@ fn classifyParameters(level: *Level, behavior: *Behavior) !void {
             rule.effect,
         }) |operation| {
             const known = codes.lookup(operation.code) orelse continue;
-            for (known.implicit_parameters) |p| {
-                if (number_use[p.parameter] == null) number_use[p.parameter] = p.name;
+            if (known.implicit) |p| {
+                if (number_use[p.parameter] == null) number_use[p.parameter] = p.default_name;
             }
             const arg = operation.argument;
             switch (known.argument) {
@@ -421,88 +421,99 @@ fn writeOperation(
         return out.print(".{{ .unknown_{d} = {d} }}", .{ operation.code, operation.argument });
     };
     const name = zon.identifier(known.name);
-    const arg = operation.argument;
+    if (known.argument == .none) {
+        if (operation.argument != 0) level.report.ignored_arguments += 1;
+        return out.print("{f}", .{name});
+    }
+    var value: std.Io.Writer.Allocating = .init(level.arena);
+    if (!try writeValue(
+        level,
+        behavior,
+        known,
+        operation.argument,
+        first_argument,
+        &value.writer,
+    )) {
+        return invalid(level, behavior, known, operation.argument, out);
+    }
+    const number = known.implicit orelse return out.print(
+        ".{{ {f} = {s} }}",
+        .{ name, value.written() },
+    );
+    // The original also reads one placement number; the table names it explicitly.
+    const slot = behavior.numbers[number.parameter].?;
+    try out.print(".{{ {f} = .{{ .{s} = {s}, .{s} = {f} }} }}", .{
+        name, number.main_field, value.written(), number.field, zon.identifier(slot),
+    });
+}
+
+/// Write an operation's argument; false when the original data holds an unexpected value.
+fn writeValue(
+    level: *Level,
+    behavior: Behavior,
+    known: codes.Operation,
+    arg: i16,
+    first_argument: ?i16,
+    out: *std.Io.Writer,
+) !bool {
     var buffer: [32]u8 = undefined;
     switch (known.argument) {
-        .none => {
-            if (arg != 0) level.report.ignored_arguments += 1;
-            try out.print("{f}", .{name});
-        },
-        .number => try out.print(".{{ {f} = {d} }}", .{ name, arg }),
-        .message => try out.print(
-            ".{{ {f} = {f} }}",
-            .{ name, zon.identifier(try messageName(level, arg)) },
-        ),
-        .send_to_link => |p| try out.print(".{{ {f} = .{{ .to = {f}, .message = {f} }} }}", .{
-            name, zon.identifier(behavior.links[p].?), zon.identifier(try messageName(level, arg)),
+        .none => unreachable,
+        .number => try out.print("{d}", .{arg}),
+        .message => try out.print("{f}", .{zon.identifier(try messageName(level, arg))}),
+        .send_to_link => |p| try out.print(".{{ .to = {f}, .message = {f} }}", .{
+            zon.identifier(behavior.links[p].?), zon.identifier(try messageName(level, arg)),
         }),
-        .parameter_number => if (parameterIndex(arg, 0)) |p| {
-            try out.print(".{{ {f} = {f} }}", .{ name, zon.identifier(behavior.numbers[p].?) });
-        } else try invalid(level, behavior, known, arg, out),
-        .parameter_link_and_amount => if (parameterIndex(arg, 1)) |p| {
-            try out.print(".{{ {f} = .{{ .purse = {f}, .amount = {f} }} }}", .{
-                name,
-                zon.identifier(behavior.links[p].?),
-                zon.identifier(behavior.numbers[p + 1].?),
+        .parameter_number => {
+            const p = parameterIndex(arg, 0) orelse return false;
+            try out.print("{f}", .{zon.identifier(behavior.numbers[p].?)});
+        },
+        .parameter_link_and_amount => {
+            const p = parameterIndex(arg, 1) orelse return false;
+            try out.print(".{{ .purse = {f}, .amount = {f} }}", .{
+                zon.identifier(behavior.links[p].?), zon.identifier(behavior.numbers[p + 1].?),
             });
-        } else try invalid(level, behavior, known, arg, out),
-        .parameter_link_pair => |fields| if (parameterIndex(arg, 1)) |p| {
-            try out.print(".{{ {f} = .{{ .{s} = {f}, .{s} = {f} }} }}", .{
-                name,
+        },
+        .parameter_link_pair => |fields| {
+            const p = parameterIndex(arg, 1) orelse return false;
+            try out.print(".{{ .{s} = {f}, .{s} = {f} }}", .{
                 fields[0],
                 zon.identifier(behavior.links[p].?),
                 fields[1],
                 zon.identifier(behavior.links[p + 1].?),
             });
-        } else try invalid(level, behavior, known, arg, out),
-        .character => if (arg >= 0 and arg < level.character_ids.len) {
-            try out.print(
-                ".{{ {f} = {f} }}",
-                .{ name, zon.identifier(level.character_ids[@intCast(arg)]) },
-            );
-        } else try invalid(level, behavior, known, arg, out),
-        .kind => try out.print(
-            ".{{ {f} = {f} }}",
-            .{ name, zon.identifier(codes.kindName(&buffer, arg)) },
-        ),
-        .button => {
-            const button: ?[]const u8 = switch (arg) {
-                0 => "shift",
-                1 => "enter",
-                2 => "space",
-                else => null,
-            };
-            if (button) |b| {
-                try out.print(".{{ {f} = .{s} }}", .{ name, b });
-            } else try invalid(level, behavior, known, arg, out);
         },
-        .hit_side => try out.print(".{{ {f} = .{s} }}", .{
-            name,
-            switch (arg) {
-                0 => "from_behind",
-                1 => "from_front",
-                // Accepted as a front hit, but a shot never treats the character as waiting for it.
-                else => "from_front_unannounced",
-            },
-        }),
-        .height => switch (arg) {
-            0 => try out.print(".{{ {f} = .standing }}", .{name}),
-            1 => try out.print(".{{ {f} = .crouched }}", .{name}),
-            else => try invalid(level, behavior, known, arg, out),
+        .character => {
+            if (arg < 0 or arg >= level.character_ids.len) return false;
+            try out.print("{f}", .{zon.identifier(level.character_ids[@intCast(arg)])});
         },
+        .kind => try out.print("{f}", .{zon.identifier(codes.kindName(&buffer, arg))}),
+        .button => try out.print(".{s}", .{switch (arg) {
+            0 => "shift",
+            1 => "enter",
+            2 => "space",
+            else => return false,
+        }}),
+        .hit_side => try out.print(".{s}", .{switch (arg) {
+            0 => "from_behind",
+            1 => "from_front",
+            // Accepted as a front hit, but a shot never treats the character as waiting for it.
+            else => "from_front_unannounced",
+        }}),
+        .height => try out.print(".{s}", .{switch (arg) {
+            0 => "standing",
+            1 => "crouched",
+            else => return false,
+        }}),
         .kind_and => |field| {
-            const kind = codes.kindName(&buffer, first_argument orelse 0);
+            const kind = zon.identifier(codes.kindName(&buffer, first_argument orelse 0));
             if (std.mem.eql(u8, field, "hit")) {
-                try out.print(
-                    ".{{ {f} = .{{ .kind = {f}, .hit = {f} }} }}",
-                    .{ name, zon.identifier(kind), zon.identifier(try messageName(level, arg)) },
-                );
-            } else try out.print(
-                ".{{ {f} = .{{ .kind = {f}, .{s} = {d} }} }}",
-                .{ name, zon.identifier(kind), field, arg },
-            );
+                const hit = zon.identifier(try messageName(level, arg));
+                try out.print(".{{ .kind = {f}, .hit = {f} }}", .{ kind, hit });
+            } else try out.print(".{{ .kind = {f}, .{s} = {d} }}", .{ kind, field, arg });
         },
     }
+    return true;
 }
 
 fn invalid(

@@ -37,11 +37,18 @@ pub const Argument = union(enum) {
 pub const Operation = struct {
     name: []const u8,
     argument: Argument,
-    /// Placement parameters the original reads implicitly, with a default name for each.
-    implicit_parameters: []const Implicit = &.{},
+    /// A placement number the original reads besides the argument, if any.
+    implicit: ?Implicit = null,
 };
 
-pub const Implicit = struct { parameter: u2, name: []const u8 };
+/// The table writes such operations as `.{ .name = .{ .main_field = argument, .field = number } }`.
+pub const Implicit = struct {
+    parameter: u2,
+    main_field: []const u8,
+    field: []const u8,
+    /// Name for the number when the overlay gives none.
+    default_name: []const u8,
+};
 
 pub fn lookup(code: u8) ?Operation {
     return switch (code) {
@@ -56,7 +63,7 @@ pub fn lookup(code: u8) ?Operation {
         8 => op("input_forward_and", .button),
         9 => op("input_none", .none),
         10 => op("input_button", .button),
-        52 => op("input_shift_any_direction", .none),
+        52 => op("shift_over_gap", .number),
         53 => op("input_buttons_only", .button),
         // Terrain around the character; "ahead" follows its facing.
         11 => op("ceiling_ahead", .number),
@@ -104,10 +111,15 @@ pub fn lookup(code: u8) ?Operation {
         51 => op("send_to_selected_item", .message),
         70 => op("send_to_touching_facing_opposite", .message),
         71 => op("send_to_touching_facing_same", .message),
-        72 => implicit(
+        72 => withNumber(
             "send_to_matching_device",
             .message,
-            &.{.{ .parameter = 0, .name = "device_kind" }},
+            .{
+                .parameter = 0,
+                .main_field = "message",
+                .field = "kind",
+                .default_name = "device_kind",
+            },
         ),
         111 => op("acknowledge", .message),
         124 => op("send_to_touching_device", .message),
@@ -119,10 +131,15 @@ pub fn lookup(code: u8) ?Operation {
         39 => op("defeated", .none),
         85 => op("set_charge", .number),
         86 => op("add_charge", .number),
-        88 => implicit(
+        88 => withNumber(
             "copy_health_to",
             .character,
-            &.{.{ .parameter = 0, .name = "health_to_copy" }},
+            .{
+                .parameter = 0,
+                .main_field = "character",
+                .field = "health",
+                .default_name = "health_to_copy",
+            },
         ),
         89 => op("mirror_health", .character),
         101 => op("credit", .parameter_link_and_amount),
@@ -155,22 +172,54 @@ pub fn lookup(code: u8) ?Operation {
         // Chance: one random draw, true when the value is divisible by the argument.
         97 => op("chance", .number),
         // Combat.
-        100 => implicit("shoot", .height, &.{.{ .parameter = 0, .name = "shot_range" }}),
+        100 => withNumber(
+            "shoot",
+            .height,
+            .{
+                .parameter = 0,
+                .main_field = "height",
+                .field = "range",
+                .default_name = "shot_range",
+            },
+        ),
         107 => op("hit", .hit_side),
-        134 => implicit("strike", .none, &.{.{ .parameter = 3, .name = "strike_range" }}),
+        134 => withNumber(
+            "strike",
+            .height,
+            .{
+                .parameter = 3,
+                .main_field = "height",
+                .field = "range",
+                .default_name = "strike_range",
+            },
+        ),
         95 => op("snap_to_wall_ahead", .none),
         79 => op("start_defeat", .number),
-        92 => implicit(
+        92 => withNumber(
             "start_defeat_with_scene",
             .number,
-            &.{.{ .parameter = 3, .name = "defeat_delay" }},
+            .{
+                .parameter = 3,
+                .main_field = "scene",
+                .field = "delay",
+                .default_name = "defeat_delay",
+            },
         ),
         // Inventory and items.
         48 => op("carried_by", .character),
         49 => op("drop_at", .character),
         50 => op("selected_item_is", .number),
-        108 => implicit("offer_payment", .none, &.{.{ .parameter = 0, .name = "seller_kind" }}),
-        109 => op("touching_pickup", .none),
+        108 => withNumber(
+            "offer_payment",
+            .message,
+            .{
+                .parameter = 0,
+                .main_field = "message",
+                .field = "seller",
+                .default_name = "seller_kind",
+            },
+        ),
+        109 => op("touching_pickup", .number),
         131 => op("player_has_item", .number),
         // Lifts and carriers.
         78 => op("move_with_riders", .number),
@@ -198,8 +247,8 @@ fn op(name: []const u8, argument: Argument) Operation {
     return .{ .name = name, .argument = argument };
 }
 
-fn implicit(name: []const u8, argument: Argument, parameters: []const Implicit) Operation {
-    return .{ .name = name, .argument = argument, .implicit_parameters = parameters };
+fn withNumber(name: []const u8, argument: Argument, number: Implicit) Operation {
+    return .{ .name = name, .argument = argument, .implicit = number };
 }
 
 /// Messages the engine itself generates or interprets; the overlay names the rest.
