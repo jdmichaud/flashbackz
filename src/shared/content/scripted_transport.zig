@@ -13,10 +13,14 @@ pub const Assets = struct {
     signals: []i16,
     clips: []animation.OwnedClip,
     player_clips: ?[2]motion.Clip,
+    effects: []runtime.EffectDefinition,
+    effect_sources: []u16,
     pub fn deinit(self: *Assets) void {
         self.allocator.free(self.definitions);
         self.allocator.free(self.sources);
         self.allocator.free(self.signals);
+        self.allocator.free(self.effects);
+        self.allocator.free(self.effect_sources);
         for (self.clips) |*clip| clip.deinit();
         self.allocator.free(self.clips);
     }
@@ -58,6 +62,10 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
         for (clips.items) |*clip| clip.deinit();
         clips.deinit(allocator);
     }
+    var effects: std.ArrayList(runtime.EffectDefinition) = .empty;
+    errdefer effects.deinit(allocator);
+    var effect_sources: std.ArrayList(u16) = .empty;
+    errdefer effect_sources.deinit(allocator);
     var player_clips: ?[2]motion.Clip = null;
     const player = try table.record(0);
     const player_rules = try rules.group(bytes, player.rule_group);
@@ -65,15 +73,16 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
         const record = try table.record(@intCast(index));
         if (record.kind != 0 or record.minimum_difficulty > @backingInt(difficulty)) continue;
         const group = try rules.group(bytes, record.rule_group);
-        if (!validRows(group, &.{ 0, 0, 2, 2, 4 }, &.{ 2, 0, 4, 2, 0 }, &.{ .{ 34, 0, 0 }, .{ 0, 0, 67 }, .{ 34, 0, 37 }, .{ 0, 0, 35 }, .{ 0, 130, 75 } })) continue;
+        const contact_gate = validRows(group, &.{ 0, 0, 2, 2, 2, 2, 6 }, &.{ 2, 0, 6, 2, 2, 2, 0 }, &.{ .{ 34, 0, 67 }, .{ 0, 0, 67 }, .{ 34, 0, 37 }, .{ 77, 0, 67 }, .{ 80, 0, 35 }, .{ 0, 0, 0 }, .{ 38, 130, 75 } });
+        if (!contact_gate and !validRows(group, &.{ 0, 0, 2, 2, 4 }, &.{ 2, 0, 4, 2, 0 }, &.{ .{ 34, 0, 0 }, .{ 0, 0, 67 }, .{ 34, 0, 37 }, .{ 0, 0, 35 }, .{ 0, 130, 75 } })) continue;
         const start = group.at(0);
         const ack = group.at(2);
-        const request = group.at(3);
-        const finish = group.at(4);
+        const request = group.at(if (contact_gate) 4 else 3);
+        const finish = group.at(if (contact_gate) 6 else 4);
         if (record.initial_state != start.source or ack.conditions[0].argument != 12 or record.parameters[0] != 0 or finish.conditions[1].argument != 0) return error.UnsupportedScriptedTransport;
         const target = record.parameters[1];
         const effect_id = record.parameters[2];
-        if (target < 0 or target >= table.count or effect_id < 0 or effect_id >= table.count or effect_id <= index) return error.InvalidTransportTarget;
+        if (target < 0 or target >= table.count or effect_id < 0 or effect_id >= table.count) return error.InvalidTransportTarget;
         const destination = try table.record(@intCast(target));
         const effect = try table.record(@intCast(effect_id));
         if (destination.room >= rooms.len or destination.rule_group != player.rule_group or destination.initial_state != 1 or effect.parameters[0] != 0 or effect.flags & 1 == 0) return error.UnsupportedTransportDestination;
@@ -99,11 +108,23 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
                 .frame => |frame| if (frame.forward != 0 or frame.down != 0) return error.MovingTransportCadence,
             };
         }
-        const effect_clips = [2]motion.Clip{ try resolve(allocator, &clips, animations, effect_rules.at(2).source, resolver), try resolve(allocator, &clips, animations, effect_rules.at(4).source, resolver) };
+        const effect_index = std.mem.indexOfScalar(u16, effect_sources.items, @intCast(effect_id)) orelse create: {
+            const effect_clips = [2]motion.Clip{ try resolve(allocator, &clips, animations, effect_rules.at(2).source, resolver), try resolve(allocator, &clips, animations, effect_rules.at(4).source, resolver) };
+            try effects.append(allocator, .{ .clips = effect_clips, .palette_bank = @intCast(effect.visual_flags & 3), .behind_player = effect.visual_flags & 8 != 0 });
+            try effect_sources.append(allocator, @intCast(effect_id));
+            break :create effects.items.len - 1;
+        };
+        var completion: ?@import("../world_props.zig").CircuitId = null;
+        if (contact_gate) {
+            if (record.room >= rooms.len or request.conditions[0].argument != 1 or group.at(3).conditions[0].argument != 0 or record.parameters[3] < 0 or record.parameters[3] >= table.count) return error.UnsupportedTransportContact;
+            completion = try routes.internConnection(allocator, connections, @intCast(index), @intCast(record.parameters[3]), finish.conditions[0].argument);
+        }
         // Register every authored output even when the consumer is compiled into this component.
         _ = try routes.internConnection(allocator, connections, @intCast(index), @intCast(effect_id), ack.effect.argument);
         _ = try routes.internConnection(allocator, connections, @intCast(index), 0, request.effect.argument);
-        try definitions.append(allocator, .{ .destination = .{ .room = rooms[destination.room], .position = destination.position, .facing = if (destination.facing_right == 0) .left else .right }, .cadence = cadence, .effect_clips = effect_clips, .palette_bank = @intCast(effect.visual_flags & 3), .behind_player = effect.visual_flags & 8 != 0, .accepts_signals = record.flags & 1 != 0 });
+        // Excluded templates retain their pose/state, but original activation never
+        // initializes their facing flag. Recover that effective left-facing destination.
+        try definitions.append(allocator, .{ .destination = .{ .room = rooms[destination.room], .position = destination.position, .facing = if (destination.minimum_difficulty > @backingInt(difficulty) or destination.facing_right == 0) .left else .right }, .cadence = cadence, .effect = effect_index, .effect_next_step = index >= effect_id, .contact = if (contact_gate) .{ .room = rooms[record.room], .position = record.position, .width = record.collision_width } else null, .wake_on_contact = record.flags & 2 != 0, .completion = completion, .accepts_signals = record.flags & 1 != 0 });
         try sources.append(allocator, @intCast(index));
         try signals.append(allocator, start.conditions[0].argument);
         table.register(@intCast(index), .scripted_transport);
@@ -116,5 +137,9 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
     errdefer allocator.free(owned_sources);
     const owned_signals = try signals.toOwnedSlice(allocator);
     errdefer allocator.free(owned_signals);
-    return .{ .allocator = allocator, .definitions = owned, .sources = owned_sources, .signals = owned_signals, .clips = try clips.toOwnedSlice(allocator), .player_clips = player_clips };
+    const owned_effects = try effects.toOwnedSlice(allocator);
+    errdefer allocator.free(owned_effects);
+    const owned_effect_sources = try effect_sources.toOwnedSlice(allocator);
+    errdefer allocator.free(owned_effect_sources);
+    return .{ .effects = owned_effects, .effect_sources = owned_effect_sources, .allocator = allocator, .definitions = owned, .sources = owned_sources, .signals = owned_signals, .clips = try clips.toOwnedSlice(allocator), .player_clips = player_clips };
 }

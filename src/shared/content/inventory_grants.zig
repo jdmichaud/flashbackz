@@ -4,9 +4,10 @@ const rules = @import("rule_table.zig");
 const runtime = @import("../inventory_grants.zig");
 pub const Spec = struct { idle: u16, signal: i16, kind: @import("../equipment.zig").Kind, object_kind: u8, starting: ?u16 = null, movie: ?@import("../story_cue.zig").Cue };
 pub fn recognize(group: rules.Group) ?Spec {
+    if (@import("credential_cards.zig").terminal(group)) |card| return .{ .idle = card.idle, .signal = card.grant_signal, .kind = .terminal_card, .object_kind = 3, .movie = null };
     if (@import("credential_cards.zig").papers(group)) |p| return .{ .idle = p.idle, .starting = p.starting, .signal = p.grant_signal, .kind = .papers, .object_kind = 3, .movie = .papers_received };
     if (@import("credential_cards.zig").parcel(group)) |p| return .{ .idle = p.idle, .signal = p.grant_signal, .kind = .parcel, .object_kind = 3, .movie = .parcel_received };
-    if (@import("credential_cards.zig").permit(group) != null) return .{ .idle = group.at(0).source, .signal = group.at(0).conditions[0].argument, .kind = .work_permit, .object_kind = 3, .movie = .permit_received };
+    if (@import("credential_cards.zig").permit(group) != null) return .{ .idle = group.at(0).source, .signal = group.at(0).conditions[0].argument, .kind = .work_permit, .object_kind = 3, .starting = group.at(5).source, .movie = .permit_received };
     if (group.count() != 2 and group.count() != 3) return null;
     const a = group.at(0);
     const b = group.at(1);
@@ -34,7 +35,14 @@ pub const Assets = struct {
 pub fn outputs(allocator: std.mem.Allocator, table: @import("placement.zig").Table, bytes: []const u8, sources: []const u16, connections: *std.ArrayList(@import("first_world_props.zig").Connection)) !void {
     for (sources) |source| {
         const record = try table.record(source);
-        const spec = @import("credential_cards.zig").parcel(try rules.group(bytes, record.rule_group)) orelse continue;
+        const group = try rules.group(bytes, record.rule_group);
+        if (@import("credential_cards.zig").terminal(group)) |card| {
+            const target = record.parameters[card.output_parameter];
+            if (target < 0 or target >= table.count) return error.InvalidGrantOutput;
+            _ = try @import("first_world_props.zig").internConnection(allocator, connections, source, @intCast(target), card.granted);
+            _ = try @import("first_world_props.zig").internConnection(allocator, connections, source, @intCast(target), card.consumed);
+        }
+        const spec = @import("credential_cards.zig").parcel(group) orelse continue;
         const target = record.parameters[spec.followup_parameter];
         if (target < 0 or target >= table.count) return error.InvalidGrantFollowup;
         _ = try @import("first_world_props.zig").internConnection(allocator, connections, source, @intCast(target), spec.followup_signal);
@@ -59,8 +67,17 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
             } else return error.MissingGrantFollowup;
             followup = .{ .steps = @intCast(clip.frames.len), .circuit = circuit };
         }
+        var on_grant: ?@import("../world_props.zig").CircuitId = null;
+        var on_consumed: ?@import("../world_props.zig").CircuitId = null;
+        if (@import("credential_cards.zig").terminal(try rules.group(rule_bytes, record.rule_group))) |card| {
+            for (routes) |route| if (route.sender == source and route.recipient == record.parameters[card.output_parameter]) {
+                if (route.message == card.granted) on_grant = route.circuit;
+                if (route.message == card.consumed) on_consumed = route.circuit;
+            };
+            if (on_grant == null or on_consumed == null) return error.MissingGrantOutput;
+        }
         table.register(@intCast(source), .inventory_grants);
-        try definitions.append(allocator, .{ .item = .{ .index = first_item.index + @as(u16, @intCast(index)), .generation = first_item.generation }, .movie = spec.movie, .followup = followup });
+        try definitions.append(allocator, .{ .item = .{ .index = first_item.index + @as(u16, @intCast(index)), .generation = first_item.generation }, .movie = spec.movie, .followup = followup, .on_grant = on_grant, .on_consumed = on_consumed });
         for (routes) |route| if (route.recipient == source and route.message == spec.signal) {
             try bindings.append(allocator, .{ .circuit = route.circuit, .target = target, .next_step = route.sender >= source });
         };

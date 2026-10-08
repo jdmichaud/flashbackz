@@ -336,7 +336,7 @@ pub const Game = struct {
                 story.music_enabled = self.preferences.music;
                 story.music.volume = self.preferences.volume;
                 if (try story.update(p)) {
-                    const defeated = story.kind == .disintegration;
+                    const defeated = story.kind == .disintegration or story.kind == .reactor_failure;
                     const paused = now - story.started_ns;
                     story.stopAudio(p);
                     story.deinit();

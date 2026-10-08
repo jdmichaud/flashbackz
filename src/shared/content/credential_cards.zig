@@ -74,3 +74,17 @@ pub fn papers(group: rules.Group) ?Papers {
     if (a.conditions[1].argument != 35 or a.effect.argument != 0 or b.conditions[0].argument != 102 or group.at(2).conditions[0].argument != 7 or group.at(4).conditions[1].argument != 43 or group.at(4).effect.argument != 0 or group.at(5).effect.argument != 0) return null;
     return .{ .idle = a.source, .using = b.target, .starting = group.at(5).source, .signal = b.conditions[1].argument, .grant_signal = a.conditions[0].argument };
 }
+
+pub const TerminalCard = struct { idle: u16, using: u16, signal: i16, grant_signal: i16, output_parameter: u2, granted: i16, consumed: i16 };
+pub fn terminal(group: rules.Group) ?TerminalCard {
+    if (group.count() != 4) return null;
+    const codes = [_][3]u8{ .{ 34, 72, 90 }, .{ 34, 36, 48 }, .{ 0, 0, 67 }, .{ 0, 36, 74 } };
+    for (codes, 0..) |ops, i| {
+        const r = group.at(i);
+        const next: u16 = if (i == 0) 3 else 0;
+        if (r.source != group.at(if (i == 3) 3 else 0).source or r.target != group.at(next).source or r.next != next or r.dx != 0 or r.dy != 0 or r.flags != 0) return null;
+        for ([_]rules.Operation{ r.conditions[0], r.conditions[1], r.effect }, ops) |op, code| if (op.code != code) return null;
+    }
+    if (group.at(0).conditions[0].argument != 102 or group.at(0).effect.argument != 46 or group.at(1).effect.argument != 0 or group.at(3).effect.argument != 0) return null;
+    return .{ .idle = group.at(0).source, .using = group.at(3).source, .signal = group.at(0).conditions[1].argument, .grant_signal = group.at(1).conditions[0].argument, .output_parameter = 1, .granted = group.at(1).conditions[1].argument, .consumed = group.at(3).conditions[1].argument };
+}

@@ -80,6 +80,14 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
         const record = try table.record(@intCast(i));
         if (record.minimum_difficulty > @backingInt(difficulty)) continue;
         const group = try @import("rule_table.zig").group(rules, record.rule_group);
+        if (@import("timed_items.zig").recognize(group)) |timer| {
+            if (record.kind != 3 or record.room < room_ids.len or record.initial_state != timer.states[0]) return error.UnsupportedTimedItemPlacement;
+            const label = try strings.copy(allocator, names, record.text_id);
+            errdefer allocator.free(label);
+            try item_sources.append(allocator, @intCast(i));
+            try items.append(allocator, .{ .kind = .mission_time, .icon = try resolver.icon(record.inventory_icon), .label = label, .introduction_steps = null, .initial_quantity = record.life, .show_quantity = record.visual_flags & 4 != 0 });
+            continue;
+        }
         if (@import("inventory_grants.zig").recognize(group)) |grant| {
             if (grant.starting != null and record.initial_state == grant.starting.? and record.initially_active != 0) continue;
             if (record.kind != 3 or record.room < room_ids.len or record.initial_state != grant.idle or record.object_id != grant.object_kind) return error.UnsupportedInventoryGrant;
@@ -92,12 +100,17 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, animations: []
                 defer use.deinit();
                 consumption_steps = @intCast(use.frames.len);
             }
+            if (@import("credential_cards.zig").terminal(group)) |card| {
+                var use = try animation.decode(allocator, animations, card.using);
+                defer use.deinit();
+                consumption_steps = @intCast(use.frames.len);
+            }
             if (@import("credential_cards.zig").papers(group)) |papers| {
                 var use = try animation.decode(allocator, animations, papers.using);
                 defer use.deinit();
                 consumption_steps = @intCast(use.frames.len);
             }
-            try items.append(allocator, .{ .kind = grant.kind, .consumption_movie = if (grant.kind == .papers) .card_delivery else null, .use_motion = if (record.object_id == 3) .reach else .direct, .use_action = if (grant.kind == .work_permit or grant.kind == .parcel or grant.kind == .papers) .{ .unlock = .{ .credential = .{ .fixed = record.life }, .consume_after_steps = consumption_steps, .movie = if (grant.kind == .parcel) .parcel_delivered else null } } else null, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label });
+            try items.append(allocator, .{ .kind = grant.kind, .consumption_movie = if (grant.kind == .papers) .card_delivery else null, .use_motion = if (record.object_id == 3) .reach else .direct, .use_action = if (grant.kind == .work_permit or grant.kind == .parcel or grant.kind == .papers or grant.kind == .terminal_card) .{ .unlock = .{ .credential = .{ .fixed = record.life }, .consume_after_steps = consumption_steps, .movie = if (grant.kind == .parcel) .parcel_delivered else null } } else null, .icon = try resolver.icon(record.inventory_icon), .introduction_steps = null, .initial_quantity = record.life, .label = label });
             continue;
         }
         const gift = @import("quest_items.zig").card(group);

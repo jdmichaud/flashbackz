@@ -116,6 +116,9 @@ pub const Scene = struct {
     props: props_mod.World,
     operated_controls: @import("../operated_controls.zig").World,
     locks: @import("../key_locks.zig").World,
+    credential_terminals: @import("../credential_terminals.zig").World,
+    environmental_alarms: @import("../environmental_alarms.zig").World,
+    timed_items: @import("../timed_items.zig").World,
     scripted_transport: @import("../scripted_transport.zig").World,
     arrival_triggers: @import("../arrival_triggers.zig").World,
     escort_followers: @import("../escort_followers.zig").World,
@@ -199,7 +202,13 @@ pub const Scene = struct {
         errdefer operated.deinit();
         var locks = try @import("../key_locks.zig").World.init(allocator, pack.locks.definitions, pack.locks.receivers);
         errdefer locks.deinit();
-        var scripted_transport = try @import("../scripted_transport.zig").World.init(allocator, pack.scripted_transport.definitions.len);
+        var credential_terminals = try @import("../credential_terminals.zig").World.init(allocator, pack.credential_terminals.definitions);
+        errdefer credential_terminals.deinit();
+        var environmental_alarms = try @import("../environmental_alarms.zig").World.init(allocator, pack.environmental_alarms.definitions);
+        errdefer environmental_alarms.deinit();
+        var timed_items = try @import("../timed_items.zig").World.init(allocator, pack.timed_items.definitions.len);
+        errdefer timed_items.deinit();
+        var scripted_transport = try @import("../scripted_transport.zig").World.init(allocator, pack.scripted_transport.definitions.len, pack.scripted_transport.effects.len);
         errdefer scripted_transport.deinit();
         var arrival_triggers = try @import("../arrival_triggers.zig").World.init(allocator, pack.arrival_triggers.definitions);
         errdefer arrival_triggers.deinit();
@@ -290,6 +299,9 @@ pub const Scene = struct {
             .escort_followers = escort_followers,
             .arrival_triggers = arrival_triggers,
             .scripted_transport = scripted_transport,
+            .timed_items = timed_items,
+            .environmental_alarms = environmental_alarms,
+            .credential_terminals = credential_terminals,
             .platform_sections = platform_sections,
             .item_aid = item_aid,
             .guides = guides,
@@ -338,8 +350,10 @@ pub const Scene = struct {
             if (!adjacent) return;
             attenuation = 1;
         }
+        try self.emitEffect(.{ .sound = sound, .attenuation = attenuation });
+    }
+    fn emitEffect(self: *Scene, event: @import("../audio/effects.zig").Event) !void {
         if (self.sound_event_count == self.sound_events.len) return error.TooManySoundEvents;
-        const event: @import("../audio/effects.zig").Event = .{ .sound = sound, .attenuation = attenuation };
         self.sound_events[self.sound_event_count] = event;
         self.sound_event_count += 1;
         if (self.settings.sound_fx) self.effects.submit(self.content.sounds, event);
@@ -369,6 +383,9 @@ pub const Scene = struct {
         self.escort_followers.deinit();
         self.arrival_triggers.deinit();
         self.scripted_transport.deinit();
+        self.timed_items.deinit();
+        self.environmental_alarms.deinit();
+        self.credential_terminals.deinit();
         self.platform_sections.deinit();
         self.item_aid.deinit();
         self.guides.deinit();
@@ -517,8 +534,11 @@ pub const Scene = struct {
                 } else try consumeInput(&self.pending, &self.input, deadline);
                 break :blk try self.input.intent();
             };
+            const room_before_step = self.environment.room;
             self.sound_event_count = 0;
             self.scripted_transport.beginStep();
+            self.timed_items.beginStep();
+            self.environmental_alarms.beginStep();
             self.props.beginStep();
             self.triggered_effects.beginStep();
             try self.inventory_grants.beginStep(self.content.inventory_grants.definitions, &self.equipment);
@@ -548,6 +568,7 @@ pub const Scene = struct {
             self.interaction = try self.chooseInteraction();
             try self.attentive_contacts.prepare(self.content.attentive_contacts.definitions, self.terrain.map(), self.props.player_contact);
             try self.quest_contacts.prepare(self.content.quest_contacts.definitions, self.terrain.map(), self.props.player_contact);
+            try self.credential_terminals.prepare(self.content.credential_terminals.definitions, self.terrain.map(), self.props.player_contact);
             try self.mission_terminals.prepare(self.content.mission_terminals.definitions, self.terrain.map(), self.props.player_contact);
             try self.service_counters.prepare(self.content.service_counters.definitions, self.terrain.map(), self.props.player_contact);
             try self.operated_controls.prepare(self.content.controls.definitions, self.terrain.map(), self.props.player_contact);
@@ -560,7 +581,7 @@ pub const Scene = struct {
             self.controller.ride_acknowledged = self.passengers.acknowledged != null;
             self.controller.ride_arrived = self.passengers.arrival;
             try self.energy_stations.prepare(self.content.energy_stations.definitions, self.terrain.map(), self.props.player_contact);
-            self.controller.control_available = self.interaction != .none or self.attentive_contacts.candidate != null or self.quest_contacts.candidate != null or self.mission_terminals.candidate != null or self.service_counters.candidate != null or self.operated_controls.candidate != null or self.locks.candidate != null or self.energy_stations.candidate != null;
+            self.controller.control_available = self.credential_terminals.candidate != null or self.interaction != .none or self.attentive_contacts.candidate != null or self.quest_contacts.candidate != null or self.mission_terminals.candidate != null or self.service_counters.candidate != null or self.operated_controls.candidate != null or self.locks.candidate != null or self.energy_stations.candidate != null;
             self.controller.pickup_available = self.props.pickup_candidate != null and self.interaction == .none;
             const selected = try self.equipment.selected();
             // Presenting a possession is a player gesture; its receiver decides whether
@@ -583,6 +604,7 @@ pub const Scene = struct {
             if (self.controller.fatal_landing) self.health = -1;
             if (self.death_wait == null) self.death_wait = self.controller.death_wait_requested;
             self.received_count = try self.equipment.advance(self.health, self.received_items);
+            try self.inventory_grants.observeConsumptions(self.content.inventory_grants.definitions, &self.equipment);
             if (self.equipment.used_movie) |movie| self.pending_movie = movie;
             if (self.equipment.recharged) |event| {
                 if (event.health) |health| self.health = health;
@@ -631,8 +653,14 @@ pub const Scene = struct {
             try self.operated_controls.advance(self.content.controls.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested and self.interaction == .none and self.locks.candidate == null);
             try self.locks.advance(self.content.locks.definitions, self.terrain.map(), self.environment.room, self.controller.operate_requested and self.interaction == .none);
             self.mission_terminals.route(self.content.mission_terminal_bindings, self.locks.pulses[0..self.locks.pulse_count]);
+            self.environmental_alarms.advance(self.content.environmental_alarms.definitions, &self.random);
+            for (self.environmental_alarms.instances, self.content.environmental_alarms.definitions) |instance, definition| {
+                if (instance.sound) |sound| try self.emitEffect(.{ .sound = sound });
+                if (instance.animation_sound) |sound| if (definition.room) |room| try self.emitSound(sound, room);
+            }
             try self.mission_terminals.advance(self.content.mission_terminals.definitions, self.content.mission_terminal_bindings, self.terrain.map(), self.environment.room, self.controller.operate_requested and self.interaction == .none, &self.equipment);
             self.doors.route(self.content.doors.bindings, self.mission_terminals.pulses[0..self.mission_terminals.pulse_count]);
+            self.scripted_transport.route(self.content.transport_bindings, self.mission_terminals.pulses[0..self.mission_terminals.pulse_count]);
             self.guards.route(self.content.guard_bindings, self.mission_terminals.pulses[0..self.mission_terminals.pulse_count]);
             for (self.mission_terminals.instances, self.content.mission_terminals.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             try self.energy_stations.advance(self.content.energy_stations.definitions, self.terrain.map(), self.environment.room);
@@ -816,15 +844,28 @@ pub const Scene = struct {
             try self.triggered_effects.advance(self.content.triggered_effects.definitions, self.terrain.map(), self.environment.room);
             self.last_ambient = if (self.content.forest_enabled) self.ambience.advance(.{ .quiet_steps = self.content.forest_quiet_steps, .calls = self.content.forest_calls }, self.environment.room, &self.random) else null;
             try self.robots.advance(self.content.robots.definitions, self.content.robots.profiles, self.terrain.view(), .{ .room = self.environment.room, .position = self.pose.position }, self.combat_targets, first_robot);
-            if (self.scripted_transport.advance(self.content.scripted_transport.definitions, if (self.controller.transport_acknowledged) transport_request else null, self.pose, self.environment.room)) |destination| {
+            if (try self.scripted_transport.advance(self.content.scripted_transport.definitions, if (self.controller.transport_acknowledged) transport_request else null, self.props.player_contact, self.terrain.map())) |destination| {
                 self.pose.position = destination.position;
                 self.pose.facing = destination.facing;
                 self.environment.room = destination.room;
                 self.controller.activity = .standing;
                 self.controller.playback = .{};
             }
-            self.scripted_transport.advanceEffects(self.content.scripted_transport.definitions, self.pose, self.environment.room);
-            for (self.scripted_transport.instances) |instance| if (instance.sound) |sound| if (instance.effect_room) |room| try self.emitSound(sound, room);
+            self.scripted_transport.advanceEffects(self.content.scripted_transport.effects, self.pose, self.environment.room);
+            for (self.scripted_transport.effects) |instance| if (instance.sound) |sound| if (instance.effect_room) |room| try self.emitSound(sound, room);
+            self.timed_items.route(self.content.timed_item_bindings, self.scripted_transport.pulses[0..self.scripted_transport.pulse_count]);
+            try self.timed_items.advance(self.content.timed_items.definitions, &self.equipment);
+            try self.inventory_grants.deliver(self.content.inventory_grants.definitions, self.content.inventory_grants.bindings, self.timed_items.pulses[0..self.timed_items.pulse_count], &self.equipment);
+            self.mission_terminals.route(self.content.mission_terminal_bindings, self.timed_items.pulses[0..self.timed_items.pulse_count]);
+            if (std.mem.indexOfScalar(@import("../geometry.zig").RoomId, self.content.timed_items.audible_rooms, self.environment.room) != null) {
+                for (self.timed_items.instances) |instance| if (instance.sound) |sound| try self.emitEffect(.{ .sound = sound, .attenuation = 1 });
+            }
+            self.credential_terminals.route(self.content.credential_terminal_bindings, self.locks.pulses[0..self.locks.pulse_count]);
+            self.credential_terminals.advance(self.content.credential_terminals.definitions, self.content.credential_terminal_bindings, self.controller.operate_requested and self.interaction == .none);
+            self.timed_items.route(self.content.timed_item_bindings, self.credential_terminals.pulses[0..self.credential_terminals.pulse_count]);
+            self.scripted_transport.route(self.content.transport_bindings, self.credential_terminals.pulses[0..self.credential_terminals.pulse_count]);
+            self.environmental_alarms.route(self.content.alarm_bindings, self.inventory_grants.pulses[0..self.inventory_grants.pulse_count]);
+            self.environmental_alarms.route(self.content.alarm_bindings, self.timed_items.pulses[0..self.timed_items.pulse_count]);
             try self.escort_followers.advance(self.content.escort_followers.definitions, self.terrain.map(), .{ .room = self.environment.room, .position = self.pose.position, .width = self.content.player_contact_width }, self.controller.operate_requested and self.interaction == .escort);
             try self.arrival_triggers.advance(self.content.arrival_triggers.definitions, self.terrain.map(), self.environment.room, self.sensed_contacts[0..sensed_count], self.message_icon);
             self.mission_terminals.route(self.content.mission_terminal_bindings, self.arrival_triggers.pulses[0..self.arrival_triggers.pulse_count]);
@@ -869,6 +910,7 @@ pub const Scene = struct {
             if (self.traders.movie) |movie| self.pending_movie = movie;
             if (self.inventory_grants.movie) |movie| self.pending_movie = movie;
             if (self.story_stations.movie) |movie| self.pending_movie = movie;
+            if (self.timed_items.failure) |movie| self.pending_movie = movie;
             if (self.hazards.defeat_requested) self.pending_movie = .disintegration;
             if (self.replay != null or try self.interactionHint() != null) self.level_code_steps = 0 else if (self.level_code_steps != 0) {
                 self.level_code_steps -= 1;
@@ -877,9 +919,13 @@ pub const Scene = struct {
             if (self.zoom_room != null and self.zoom_room.? != self.environment.room and self.settings.zoom == .on) self.settings.zoom = .off;
             self.zoom_room = self.environment.room;
             self.zoom.setActive(self.settings.zoom == .on, self.pose);
+            if (self.environment.room != room_before_step) self.environmental_alarms.shake_rows = 0;
             self.zoom.advance(self.pose);
             self.clock.?.consume();
             var request = self.locks.notice;
+            if (self.credential_terminals.notice) |notice| if (request == null or notice.priority >= request.?.priority) {
+                request = notice;
+            };
             if (self.arrival_triggers.notice) |notice| if (request == null or notice.priority >= request.?.priority) {
                 request = notice;
             };
@@ -1024,6 +1070,11 @@ pub const Scene = struct {
             try message.draw(try self.content.messages.get(message.request.message), &self.content.inventory_art.font, room.image.pixels, indices);
             try sprite_renderer.draw(indices, 256, 224, try self.content.frame(message.request.icon), 80, 8, .{ .palette_bank = 10, .foreground = .overwrite });
         } else try self.zoom.draw(indices, rgba);
+        const shake = @as(usize, self.environmental_alarms.shake_rows) * room.image.width;
+        if (shake != 0) {
+            std.mem.copyBackwards(u8, indices[shake..], indices[0 .. indices.len - shake]);
+            @memset(indices[0..shake], 0);
+        }
         if (self.dialog) |dialog| try dialog.menu.draw(self.content.inventory_art.artwork(), self.menu_entries[0..dialog.menu.count], self.score, indices, room.image.width, room.image.height);
         if (self.options) |options| try options.menu.draw(indices, &self.content.inventory_art.font);
         var colors = room.colors;
@@ -1110,6 +1161,10 @@ pub const Scene = struct {
             const definition = self.content.quest_contacts.definitions[index];
             return .{ .icon = definition.hint, .label = definition.label };
         }
+        if (self.credential_terminals.candidate) |index| {
+            const definition = self.content.credential_terminals.definitions[index];
+            return .{ .icon = definition.hint, .label = definition.label };
+        }
         if (self.mission_terminals.candidate) |index| {
             const definition = self.content.mission_terminals.definitions[index];
             return .{ .icon = definition.hint, .label = definition.label };
@@ -1133,7 +1188,7 @@ pub const Scene = struct {
         return null;
     }
     fn drawItemAid(self: *const Scene, room: *const @import("../content/room_artwork.zig").Artwork, indices: []u8, behind_player: bool) !void {
-        for (self.scripted_transport.instances, self.content.scripted_transport.definitions) |instance, definition| {
+        for (self.scripted_transport.effects, self.content.scripted_transport.effects) |instance, definition| {
             if (instance.effect_room != self.environment.room or definition.behind_player != behind_player) continue;
             const pose = instance.effect_pose;
             try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(pose.visual.id), @as(i32, pose.position.x) + 8, @as(i32, pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
@@ -1373,6 +1428,9 @@ pub const Scene = struct {
         self.escort_followers.hashInto(&hash);
         self.arrival_triggers.hashInto(&hash);
         self.scripted_transport.hashInto(&hash);
+        self.timed_items.hashInto(&hash);
+        self.environmental_alarms.hashInto(&hash);
+        self.credential_terminals.hashInto(&hash);
         self.platform_sections.hashInto(&hash);
         self.item_aid.hashInto(&hash);
         self.guides.hashInto(&hash);

@@ -151,7 +151,8 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         const service = @import("service_counters.zig").recognize(group);
         const mission = @import("mission_terminals.zig").recognize(group);
         const quest = @import("quest_contacts.zig").recognize(group);
-        const external_signal: ?i16 = if (service) |value| value.signal else if (mission) |value| value.signals[1] else if (quest) |value| value.receive else null;
+        const terminal = @import("credential_terminals.zig").recognize(group);
+        const external_signal: ?i16 = if (service) |value| value.signal else if (mission) |value| value.signals[1] else if (quest) |value| value.receive else if (terminal) |value| value.signal else null;
         if (lock == null and external_signal == null and quest_index == null and (manual == null or record.initial_state != manual.?.idle)) continue;
         const receiver = receivers.items.len;
         if (quest_index) |index| try quest_receivers.append(allocator, .{ .receiver = receiver, .contact = index });
@@ -160,7 +161,7 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
             const item = try table.record(source);
             if (item.parameters[0] != record.kind) continue;
             const item_rules = try rules.group(rule_bytes, item.rule_group);
-            const signal = if (@import("key_pickups.zig").recognize(item_rules)) |key| key.signal else if (@import("cartridges.zig").recognize(item_rules)) |cartridge| cartridge.signal else if (@import("quest_items.zig").card(item_rules)) |card| card.signal else if (@import("credential_cards.zig").starting(item_rules)) |card| card.signal else if (@import("credential_cards.zig").permit(item_rules)) |card| card.signal else if (@import("credential_cards.zig").parcel(item_rules)) |parcel| parcel.signal else if(@import("credential_cards.zig").papers(item_rules))|papers|papers.signal else continue;
+            const signal = if (@import("key_pickups.zig").recognize(item_rules)) |key| key.signal else if (@import("cartridges.zig").recognize(item_rules)) |cartridge| cartridge.signal else if (@import("quest_items.zig").card(item_rules)) |card| card.signal else if (@import("credential_cards.zig").starting(item_rules)) |card| card.signal else if (@import("credential_cards.zig").permit(item_rules)) |card| card.signal else if (@import("credential_cards.zig").parcel(item_rules)) |parcel| parcel.signal else if (@import("credential_cards.zig").papers(item_rules)) |papers| papers.signal else if (@import("credential_cards.zig").terminal(item_rules)) |card| card.signal else continue;
             if (lock == null and signal == 30) return error.UnsupportedItemOperatedControl;
             const circuit = if (external_signal != null and signal == external_signal.?) try props.internConnection(allocator, connections, source, @intCast(i), signal) else null;
             try bindings.append(allocator, .{ .circuit = circuit, .item = .{ .index = first_item.index + @as(u16, @intCast(index)), .generation = first_item.generation }, .receiver = receiver, .activates = if (lock != null) signal == recognize(group).?.input else false, .next_step = source >= i });

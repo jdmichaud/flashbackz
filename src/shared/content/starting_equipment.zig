@@ -18,13 +18,14 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
         .{ .kind = .shield, .state = 322, .target = 321, .operations = .{ 89, 0, 48 } },
         .{ .kind = .credits, .state = 329, .target = 330, .operations = .{ 0, 48, 67 } },
         .{ .kind = .id_card, .state = 331, .target = 332, .operations = .{ 48, 0, 67 } },
+        .{ .kind = .work_permit, .state = 340, .target = 341, .operations = .{ 0, 0, 48 } },
         .{ .kind = .papers, .state = 340, .target = 338, .operations = .{ 0, 0, 48 } },
         .{ .kind = .force_field, .state = 424, .target = 427, .operations = .{ 0, 48, 0 } },
     };
     var count: usize = 0;
     for (0..placements.count) |i| {
         const record = try placements.record(@intCast(i));
-        for (specs) |spec| if (record.initial_state == spec.state and record.initially_active != 0 and (spec.kind != .papers or @import("credential_cards.zig").papers(try @import("rule_table.zig").group(rules, record.rule_group)) != null)) {
+        for (specs) |spec| if (record.initial_state == spec.state and record.initially_active != 0 and matchesKind(spec.kind, try @import("rule_table.zig").group(rules, record.rule_group))) {
             count += 1;
         };
     }
@@ -38,7 +39,7 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
         const source = try placements.record(@intCast(i));
         if (source.initially_active == 0) continue;
         const spec = for (specs) |candidate| {
-            if (candidate.state == source.initial_state and (candidate.kind != .papers or @import("credential_cards.zig").papers(try @import("rule_table.zig").group(rules, source.rule_group)) != null)) break candidate;
+            if (candidate.state == source.initial_state and matchesKind(candidate.kind, try @import("rule_table.zig").group(rules, source.rule_group))) break candidate;
         } else continue;
         const definition = &definitions[loaded];
         if (source.initial_state != spec.state or source.kind != 3 or source.minimum_difficulty != 0 or source.initially_active == 0)
@@ -46,7 +47,7 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
         const rule = try firstRule(rules, source.rule_group, source.initial_state);
         if (rule[2] != 0 or rule[3] != 0 or rule[8] != 0 or word(rule, 4) != spec.target or
             !std.mem.eql(u8, &.{ rule[7], rule[6], rule[9] }, &spec.operations) or
-            word(rule, 12) != 0 or word(rule, 14) != 0 or word(rule, 16) != 0)
+            (spec.operations[0] != 0 and word(rule, 12) != 0) or word(rule, 14) != 0 or word(rule, 16) != 0)
             return error.UnsupportedStartingEquipmentRule;
         var introduction = try animation.decode(allocator, animations, source.initial_state);
         defer introduction.deinit();
@@ -76,7 +77,7 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
             .recharge = if (spec.kind == .shield) try shieldRecharge(allocator, source, rules, animations) else null,
             .use_motion = if (source.object_id == 3) .reach else .direct,
             .kind = spec.kind,
-            .use_action = if (spec.kind == .credits) .pay else if (card != null or papers != null) .{ .unlock = .{ .credential = .{ .fixed = source.life }, .consume_after_steps = use_steps, .movie = if (card != null) .card_delivery else null } } else null,
+            .use_action = if (spec.kind == .credits) .pay else if (card != null or papers != null or spec.kind == .work_permit) .{ .unlock = .{ .credential = .{ .fixed = source.life }, .consume_after_steps = use_steps, .movie = if (card != null) .card_delivery else null } } else null,
             .icon = try resolver.icon(source.inventory_icon),
             .introduction_steps = @as(u16, @intCast(introduction.frames.len)),
             .initial_quantity = source.life,
@@ -89,6 +90,14 @@ pub fn recover(allocator: std.mem.Allocator, placements: placement.Table, animat
         loaded += 1;
     }
     return .{ .definitions = definitions, .sources = sources };
+}
+
+fn matchesKind(kind: equipment.Kind, group: @import("rule_table.zig").Group) bool {
+    return switch (kind) {
+        .papers => @import("credential_cards.zig").papers(group) != null,
+        .work_permit => @import("credential_cards.zig").permit(group) != null,
+        else => true,
+    };
 }
 
 fn shieldRecharge(allocator: std.mem.Allocator, record: placement.Record, rule_bytes: []const u8, animations: []const u8) !equipment.Recharge {

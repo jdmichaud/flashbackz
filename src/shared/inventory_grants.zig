@@ -4,6 +4,8 @@ const equipment = @import("equipment.zig");
 pub const Followup = struct { steps: u16, circuit: @import("world_props.zig").CircuitId };
 pub const Definition = struct {
     followup: ?Followup = null,
+    on_grant: ?@import("world_props.zig").CircuitId = null,
+    on_consumed: ?@import("world_props.zig").CircuitId = null,
     item: equipment.ItemHandle,
     movie: ?@import("story_cue.zig").Cue,
 };
@@ -16,6 +18,7 @@ pub const World = struct {
     allocator: std.mem.Allocator,
     pending: []bool,
     applied: []bool,
+    waiting_consumption: []bool,
     followup_in: []?u16,
     pulses: []@import("world_props.zig").CircuitId,
     pulse_count: usize = 0,
@@ -27,14 +30,18 @@ pub const World = struct {
         const applied = try allocator.alloc(bool, count);
         errdefer allocator.free(applied);
         @memset(applied, false);
+        const waiting_consumption = try allocator.alloc(bool, count);
+        errdefer allocator.free(waiting_consumption);
+        @memset(waiting_consumption, false);
         const followup_in = try allocator.alloc(?u16, count);
         errdefer allocator.free(followup_in);
         @memset(followup_in, null);
-        return .{ .allocator = allocator, .pending = pending, .applied = applied, .followup_in = followup_in, .pulses = try allocator.alloc(@import("world_props.zig").CircuitId, count) };
+        return .{ .allocator = allocator, .pending = pending, .applied = applied, .waiting_consumption = waiting_consumption, .followup_in = followup_in, .pulses = try allocator.alloc(@import("world_props.zig").CircuitId, count * 3) };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.pending);
         self.allocator.free(self.applied);
+        self.allocator.free(self.waiting_consumption);
         self.allocator.free(self.followup_in);
         self.allocator.free(self.pulses);
     }
@@ -42,6 +49,11 @@ pub const World = struct {
         if (self.applied[index]) return;
         try items.grant(definitions[index].item);
         self.applied[index] = true;
+        if (definitions[index].on_grant) |circuit| {
+            self.pulses[self.pulse_count] = circuit;
+            self.pulse_count += 1;
+        }
+        self.waiting_consumption[index] = definitions[index].on_consumed != null;
         if (definitions[index].followup) |followup| self.followup_in[index] = followup.steps;
         if (definitions[index].movie) |movie| self.movie = movie;
     }
@@ -67,8 +79,16 @@ pub const World = struct {
             if (binding.next_step) self.pending[binding.target] = true else try self.grant(definitions, binding.target, items);
         };
     }
+    pub fn observeConsumptions(self: *World, definitions: []const Definition, items: *const equipment.Loadout) !void {
+        for (self.waiting_consumption, definitions) |*waiting, definition| if (waiting.* and (try items.item(definition.item)).state == .consumed) {
+            self.pulses[self.pulse_count] = definition.on_consumed.?;
+            self.pulse_count += 1;
+            waiting.* = false;
+        };
+    }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
         for (self.pending) |pending| hash.update(&.{@intFromBool(pending)});
+        for (self.waiting_consumption) |waiting| hash.update(&.{@intFromBool(waiting)});
         for (self.followup_in) |remaining| {
             const value: u32 = if (remaining) |steps| @as(u32, steps) + 1 else 0;
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));

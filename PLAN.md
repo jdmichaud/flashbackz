@@ -105,6 +105,9 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   expiry, terminal-card grants/use, linked terminal outputs, alarm and failure presentation.
   Compile shared transport, timed-item and credential components; connect completion/payment
   through original links. Qualify focused original/native scenarios and retain full-route gaps.
+  - Entry/countdown, card completion and expiry components match 663 original updates and
+    22 ordered sound requests. GENEXP matches 51/52 frames; one-pixel edge differences in
+    one frame are documented. Native success/expiry pass; full unmodified maze travel remains open.
 - [ ] Escort assignment: import follower spacing, turns, obstacle/support decisions,
   dialogue and lift boarding/release. Bind arrival to the original destination sensor,
   mission payment and player return effect. Exclude the original protection wrapper while

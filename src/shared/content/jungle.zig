@@ -41,6 +41,12 @@ pub const Pack = struct {
     world_props: prop_import.Assets,
     controls: @import("operated_controls.zig").Assets,
     locks: @import("key_locks.zig").Assets,
+    credential_terminals: @import("credential_terminals.zig").Assets,
+    credential_terminal_bindings: []@import("../credential_terminals.zig").Binding,
+    environmental_alarms: @import("environmental_alarms.zig").Assets,
+    alarm_bindings: []@import("../environmental_alarms.zig").Binding,
+    timed_items: @import("timed_items.zig").Assets,
+    timed_item_bindings: []@import("../timed_items.zig").Binding,
     scripted_transport: @import("scripted_transport.zig").Assets,
     transport_bindings: []@import("../scripted_transport.zig").Binding,
     arrival_triggers: @import("arrival_triggers.zig").Assets,
@@ -117,6 +123,12 @@ pub const Pack = struct {
         self.escort_followers.deinit();
         self.arrival_triggers.deinit();
         self.scripted_transport.deinit();
+        self.timed_items.deinit();
+        self.environmental_alarms.deinit();
+        self.allocator.free(self.alarm_bindings);
+        self.credential_terminals.deinit();
+        self.allocator.free(self.credential_terminal_bindings);
+        self.allocator.free(self.timed_item_bindings);
         self.allocator.free(self.transport_bindings);
         self.allocator.free(self.quest_contact_bindings);
         self.allocator.free(self.mission_terminal_bindings);
@@ -527,6 +539,12 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     defer allocator.free(credential_sources);
     @memcpy(credential_sources[0..starting.sources.len], starting.sources);
     @memcpy(credential_sources[starting.sources.len..], props.item_sources);
+    var credential_terminals = try @import("credential_terminals.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, &resolver);
+    errdefer credential_terminals.deinit();
+    var environmental_alarms = try @import("environmental_alarms.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &resolver);
+    errdefer environmental_alarms.deinit();
+    var timed_items = try @import("timed_items.zig").load(allocator, placement_table, rules.bytes, ani.bytes, terrain.source, &room_ids, props.item_sources, @intCast(initial_items.len), &connections, &resolver);
+    errdefer timed_items.deinit();
     var scripted_transport = try @import("scripted_transport.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
     errdefer scripted_transport.deinit();
     var arrival_triggers = try @import("arrival_triggers.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
@@ -565,6 +583,12 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     const combined_connections = try connections.toOwnedSlice(allocator);
     allocator.free(props.connections);
     props.connections = combined_connections;
+    const credential_terminal_bindings = try credential_terminals.bind(props.connections);
+    errdefer allocator.free(credential_terminal_bindings);
+    const alarm_bindings = try environmental_alarms.bind(props.connections);
+    errdefer allocator.free(alarm_bindings);
+    const timed_item_bindings = try timed_items.bind(props.connections);
+    errdefer allocator.free(timed_item_bindings);
     const transport_bindings = try scripted_transport.bind(props.connections);
     errdefer allocator.free(transport_bindings);
     const quest_contact_bindings = try quest_contacts.bind(props.connections);
@@ -670,6 +694,12 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .escort_followers = escort_followers,
         .arrival_triggers = arrival_triggers,
         .scripted_transport = scripted_transport,
+        .timed_items = timed_items,
+        .environmental_alarms = environmental_alarms,
+        .alarm_bindings = alarm_bindings,
+        .credential_terminals = credential_terminals,
+        .credential_terminal_bindings = credential_terminal_bindings,
+        .timed_item_bindings = timed_item_bindings,
         .transport_bindings = transport_bindings,
         .quest_contact_bindings = quest_contact_bindings,
         .mission_terminal_bindings = mission_terminal_bindings,

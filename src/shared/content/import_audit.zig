@@ -39,6 +39,9 @@ pub const System = enum(u6) {
     arrival_triggers,
     scripted_transport,
     transport_templates,
+    timed_items,
+    credential_terminals,
+    environmental_alarms,
 };
 pub const Ledger = struct {
     entries: [256]u64 = @splat(0),

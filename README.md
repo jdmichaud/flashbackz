@@ -73,6 +73,10 @@ accept WORK PERMIT with Return. Return, Space or Shift advances film pages; Tab 
 The first parcel assignment's conversations, grant, ambush, delivery, 100-credit payment and
 next-terminal unlock are connected. Its prepared route matches the original; the remaining
 assignment consumers and full street-route qualification are still incomplete.
+The reactor assignment now grants TIME and TERMINAL CARD after transport. Select the card
+and hold Return at its matching terminal to complete the repair, receive 500 credits and
+return. Inventory and Game Options pause the countdown. Expiry plays the reactor explosion
+and reaches Continue. Prepared routes pass; the full maze and its enemies remain unfinished.
 The escort follower now follows, turns and boards ordinary lifts through shared contact and
 passenger rules. Stay ahead of him; use Shift+Up/Down on the lift. Arrival triggers the original
 dialogue, 300-credit mission payment and return effect. Holster the gun to accept the return.
