@@ -204,7 +204,10 @@ pub fn transport(
         character.cursor = 0;
     }
     // Only the view changes: no room wakes, and the contact window waits for the next update.
-    if (definition.kind == .player) world.view_room = character.room;
+    if (definition.kind == .player) {
+        world.view_room = character.room;
+        world.room_loads +%= 1;
+    }
     world.showFrame(moved) catch return error.InvalidAnimation;
     return true;
 }
@@ -327,6 +330,7 @@ pub fn checkpoint(world: *World, _: u16, _: void) !bool {
     saved.score = world.score;
     saved.grid = world.grid;
     saved.terrain_history = world.terrain_history;
+    world.checkpoint_saves +%= 1;
     return true;
 }
 

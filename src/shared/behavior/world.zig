@@ -196,8 +196,14 @@ pub const World = struct {
     view_room: u8,
     /// Set when the view must move to Conrad's room after the update.
     view_dirty: bool = true,
+    /// Counts the view room's loads (after a view change, and when Conrad is transported);
+    /// the screen redraws its background on each.
+    room_loads: u32 = 0,
+    /// Counts checkpoint saves, which the touch label acknowledges.
+    checkpoint_saves: u32 = 0,
     score: u32 = 0,
-    /// Updates left in Conrad's protection after a hit.
+    /// Updates left in Conrad's protection after a hit. It counts down after each drawn frame,
+    /// that is at the start of the next update; he blinks while it is odd.
     protection: u8 = 0,
     /// Conrad was hurt and protection starts when he next listens for hits.
     hurt: bool = false,
@@ -296,6 +302,7 @@ pub const World = struct {
     pub fn update(self: *World, controls: Controls, catch_up: bool) !Outcome {
         self.controls = controls;
         self.requests = .{};
+        if (!catch_up and self.protection != 0) self.protection -= 1;
         if (!catch_up and self.defeat_countdown & 0xff != 0) {
             self.defeat_countdown -%= 1;
             if (self.defeat_countdown == 0) {
@@ -316,10 +323,12 @@ pub const World = struct {
             if (self.view_room == 0xff) {
                 self.requests.scene = 6;
                 self.defeat_countdown = 1;
-            } else self.view_room = self.characters[0].room;
+            } else {
+                self.view_room = self.characters[0].room;
+                self.room_loads +%= 1;
+            }
             self.view_dirty = false;
         }
-        if (!catch_up and self.protection != 0) self.protection -= 1;
         return .played;
     }
 
