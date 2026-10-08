@@ -91,10 +91,18 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     - `src/shared/behavior/`: the whole vocabulary is implemented. flashback-re
       `tools/engine_regression.py`: all 40 retained captures (9,116 updates) match the original
       for every character; one documented copy-protection exclusion.
-  - [ ] Migrate implemented families to tables one at a time, deleting their Zig components.
-    Gate for each: golden traces and the whole-world comparison are unchanged.
-  - [ ] Complete the vocabulary for the remaining unmapped families (95 at the start),
-    guided by the whole-world gap reports.
+  - [x] Complete the vocabulary for the remaining unmapped families: every original
+    condition and effect is implemented, so the engine runs every character of every level.
+  - [ ] Revised 2026-10-08: since the engine runs whole levels, the families are replaced
+    together rather than one at a time. Presentation research: the original's character
+    drawing (0x2539, draw lists, edge rooms), HUD, labels, world messages, inventory screen,
+    scene and sound requests, and input processing, recorded in flashback-re.
+  - [ ] Table-driven level scene: every level runs on the behavior engine (Conrad included) and
+    is presented from the engine's state and requests. Gate: the native game reproduces the
+    original frames of the retained captures with recorded video, and its per-update character
+    state matches the engine regression.
+  - [ ] Remove the hand-coded families, their importers and their tests once the scene
+    replaces them. Golden traces are re-recorded and each difference is explained.
 - [ ] **Systematic gap detection (user concern, 2026-10-08):** replace reliance on manual play
   with a family-agnostic world comparison. On every update, compare each placement's presence,
   room and position with the original, and report placements that act in the original but have
