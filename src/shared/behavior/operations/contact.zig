@@ -349,6 +349,7 @@ const testing = struct {
             try animations.Animations.init(&animation_bytes),
             try grid.Grid.init(&layout),
             .normal,
+            null,
         );
         errdefer w.deinit();
         try register(&w);
