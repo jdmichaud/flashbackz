@@ -24,6 +24,8 @@ pub const Character = struct {
     width: u8,
     active: bool,
     wakes_on_message: bool = false,
+    /// Wakes when another character shares one of its cells.
+    wakes_on_contact: bool = false,
     wakes_when_near: bool = false,
     other_flags: u8 = 0,
     minimum_difficulty: Difficulty,
@@ -544,6 +546,7 @@ const Loader = struct {
             .width = try fields.integer(u8, "width"),
             .active = fields.flag("active"),
             .wakes_on_message = fields.flag("wakes_on_message"),
+            .wakes_on_contact = fields.flag("wakes_on_contact"),
             .wakes_when_near = fields.flag("wakes_when_near"),
             .behind_player = fields.flag("behind_player"),
             .minimum_difficulty = try fields.choice(Difficulty, "minimum_difficulty"),

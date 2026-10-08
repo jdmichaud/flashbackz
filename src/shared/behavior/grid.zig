@@ -87,6 +87,11 @@ pub const Grid = struct {
         self.bytes[offset] = value;
     }
 
+    /// The link byte as stored: a room, or 0xff where there is none.
+    pub fn rawLink(self: *const Grid, room: u8, side: Side) u8 {
+        return @bitCast(self.signedLink(room, side) orelse -1);
+    }
+
     /// The raw link byte, as the original reads it; rooms past 63 read the next table.
     fn signedLink(self: *const Grid, room: u8, side: Side) ?i8 {
         const b = self.byte(@as(i32, @backingInt(side)) * 64 + room) orelse return null;

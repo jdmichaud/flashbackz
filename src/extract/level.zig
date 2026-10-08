@@ -570,11 +570,10 @@ fn writeCharacters(level: *Level, out: *std.Io.Writer) !void {
         try w.line(".width = {d},", .{record.collision_width});
         try w.line(".active = {},", .{record.initially_active != 0});
         if (record.flags & 1 != 0) try w.line(".wakes_on_message = true,", .{});
+        if (record.flags & 2 != 0) try w.line(".wakes_on_contact = true,", .{});
         if (record.flags & 4 != 0) try w.line(".wakes_when_near = true,", .{});
-        if (record.flags & ~@as(u8, 5) != 0) try w.line(
-            ".other_flags = {d},",
-            .{record.flags & ~@as(u8, 5)},
-        );
+        const other_flags = record.flags & ~@as(u8, 7);
+        if (other_flags != 0) try w.line(".other_flags = {d},", .{other_flags});
         try w.line(".minimum_difficulty = .{s},", .{switch (record.minimum_difficulty) {
             0 => "easy",
             1 => "normal",
