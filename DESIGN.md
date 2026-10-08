@@ -122,16 +122,19 @@ for now; moving him to a table is a later decision.
 
 - A **state** has a name and an animation, given as original frames, per-frame movement and
   sound cues.
-- Each state lists its **transitions** in order. A transition has conditions (`when`), at most
-  one effect (`then`), a movement, and a target state. It may be marked `reacts`: such a
-  transition can fire before the animation completes, for example when a hit is received.
+- Each state lists its **transitions** in order. A transition has a list of checks (`when`), at
+  most one effect (`then`), changes to the character (turn, damage, heal, score), a movement and
+  a target state. Some original checks are actions that always succeed, such as `set_timer` or
+  `send`. They stay in `when`, in order, because they run even when a later check fails.
 - **Conditions and effects** form a fixed vocabulary implemented once in Zig. Each is a small
   named function with typed arguments, for example `sees(player, within_cells: 16)`,
   `chance(1, in: 20)`, `timer_expired`, `received(.hit_front)`, `signal(.ambush, .cover)` or
   `reveal(in_room: 19)`. Original quirks live inside the condition or effect that has them,
   documented there (for example, the sight scan's leftward continuation).
-- **Links** connect a character to others by name (`alarm -> gunman_148`). Signals travel
-  over links.
+- **Links** connect a character to others. A behavior names its links (`cover`, `gunman`);
+  each placement binds them to characters (`cover = papers_20`). Signals travel over links.
+- **Messages** have names: engine-wide ones for fixed meanings (hits, talk, acknowledgement)
+  and level-wide ones from the naming overlay. Unnamed messages keep a systematic name.
 
 The evaluation order is part of the behavior and is stated explicitly:
 
@@ -143,9 +146,13 @@ The evaluation order is part of the behavior and is stated explicitly:
    therefore happen only where the original draws them.
 4. A signal reaches its recipient immediately. A recipient later in the order reacts in the
    same update; an earlier one reacts in the next update. Conrad's shot is a character in that
-   order.
+   order. Every mailbox is emptied at the end of its owner's update.
+5. A message that arrives during an animation is lost, unless the current state has a
+   transition waiting for it. Then the animation's remaining movement applies at once and the
+   transitions are tried in that update. No marker is needed; the engine derives this.
 
-Research measures each part of this model against the original before the engine relies on it.
+Research recorded this model from the executable (flashback-re `docs/rule-vocabulary.md`) and
+confirms each part in running scenarios before the engine relies on it.
 
 Player progress and checkpoints include the complete game state needed by the original's
 restart/save behavior. Persistence semantics and the initial state remain unmeasured until their
