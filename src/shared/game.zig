@@ -219,6 +219,8 @@ pub const Game = struct {
     difficulty: settings_mod.Difficulty = .normal,
     level: content_level.Id = .jungle,
     story: ?story_mod.Story = null,
+    /// The level the continue screen may resume.
+    suspended_level: ?level_scene.Scene = null,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -305,6 +307,7 @@ pub const Game = struct {
 
     pub fn deinit(self: *Game) void {
         if (self.story) |*story| story.deinit();
+        if (self.suspended_level) |*scene| scene.deinit();
         switch (self.scene) {
             .smoke => {},
             .menu => |*scene| scene.deinit(),
@@ -537,7 +540,32 @@ pub const Game = struct {
         if (self.scene == .continue_game) {
             const dialog = &self.scene.continue_game;
             try dialog.update(p.nowNs());
-            if (dialog.menu.outcome) |choice| {
+            if (dialog.menu.outcome) |choice| resume_level: {
+                if (self.suspended_level) |*level| {
+                    if (choice == .retry) {
+                        if (!level.continueAfterDefeat()) {
+                            // No checkpoint: the level starts again, from its entry score.
+                            var fresh = try level_scene.Scene.load(
+                                self.allocator,
+                                self.assets.?,
+                                self.data.?,
+                                level.level,
+                                self.difficulty,
+                            );
+                            fresh.world.score = level.world.entry_score;
+                            fresh.world.entry_score = level.world.entry_score;
+                            fresh.world.random = level.world.random;
+                            level.deinit();
+                            level.* = fresh;
+                        }
+                        dialog.deinit();
+                        self.scene = .{ .level = level.* };
+                        self.suspended_level = null;
+                        break :resume_level;
+                    }
+                    level.deinit();
+                    self.suspended_level = null;
+                }
                 const art = (try menu_art.load(self.allocator, self.assets.?)) orelse return error.MissingMenu;
                 var next = front_end.Scene.init(self.allocator, self.assets.?, art);
                 errdefer next.deinit();
@@ -597,6 +625,7 @@ pub const Game = struct {
                     self.difficulty,
                 );
                 next.world.score = scene.world.score;
+                next.world.entry_score = scene.world.score;
                 next.world.random = scene.world.random;
                 scene.stopAudio(p);
                 scene.deinit();
@@ -611,7 +640,7 @@ pub const Game = struct {
                     self.assets.?,
                     scene.world.score,
                 );
-                scene.deinit();
+                self.suspended_level = scene.*;
                 self.scene = .{ .continue_game = next };
             },
             .aborted => {

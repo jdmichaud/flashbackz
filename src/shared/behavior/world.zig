@@ -202,6 +202,8 @@ pub const World = struct {
     /// Counts checkpoint saves, which the touch label acknowledges.
     checkpoint_saves: u32 = 0,
     score: u32 = 0,
+    /// The score when the level was entered; a continue starts from it.
+    entry_score: u32 = 0,
     /// Updates left in Conrad's protection after a hit. It counts down after each drawn frame,
     /// that is at the start of the next update; he blinks while it is odd.
     protection: u8 = 0,
@@ -287,6 +289,37 @@ pub const World = struct {
         world.view_room = characters[0].room;
         world.resetLetters();
         return world;
+    }
+
+    /// A continue: back to the last checkpoint, with the room lists rebuilt in placement order
+    /// and the restart that follows any continue. False when no checkpoint was saved; the
+    /// level then starts again.
+    pub fn restoreCheckpoint(self: *World) bool {
+        const saved = &(self.checkpoint orelse return false);
+        @memcpy(self.characters, saved.characters[0..self.characters.len]);
+        self.score = saved.score;
+        self.grid = saved.grid;
+        self.terrain_history = saved.terrain_history;
+        self.room_lists = @splat(null);
+        for (self.characters, 0..) |character, index| {
+            if (character.present) self.pushToRoom(@intCast(index), character.room);
+        }
+        self.restart();
+        return true;
+    }
+
+    /// The restart after a continue: messages, countdowns, protection and the weapon mode are
+    /// cleared, and the view returns to Conrad's room.
+    fn restart(self: *World) void {
+        self.resetLetters();
+        @memset(self.inbox, null);
+        self.defeat_countdown = 0;
+        self.defeat_scene = -1;
+        self.protection = 0;
+        self.hurt = false;
+        self.weapon_mode = 0;
+        self.view_room = self.characters[0].room;
+        self.view_dirty = true;
     }
 
     pub fn deinit(self: *World) void {

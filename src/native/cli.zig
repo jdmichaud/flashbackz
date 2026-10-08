@@ -162,7 +162,7 @@ pub const Providers = struct {
                 arena.allocator(),
                 self.assetSource().?,
             ) catch |err| missing: {
-                std.log.warn("data set not extracted: {s}", .{@errorName(err)});
+                std.log.info("data set not extracted: {s}", .{@errorName(err)});
                 break :missing null;
             };
         }

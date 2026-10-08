@@ -329,6 +329,26 @@ pub const Scene = struct {
         return controls;
     }
 
+    /// The player chose to continue after a defeat: play resumes from the last checkpoint, at
+    /// the score the level was entered with unless the checkpoint saved another. False when
+    /// no checkpoint was saved: the level must start again.
+    pub fn continueAfterDefeat(self: *Scene) bool {
+        self.world.score = self.world.entry_score;
+        if (!self.world.restoreCheckpoint()) return false;
+        self.outcome = .playing;
+        self.clock = null;
+        self.message_clock = null;
+        self.inventory = null;
+        self.inventory_delay = 4;
+        self.requested_scene = null;
+        self.film = null;
+        self.keys = .{ .last_direction = self.keys.last_direction };
+        self.screen.hud_icon = null;
+        self.screen.message = null;
+        self.screen.pending_message = null;
+        return true;
+    }
+
     /// The film has played: the view reloads after this update's walk, held keys are
     /// released, and the inventory waits again.
     pub fn finishFilm(self: *Scene, now_ns: u64, paused_for: u64) !void {

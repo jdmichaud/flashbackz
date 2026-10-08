@@ -851,4 +851,28 @@ test "checkpoint saves the characters, score, grid and terrain history" {
     try std.testing.expectEqual(@as(i16, 112), saved.characters[0].x);
     try std.testing.expectEqual(@as(u8, 1), saved.grid.bytes[256 + 5 * 16 + 7]);
     try std.testing.expectEqual(@as(u16, 1), saved.terrain_history.change_count);
+
+    // A continue restores them, rebuilds the room lists and restarts.
+    w.characters[1].room = 3;
+    w.room_lists = @splat(null);
+    w.protection = 9;
+    try std.testing.expect(w.restoreCheckpoint());
+    try std.testing.expectEqual(@as(u32, 1500), w.score);
+    try std.testing.expectEqual(@as(i16, 112), w.characters[0].x);
+    try std.testing.expectEqual(@as(u8, 1), w.grid.bytes[256 + 5 * 16 + 7]);
+    try std.testing.expectEqual(@as(?u16, 1), w.room_lists[w.characters[1].room]);
+    try std.testing.expectEqual(@as(u8, 0), w.protection);
+    try std.testing.expect(w.view_dirty);
+}
+
+test "a continue without a checkpoint restores nothing" {
+    var characters = [_]testing.data_set.Character{testing.character(0, .player, 0)};
+    const level: testing.data_set.Level = .{
+        .behaviors = &testing.behaviors,
+        .characters = &characters,
+        .message_names = &.{},
+    };
+    var w = try testing.world(&level);
+    defer w.deinit();
+    try std.testing.expect(!w.restoreCheckpoint());
 }
