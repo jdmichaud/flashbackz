@@ -132,6 +132,24 @@ zig build --prefix /tmp/flashback/modern/out --cache-dir /tmp/flashback/modern/c
 /tmp/flashback/modern/out/bin/flashbackz-agent --scene menu --frames 120 ../disk1.img ../disk2.img
 ```
 
+## Extracting the data set
+
+`flashbackz-extract` converts the user's disks into the readable data set that character
+behavior is moving to (DESIGN.md section 3). Per level it writes `characters.zon` and one
+`behaviors/<name>.zon` per behavior, plus `messages.zon`. Images and sound are not extracted.
+Write it outside Git, into a new or empty directory:
+
+```sh
+zig build extract --prefix /tmp/flashback/modern/out --cache-dir /tmp/flashback/modern/cache
+/tmp/flashback/modern/out/bin/flashbackz-extract ~/flashback-data ../disk1.img ../disk2.img
+```
+
+Names come from the committed overlay `src/extract/names.zon`. Anything not named there keeps
+a systematic name (`state_768`, `signal_20`, `link_0`). Each generated behavior shows its key
+and its states' ordinals, which is what the overlay uses to name them. `report.txt` lists
+dropped unreachable rules and anything the extractor could not name. The game does not load
+the data set yet; that is the next step of the plan.
+
 For development checks, `--scene` also accepts `city`, `tower`, `earth_city`, `spaceport`,
 `alien_surface` and `alien_base`, alongside `menu` and `jungle`. These shortcuts skip startup;
 remaining gameplay and story behavior in those levels is still under implementation.

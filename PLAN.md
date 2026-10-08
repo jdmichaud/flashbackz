@@ -80,9 +80,11 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   - [ ] Vocabulary survey: every condition and effect used across all levels and difficulties,
     with counts, recovered meaning and our name; measure the evaluation order (animation
     completion, reacting transitions, signal timing, authored order).
-  - [ ] Extractor: disks to a ZON data set outside Git (characters, behavior tables, text),
+  - [x] Extractor: disks to a ZON data set outside Git (characters, behavior tables, text),
     plus a committed naming overlay. Gate: deterministic output, synthetic tests, all seven
     levels extract, and every unnamed condition or effect is reported.
+    - `flashbackz-extract`: 1,097 characters and 418 behaviors; no unknown operations. The
+      overlay names Conrad and the city ambush; other behaviors keep systematic names.
   - [ ] Behavior engine: tables load into the content pack and run with the stated evaluation
     order. Gate: the android ambush (civilian, gunman, defensive fields) runs from tables and
     matches its 260-update capture and the whole-world replay.

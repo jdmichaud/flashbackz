@@ -87,9 +87,9 @@ disk images --------------------------------------------> art and sound decoders
 ```
 
 The data set uses ZON (Zig object notation): human-readable, parsed by the standard library,
-no new dependency. Per level it contains `characters.zon` (every placement: name, kind, room,
-position, facing, behavior, links, numeric settings), one `behaviors/<name>.zon` table per
-behavior, and `text.zon`. Names are ours. The extractor's vocabulary maps every original
+no new dependency. Per level it contains `characters.zon` (every placement: name, label, kind,
+room, position, facing, behavior, links, numeric settings) and one `behaviors/<name>.zon`
+table per behavior. `messages.zon` holds the world messages that `show_message` refers to. Names are ours. The extractor's vocabulary maps every original
 condition and effect to a named, typed form. A committed naming overlay, keyed by the behavior's
 structure, names behaviors and states (`frightened_civilian`, `aiming`). Unnamed states keep a
 systematic name until someone names them. Overlays are committed ZON files in the same format.
