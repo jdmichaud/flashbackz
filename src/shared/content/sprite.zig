@@ -183,7 +183,7 @@ test "long output can replace a later token before it is decoded" {
     for (pixels) |color| try std.testing.expectEqual(@as(u8, 0), color);
 }
 
-test "unsupported encodings and absent archive entries are checked" {
+test "truncated records and absent archive entries are checked" {
     const archive = [_]u8{ 'S', 'P', 'P', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0x30 };
     const offsets = [_]u8{ 7, 0, 0, 0, 0, 0, 255, 255 };
     var selected = try fromArchive(std.testing.allocator, &archive, &offsets, 7);
@@ -192,7 +192,15 @@ test "unsupported encodings and absent archive entries are checked" {
     try std.testing.expectError(error.MissingSprite, fromArchive(std.testing.allocator, &archive, &offsets, 8));
     try std.testing.expectError(error.InvalidSpriteDirectory, fromArchive(std.testing.allocator, &archive, offsets[0..7], 7));
     try std.testing.expectError(error.TruncatedSprite, decode(std.testing.allocator, &.{ 0, 0, 2, 2, 0, 9 }));
-    try std.testing.expectError(error.UnsupportedSpriteEncoding, decode(std.testing.allocator, &.{ 0, 0, 0x81, 1, 16 }));
+    // Direct-draw records keep the selector bit in the dimension: 129 pixels are required.
+    try std.testing.expectError(error.TruncatedSprite, decode(std.testing.allocator, &.{ 0, 0, 0x81, 1, 16 }));
+    var direct: [4 + 129]u8 = @splat(16);
+    direct[0..4].* = .{ 0, 0, 0x81, 1 };
+    var frame = try decode(std.testing.allocator, &direct);
+    defer frame.deinit();
+    try std.testing.expectEqual(@as(u16, 129), frame.image.width);
+    try std.testing.expectEqual(.full8, frame.color_bits);
+    try std.testing.expectEqual(@as(u8, 16), frame.image.pixels[128]);
 }
 
 test "icon offsets and nibble order are bounded independently of sprite archives" {
