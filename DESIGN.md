@@ -40,15 +40,17 @@ SDL / agent host
     AssetSource: bounded read-only content access
     Storage: atomic named records
         |
-Application: scene lifecycle, scheduling, loading, persistence
+Application (game.zig): scenes (title, level, continue), scheduling, loading, persistence
         |
-Session: World + PlayerProgress + deterministic Commands / Events
+Level scene: the keyboard's input byte, films, messages, inventory, options -> Screen
         |
-Movement / collision / interactions / combat / behaviors / room flow
+Behavior engine (World): every character's live state, rooms, contacts, mailboxes, terrain,
+    running the behavior tables with the original's evaluation order
         |
-immutable ContentPack: rooms, actor definitions, motion, rules, art, text, sound
+immutable data set (characters, behavior tables, messages, scenes) + level pack (room art,
+    character art, animations, collision, icons, font, sounds) read from the original files
         |
-Renderer -> indexed frame -> RGBA; Audio -> scheduled voices -> PCM
+Screen -> indexed frame -> RGBA; effects mixer and film music -> PCM
 ```
 
 Each application is a value with its own allocator, providers, scene state, session, renderer and
@@ -101,24 +103,31 @@ condition or effect; it never substitutes a default.
 
 ## 4. Session and systems
 
-`World` owns actors, room state and pending events. An actor has typed position, facing, health,
-current motion/animation progress, timers, inventory/interaction references and a behavior
-instance. Definitions are shared immutable content; per-session state belongs to the world.
+Revised 2026-10-09: the behavior engine runs every character, and the hand-written systems
+are gone.
 
-Commands express player intent: directions, action, arm, use, inventory and pause. The input
-interpreter owns key-held state, transitions, focus-loss release and action precedence. SDL key
-symbols, DOS scancodes and host repeat events never become simulation state.
+`World` (`src/shared/behavior/world.zig`) owns one live record per character: state, position,
+room, animation cursor, health, counter, facing, activity, displayed frame and inventory links.
+It also owns the room lists, the contact cells, the mailboxes, the collision grid with its
+terrain history, the score and the checkpoint. Definitions (characters, behavior tables) are
+shared immutable content from the data set; per-session state belongs to the world.
 
-Systems have cohesive purposes: movement advances a motion; environment collision resolves
-contacts; interactions identify and operate nearby items; combat applies hits and damage;
-behaviors choose transitions and emit actions; room flow moves actors across named exits. Their
-ordering is explicit and will be established from measured original outcomes. A fidelity test
-can require one event before another without requiring the original's routine boundaries.
+The only command is Conrad's input byte: four directions and four buttons held, with the
+original's diagonal rule, read by the level scene from the keyboard (or a demo recording). SDL
+key symbols, DOS scancodes and host repeat events never become simulation state; modal screens
+release held keys as the original does.
+
+One update walks the active characters in placement order; each plays a frame or, when its
+animation ends, fires its first rule whose checks hold (section below). Movement, collision,
+contact, combat and room flow are not separate systems: they are conditions and effects of the
+vocabulary, each implemented once (`src/shared/behavior/operations/`). The update's other
+steps (contacts, view changes, defeat countdown, protection) are documented in the engine and
+measured in flashback-re `docs/rules/engine-update.md`.
 
 ### Characters and behavior tables
 
-Every acting character except Conrad follows a behavior table. Conrad keeps a Zig controller
-for now; moving him to a table is a later decision.
+Every character follows a behavior table, Conrad included (2026-10-09: his table reproduces
+the original on every capture, so the planned Zig controller was not needed).
 
 - A **state** has a name and an animation, given as original frames, per-frame movement and
   sound cues.
@@ -173,10 +182,15 @@ come from the original. The placeholder's RNG is only for platform smoke tests.
 
 ## 6. Presentation and audio
 
-The renderer consumes room layers, animation frames, actor placements, UI text and palette
-effects. It owns indexed pixels and palettes, then converts to an RGBA8 frame for the host.
-It does not emulate VGA registers or route drawing through translated DOS calls. The observed
-menu/game content is 256 by 224 pixels; movies have their own measured dimensions and pacing.
+The level scene's `Screen` presents the world after each update as the original does (flashback-re
+`docs/rules/engine-presentation.md`): room art, the characters of the view room and the edges of
+its neighbors in four layers, the HUD icon, the touch label, the password, world messages and the
+colors in the display. It owns indexed pixels and palettes, then converts to an RGBA8 frame for
+the host. It does not emulate VGA registers, but it keeps the original's observable timing: two
+hidden updates after a room load, a HUD icon and shake that reach the picture at the flip, and
+message pages alternating between two video pages. The game content is 256 by 224 pixels;
+films have their own measured dimensions and pacing. Music plays only with films, chosen per
+scene (`docs/rules/engine-music.md`); effects follow the engine's sound requests.
 
 Audio sequencing and sample decoding are Flashback subsystems with measured priorities and
 timing. A generic OPL2/OPL3 synthesizer may be reused from vpoolz after its code, tests and
