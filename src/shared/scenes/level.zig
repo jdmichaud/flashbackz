@@ -18,6 +18,7 @@ const step_clock = @import("../step_clock.zig");
 const settings = @import("../settings.zig");
 const audio_effects = @import("../audio/effects.zig");
 const inventory_menu = @import("inventory_menu.zig");
+const game_options = @import("game_options.zig");
 const World = behavior.world.World;
 const data_set = behavior.data_set;
 const contacts = behavior.contacts;
@@ -58,8 +59,10 @@ pub const Scene = struct {
     message_clock: ?step_clock.Clock = null,
     pending: std.ArrayList(platform.Event) = .empty,
     effects: audio_effects.Output = .{},
-    sound_enabled: bool = true,
+    settings: game_options.Settings = .{},
     outcome: Outcome = .playing,
+    /// The options dialog, opened with Esc; the world waits while it is open.
+    options: ?Options = null,
     /// Presented frames before the inventory key works: 4 after the level starts, 10 after the
     /// inventory closes.
     inventory_delay: u8 = 4,
@@ -69,6 +72,8 @@ pub const Scene = struct {
     /// A film the game must play now; the update waits for it with its input latched.
     film: ?data_set.Film = null,
     after_film: u8 = 0,
+
+    const Options = struct { menu: game_options.Menu, clock: step_clock.Clock };
 
     const Inventory = struct {
         menu: inventory_menu.Menu,
@@ -230,6 +235,12 @@ pub const Scene = struct {
         while (self.outcome == .playing and self.film == null and self.needsCatchup(now_ns) and
             work < 8) : (work += 1)
         {
+            if (self.options) |*options| {
+                const deadline = options.clock.deadline();
+                options.clock.consume();
+                self.pollOptions(deadline);
+                continue;
+            }
             if (self.inventory) |*inventory| {
                 const deadline = inventory.clock.deadline();
                 inventory.clock.consume();
@@ -250,16 +261,48 @@ pub const Scene = struct {
         }
     }
 
-    /// After a presented frame: a world message opens, else the inventory key is checked.
+    /// After a presented frame: a world message opens, else Esc opens the options (it ends a
+    /// demo), else the inventory key is checked.
     fn afterFrame(self: *Scene, controls: u8, now_ns: u64) !void {
         if (self.screen.message != null) {
             try self.openMessage(now_ns);
-        } else if (self.outcome == .playing) {
+        } else if (self.outcome != .playing) {
+            return;
+        } else if (self.keys.escape) {
+            self.keys.escape = false;
+            if (self.demo != null) {
+                self.outcome = .aborted;
+                return;
+            }
+            self.options = .{
+                .menu = .{ .settings = self.settings },
+                .clock = try step_clock.Clock.init(step_clock.inventory, now_ns),
+            };
+            self.keys.release();
+        } else {
             try self.checkInventoryKey(controls, now_ns);
         }
     }
 
+    /// The options dialog takes key presses; resuming applies its settings, and abandoning the
+    /// game leads to the continue screen, as a defeat does.
+    fn pollOptions(self: *Scene, deadline: u64) void {
+        const options = &self.options.?;
+        while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
+            const event = self.pending.orderedRemove(0);
+            if (event.payload == .key_down) options.menu.key(event.payload.key_down.key);
+        }
+        const outcome = options.menu.outcome orelse return;
+        self.settings = options.menu.settings;
+        const paused = deadline -| options.clock.origin_ns;
+        self.options = null;
+        self.keys.release();
+        self.clock.?.origin_ns +|= paused;
+        if (outcome == .abort_game) self.outcome = .defeated;
+    }
+
     pub fn nextDeadline(self: *const Scene) ?u64 {
+        if (self.options) |options| return options.clock.deadline();
         if (self.inventory) |inventory| return inventory.clock.deadline();
         if (self.message_clock) |clock| return clock.deadline();
         return if (self.clock) |clock| clock.deadline() else null;
@@ -302,8 +345,8 @@ pub const Scene = struct {
     /// One update with the input held at `deadline`; returns the input byte it used.
     fn step(self: *Scene, deadline: u64) !u8 {
         const held = self.takeKeys(deadline);
-        // Esc leaves (the options dialog is not modeled yet); Tab or Backspace ends a demo.
-        if (self.keys.escape or (self.demo != null and held & 0x80 != 0)) {
+        // Tab or Backspace ends a demo.
+        if (self.demo != null and held & 0x80 != 0) {
             self.outcome = .aborted;
             return 0;
         }
@@ -365,7 +408,7 @@ pub const Scene = struct {
     fn walk(self: *Scene, controls: u8) !void {
         const outcome = try self.world.update(@bitCast(controls), false);
         for (self.world.requests.sounds[0..self.world.requests.sound_count]) |sound| {
-            if (self.sound_enabled) self.effects.submit(self.pack.sounds, .{
+            if (self.settings.sound_fx) self.effects.submit(self.pack.sounds, .{
                 .sound = @fromBackingInt(sound.id),
                 .attenuation = @intFromBool(sound.distant),
             });
@@ -517,12 +560,14 @@ pub const Scene = struct {
             width,
             height,
         );
+        if (self.options) |options| try options.menu.draw(&picture, &self.pack.font);
         self.screen.display(&picture, indices[0..pixel_count]);
         try palette.writeRgba(indices, &self.screen.colors, rgba);
     }
 
     pub fn pumpAudio(self: *Scene, p: *platform.Platform) !void {
-        if (!self.sound_enabled) return self.effects.stop(p);
+        self.effects.volume = self.settings.volume;
+        if (self.options != null or !self.settings.sound_fx) return self.effects.stop(p);
         try self.effects.pump(self.pack.sounds, p);
     }
 

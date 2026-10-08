@@ -247,13 +247,14 @@ pub const Game = struct {
         const preferences: game_options.Settings = .{ .volume = volume_preference.load(storage) };
         if (entry == .table_level_development) {
             const level = entry.table_level_development;
-            const scene = try level_scene.Scene.load(
+            var scene = try level_scene.Scene.load(
                 allocator,
                 assets orelse return error.OriginalContentRequired,
                 data orelse return error.DataSetRequired,
                 level,
                 .normal,
             );
+            scene.settings = preferences;
             return .{
                 .allocator = allocator,
                 .assets = assets,
@@ -426,7 +427,7 @@ pub const Game = struct {
                         self.data.?,
                         self.demo_index,
                     );
-                    next.sound_enabled = self.preferences.sound_fx;
+                    next.settings = self.preferences;
                     front.deinit();
                     self.scene = .{ .level = next };
                     self.demo_index += 1;
@@ -439,7 +440,7 @@ pub const Game = struct {
                     front.selected_level,
                     front.difficulty,
                 );
-                next.sound_enabled = self.preferences.sound_fx;
+                next.settings = self.preferences;
                 self.level = front.selected_level;
                 self.difficulty = front.difficulty;
                 front.deinit();
@@ -587,6 +588,7 @@ pub const Game = struct {
                             fresh.world.score = level.world.entry_score;
                             fresh.world.entry_score = level.world.entry_score;
                             fresh.world.random = level.world.random;
+                            fresh.settings = level.settings;
                             level.deinit();
                             level.* = fresh;
                         }
@@ -643,6 +645,7 @@ pub const Game = struct {
             try scene.finishFilm(now, paused);
         }
         try scene.update(now);
+        self.applyPreferences(scene.settings);
         switch (scene.outcome) {
             .playing => {
                 try scene.pumpAudio(p);
@@ -660,6 +663,7 @@ pub const Game = struct {
                 next.world.entry_score = scene.world.score;
                 next.world.random = scene.world.random;
                 next.world.shake = scene.world.shake;
+                next.settings = scene.settings;
                 scene.stopAudio(p);
                 scene.deinit();
                 self.level = destination;
