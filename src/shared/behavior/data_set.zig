@@ -92,6 +92,32 @@ pub fn loadLevel(
     return load(gpa, arena, characters, behaviors.items, diagnostic);
 }
 
+/// One line of a world message, drawn in its ink.
+pub const Line = struct { text: []const u8, ink: u8 };
+/// World messages by number: each is a list of pages, each page a list of lines.
+pub const Messages = []const []const []const Line;
+
+/// Loads `messages.zon`. Results live in `arena`.
+pub fn loadMessages(
+    gpa: std.mem.Allocator,
+    arena: std.mem.Allocator,
+    files: *const Files,
+    diagnostic: *Diagnostic,
+) Error!Messages {
+    const source = files.get("messages.zon") orelse
+        return fail(diagnostic, "the data set has no messages.zon", .{});
+    var diagnostics: std.zon.parse.Diagnostics = undefined;
+    return std.zon.parse.fromSlice(Messages, .{
+        .gpa = gpa,
+        .arena = arena,
+        .source = source,
+        .diagnostics = &diagnostics,
+    }) catch |err| switch (err) {
+        error.OutOfMemory => error.OutOfMemory,
+        else => fail(diagnostic, "messages.zon: not a list of pages of lines", .{}),
+    };
+}
+
 /// Explains the first failure in words, for the person editing the data set.
 pub const Diagnostic = struct {
     text: [256]u8 = undefined,
@@ -786,6 +812,21 @@ fn fail(diagnostic: *Diagnostic, comptime format: []const u8, arguments: anytype
     const text = std.fmt.bufPrint(&diagnostic.text, format, arguments) catch diagnostic.text[0..];
     diagnostic.len = text.len;
     return error.InvalidDataSet;
+}
+
+test "world messages load as pages of lines" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    var files: Files = .empty;
+    try files.put(arena.allocator(), "messages.zon",
+        \\.{ .{ .{ .{ .text = "HELLO", .ink = 232 } }, .{} } }
+    );
+    var diagnostic: Diagnostic = .{};
+    const messages = try loadMessages(std.testing.allocator, arena.allocator(), &files, &diagnostic);
+    try std.testing.expectEqual(@as(usize, 1), messages.len);
+    try std.testing.expectEqual(@as(usize, 2), messages[0].len);
+    try std.testing.expectEqualStrings("HELLO", messages[0][0][0].text);
+    try std.testing.expectEqual(@as(u8, 232), messages[0][0][0].ink);
 }
 
 test "a behavior and its characters load with every name resolved" {

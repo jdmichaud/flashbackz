@@ -43,6 +43,7 @@ pub const Scene = struct {
     arena: *std.heap.ArenaAllocator,
     level: level_mod.Id,
     data: *const data_set.Level,
+    messages: data_set.Messages,
     pack: level_pack.Pack,
     world: World,
     screen: *Screen,
@@ -50,6 +51,9 @@ pub const Scene = struct {
     /// A demo replays its recorded input bytes instead of the keys.
     demo: ?Demo = null,
     clock: ?step_clock.Clock = null,
+    /// While a world message shows, the keys are polled every three display refreshes and the
+    /// world waits.
+    message_clock: ?step_clock.Clock = null,
     pending: std.ArrayList(platform.Event) = .empty,
     effects: audio_effects.Output = .{},
     sound_enabled: bool = true,
@@ -126,6 +130,15 @@ pub const Scene = struct {
             std.log.err("data set: {s}", .{diagnostic.message()});
             return err;
         };
+        const messages = data_set.loadMessages(
+            allocator,
+            arena.allocator(),
+            files,
+            &diagnostic,
+        ) catch |err| {
+            std.log.err("data set: {s}", .{diagnostic.message()});
+            return err;
+        };
         const interface = try floppy_interface.load(allocator, assets);
         const first_room = if (start) |s| s.room else data.characters[0].room orelse 0;
         var pack = try level_pack.load(allocator, assets, &interface, level, difficulty, first_room);
@@ -146,6 +159,7 @@ pub const Scene = struct {
             .arena = arena,
             .level = level,
             .data = data,
+            .messages = messages,
             .pack = pack,
             .world = world,
             .screen = screen,
@@ -175,14 +189,51 @@ pub const Scene = struct {
         if (self.clock == null) self.clock = try step_clock.Clock.init(step_clock.jungle, now_ns);
         var work: usize = 0;
         while (self.outcome == .playing and self.needsCatchup(now_ns) and work < 8) : (work += 1) {
+            if (self.message_clock) |*clock| {
+                const deadline = clock.deadline();
+                clock.consume();
+                try self.pollMessage(deadline);
+                continue;
+            }
             const deadline = self.clock.?.deadline();
             self.clock.?.consume();
             try self.step(deadline);
+            if (self.screen.message != null) try self.openMessage(deadline);
         }
     }
 
     pub fn nextDeadline(self: *const Scene) ?u64 {
+        if (self.message_clock) |clock| return clock.deadline();
         return if (self.clock) |clock| clock.deadline() else null;
+    }
+
+    /// The world message takes the keyboard: keys held now count only once released.
+    fn openMessage(self: *Scene, now_ns: u64) !void {
+        var cadence = step_clock.inventory;
+        cadence.initial_gap_ticks = 3;
+        cadence.regular_gap_ticks = 3;
+        self.message_clock = try step_clock.Clock.init(cadence, now_ns);
+        self.message_clock.?.consume();
+        self.keys.release();
+    }
+
+    /// Enter, Space or Shift turns the page; after the last, play resumes.
+    fn pollMessage(self: *Scene, deadline: u64) !void {
+        const held = if (self.demo) |*demo| byte: {
+            if (demo.cursor == demo.bytes.len) {
+                self.outcome = .aborted;
+                return;
+            }
+            demo.cursor += 1;
+            break :byte demo.bytes[demo.cursor - 1];
+        } else self.takeKeys(deadline);
+        if (held & 0x70 == 0) return;
+        self.keys.release();
+        if (try self.screen.nextMessagePage(&self.pack, self.messages)) return;
+        // The world resumes where it stopped.
+        const paused = deadline -| self.message_clock.?.origin_ns;
+        self.message_clock = null;
+        self.clock.?.origin_ns +|= paused;
     }
 
     pub fn needsCatchup(self: *const Scene, now_ns: u64) bool {
@@ -214,7 +265,7 @@ pub const Scene = struct {
             });
         }
         switch (outcome) {
-            .played => try self.screen.present(&self.pack, &self.world),
+            .played => try self.screen.present(&self.pack, self.messages, &self.world),
             .defeated => self.outcome = .defeated,
             .level_changed => self.outcome = .{
                 .level = std.enums.fromInt(level_mod.Id, self.world.requests.level.?) orelse
@@ -228,9 +279,9 @@ pub const Scene = struct {
         while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
             const event = self.pending.orderedRemove(0);
             switch (event.payload) {
-                .focus_lost => self.keys = .{ .last_direction = self.keys.last_direction },
-                .key_down => |key| self.keys.press(key.key, true),
-                .key_up => |key| self.keys.press(key.key, false),
+                .focus_lost => self.keys.lose(),
+                .key_down => |key| self.keys.press(key.key, true, key.repeat),
+                .key_up => |key| self.keys.press(key.key, false, false),
                 else => {},
             }
         }
@@ -271,13 +322,26 @@ pub const Scene = struct {
 };
 
 /// The keyboard as the original reads it: one byte of held keys (no edge detection) and the
-/// last direction held without a diagonal.
+/// last direction held without a diagonal. After a modal screen the held keys are released:
+/// a key still down counts again only when pressed anew (or when the keyboard repeats it).
 pub const Keys = struct {
     held: u8 = 0,
+    /// Keys physically down, and those of them released by a modal screen.
+    down: u8 = 0,
+    ignored: u8 = 0,
     last_direction: u8 = 0,
     escape: bool = false,
 
-    pub fn press(self: *Keys, key: platform.Key, down: bool) void {
+    pub fn release(self: *Keys) void {
+        self.ignored |= self.down;
+        self.held = 0;
+    }
+
+    pub fn lose(self: *Keys) void {
+        self.* = .{ .last_direction = self.last_direction };
+    }
+
+    pub fn press(self: *Keys, key: platform.Key, down: bool, repeat: bool) void {
         const bit: u8 = switch (key) {
             .up => 0x01,
             .down => 0x02,
@@ -293,7 +357,15 @@ pub const Keys = struct {
             },
             else => return,
         };
-        if (down) self.held |= bit else self.held &= ~bit;
+        if (down) {
+            self.down |= bit;
+            if (repeat) self.ignored &= ~bit;
+            if (self.ignored & bit == 0) self.held |= bit;
+        } else {
+            self.down &= ~bit;
+            self.ignored &= ~bit;
+            self.held &= ~bit;
+        }
     }
 
     /// Holding a vertical and a horizontal direction keeps the last single direction, with the
@@ -316,6 +388,22 @@ fn inputByte(sample: input_recording.Sample) u8 {
     if (sample.action) byte |= 0x40;
     if (sample.inventory) byte |= 0x80;
     return byte;
+}
+
+test "a key held through a modal screen counts again only once pressed anew" {
+    var keys: Keys = .{};
+    keys.press(.enter, true, false);
+    try std.testing.expectEqual(@as(u8, 0x10), keys.held);
+    keys.release();
+    try std.testing.expectEqual(@as(u8, 0), keys.held);
+    keys.press(.enter, true, false);
+    try std.testing.expectEqual(@as(u8, 0), keys.held);
+    keys.press(.enter, true, true);
+    try std.testing.expectEqual(@as(u8, 0x10), keys.held);
+    keys.release();
+    keys.press(.enter, false, false);
+    keys.press(.enter, true, false);
+    try std.testing.expectEqual(@as(u8, 0x10), keys.held);
 }
 
 test "diagonals keep the last single direction with the current buttons" {
@@ -349,13 +437,55 @@ pub const Screen = struct {
     checkpoint_saves: u32 = 0,
     /// "COMPLETED" shows while Conrad touches the save terminal after saving.
     completed: bool = false,
+    /// A world message waits until the room shows, then pages over the frame it froze.
+    pending_message: ?u16 = null,
+    message: ?ShownMessage = null,
+    /// The frame under the message.
+    under_message: [pixel_count]u8 = @splat(0),
+    /// Pages alternate between the two video pages. After each flip, the page about to be
+    /// drawn gets the texts and icons it showed earlier wiped with the background, which then
+    /// holds the frozen frame's message area (16, 26, 128x32).
+    pages: [2][pixel_count]u8 = undefined,
+    page_rects: [2]Rects = .{ .{}, .{} },
+    page_buffer: u1 = 0,
+    message_background: [pixel_count]u8 = undefined,
+    /// The rectangles of the texts and icons drawn this frame and the previous one.
+    frame_rects: Rects = .{},
+    previous_rects: Rects = .{},
+    /// A new HUD icon reaches the picture when it is flipped, after any message.
+    hud_unshown: bool = false,
+    /// The icon beside the message: what Conrad touched while one was pending (it can be
+    /// stale, as in the original).
+    message_icon: u8 = 0,
+
+    pub const ShownMessage = struct { number: u16, page: usize = 0 };
+
+    const Rect = struct { x: i32, y: i32, w: i32, h: i32 };
+    const Rects = struct {
+        items: [16]Rect = undefined,
+        count: u8 = 0,
+
+        fn add(self: *Rects, rect: Rect) void {
+            if (self.count == self.items.len) return;
+            self.items[self.count] = rect;
+            self.count += 1;
+        }
+    };
 
     pub fn init(demo: bool) Screen {
         return .{ .password_frames = if (demo) 0 else 150 };
     }
 
     /// Presents the engine's state after an update.
-    pub fn present(self: *Screen, pack: *const level_pack.Pack, world: *const World) !void {
+    pub fn present(
+        self: *Screen,
+        pack: *const level_pack.Pack,
+        messages: data_set.Messages,
+        world: *const World,
+    ) !void {
+        if (world.requests.world_message) |number| {
+            if (number >= 0) self.pending_message = @intCast(number);
+        }
         if (world.room_loads != self.room_loads) {
             self.room_loads = world.room_loads;
             self.loadRoom(pack, world.view_room);
@@ -368,17 +498,89 @@ pub const Screen = struct {
             self.room_countdown -= 1;
             return;
         }
-        try self.paintHudIcon(pack, world);
         @memcpy(&self.picture, &self.background);
         var lists: Lists = .{};
         self.queueAll(pack, world, &lists);
         try self.render(&lists, world);
+        self.frame_rects = .{};
         try self.drawLabel(pack, world);
         try self.drawPassword(pack);
+        try self.paintHudIcon(pack, world);
+        if (self.pending_message) |number| {
+            self.pending_message = null;
+            if (number < messages.len and messages[number].len != 0) {
+                try self.openMessage(pack, messages, number);
+            }
+        }
+        if (self.message == null) self.showHudIcon(pack);
+        self.previous_rects = self.frame_rects;
         if (self.room_countdown == 1) {
             self.room_countdown = 0;
             self.setRoomColors(pack, world.view_room);
         }
+    }
+
+    /// Turns the message's page. False when it was the last: the frame shows without it.
+    pub fn nextMessagePage(
+        self: *Screen,
+        pack: *const level_pack.Pack,
+        messages: data_set.Messages,
+    ) !bool {
+        const shown = &(self.message orelse return false);
+        shown.page += 1;
+        if (shown.page < messages[shown.number].len) {
+            try self.drawMessagePage(pack, messages);
+            return true;
+        }
+        self.message = null;
+        @memcpy(&self.picture, &self.under_message);
+        self.showHudIcon(pack);
+        return false;
+    }
+
+    /// The message freezes the frame: the background takes its message area, and both video
+    /// pages hold it, each with the texts drawn into it in the last two frames.
+    fn openMessage(
+        self: *Screen,
+        pack: *const level_pack.Pack,
+        messages: data_set.Messages,
+        number: u16,
+    ) !void {
+        @memcpy(&self.under_message, &self.picture);
+        @memcpy(&self.message_background, &self.background);
+        for (26..58) |row| @memcpy(
+            self.message_background[row * width + 16 ..][0..128],
+            self.picture[row * width + 16 ..][0..128],
+        );
+        self.pages = .{ self.picture, self.picture };
+        self.page_rects = .{ self.frame_rects, self.previous_rects };
+        self.page_buffer = 0;
+        self.message = .{ .number = number };
+        try self.drawMessagePage(pack, messages);
+    }
+
+    /// The page's lines centered on x = 88 from y = 26, with the icon at (80, 8), drawn into
+    /// its video page, which is then shown; the other page is wiped for the next one.
+    fn drawMessagePage(
+        self: *Screen,
+        pack: *const level_pack.Pack,
+        messages: data_set.Messages,
+    ) !void {
+        const shown = self.message.?;
+        const target = &self.pages[self.page_buffer];
+        const rects = &self.page_rects[self.page_buffer];
+        if (iconFrame(pack, self.message_icon)) |frame| drawIcon(target, rects, frame, 80, 8);
+        for (messages[shown.number][shown.page], 0..) |line, row| {
+            const x = 88 - 4 * @as(i32, @intCast(line.text.len));
+            const y = 26 + 8 * @as(i32, @intCast(row));
+            try drawText(target, rects, pack, line.text, x, y, line.ink);
+        }
+        @memcpy(&self.picture, target);
+        self.page_buffer = ~self.page_buffer;
+        const other = &self.pages[self.page_buffer];
+        const old = &self.page_rects[self.page_buffer];
+        for (old.items[0..old.count]) |rect| restore(other, &self.message_background, rect);
+        old.* = .{};
     }
 
     pub fn writeRgba(self: *const Screen, rgba: []u8) !void {
@@ -421,6 +623,16 @@ pub const Screen = struct {
             self.background[at] = 0xa0 | pixel;
             self.foreground[at] = true;
         };
+        self.hud_unshown = true;
+    }
+
+    /// The new HUD icon is drawn onto the picture just before it is flipped.
+    fn showHudIcon(self: *Screen, pack: *const level_pack.Pack) void {
+        if (!self.hud_unshown) return;
+        self.hud_unshown = false;
+        const frame = iconFrame(pack, self.hud_icon orelse return) orelse return;
+        var unrecorded: Rects = .{};
+        drawIcon(&self.picture, &unrecorded, frame, 232, 8);
     }
 
     // Characters --------------------------------------------------------------------------
@@ -602,13 +814,20 @@ pub const Screen = struct {
             return;
         };
         self.password_frames = 0;
-        if (iconFrame(pack, found.icon - 1)) |frame| drawIcon(&self.picture, frame, 80, 8);
+        if (self.pending_message != null) {
+            self.message_icon = found.icon - 1;
+            self.completed = false;
+            return;
+        }
+        const rects = &self.frame_rects;
+        if (iconFrame(pack, found.icon - 1)) |frame| drawIcon(&self.picture, rects, frame, 80, 8);
         const name = world.level.characters[found.character].label;
-        try self.drawText(pack, name, 88 - 4 * @as(i32, @intCast(name.len)), 26, 0xe6);
+        const x = 88 - 4 * @as(i32, @intCast(name.len));
+        try drawText(&self.picture, rects, pack, name, x, 26, 0xe6);
         if (found.icon != 3) {
             self.completed = false;
         } else if (self.completed) {
-            try self.drawText(pack, "COMPLETED", 88 - 4 * 9, 34, 0xe6);
+            try drawText(&self.picture, rects, pack, "COMPLETED", 88 - 4 * 9, 34, 0xe6);
         }
     }
 
@@ -617,24 +836,38 @@ pub const Screen = struct {
         self.password_frames -= 1;
         if (self.password_frames == 0) return;
         const text = std.mem.sliceTo(&pack.password, 0);
-        try self.drawText(pack, text, 128 - 4 * @as(i32, @intCast(text.len)), 16, 0xe7);
-    }
-
-    fn drawText(
-        self: *Screen,
-        pack: *const level_pack.Pack,
-        text: []const u8,
-        x: i32,
-        y: i32,
-        ink: u8,
-    ) !void {
-        try text_renderer.draw(&self.picture, width, height, &pack.font, text, x, y, .{
-            .foreground = ink,
-            .shadow = 0xe2,
-            .palette_bank = 14,
-        });
+        const x = 128 - 4 * @as(i32, @intCast(text.len));
+        try drawText(&self.picture, &self.frame_rects, pack, text, x, 16, 0xe7);
     }
 };
+
+/// Draws text and records its rectangle, as the original does for later restoring.
+fn drawText(
+    target: *[pixel_count]u8,
+    rects: *Screen.Rects,
+    pack: *const level_pack.Pack,
+    text: []const u8,
+    x: i32,
+    y: i32,
+    ink: u8,
+) !void {
+    try text_renderer.draw(target, width, height, &pack.font, text, x, y, .{
+        .foreground = ink,
+        .shadow = 0xe2,
+        .palette_bank = 14,
+    });
+    rects.add(.{ .x = x, .y = y, .w = 8 * @as(i32, @intCast(text.len)), .h = 8 });
+}
+
+/// Copies a rectangle from `source`, clipped to the screen.
+fn restore(target: *[pixel_count]u8, source: *const [pixel_count]u8, rect: Screen.Rect) void {
+    const x0: usize = @intCast(std.math.clamp(rect.x, 0, width));
+    const x1: usize = @intCast(std.math.clamp(rect.x + rect.w, 0, width));
+    const y0: usize = @intCast(std.math.clamp(rect.y, 0, height));
+    const y1: usize = @intCast(std.math.clamp(rect.y + rect.h, 0, height));
+    if (x1 <= x0) return;
+    for (y0..y1) |row| @memcpy(target[row * width + x0 .. row * width + x1], source[row * width + x0 .. row * width + x1]);
+}
 
 const Label = struct { icon: u8, character: u16 };
 
@@ -680,9 +913,16 @@ fn iconFrame(pack: *const level_pack.Pack, icon: u8) ?*const sprite.Frame {
 }
 
 /// Icons draw their nonzero pixels with the icon colors, over anything.
-fn drawIcon(picture: []u8, frame: *const sprite.Frame, x: usize, y: usize) void {
+fn drawIcon(
+    picture: *[pixel_count]u8,
+    rects: *Screen.Rects,
+    frame: *const sprite.Frame,
+    x: usize,
+    y: usize,
+) void {
     for (0..16) |row| for (0..16) |column| {
         const pixel = frame.image.pixels[row * 16 + column];
         if (pixel != 0) picture[(y + row) * width + x + column] = 0xa0 | pixel;
     };
+    rects.add(.{ .x = @intCast(x), .y = @intCast(y), .w = 16, .h = 16 });
 }
