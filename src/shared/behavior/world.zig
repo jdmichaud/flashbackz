@@ -127,12 +127,19 @@ pub const World = struct {
     missing_operation: ?[]const u8 = null,
     scratch: std.ArrayList(u16) = .empty,
 
+    /// Where Conrad starts instead of his placement, as a demo does.
+    pub const Start = struct { room: u8, x: i16, y: i16 };
+
+    /// A level as it starts: characters wake from their placements and Conrad's placement
+    /// room, then Conrad moves to `start` if given, then rooms are listed and the view
+    /// follows him.
     pub fn init(
         allocator: std.mem.Allocator,
         level: *const data_set.Level,
         level_animations: animations.Animations,
         collision: grid.Grid,
         difficulty: data_set.Difficulty,
+        start: ?Start,
     ) !World {
         const characters = try allocator.alloc(Character, level.characters.len);
         errdefer allocator.free(characters);
@@ -148,7 +155,7 @@ pub const World = struct {
             .inbox = inbox,
             .view_room = level.characters[0].room orelse Room.outside,
         };
-        for (characters, level.characters, 0..) |*character, definition, index| {
+        for (characters, level.characters) |*character, definition| {
             const present = @backingInt(definition.minimum_difficulty) <= @backingInt(difficulty);
             const doubled = definition.kind == .enemy and @backingInt(difficulty) >= 2;
             const room = definition.room orelse Room.outside;
@@ -165,9 +172,17 @@ pub const World = struct {
                 .active = present and (definition.active or
                     (definition.wakes_when_near and room == world.view_room)),
             };
-            // Lists start in descending placement order: each placement goes to the front.
-            if (present) world.pushToRoom(@intCast(index), room);
         }
+        if (start) |conrad| {
+            characters[0].room = conrad.room;
+            characters[0].x = conrad.x;
+            characters[0].y = conrad.y;
+        }
+        // Lists start in descending placement order: each placement goes to the front.
+        for (characters, 0..) |character, index| {
+            if (character.present) world.pushToRoom(@intCast(index), character.room);
+        }
+        world.view_room = characters[0].room;
         world.resetLetters();
         return world;
     }
