@@ -279,6 +279,7 @@ pub const Game = struct {
                 .allocator = allocator,
                 .assets = assets,
                 .storage = storage,
+                .data = data,
                 .page = page,
                 .rgba = rgba,
                 .preferences = preferences,
@@ -298,6 +299,7 @@ pub const Game = struct {
             .allocator = allocator,
             .assets = assets,
             .storage = storage,
+            .data = data,
             .page = page,
             .rgba = rgba,
             .preferences = preferences,
@@ -413,7 +415,37 @@ pub const Game = struct {
                 return .finished;
             }
             try front.update(p);
-            if (front.stage == .demo_ready) {
+            if (front.stage == .demo_ready and self.data != null) {
+                if (self.demo_index == 3) {
+                    self.demo_index = 0;
+                    try front.intro();
+                } else {
+                    var next = try level_scene.Scene.loadDemo(
+                        self.allocator,
+                        self.assets.?,
+                        self.data.?,
+                        self.demo_index,
+                    );
+                    next.sound_enabled = self.preferences.sound_fx;
+                    front.deinit();
+                    self.scene = .{ .level = next };
+                    self.demo_index += 1;
+                }
+            } else if (front.stage == .ready and self.data != null) {
+                var next = try level_scene.Scene.load(
+                    self.allocator,
+                    self.assets.?,
+                    self.data.?,
+                    front.selected_level,
+                    front.difficulty,
+                );
+                next.sound_enabled = self.preferences.sound_fx;
+                self.level = front.selected_level;
+                self.difficulty = front.difficulty;
+                front.deinit();
+                self.scene = .{ .level = next };
+            } else if (front.stage == .demo_ready) {
+                // Without a data set, the hand-written scene plays the demos.
                 if (self.demo_index == 3) {
                     self.demo_index = 0;
                     try front.intro();
