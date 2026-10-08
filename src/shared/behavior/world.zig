@@ -62,6 +62,18 @@ pub const Character = struct {
     /// The next character in the same room's list.
     next_in_room: ?u16 = null,
     look: Look = .{},
+    /// A character not placed at this difficulty that the previous level left marked awake:
+    /// it counts as awake (messages reach it, nothing wakes it) without being updated.
+    stale_awake: bool = false,
+};
+
+/// What a character's record keeps from the previous level when the new level does not place
+/// it: its flags. A new game starts with none.
+pub const Inherited = struct {
+    facing_right: bool = false,
+    awake: bool = false,
+    mirrored: bool = false,
+    composed: bool = false,
 };
 
 pub const Letter = struct { sender: u16, message: vocabulary.Message, next: ?u16 };
@@ -235,14 +247,22 @@ pub const World = struct {
     /// A level as it starts: characters wake from their placements and Conrad's placement
     /// room, then Conrad moves to `start` if given, then rooms are listed and the view
     /// follows him.
+    pub const Options = struct {
+        difficulty: data_set.Difficulty = .normal,
+        /// Where a demo starts Conrad instead of his placement.
+        start: ?Start = null,
+        /// Each record's flags as the previous level left them, by placement index.
+        inherited: []const Inherited = &.{},
+    };
+
     pub fn init(
         allocator: std.mem.Allocator,
         level: *const data_set.Level,
         level_animations: animations.Animations,
         collision: grid.Grid,
-        difficulty: data_set.Difficulty,
-        start: ?Start,
+        options: Options,
     ) !World {
+        const difficulty = options.difficulty;
         const characters = try allocator.alloc(Character, level.characters.len);
         errdefer allocator.free(characters);
         const inbox = try allocator.alloc(?u16, level.characters.len);
@@ -257,7 +277,7 @@ pub const World = struct {
             .inbox = inbox,
             .view_room = level.characters[0].room orelse Room.outside,
         };
-        for (characters, level.characters) |*character, definition| {
+        for (characters, level.characters, 0..) |*character, definition, index| {
             const present = @backingInt(definition.minimum_difficulty) <= @backingInt(difficulty);
             const doubled = definition.kind == .enemy and @backingInt(difficulty) >= 2;
             const room = definition.room orelse Room.outside;
@@ -267,15 +287,22 @@ pub const World = struct {
                 .y = definition.y,
                 .room = room,
                 .health = if (doubled) definition.health *% 2 else definition.health,
-                // Characters left out at this difficulty keep their flags from before; a new
-                // game starts them cleared.
-                .facing_right = present and definition.facing == .right,
+                .facing_right = definition.facing == .right,
                 .present = present,
                 .active = present and (definition.active or
                     (definition.wakes_when_near and room == world.view_room)),
             };
+            if (present) continue;
+            // Characters left out at this difficulty keep their flags from the previous level.
+            const kept: Inherited = if (index < options.inherited.len)
+                options.inherited[index]
+            else
+                .{};
+            character.facing_right = kept.facing_right;
+            character.stale_awake = kept.awake;
+            character.look = .{ .mirrored = kept.mirrored, .composed = kept.composed };
         }
-        if (start) |conrad| {
+        if (options.start) |conrad| {
             characters[0].room = conrad.room;
             characters[0].x = conrad.x;
             characters[0].y = conrad.y;
@@ -410,6 +437,30 @@ pub const World = struct {
     /// Stops updating the character until something wakes it.
     pub fn deactivate(self: *World, index: u16) void {
         self.characters[index].active = false;
+        self.characters[index].stale_awake = false;
+    }
+
+    /// Whether the character counts as awake: updated, or left marked awake by the previous
+    /// level.
+    pub fn awake(self: *const World, index: u16) bool {
+        return self.characters[index].active or self.characters[index].stale_awake;
+    }
+
+    /// Each record's flags, as the next level inherits them for characters it does not place.
+    pub fn inheritance(self: *const World, out: []Inherited) void {
+        for (out, 0..) |*kept, index| {
+            if (index >= self.characters.len) {
+                kept.* = .{};
+                continue;
+            }
+            const character = self.characters[index];
+            kept.* = .{
+                .facing_right = character.facing_right,
+                .awake = self.awake(@intCast(index)),
+                .mirrored = character.look.mirrored,
+                .composed = character.look.composed,
+            };
+        }
     }
 
     fn updateCharacter(self: *World, index: u16) !void {
@@ -731,7 +782,7 @@ pub const World = struct {
     /// sender's room and not a protected Conrad, and a full pool drops the message.
     pub fn send(self: *World, sender: u16, recipient: u16, message: vocabulary.Message) void {
         const to = &self.characters[recipient];
-        if (!to.active) {
+        if (!self.awake(recipient)) {
             if (!self.level.characters[recipient].wakes_on_message) return;
             to.active = true;
         }

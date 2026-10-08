@@ -112,8 +112,7 @@ const testing = struct {
             &level,
             try animations.Animations.init(&animation_bytes),
             try grid.Grid.init(&layout),
-            .normal,
-            null,
+            .{},
         );
         w.column = grid.columnOf(112);
         w.band = grid.bandOf(214);

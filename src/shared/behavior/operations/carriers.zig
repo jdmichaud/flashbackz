@@ -393,8 +393,7 @@ const testing = struct {
             level,
             try animations.Animations.init(&animation_bytes),
             try grid.Grid.init(&layout),
-            .normal,
-            null,
+            .{},
         );
     }
 

@@ -87,14 +87,20 @@ pub const Scene = struct {
     pub const Demo = struct { bytes: []u8, cursor: usize = 0 };
 
     /// Loads `level` from the data set `files` and the original art and sound in `assets`.
+    pub const Setup = struct {
+        difficulty: settings.Difficulty = .normal,
+        /// The records' flags as the previous level left them (none in a new game).
+        inherited: []const behavior.world.Inherited = &.{},
+    };
+
     pub fn load(
         allocator: std.mem.Allocator,
         assets: platform.AssetSource,
         files: *const data_set.Files,
         level: level_mod.Id,
-        difficulty: settings.Difficulty,
+        setup: Setup,
     ) !Scene {
-        return loadWithStart(allocator, assets, files, level, difficulty, null);
+        return loadWithStart(allocator, assets, files, level, setup, null);
     }
 
     /// Loads demo `index`: its level, with Conrad where the demo starts, replaying its input.
@@ -103,6 +109,7 @@ pub const Scene = struct {
         assets: platform.AssetSource,
         files: *const data_set.Files,
         index: usize,
+        inherited: []const behavior.world.Inherited,
     ) !Scene {
         const recording = try demo_mod.load(allocator, assets, index);
         defer allocator.free(recording.controls);
@@ -116,7 +123,7 @@ pub const Scene = struct {
             assets,
             files,
             recording.descriptor.level,
-            .normal,
+            .{ .inherited = inherited },
             start,
         );
         errdefer scene.deinit();
@@ -134,9 +141,10 @@ pub const Scene = struct {
         assets: platform.AssetSource,
         files: *const data_set.Files,
         level: level_mod.Id,
-        difficulty: settings.Difficulty,
+        setup: Setup,
         start: ?World.Start,
     ) !Scene {
+        const difficulty = setup.difficulty;
         const arena = try allocator.create(std.heap.ArenaAllocator);
         arena.* = .init(allocator);
         errdefer {
@@ -189,8 +197,11 @@ pub const Scene = struct {
             data,
             pack.animations,
             pack.grid,
-            @fromBackingInt(@backingInt(difficulty)),
-            start,
+            .{
+                .difficulty = @fromBackingInt(@backingInt(difficulty)),
+                .start = start,
+                .inherited = setup.inherited,
+            },
         );
         errdefer world.deinit();
         const screen = try allocator.create(Screen);

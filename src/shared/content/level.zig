@@ -12,4 +12,3 @@ pub fn files(id: Id) Files {
         .alien_base => .{ .actors = "LEVEL5_2", .rooms = "LEVEL5" },
     };
 }
-

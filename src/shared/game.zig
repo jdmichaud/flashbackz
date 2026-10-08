@@ -9,6 +9,7 @@ const continue_mod = @import("scenes/continue_game.zig");
 const story_mod = @import("scenes/story.zig");
 const level_scene = @import("scenes/level.zig");
 const data_set = @import("behavior/data_set.zig");
+const behavior_world = @import("behavior/world.zig");
 const content_level = @import("content/level.zig");
 const game_options = @import("scenes/game_options.zig");
 const memory = @import("memory.zig");
@@ -216,6 +217,9 @@ pub const Game = struct {
     story: ?story_mod.Story = null,
     /// The level the continue screen may resume.
     suspended_level: ?level_scene.Scene = null,
+    /// The character records' flags as the last level left them; the next level's characters
+    /// that it does not place keep them, as in the original.
+    inherited: [256]behavior_world.Inherited = @splat(.{}),
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -247,7 +251,7 @@ pub const Game = struct {
                 assets orelse return error.OriginalContentRequired,
                 data orelse return error.DataSetRequired,
                 level,
-                .normal,
+                .{},
             );
             scene.settings = preferences;
             return .{
@@ -376,6 +380,7 @@ pub const Game = struct {
                         self.assets.?,
                         self.data orelse return error.DataSetRequired,
                         self.demo_index,
+                        &self.inherited,
                     );
                     next.settings = self.preferences;
                     front.deinit();
@@ -388,7 +393,7 @@ pub const Game = struct {
                     self.assets.?,
                     self.data orelse return error.DataSetRequired,
                     front.selected_level,
-                    front.difficulty,
+                    .{ .difficulty = front.difficulty, .inherited = &self.inherited },
                 );
                 next.settings = self.preferences;
                 self.level = front.selected_level;
@@ -404,19 +409,20 @@ pub const Game = struct {
                 if (self.suspended_level) |*level| {
                     if (choice == .retry) {
                         if (!level.continueAfterDefeat()) {
+                            level.world.inheritance(&self.inherited);
                             // No checkpoint: the level starts again, from its entry score.
                             var fresh = try level_scene.Scene.load(
                                 self.allocator,
                                 self.assets.?,
                                 self.data.?,
                                 level.level,
-                                self.difficulty,
+                                .{ .difficulty = self.difficulty, .inherited = &self.inherited },
                             );
                             fresh.world.score = level.world.entry_score;
                             fresh.world.entry_score = level.world.entry_score;
                             fresh.world.random = level.world.random;
                             fresh.settings = level.settings;
-                            level.deinit();
+                            self.retire(level);
                             level.* = fresh;
                         }
                         dialog.deinit();
@@ -424,7 +430,7 @@ pub const Game = struct {
                         self.suspended_level = null;
                         break :resume_level;
                     }
-                    level.deinit();
+                    self.retire(level);
                     self.suspended_level = null;
                 }
                 const art = (try menu_art.load(self.allocator, self.assets.?)) orelse return error.MissingMenu;
@@ -479,12 +485,13 @@ pub const Game = struct {
                 return scene.needsCatchup(now);
             },
             .level => |destination| {
+                scene.world.inheritance(&self.inherited);
                 var next = try level_scene.Scene.load(
                     self.allocator,
                     self.assets.?,
                     self.data.?,
                     destination,
-                    self.difficulty,
+                    .{ .difficulty = self.difficulty, .inherited = &self.inherited },
                 );
                 next.world.score = scene.world.score;
                 next.world.entry_score = scene.world.score;
@@ -514,11 +521,17 @@ pub const Game = struct {
                 var next = front_end.Scene.init(self.allocator, self.assets.?, art);
                 next.difficulty = self.difficulty;
                 next.music_enabled = self.preferences.music;
-                scene.deinit();
+                self.retire(scene);
                 self.scene = .{ .menu = next };
             },
         }
         return false;
+    }
+
+    /// Ends a level scene, keeping its records' flags for the next level.
+    fn retire(self: *Game, scene: *level_scene.Scene) void {
+        scene.world.inheritance(&self.inherited);
+        scene.deinit();
     }
 
     /// The first line of `title_asset`, when the host has the asset.
