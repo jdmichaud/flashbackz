@@ -10,6 +10,7 @@ pub const platform = @import("platform.zig");
 pub const memory = @import("memory.zig");
 pub const version = @import("version.zig");
 pub const content = @import("content/root.zig");
+pub const behavior = @import("behavior/root.zig");
 pub const floppy = @import("floppy.zig");
 pub const asset_pack = @import("asset_pack.zig");
 pub const menu = @import("scenes/menu.zig");
