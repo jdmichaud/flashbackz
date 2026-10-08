@@ -124,11 +124,8 @@ pub const State = struct {
     }
 
     fn wallAt(environment: anytype, pose: motion.Pose, ahead: i16) !bool {
-        return try environment.at(pose, .torso, ahead) and !try environment.at(
-            pose,
-            .torso,
-            ahead - 1,
-        );
+        return try environment.at(pose, .torso, ahead) and
+            !try environment.at(pose, .torso, ahead - 1);
     }
 
     pub fn finishPhase(
@@ -148,11 +145,9 @@ pub const State = struct {
             .running_recovery => {
                 if (try wallAt(environment, pose.*, 0)) return .wall_collision;
                 if (try wallAt(environment, pose.*, 1)) return .wall_stop;
-                if (!try environment.at(
-                    pose.*,
-                    .support,
-                    1,
-                ) or !try environment.at(pose.*, .support, 2)) {
+                if (!try environment.at(pose.*, .support, 1) or
+                    !try environment.at(pose.*, .support, 2))
+                {
                     shiftForward(pose, clips.alignment_forward);
                     return .running_drop;
                 }
@@ -176,17 +171,13 @@ pub const State = struct {
                 return .jump_flight;
             },
             .enter => {
-                if (!try environment.at(pose.*, .torso, 0) and !try environment.at(
-                    pose.*,
-                    .support,
-                    1,
-                )) {
+                if (!try environment.at(pose.*, .torso, 0) and
+                    !try environment.at(pose.*, .support, 1))
+                {
                     self.phase = .drop;
                 } else {
-                    const passage = try environment.rollPassage(
-                        pose.*,
-                        0,
-                    ) or try environment.rollPassage(pose.*, 1);
+                    const passage = try environment.rollPassage(pose.*, 0) or
+                        try environment.rollPassage(pose.*, 1);
                     if (!passage and try environment.at(pose.*, .torso, 1)) return .wall_collision;
                     self.phase = .tumble;
                 }
@@ -196,16 +187,11 @@ pub const State = struct {
                     self.phase = .exit;
                     return .continued;
                 }
-                if (try environment.at(pose.*, .torso, 0) and !try environment.at(
-                    pose.*,
-                    .torso,
-                    -1,
-                )) return .wall_collision;
-                if (try environment.at(
-                    pose.*,
-                    .torso,
-                    1,
-                ) and !try environment.at(pose.*, .torso, 0)) {
+                if (try environment.at(pose.*, .torso, 0) and
+                    !try environment.at(pose.*, .torso, -1)) return .wall_collision;
+                if (try environment.at(pose.*, .torso, 1) and
+                    !try environment.at(pose.*, .torso, 0))
+                {
                     shiftForward(pose, clips.alignment_forward);
                     self.phase = .balance;
                 } else self.phase = if (try environment.at(pose.*, .support, 1)) .exit else .drop;
@@ -215,11 +201,7 @@ pub const State = struct {
                     self.phase = .drop;
                 } else if (try environment.rollPassage(pose.*, 0)) {
                     self.phase = .enter;
-                } else if (try wallAt(
-                    environment,
-                    pose.*,
-                    1,
-                ) or (intent.action and intent.direction == pose.facing)) {
+                } else if (try wallAt(environment, pose.*, 1) or (intent.action and intent.direction == pose.facing)) {
                     self.phase = .balance;
                 } else if (weapon_desired) {
                     shiftForward(pose, clips.alignment_forward);
@@ -230,19 +212,14 @@ pub const State = struct {
                 shiftForward(pose, clips.alignment_forward);
             },
             .balance => {
-                if (try wallAt(
-                    environment,
-                    pose.*,
-                    0,
-                ) or try wallAt(environment, pose.*, 1) or try wallAt(environment, pose.*, 2)) {
+                if (try wallAt(environment, pose.*, 0) or
+                    try wallAt(environment, pose.*, 1) or
+                    try wallAt(environment, pose.*, 2))
+                {
                     self.phase = .rise;
                 } else if (!try environment.at(pose.*, .support, 0)) {
                     self.phase = .drop;
-                } else if (!try environment.at(
-                    pose.*,
-                    .support,
-                    1,
-                ) or !try environment.at(pose.*, .support, 2)) {
+                } else if (!try environment.at(pose.*, .support, 1) or !try environment.at(pose.*, .support, 2)) {
                     shiftForward(pose, clips.alignment_forward);
                     self.phase = .drop;
                 } else {
@@ -266,20 +243,14 @@ pub const State = struct {
                     pose.position.y +%= 24;
                     return .catch_ledge;
                 }
-                if ((try environment.at(pose.*, .torso, 0) and !try environment.at(
-                    pose.*,
-                    .support,
-                    -1,
-                )) or !try environment.at(pose.*, .support, 0)) {
+                if ((try environment.at(pose.*, .torso, 0) and
+                    !try environment.at(pose.*, .support, -1)) or
+                    !try environment.at(pose.*, .support, 0))
+                {
                     pose.position.y +%= clips.long_fall_down;
                     return .long_fall;
                 }
-                self.phase = if (try environment.at(pose.*, .torso, 0) or try environment.ledge(
-                    pose.*,
-                    .support,
-                    0,
-                    .ahead,
-                )) .upright_landing else .recover;
+                self.phase = if (try environment.at(pose.*, .torso, 0) or try environment.ledge(pose.*, .support, 0, .ahead)) .upright_landing else .recover;
                 pose.position.y +%= clips.landing_down;
             },
             .recover, .upright_landing => return .standing,

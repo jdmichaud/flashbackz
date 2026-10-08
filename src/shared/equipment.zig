@@ -35,11 +35,7 @@ pub const Recharge = struct {
     restore: union(enum) { player_health: i16, item_charge: i16 },
     movie: story_cue.Cue,
 };
-pub const Recharged = struct {
-    item: ItemHandle,
-    health: ?i16,
-    movie: ?story_cue.Cue,
-};
+pub const Recharged = struct { item: ItemHandle, health: ?i16, movie: ?story_cue.Cue };
 pub const Definition = struct {
     consumption_movie: ?story_cue.Cue = null,
     consumption_notice: ?world_messages.Id = null,

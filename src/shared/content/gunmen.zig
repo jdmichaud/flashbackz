@@ -246,17 +246,11 @@ fn discover(group: rules.Group) !?Sources {
     put(&sources, .crouched_recovery, (try required(group, low_fire.target, 68, 0)).target);
     // Every imported action must be a distinct clip role in this family. The runtime
     // chooses intent; these source relationships are only used to identify its artwork.
-    for (
-        sources,
-        0..,
-    ) |state, i| for (sources[0..i]) |previous| if (state == previous) return error.UnsupportedGunmanMotionGraph;
+    for (sources, 0..) |state, i| for (sources[0..i]) |previous| if (state == previous) return error.UnsupportedGunmanMotionGraph;
     return sources;
 }
 
-fn postureSenses(
-    group: rules.Group,
-    state: u16,
-) ![4]?perception.PostureSense {
+fn postureSenses(group: rules.Group, state: u16) ![4]?perception.PostureSense {
     var result: [4]?perception.PostureSense = @splat(null);
     var count: usize = 0;
     for (0..group.count()) |i| {
@@ -347,10 +341,8 @@ fn profile(
         ) else aim_immediate = try distance(group, aiming, 120, 0);
     }
     const recovery_target = (try required(group, get(sources, .crouched_recovery), 63, 0)).target;
-    if (recovery_target != get(
-        sources,
-        .crouched_aim,
-    ) and recovery_target != get(sources, .rising)) return error.UnsupportedEnemyRecovery;
+    if (recovery_target != get(sources, .crouched_aim) and
+        recovery_target != get(sources, .rising)) return error.UnsupportedEnemyRecovery;
     return .{
         .clips = clips,
         .crouch_senses = try postureSenses(group, get(sources, .assessing)),
@@ -530,10 +522,7 @@ pub fn load(
         const initial: Action = if (dormant) .ready else for (family.sources, 0..) |state, index| {
             if (record.initial_state == state) break std.enums.values(Action)[index];
         } else return error.UnsupportedEnemyStart;
-        const room = if (dormant) record.parameters[@intCast(group.at(189).effect.argument)] else @as(
-            i16,
-            record.room,
-        );
+        const room = if (dormant) record.parameters[@intCast(group.at(189).effect.argument)] else @as(i16, record.room);
         if (room < 0 or room >= room_ids.len) return error.InvalidEnemyRoom;
         var aim_delay: i16 = undefined;
         var recovery_delay: i16 = undefined;

@@ -147,12 +147,7 @@ pub fn recognize(group: rules.Group) ?Spec {
         r[8].conditions[1].argument != r[21].conditions[1].argument or
         r[8].effect.argument != r[24].effect.argument) return null;
     const range = r[3].conditions[1].argument;
-    for ([_]usize{
-        3,
-        10,
-        13,
-        17,
-    }) |i| if (r[i].conditions[0].argument != 1 or
+    for ([_]usize{ 3, 10, 13, 17 }) |i| if (r[i].conditions[0].argument != 1 or
         r[i].conditions[1].argument != range) return null;
     for ([_]i16{
         r[2].effect.argument,
@@ -273,10 +268,7 @@ pub fn load(
         );
         for (item_sources, 0..) |source, index| {
             const item = try table.record(source);
-            const offer = quest_items.teleporter(try rules.group(
-                rule_bytes,
-                item.rule_group,
-            )) orelse continue;
+            const offer = quest_items.teleporter(try rules.group(rule_bytes, item.rule_group)) orelse continue;
             if (item.parameters[0] != record.kind or offer.signal != spec.accept) continue;
             try bindings.append(
                 allocator,
@@ -295,10 +287,7 @@ pub fn load(
         for (0..table.count) |source| {
             const item = try table.record(@intCast(source));
             if (item.initially_active == 0 or item.parameters[0] != record.kind) continue;
-            const signal = credit_wallet.signal(try rules.group(
-                rule_bytes,
-                item.rule_group,
-            )) orelse continue;
+            const signal = credit_wallet.signal(try rules.group(rule_bytes, item.rule_group)) orelse continue;
             if (signal != spec.accept) continue;
             for (supplies, 0..) |supply, index| if (supply.kind == .credits) {
                 try bindings.append(

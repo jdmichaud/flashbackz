@@ -34,10 +34,7 @@ pub fn recognize(group: rules.Group) ?Spec {
             r.next != to or
             r.dx != 0 or
             r.dy != 0 or
-            r.flags != (if (i == 4) @as(
-                u8,
-                2,
-            ) else 0)) return null;
+            r.flags != (if (i == 4) @as(u8, 2) else 0)) return null;
         for (
             [_]rules.Operation{ r.conditions[0], r.conditions[1], r.effect },
             ops,
@@ -71,11 +68,7 @@ pub const Assets = struct {
     pub fn bind(self: Assets, connections: []const routes.Connection) ![]runtime.Binding {
         var bindings: std.ArrayList(runtime.Binding) = .empty;
         errdefer bindings.deinit(self.allocator);
-        for (
-            self.sources,
-            self.signals,
-            0..,
-        ) |source, signals, index| for (connections) |connection| if (connection.recipient == source) {
+        for (self.sources, self.signals, 0..) |source, signals, index| for (connections) |connection| if (connection.recipient == source) {
             for (
                 signals,
                 [_]runtime.Action{ .start, .complete },

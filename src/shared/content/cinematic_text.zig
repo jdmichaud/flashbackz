@@ -63,11 +63,7 @@ fn parseStrings(
     for (result, 0..) |*value, i| {
         const at = std.mem.readInt(u16, offsets[i * 2 ..][0..2], .big);
         if (at >= text.len) return error.InvalidCinematicTextOffset;
-        const length = std.mem.indexOfScalar(
-            u8,
-            owned_text[at..],
-            '\n',
-        ) orelse return error.UnterminatedCinematicText;
+        const length = std.mem.indexOfScalar(u8, owned_text[at..], '\n') orelse return error.UnterminatedCinematicText;
         value.* = owned_text[at..][0..length];
     }
     return result;

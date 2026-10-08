@@ -104,21 +104,14 @@ pub fn recognize(group: rules.Group) ?Spec {
         )) return null;
         const end = for (0..group.count()) |j| {
             const candidate = group.at(j);
-            if (candidate.source == movement.source and op(
-                candidate.conditions[0],
-                63,
-                0,
-            )) break candidate;
+            if (candidate.source == movement.source and
+                op(candidate.conditions[0], 63, 0)) break candidate;
         } else return null;
         if (end.effect.code != 54 or
             start.conditions[1].argument != end.effect.argument) return null;
         const arrival = idle(group, end.target);
         const arrived_state = if (arrival) |a| a.target else end.target;
-        const arrival_clip: ?u16 = if (arrival) |a| if (a.target != a.source and op(
-            a.effect,
-            0,
-            0,
-        )) a.source else null else null;
+        const arrival_clip: ?u16 = if (arrival) |a| if (a.target != a.source and op(a.effect, 0, 0)) a.source else null else null;
         if (arrival != null and arrival_clip == null) return null;
         const index: usize = if (start.effect.argument < 0) 0 else 1;
         if (trips[index] != null) return null;
@@ -129,18 +122,11 @@ pub fn recognize(group: rules.Group) ?Spec {
             const a = group.at(j);
             if (a.source != r.source) continue;
             ready_rules += 1;
-            if (op(
-                a.conditions[0],
-                127,
-                0,
-            ) and
+            if (op(a.conditions[0], 127, 0) and
                 a.conditions[1].code == 34 and
                 a.target == r.target) call = a.conditions[1].argument;
-            if (a.conditions[0].code == 34 and op(
-                a.conditions[1],
-                126,
-                132,
-            )) fallback_floor = a.effect.code == 54;
+            if (a.conditions[0].code == 34 and
+                op(a.conditions[1], 126, 132)) fallback_floor = a.effect.code == 54;
         }
         if (ready_rules != 6 or call == null) return null;
         const sound = if (end.conditions[1].code == 125 and
@@ -177,21 +163,16 @@ pub fn recognize(group: rules.Group) ?Spec {
             const r = group.at(j);
             if (r.source == trip.movement and op(r.conditions[0], 63, 0)) break r;
         } else unreachable;
-        const destination = if (trip.arrival) |a| (idle(
-            group,
-            a,
-        ) orelse return null).target else end.target;
+        const destination = if (trip.arrival) |a| (idle(group, a) orelse return null).target else end.target;
         if (destination != complete[1 - index].parked) return null;
     }
     var disabled: ?u16 = null;
     var enabled: runtime.Stop = undefined;
     for (0..group.count()) |i| {
         const r = group.at(i);
-        if (!op(
-            r.conditions[0],
-            34,
-            30,
-        ) or r.conditions[1].code != 0 or r.effect.code != 0) continue;
+        if (!op(r.conditions[0], 34, 30) or
+            r.conditions[1].code != 0 or
+            r.effect.code != 0) continue;
         if (r.target == complete[0].parked) enabled = .bottom else if (r.target == complete[1].parked) enabled = .top else continue;
         disabled = r.source;
     }
@@ -357,18 +338,11 @@ fn recognizeCinematic(group: rules.Group) ?Spec {
         r[0].source == r[6].source) return null;
     const height = r[4].effect.argument;
     for ([_]usize{ 5, 10, 11, 12, 14 }) |i| if (r[i].effect.argument != height) return null;
-    for ([_]usize{
-        16,
-        17,
-    }) |i| if (r[i].conditions[1].argument != height or
+    for ([_]usize{ 16, 17 }) |i| if (r[i].conditions[1].argument != height or
         r[i].conditions[0].argument < 0 or
         r[i].conditions[0].argument > 3) return null;
-    for ([_]usize{
-        0,
-        1,
-        6,
-        7,
-    }) |i| if (r[i].effect.argument < 0 or r[i].effect.argument > 3) return null;
+    for ([_]usize{ 0, 1, 6, 7 }) |i| if (r[i].effect.argument < 0 or
+        r[i].effect.argument > 3) return null;
     if (r[12].conditions[0].argument != 0 or
         r[14].conditions[0].argument != 0 or
         r[4].conditions[1].argument != 130 or
@@ -536,10 +510,7 @@ pub fn load(
             record.collision_width > 16) return error.InvalidLiftFootprint;
         var column = @divFloor(@as(i32, record.position.x) + 8, 16);
         if (record.facing_right != 0) column -= record.collision_width - 1;
-        const floor_row = (@divTrunc(
-            @as(i32, record.position.y),
-            36,
-        ) & ~@as(i32, 1)) + spec.floor_row;
+        const floor_row = (@divTrunc(@as(i32, record.position.y), 36) & ~@as(i32, 1)) + spec.floor_row;
         if (column < 0 or
             column + record.collision_width > 16 or
             floor_row < 0 or

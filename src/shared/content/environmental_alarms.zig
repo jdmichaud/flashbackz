@@ -72,11 +72,7 @@ pub const Assets = struct {
     pub fn bind(self: Assets, connections: []const routes.Connection) ![]runtime.Binding {
         var bindings: std.ArrayList(runtime.Binding) = .empty;
         errdefer bindings.deinit(self.allocator);
-        for (
-            self.sources,
-            self.signals,
-            0..,
-        ) |source, signals, index| for (connections) |connection| if (connection.recipient == source) {
+        for (self.sources, self.signals, 0..) |source, signals, index| for (connections) |connection| if (connection.recipient == source) {
             for (
                 signals,
                 [_]runtime.Action{ .start, .stop },

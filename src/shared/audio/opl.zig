@@ -360,10 +360,7 @@ const step_skip_mask = [5]u8{ 0xff, 0xfe, 0xee, 0xba, 0xaa };
 pub fn changeAttackRate(chip: *Chip, regbase: usize, o: *Operator) void {
     const attackrate: i32 = chip.adlibreg[arc_attr_decr + regbase] >> 4;
     if (attackrate != 0) {
-        const f = pow2(@as(f64, @floatFromInt(attackrate)) + @as(
-            f64,
-            @floatFromInt(o.toff >> 2),
-        ) - 1) *
+        const f = pow2(@as(f64, @floatFromInt(attackrate)) + @as(f64, @floatFromInt(o.toff >> 2)) - 1) *
             attackconst[o.toff & 3] * chip.recipsamp;
         o.a0 = 0.0377 * f;
         o.a1 = 10.73 * f + 1;
@@ -425,10 +422,7 @@ pub fn changeReleaseRate(chip: *Chip, regbase: usize, o: *Operator) void {
 
 pub fn changeSustainLevel(chip: *Chip, regbase: usize, o: *Operator) void {
     const sustainlevel: i32 = chip.adlibreg[arc_susl_relr + regbase] >> 4;
-    o.sustain_level = if (sustainlevel < 15) pow2(@as(
-        f64,
-        @floatFromInt(sustainlevel),
-    ) * -0.5) else 0.0;
+    o.sustain_level = if (sustainlevel < 15) pow2(@as(f64, @floatFromInt(sustainlevel)) * -0.5) else 0.0;
 }
 
 pub fn changeWaveform(chip: *Chip, regbase_in: usize, o: *Operator) void {
@@ -516,10 +510,7 @@ fn buildWaveTable(pi: f64) [waveprec * 3]i16 {
     var table: [waveprec * 3]i16 = @splat(0);
     for (0..waveprec >> 1) |n| {
         const a = 16384.0 * @sin(@as(f64, @floatFromInt(n << 1)) * pi * 2 / @as(f64, waveprec));
-        const b = 16384.0 * @sin(@as(
-            f64,
-            @floatFromInt((n << 1) + 1),
-        ) * pi * 2 / @as(f64, waveprec));
+        const b = 16384.0 * @sin(@as(f64, @floatFromInt((n << 1) + 1)) * pi * 2 / @as(f64, waveprec));
         table[(n << 1) + waveprec] = @intCast(toI32(a));
         table[(n << 1) + 1 + waveprec] = @intCast(toI32(b));
         table[n] = table[(n << 1) + waveprec];
@@ -554,10 +545,7 @@ pub fn init(samplerate_in: u32) Chip {
     var i: usize = 16;
     while (i > 0) {
         i -= 1;
-        chip.frqmul[i] = @floatCast(frqmul_tab[i] * intfrequ / @as(
-            f64,
-            waveprec,
-        ) * fixedpt * chip.recipsamp);
+        chip.frqmul[i] = @floatCast(frqmul_tab[i] * intfrequ / @as(f64, waveprec) * fixedpt * chip.recipsamp);
     }
 
     chip.vib_table[0] = 8;
@@ -1364,10 +1352,7 @@ test "pow2 is pow with a base known only at run time, to the bit" {
     };
     for (0..15) |level| try Check.same(base, @as(f64, @floatFromInt(level)) * -0.5);
     for (0..tremtab_size) |n| {
-        const t: i32 = if (n < 14) @as(
-            i32,
-            @intCast(n),
-        ) - 13 else if (n < 41) -@as(i32, @intCast(n)) + 14 else @as(i32, @intCast(n)) - 66;
+        const t: i32 = if (n < 14) @as(i32, @intCast(n)) - 13 else if (n < 41) -@as(i32, @intCast(n)) + 14 else @as(i32, @intCast(n)) - 66;
         try Check.same(base, @as(f64, @floatFromInt(t)) * 4.8 / 26.0 / 6.0);
         try Check.same(base, @as(f64, @floatFromInt(@divTrunc(t, 4))) * 1.2 / 6.0 / 6.0);
     }

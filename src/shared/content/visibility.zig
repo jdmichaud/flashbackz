@@ -107,12 +107,7 @@ pub fn load(
             .position = record.position,
             .width = record.collision_width,
         } else null, .continuation = undefined };
-        for (&definition.continuation, 1..) |*choice, distance| choice.* = continuation(
-            table,
-            identities,
-            index,
-            distance,
-        );
+        for (&definition.continuation, 1..) |*choice, distance| choice.* = continuation(table, identities, index, distance);
         var owner: Owner = if (index == 0) .player else .unbound;
         for (owners.props.definitions, 0..) |prop, i| if (prop.interaction_priority == index) {
             owner = .{ .prop = i };

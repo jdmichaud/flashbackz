@@ -87,10 +87,7 @@ pub const Archive = struct {
             const count: i16 = @bitCast(try big16(self.banks, bank * 6 + 4));
             const size = @as(usize, @abs(count)) * 32;
             if (count == 0 or size > 32768 or offset < directory) return error.InvalidArtBank;
-            const bytes = if (count < 0) try allocator.dupe(
-                u8,
-                try slice(self.banks, offset, size),
-            ) else try backward.decode(
+            const bytes = if (count < 0) try allocator.dupe(u8, try slice(self.banks, offset, size)) else try backward.decode(
                 allocator,
                 try slice(self.banks, directory, offset - directory),
                 size,
@@ -136,10 +133,7 @@ pub const Archive = struct {
             const start: usize = @abs(offset);
             const size = try big16(self.background, start);
             const encoded = try slice(self.background, start + 2, size);
-            const decoded = if (offset < 0) try allocator.dupe(u8, encoded) else try expandRuns(
-                allocator,
-                encoded,
-            );
+            const decoded = if (offset < 0) try allocator.dupe(u8, encoded) else try expandRuns(allocator, encoded);
             defer allocator.free(decoded);
             try drawBackgroundPiece(
                 pixels,
@@ -185,16 +179,12 @@ fn drawBackgroundPiece(pixels: []u8, bytes: []const u8, x: i32, y: i32) !void {
         if (dy < 0 or dy >= 224) continue;
         for (0..width) |column| {
             const dx = x + @as(i32, @intCast(column));
-            if (dx < 0 or dx >= 256 or mask[row * (width / 8) + column / 8] & (@as(u8, 128) >> @as(
-                u3,
-                @intCast(column % 8),
-            )) == 0) continue;
+            if (dx < 0 or
+                dx >= 256 or
+                mask[row * (width / 8) + column / 8] & (@as(u8, 128) >> @as(u3, @intCast(column % 8))) == 0) continue;
             const value = colors[row * (width / 2) + column / 2];
             pixels[
-                @as(
-                    usize,
-                    @intCast(dy),
-                ) * 256 + @as(usize, @intCast(dx))
+                @as(usize, @intCast(dy)) * 256 + @as(usize, @intCast(dx))
             ] = if (column % 2 == 0) value >> 4 else value & 15;
         }
     }

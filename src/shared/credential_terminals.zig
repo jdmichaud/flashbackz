@@ -24,10 +24,7 @@ pub const World = struct {
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);
-        for (
-            instances,
-            definitions,
-        ) |*instance, definition| instance.* = .{ .active = definition.initially_active };
+        for (instances, definitions) |*instance, definition| instance.* = .{ .active = definition.initially_active };
         return .{
             .allocator = allocator,
             .instances = instances,

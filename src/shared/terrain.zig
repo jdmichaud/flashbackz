@@ -26,10 +26,7 @@ pub const View = struct {
         var base: usize = 0;
         for (self.geometry.rooms) |candidate| {
             if (candidate.id == address.room) return self.materials[
-                base + @as(
-                    usize,
-                    address.row,
-                ) * candidate.columns + address.column
+                base + @as(usize, address.row) * candidate.columns + address.column
             ];
             base += candidate.blocking.len;
         }
@@ -60,10 +57,9 @@ pub const State = struct {
         var count: usize = 0;
         var stride: usize = 0;
         for (base.rooms, 0..) |room, i| {
-            if (room.columns == 0 or room.rows == 0 or room.blocking.len != @as(
-                usize,
-                room.columns,
-            ) * room.rows) return error.InvalidTerrain;
+            if (room.columns == 0 or
+                room.rows == 0 or
+                room.blocking.len != @as(usize, room.columns) * room.rows) return error.InvalidTerrain;
             for (base.rooms[0..i]) |previous| if (previous.id == room.id) return error.DuplicateRoomId;
             count = try std.math.add(usize, count, room.blocking.len);
             stride = @max(stride, room.columns);

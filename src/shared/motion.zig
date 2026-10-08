@@ -8,19 +8,11 @@ pub const VisualId = enum(u32) { _ };
 pub const Facing = enum { right, left };
 pub const Position = struct { x: i16, y: i16 };
 pub const Visual = struct { id: VisualId, mirrored: bool = false };
-pub const Pose = struct {
-    position: Position,
-    facing: Facing = .right,
-    visual: Visual,
-};
+pub const Pose = struct { position: Position, facing: Facing = .right, visual: Visual };
 
 pub const Step = union(enum) {
     hold,
-    frame: struct {
-        visual: Visual,
-        forward: i16 = 0,
-        down: i16 = 0,
-    },
+    frame: struct { visual: Visual, forward: i16 = 0, down: i16 = 0 },
 };
 
 pub const Clip = struct { hit_profile: ?combat.ProfileId = null, steps: []const Step, presses_floor_switches: bool = false, ordinary_contact: bool = false, sound: ?SoundId = null, disturbs_surface: bool = false };

@@ -11,13 +11,14 @@ pub const Canvas = struct {
     clip: Rect,
 
     fn plot(self: Canvas, x: i32, y: i32, ink: Ink) void {
-        if (x < self.clip.x or y < self.clip.y or x >= @as(
-            i32,
-            self.clip.x,
-        ) + self.clip.width or y >= @as(
-            i32,
-            self.clip.y,
-        ) + self.clip.height or x < 0 or y < 0 or x >= self.width or y >= self.height) return;
+        if (x < self.clip.x or
+            y < self.clip.y or
+            x >= @as(i32, self.clip.x) + self.clip.width or
+            y >= @as(i32, self.clip.y) + self.clip.height or
+            x < 0 or
+            y < 0 or
+            x >= self.width or
+            y >= self.height) return;
         const pixel = &self.pixels[@as(usize, @intCast(y)) * self.width + @as(usize, @intCast(x))];
         switch (ink) {
             .color => |color| pixel.* = color,
@@ -72,10 +73,7 @@ pub const Canvas = struct {
     /// Integer boundary traversal with explicit tie rules. Scanline spans are emitted once,
     /// then clipped by the canvas, so indexed tinting cannot accumulate through overdraw.
     pub fn ellipse(self: Canvas, center: Point, radius_x: u16, radius_y: u16, ink: Ink) !void {
-        if (self.pixels.len != @as(
-            usize,
-            self.width,
-        ) * self.height) return error.InvalidVectorShape;
+        if (self.pixels.len != @as(usize, self.width) * self.height) return error.InvalidVectorShape;
         if (radius_x > std.math.maxInt(i16) or
             radius_y > std.math.maxInt(i16)) return error.UnsupportedVectorExtent;
         const xx: i32 = @as(i32, radius_x) * radius_x;
@@ -84,10 +82,7 @@ pub const Canvas = struct {
         var y: i32 = 0;
         // Preserve the original cross-word multiply: only the high word of its
         // upper partial product contributes. Error accumulators then wrap at 32 bits.
-        const initial = @as(
-            i32,
-            radius_x,
-        ) * (2 * yy & 65535) + ((@as(i32, radius_x) * (2 * yy >> 16)) >> 16);
+        const initial = @as(i32, radius_x) * (2 * yy & 65535) + ((@as(i32, radius_x) * (2 * yy >> 16)) >> 16);
         var horizontal_slope = 2 *% initial;
         var vertical_slope: i32 = 0;
         var horizontal_error = 2 * xx -% initial +% yy;
@@ -127,10 +122,9 @@ pub const Canvas = struct {
     /// Clockwise illustrations with one filled span per row. The picture importer rejects unsupported
     /// curves and unsupported extents instead of substituting a different rasterization.
     pub fn draw(self: Canvas, points: []const Point, ink: Ink) !void {
-        if (self.pixels.len != @as(
-            usize,
-            self.width,
-        ) * self.height or points.len == 0 or points.len > 64) return error.InvalidVectorShape;
+        if (self.pixels.len != @as(usize, self.width) * self.height or
+            points.len == 0 or
+            points.len > 64) return error.InvalidVectorShape;
         if (points.len == 1) {
             self.plot(points[0].x, points[0].y, ink);
             return;

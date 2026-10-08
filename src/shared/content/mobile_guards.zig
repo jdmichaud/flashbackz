@@ -87,10 +87,9 @@ const Import = struct {
                     if (impact == .rear_high or impact == .rear_low) 0 else 1,
                 )) or (op.code == 34 and op.argument == @as(i16, @intCast(slot + 1)));
                 if (!matches) continue;
-                if (rule.conditions[1].code != 0 or rule.effect.code != 0 or rule.flags & ~@as(
-                    u8,
-                    5,
-                ) != 0) return error.UnsupportedGuardHit;
+                if (rule.conditions[1].code != 0 or
+                    rule.effect.code != 0 or
+                    rule.flags & ~@as(u8, 5) != 0) return error.UnsupportedGuardHit;
                 const direction: wound.Direction = if (rule.target == self.group.at(155).source) .forward else if (rule.target == self.group.at(172).source) .backward else return error.UnsupportedGuardHit;
                 policy.responses[slot] = .{
                     .direction = direction,

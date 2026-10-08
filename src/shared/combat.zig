@@ -65,11 +65,7 @@ pub fn trace(
     var current_room = room;
     const layout: contacts.Layout = .{};
     for (0..range) |_| {
-        const cell = try view.geometry.locate(
-            current_room,
-            column,
-            band * 2 + 1,
-        ) orelse return null;
+        const cell = try view.geometry.locate(current_room, column, band * 2 + 1) orelse return null;
         // A target in the first solid cell is considered before the terrain at that cell.
         for (targets) |target| {
             if (!target.active) continue;

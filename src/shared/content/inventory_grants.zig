@@ -58,10 +58,7 @@ pub fn recognize(group: rules.Group) ?Spec {
     if (group.count() != 2 and group.count() != 3) return null;
     const a = group.at(0);
     const b = group.at(1);
-    for ([_]rules.Rule{
-        a,
-        b,
-    }) |r| if (r.source != a.source or
+    for ([_]rules.Rule{ a, b }) |r| if (r.source != a.source or
         r.target != a.source or
         r.next != 0 or
         r.dx != 0 or
@@ -170,10 +167,7 @@ pub fn load(
         const spec = recognize(try rules.group(rule_bytes, record.rule_group)) orelse continue;
         const target = definitions.items.len;
         var followup: ?runtime.Followup = null;
-        if (credential_cards.parcel(try rules.group(
-            rule_bytes,
-            record.rule_group,
-        ))) |parcel| {
+        if (credential_cards.parcel(try rules.group(rule_bytes, record.rule_group))) |parcel| {
             var clip = try animation.decode(allocator, animations, parcel.received);
             defer clip.deinit();
             const recipient = record.parameters[parcel.followup_parameter];
@@ -186,10 +180,7 @@ pub fn load(
         }
         var on_grant: ?world_props.CircuitId = null;
         var on_consumed: ?world_props.CircuitId = null;
-        if (credential_cards.terminal(try rules.group(
-            rule_bytes,
-            record.rule_group,
-        ))) |card| {
+        if (credential_cards.terminal(try rules.group(rule_bytes, record.rule_group))) |card| {
             for (routes) |route| if (route.sender == source and
                 route.recipient == record.parameters[card.output_parameter])
             {

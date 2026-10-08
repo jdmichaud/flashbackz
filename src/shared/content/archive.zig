@@ -13,11 +13,7 @@ pub fn expand(pack: *Pack, bytes: []const u8, prefix: []const u8) !void {
     if (previous_end > bytes.len) return error.TruncatedArchive;
     for (0..count) |i| {
         const record = bytes[4 + i * 30 ..][0..30];
-        const name_end = std.mem.indexOfScalar(
-            u8,
-            record[0..14],
-            0,
-        ) orelse return error.InvalidArchiveName;
+        const name_end = std.mem.indexOfScalar(u8, record[0..14], 0) orelse return error.InvalidArchiveName;
         const name = record[0..name_end];
         if (std.mem.indexOfAny(u8, name, "/\\") != null) return error.InvalidArchiveName;
         const at: usize = std.mem.readInt(u32, record[14..18], .big);

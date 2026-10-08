@@ -61,10 +61,7 @@ pub const Emitter = struct {
             },
             .facing = self.pose.facing,
             .active = self.room != null,
-            .vulnerable = if (self.phase == .shielding) .{
-                .front_high = true,
-                .front_low = true,
-            } else .{},
+            .vulnerable = if (self.phase == .shielding) .{ .front_high = true, .front_low = true } else .{},
         };
     }
 };

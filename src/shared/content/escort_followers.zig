@@ -156,10 +156,7 @@ fn recognize(group: rules.Group) ?Spec {
             row.target != group.at(target).source or
             row.next != target or
             row.dy != 0 or
-            row.flags != (if (index == 35 or index == 36) @as(
-                u8,
-                1,
-            ) else 0)) return null;
+            row.flags != (if (index == 35 or index == 36) @as(u8, 1) else 0)) return null;
         for (
             [_]rules.Operation{ row.conditions[0], row.conditions[1], row.effect },
             operations,

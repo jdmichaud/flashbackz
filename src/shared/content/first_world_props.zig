@@ -53,15 +53,13 @@ fn firstRule(bytes: []const u8, group: u16, state: u16) ![]const u8 {
     if (bytes.len < 2) return error.InvalidPropRules;
     const count = std.mem.readInt(u16, bytes[0..2], .little);
     const body = bytes[2..];
-    if (count > 256 or group >= count or @as(
-        usize,
-        count,
-    ) * 4 > body.len) return error.InvalidPropRules;
+    if (count > 256 or
+        group >= count or
+        @as(usize, count) * 4 > body.len) return error.InvalidPropRules;
     const offset = std.mem.readInt(u32, body[@as(usize, group) * 4 ..][0..4], .little);
-    if (offset < @as(
-        usize,
-        count,
-    ) * 4 or offset > body.len or body.len - offset < 2) return error.InvalidPropRules;
+    if (offset < @as(usize, count) * 4 or
+        offset > body.len or
+        body.len - offset < 2) return error.InvalidPropRules;
     const records = body[offset..];
     const length = std.mem.readInt(u16, records[0..2], .little);
     if (@as(usize, length) * 18 > records.len - 2) return error.InvalidPropRules;
@@ -204,27 +202,15 @@ pub fn load(
             if (destination < 0 or destination >= room_ids.len) return error.InvalidGiftRoom;
             room = @intCast(destination);
         }
-        const pressure_spec = pressure_controls.recognize(try rule_table.group(
-            rules,
-            record.rule_group,
-        ));
+        const pressure_spec = pressure_controls.recognize(try rule_table.group(rules, record.rule_group));
         if (record.kind != 3 and pressure_spec == null) continue;
         const rule = try firstRule(rules, record.rule_group, record.initial_state);
         var behavior: @FieldType(world.Definition, "behavior") = undefined;
         if (record.kind == 3) {
             const stone = isThrowablePickup(rules, record.rule_group, record.initial_state, rule);
-            const credit = credit_pickups.recognize(try rule_table.group(
-                rules,
-                record.rule_group,
-            ));
-            const key = key_pickups.recognize(try rule_table.group(
-                rules,
-                record.rule_group,
-            ));
-            const cartridge = cartridges.recognize(try rule_table.group(
-                rules,
-                record.rule_group,
-            ));
+            const credit = credit_pickups.recognize(try rule_table.group(rules, record.rule_group));
+            const key = key_pickups.recognize(try rule_table.group(rules, record.rule_group));
+            const cartridge = cartridges.recognize(try rule_table.group(rules, record.rule_group));
             const device = quest_items.teleporter(group);
             if (record.initial_state != 328 and
                 !stone and
@@ -241,10 +227,7 @@ pub fn load(
                 const purse = try table.record(@intCast(recipient));
                 if (purse.kind != 3 or
                     purse.initially_active == 0 or
-                    credit_wallet.signal(try rule_table.group(
-                        rules,
-                        purse.rule_group,
-                    )) == null) return error.UnsupportedCreditRecipient;
+                    credit_wallet.signal(try rule_table.group(rules, purse.rule_group)) == null) return error.UnsupportedCreditRecipient;
                 const target: equipment.ItemHandle = for (supplied_items, 0..) |item, index| {
                     if (item.kind == .credits) break .{ .index = @intCast(index), .generation = 1 };
                 } else return error.MissingCreditPurse;
@@ -439,18 +422,20 @@ pub fn load(
                 if (record.kind != 3 or
                     record.minimum_difficulty != 0 or
                     record.contact_icon != 1) return error.UnsupportedHolocube;
-                if (word(rule, 4) != 315 or rule[7] != 34 or rule[6] != 90 or rule[9] != 48 or word(
-                    rule,
-                    12,
-                ) != 30 or word(
-                    rule,
-                    14,
-                ) != 1 or word(rule, 16) != 0) return error.UnsupportedPickupRule;
+                if (word(rule, 4) != 315 or
+                    rule[7] != 34 or
+                    rule[6] != 90 or
+                    rule[9] != 48 or
+                    word(rule, 12) != 30 or
+                    word(rule, 14) != 1 or
+                    word(rule, 16) != 0) return error.UnsupportedPickupRule;
                 const use = try firstRule(rules, record.rule_group, 315);
-                if (word(use, 4) != 315 or use[7] != 34 or use[6] != 90 or use[9] != 0 or word(
-                    use,
-                    12,
-                ) != 102 or word(use, 14) != 17) return error.UnsupportedItemUse;
+                if (word(use, 4) != 315 or
+                    use[7] != 34 or
+                    use[6] != 90 or
+                    use[9] != 0 or
+                    word(use, 12) != 102 or
+                    word(use, 14) != 17) return error.UnsupportedItemUse;
                 const idle = try appendClip(
                     allocator,
                     &clips,
@@ -492,10 +477,7 @@ pub fn load(
                     connection.recipient == recipient and
                     connection.message == message) break connection.circuit;
             } else fresh: {
-                const id: world.CircuitId = @fromBackingInt(@as(
-                    u16,
-                    @intCast(connections.items.len),
-                ));
+                const id: world.CircuitId = @fromBackingInt(@as(u16, @intCast(connections.items.len)));
                 try connections.append(
                     allocator,
                     .{
@@ -603,10 +585,14 @@ fn appendClip(
 /// Ground transfer plus separate throw/drop inventory messages identifies this family.
 /// The rest of the object's rules describe its flight and are imported separately.
 fn isThrowablePickup(bytes: []const u8, group: u16, initial: u16, pickup: []const u8) bool {
-    if (pickup[2] != 0 or pickup[3] != 0 or pickup[8] != 0 or pickup[7] != 34 or word(
-        pickup,
-        12,
-    ) != 30 or pickup[6] != 90 or word(pickup, 14) != 8 or pickup[9] != 48) return false;
+    if (pickup[2] != 0 or
+        pickup[3] != 0 or
+        pickup[8] != 0 or
+        pickup[7] != 34 or
+        word(pickup, 12) != 30 or
+        pickup[6] != 90 or
+        word(pickup, 14) != 8 or
+        pickup[9] != 48) return false;
     const carried = word(pickup, 4);
     const view = rule_table.group(bytes, group) catch return false;
     var throws = false;

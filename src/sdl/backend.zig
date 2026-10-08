@@ -264,12 +264,10 @@ pub const SdlBackend = struct {
 
     /// The largest rectangle with the aspect ratio of the frame that fits the output, centred.
     pub fn fitRect(out_w: i32, out_h: i32, width: u32, height: u32) c.Rect {
-        if (out_w <= 0 or out_h <= 0 or width == 0 or height == 0) return .{
-            .x = 0,
-            .y = 0,
-            .w = 0,
-            .h = 0,
-        };
+        if (out_w <= 0 or
+            out_h <= 0 or
+            width == 0 or
+            height == 0) return .{ .x = 0, .y = 0, .w = 0, .h = 0 };
         const ow: i64 = out_w;
         const oh: i64 = out_h;
         const w: i64 = width;
@@ -356,11 +354,7 @@ pub const SdlBackend = struct {
             // Make the new texture before the change. The old texture stays until the new one
             // exists.
             const renderer = self.renderer orelse return error.DeviceFailure;
-            const fresh = self.createTexture(
-                renderer,
-                width,
-                height,
-            ) orelse return error.DeviceFailure;
+            const fresh = self.createTexture(renderer, width, height) orelse return error.DeviceFailure;
             if (self.texture) |old| c.SDL_DestroyTexture(old);
             self.texture = fresh;
             self.refitWindow(width, height);
@@ -372,10 +366,9 @@ pub const SdlBackend = struct {
     fn displayBounds(self: *const SdlBackend) ?platform.Size {
         const index = if (self.window) |w| @max(c.SDL_GetWindowDisplayIndex(w), 0) else 0;
         var rect: c.Rect = undefined;
-        if (c.SDL_GetDisplayUsableBounds(
-            index,
-            &rect,
-        ) != 0 or rect.w <= 0 or rect.h <= 0) return null;
+        if (c.SDL_GetDisplayUsableBounds(index, &rect) != 0 or
+            rect.w <= 0 or
+            rect.h <= 0) return null;
         return .{ .width = @intCast(rect.w), .height = @intCast(rect.h) };
     }
 
@@ -388,10 +381,8 @@ pub const SdlBackend = struct {
         var h: c_int = 0;
         c.SDL_GetWindowSize(window, &w, &h);
         if (w < 0 or h < 0) return;
-        if (@as(
-            u32,
-            @intCast(w),
-        ) != self.window_size.width or @as(u32, @intCast(h)) != self.window_size.height) return;
+        if (@as(u32, @intCast(w)) != self.window_size.width or
+            @as(u32, @intCast(h)) != self.window_size.height) return;
         const size = fitWindowSize(
             width,
             height,
@@ -428,11 +419,7 @@ pub const SdlBackend = struct {
         };
         errdefer c.SDL_DestroyRenderer(created.renderer);
         self.recordRendererInfo(created);
-        const texture = self.createTexture(
-            created.renderer,
-            width,
-            height,
-        ) orelse return error.DeviceFailure;
+        const texture = self.createTexture(created.renderer, width, height) orelse return error.DeviceFailure;
         self.window = window;
         self.renderer = created.renderer;
         self.texture = texture;
@@ -455,10 +442,7 @@ pub const SdlBackend = struct {
                 return .{ .renderer = r, .asked_vsync = true };
             }
         }
-        if (c.SDL_CreateRenderer(window, -1, c.RENDERER_ACCELERATED)) |r| return .{
-            .renderer = r,
-            .asked_vsync = false,
-        };
+        if (c.SDL_CreateRenderer(window, -1, c.RENDERER_ACCELERATED)) |r| return .{ .renderer = r, .asked_vsync = false };
         const r = c.SDL_CreateRenderer(window, -1, c.RENDERER_SOFTWARE) orelse return null;
         return .{ .renderer = r, .asked_vsync = false };
     }
@@ -543,12 +527,7 @@ pub const SdlBackend = struct {
         const renderer = self.renderer orelse return error.InvalidResolution;
         const texture = self.texture orelse return error.InvalidResolution;
         // SDL copies the rows into the texture. The backend keeps no reference to the buffer.
-        if (c.SDL_UpdateTexture(
-            texture,
-            null,
-            frame.pixels.ptr,
-            pitch,
-        ) != 0) return error.DeviceFailure;
+        if (c.SDL_UpdateTexture(texture, null, frame.pixels.ptr, pitch) != 0) return error.DeviceFailure;
         const out = self.outputSize() orelse platform.Size{
             .width = res.width,
             .height = res.height,
@@ -844,11 +823,7 @@ pub const SdlBackend = struct {
         const accepted: usize = @intCast(@min(offered, room));
         if (accepted == 0) return 0;
         const bytes: u32 = @intCast(accepted * self.audio.bytes_per_frame);
-        if (c.SDL_QueueAudio(
-            self.audio.device,
-            samples.ptr,
-            bytes,
-        ) != 0) return error.DeviceFailure;
+        if (c.SDL_QueueAudio(self.audio.device, samples.ptr, bytes) != 0) return error.DeviceFailure;
         self.audio.accepted_frames += accepted;
         return accepted;
     }

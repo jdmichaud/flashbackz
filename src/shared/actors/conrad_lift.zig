@@ -43,12 +43,7 @@ pub const Ground = enum {
     armed_crouched,
     armed_aiming_crouched,
 };
-pub const Outcome = union(enum) {
-    continued,
-    boarded,
-    leave: Ground,
-    fire: pistol_shot.Height,
-};
+pub const Outcome = union(enum) { continued, boarded, leave: Ground, fire: pistol_shot.Height };
 pub const State = struct {
     phase: Phase = .waiting,
     pub fn clip(self: State, clips: Clips) motion.Clip {

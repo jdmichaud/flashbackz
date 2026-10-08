@@ -47,11 +47,7 @@ pub const DirectoryStorage = struct {
                 else => error.Io,
             };
         }
-        const dir = std.Io.Dir.cwd().openDir(
-            io,
-            path,
-            .{ .iterate = true },
-        ) catch |err| return switch (err) {
+        const dir = std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true }) catch |err| return switch (err) {
             error.FileNotFound => error.NotFound,
             error.NotDir => error.NotADirectory,
             error.AccessDenied, error.PermissionDenied => error.AccessDenied,
@@ -111,11 +107,7 @@ pub const DirectoryStorage = struct {
         try self.takeFault(.before_create);
         var temp_buf: TempName = undefined;
         const temp = self.tempName(name, &temp_buf);
-        const file = self.dir.createFile(
-            io,
-            temp,
-            .{ .exclusive = true },
-        ) catch |err| return mapError(err);
+        const file = self.dir.createFile(io, temp, .{ .exclusive = true }) catch |err| return mapError(err);
         var file_open = true;
         // Until the rename commits, any exit removes the temporary and keeps the old record.
         var committed = false;

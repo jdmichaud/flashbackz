@@ -41,10 +41,7 @@ fn recognize(group: rules.Group) bool {
         if (r.source != group.at(source).source or
             r.target != group.at(target).source or
             r.next != target or
-            r.flags != (if (i == 2 or i == 3 or i == 6 or i == 7) @as(
-                u8,
-                1,
-            ) else 0)) return false;
+            r.flags != (if (i == 2 or i == 3 or i == 6 or i == 7) @as(u8, 1) else 0)) return false;
         for (
             [_]rules.Operation{ r.conditions[0], r.conditions[1], r.effect },
             ops,
@@ -104,11 +101,7 @@ pub fn load(
         for (connections) |connection| if (connection.recipient == index and
             connection.message == group.at(0).conditions[0].argument)
         {
-            const owner = std.mem.indexOfScalar(
-                u16,
-                gunmen.sources,
-                connection.sender,
-            ) orelse return error.UnsupportedBarrierOwner;
+            const owner = std.mem.indexOfScalar(u16, gunmen.sources, connection.sender) orelse return error.UnsupportedBarrierOwner;
             try bindings.append(
                 allocator,
                 .{

@@ -19,10 +19,9 @@ pub const Assets = struct {
     }
 };
 fn ops(rule: rules.Rule, expected: [3]rules.Operation) bool {
-    return std.meta.eql(
-        rule.conditions[0],
-        expected[0],
-    ) and std.meta.eql(rule.conditions[1], expected[1]) and std.meta.eql(rule.effect, expected[2]);
+    return std.meta.eql(rule.conditions[0], expected[0]) and
+        std.meta.eql(rule.conditions[1], expected[1]) and
+        std.meta.eql(rule.effect, expected[2]);
 }
 const nop: rules.Operation = .{ .code = 0, .argument = 0 };
 fn op(code: u8, argument: i16) rules.Operation {
@@ -59,14 +58,12 @@ pub fn load(
             const display = group.at(7);
             if (!ops(display, .{ op(34, 11), nop, nop }) or display.source != a.source or
                 !ops(group.at(8), .{ nop, nop, nop }) or group.at(8).target != a.source or
-                !ops(
-                    group.at(10),
-                    .{ op(34, 10), nop, nop },
-                ) or group.at(10).source != display.target or group.at(10).target != a.source or
-                !ops(
-                    group.at(11),
-                    .{ nop, nop, op(67, 0) },
-                ) or group.at(11).source != display.target or group.at(11).target != display.target)
+                !ops(group.at(10), .{ op(34, 10), nop, nop }) or
+                group.at(10).source != display.target or
+                group.at(10).target != a.source or
+                !ops(group.at(11), .{ nop, nop, op(67, 0) }) or
+                group.at(11).source != display.target or
+                group.at(11).target != display.target)
                 return error.UnsupportedForceFieldDisplayOverride;
         }
         const idle = a.source;
@@ -78,10 +75,7 @@ pub fn load(
             record.initially_active == 0 or
             record.collision_width != 1) return error.UnsupportedForceFieldStart;
         for (0..group.count()) |i| if (group.at(i).flags != 0) return error.UnsupportedForceFieldFlags;
-        if (!ops(
-            group.at(1),
-            .{ nop, nop, nop },
-        ) or
+        if (!ops(group.at(1), .{ nop, nop, nop }) or
             group.at(1).source != idle or
             group.at(1).target != idle or
             group.at(1).next != 0) return error.UnsupportedForceFieldRules;
@@ -90,47 +84,26 @@ pub fn load(
             if (!ops(
                 r,
                 .{ op(107, if (i == 2) 1 else 0), nop, op(49, 0) },
-            ) or r.source != active or r.target != absorbed or r.next != (if (rear) @as(
-                u16,
-                9,
-            ) else 6)) return error.UnsupportedForceFieldImpact;
+            ) or r.source != active or r.target != absorbed or r.next != (if (rear) @as(u16, 9) else 6)) return error.UnsupportedForceFieldImpact;
         }
-        if (!ops(
-            group.at(4),
-            .{ nop, nop, op(87, 0) },
-        ) or group.at(4).source != active or group.at(4).next != (if (rear) @as(
-            u16,
-            0,
-        ) else 5)) return error.UnsupportedForceFieldExpiry;
+        if (!ops(group.at(4), .{ nop, nop, op(87, 0) }) or group.at(4).source != active or group.at(4).next != (if (rear) @as(u16, 0) else 5)) return error.UnsupportedForceFieldExpiry;
         const end = group.at(if (rear) 9 else 6);
-        if (!ops(
-            end,
-            .{ nop, nop, op(87, 0) },
-        ) or
+        if (!ops(end, .{ nop, nop, op(87, 0) }) or
             end.source != absorbed or
             end.target != idle or
             end.next != 0) return error.UnsupportedForceFieldImpactEnd;
         if (rear) {
             const check = group.at(5);
-            if (!ops(
-                check,
-                .{ nop, op(106, -16), nop },
-            ) or
+            if (!ops(check, .{ nop, op(106, -16), nop }) or
                 a.next != 5 or
                 check.source != a.target or
                 check.target != active or
                 check.next != 2 or
                 recovered != idle) return error.UnsupportedRearForceField;
-            if (!ops(
-                group.at(6),
-                .{ nop, nop, op(87, 0) },
-            ) or
+            if (!ops(group.at(6), .{ nop, nop, op(87, 0) }) or
                 group.at(6).source != check.source or
                 group.at(6).target != idle) return error.UnsupportedRearForceField;
-        } else if (a.target != active or a.next != 2 or !ops(
-            group.at(5),
-            .{ nop, nop, nop },
-        ) or
+        } else if (a.target != active or a.next != 2 or !ops(group.at(5), .{ nop, nop, nop }) or
             group.at(5).source != recovered or
             group.at(5).target != idle) return error.UnsupportedForceFieldRecovery;
         var resolved: [5]motion.Clip = undefined;

@@ -56,40 +56,12 @@ pub const State = struct {
             .impact => {
                 if (health > 0) {
                     self.phase = .recovery;
-                    self.clearance = if (self.direction == .forward) (if (try environment.at(
-                        pose.*,
-                        .torso,
-                        1,
-                    )) @as(u2, 0) else if (try environment.at(
-                        pose.*,
-                        .torso,
-                        2,
-                    )) @as(u2, 1) else 2) else (if (try environment.at(
-                        pose.*,
-                        .torso,
-                        0,
-                    )) @as(u2, 0) else if (try environment.at(
-                        pose.*,
-                        .torso,
-                        -1,
-                    )) @as(u2, 1) else if (try environment.at(
-                        pose.*,
-                        .torso,
-                        -2,
-                    )) @as(u2, 2) else 3);
+                    self.clearance = if (self.direction == .forward) (if (try environment.at(pose.*, .torso, 1)) @as(u2, 0) else if (try environment.at(pose.*, .torso, 2)) @as(u2, 1) else 2) else (if (try environment.at(pose.*, .torso, 0)) @as(u2, 0) else if (try environment.at(pose.*, .torso, -1)) @as(u2, 1) else if (try environment.at(pose.*, .torso, -2)) @as(u2, 2) else 3);
                     return .{};
                 }
                 self.phase = .fatal_launch;
                 if (self.direction == .backward) {
-                    self.clearance = if (try environment.at(
-                        pose.*,
-                        .torso,
-                        0,
-                    )) 0 else if (try environment.at(
-                        pose.*,
-                        .torso,
-                        -1,
-                    )) 1 else 2;
+                    self.clearance = if (try environment.at(pose.*, .torso, 0)) 0 else if (try environment.at(pose.*, .torso, -1)) 1 else 2;
                     return .{ .score = profile.backward_scores[self.clearance] };
                 }
                 var award: usize = 5;
@@ -101,20 +73,7 @@ pub const State = struct {
                     award = 1;
                 } else {
                     self.clearance = 2;
-                    if (try environment.at(
-                        pose.*,
-                        .torso,
-                        3,
-                    )) award = 2 else if (!try environment.at(
-                        pose.*,
-                        .support,
-                        3,
-                    )) award = 3 else if (try environment.ledge(
-                        pose.*,
-                        .support,
-                        3,
-                        .behind,
-                    )) award = 4 else self.clearance = 3;
+                    if (try environment.at(pose.*, .torso, 3)) award = 2 else if (!try environment.at(pose.*, .support, 3)) award = 3 else if (try environment.ledge(pose.*, .support, 3, .behind)) award = 4 else self.clearance = 3;
                 }
                 return .{ .score = profile.forward_scores[award] };
             },
@@ -129,12 +88,7 @@ pub const State = struct {
                 self.dropped = !try environment.at(pose.*, .support, 0);
                 if (self.direction == .forward and
                     self.clearance == 2) self.dropped = self.dropped or
-                    try environment.ledge(
-                        pose.*,
-                        .support,
-                        0,
-                        .ahead,
-                    ) or try environment.ledge(
+                    try environment.ledge(pose.*, .support, 0, .ahead) or try environment.ledge(
                     pose.*,
                     .support,
                     0,

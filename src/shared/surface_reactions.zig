@@ -70,11 +70,7 @@ pub const World = struct {
                     instance.pose.position.y -%= clips.alignment_down;
                 } else if (definition.footprint.room == player.room and
                     disturbs_surface and
-                    try layout.overlaps(
-                        map,
-                        definition.footprint,
-                        player,
-                    ))
+                    try layout.overlaps(map, definition.footprint, player))
                 {
                     if (@rem(@as(i16, @bitCast(random.next())), clips.chance) == 0) {
                         instance.active = true;

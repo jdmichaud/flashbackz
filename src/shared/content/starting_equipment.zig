@@ -37,10 +37,7 @@ pub fn recover(
         const record = try placements.record(@intCast(i));
         for (specs) |spec| if (record.initial_state == spec.state and
             record.initially_active != 0 and
-            matchesKind(
-                spec.kind,
-                try table.group(rules, record.rule_group),
-            ))
+            matchesKind(spec.kind, try table.group(rules, record.rule_group)))
         {
             count += 1;
         };
@@ -69,18 +66,14 @@ pub fn recover(
         const rule = try firstRule(rules, source.rule_group, source.initial_state);
         if (rule[2] != 0 or rule[3] != 0 or rule[8] != 0 or word(rule, 4) != spec.target or
             !std.mem.eql(u8, &.{ rule[7], rule[6], rule[9] }, &spec.operations) or
-            (spec.operations[0] != 0 and word(
-                rule,
-                12,
-            ) != 0) or word(rule, 14) != 0 or word(rule, 16) != 0)
+            (spec.operations[0] != 0 and word(rule, 12) != 0) or
+            word(rule, 14) != 0 or
+            word(rule, 16) != 0)
             return error.UnsupportedStartingEquipmentRule;
         var introduction = try animation.decode(allocator, animations, source.initial_state);
         defer introduction.deinit();
         if (introduction.sound != null or
-            introduction.header_metadata != (if (spec.kind == .force_field) @as(
-                u8,
-                2,
-            ) else 0)) return error.UnsupportedEquipmentIntroduction;
+            introduction.header_metadata != (if (spec.kind == .force_field) @as(u8, 2) else 0)) return error.UnsupportedEquipmentIntroduction;
         // Offstage inventory grants may animate their unused source position.
         // The loadout owns arrival timing, without creating an invisible world actor.
         for (introduction.frames) |frame| switch (frame) {
@@ -89,18 +82,10 @@ pub fn recover(
                 (value.dx != 0 or value.dy != 0)) return error.UnsupportedEquipmentIntroduction,
         };
         if (spec.kind == .credits and
-            (credit_wallet.signal(try table.group(
-                rules,
-                source.rule_group,
-            )) == null or source.parameters[0] != 3)) return error.UnsupportedCreditUse;
-        const card = if (spec.kind == .id_card) credential_cards.starting(try table.group(
-            rules,
-            source.rule_group,
-        )) orelse return error.UnsupportedStartingCard else null;
-        const papers = if (spec.kind == .papers) credential_cards.papers(try table.group(
-            rules,
-            source.rule_group,
-        )) orelse return error.UnsupportedStartingPapers else null;
+            (credit_wallet.signal(try table.group(rules, source.rule_group)) == null or
+                source.parameters[0] != 3)) return error.UnsupportedCreditUse;
+        const card = if (spec.kind == .id_card) credential_cards.starting(try table.group(rules, source.rule_group)) orelse return error.UnsupportedStartingCard else null;
+        const papers = if (spec.kind == .papers) credential_cards.papers(try table.group(rules, source.rule_group)) orelse return error.UnsupportedStartingPapers else null;
         var use_steps: ?u16 = null;
         if (card) |capability| {
             var clip = try animation.decode(allocator, animations, capability.using);
@@ -114,12 +99,7 @@ pub fn recover(
         }
         definition.* = .{
             .consumption_movie = if (papers != null) .card_delivery else null,
-            .recharge = if (spec.kind == .shield) try shieldRecharge(
-                allocator,
-                source,
-                rules,
-                animations,
-            ) else null,
+            .recharge = if (spec.kind == .shield) try shieldRecharge(allocator, source, rules, animations) else null,
             .use_motion = if (source.object_id == 3) .reach else .direct,
             .kind = spec.kind,
             .use_action = if (spec.kind == .credits) .pay else if (card != null or
@@ -163,12 +143,9 @@ fn shieldRecharge(
     const use = group.at(1);
     const idle = group.at(2);
     const complete = group.at(3);
-    for ([_]table.Rule{
-        intro,
-        use,
-        idle,
-        complete,
-    }) |r| if (r.dx != 0 or r.dy != 0 or r.flags != 0) return error.UnsupportedShieldRecharge;
+    for ([_]table.Rule{ intro, use, idle, complete }) |r| if (r.dx != 0 or
+        r.dy != 0 or
+        r.flags != 0) return error.UnsupportedShieldRecharge;
     if (use.source != intro.target or
         idle.source != use.source or
         idle.target != use.source or
@@ -219,15 +196,13 @@ fn firstRule(bytes: []const u8, group: u16, state: u16) ![]const u8 {
     if (bytes.len < 2) return error.InvalidEquipmentRules;
     const count = word(bytes, 0);
     const body = bytes[2..];
-    if (count > 256 or @as(
-        usize,
-        count,
-    ) * 4 > body.len or group >= count) return error.InvalidEquipmentRules;
+    if (count > 256 or
+        @as(usize, count) * 4 > body.len or
+        group >= count) return error.InvalidEquipmentRules;
     const offset = std.mem.readInt(u32, body[@as(usize, group) * 4 ..][0..4], .little);
-    if (offset < @as(
-        usize,
-        count,
-    ) * 4 or offset > body.len or body.len - offset < 2) return error.InvalidEquipmentRules;
+    if (offset < @as(usize, count) * 4 or
+        offset > body.len or
+        body.len - offset < 2) return error.InvalidEquipmentRules;
     const records = body[offset..];
     const length = word(records, 0);
     if (@as(usize, length) * 18 > records.len - 2) return error.InvalidEquipmentRules;

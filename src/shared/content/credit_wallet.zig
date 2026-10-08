@@ -5,11 +5,7 @@ pub fn signal(group: rules.Group) ?i16 {
     const intro = group.at(0);
     const use = group.at(1);
     const idle = group.at(2);
-    for ([_]rules.Rule{
-        intro,
-        use,
-        idle,
-    }) |r| if (r.dx != 0 or
+    for ([_]rules.Rule{ intro, use, idle }) |r| if (r.dx != 0 or
         r.dy != 0 or
         r.flags != 0 or
         r.next != 1 or

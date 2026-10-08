@@ -293,10 +293,7 @@ pub const Scene = struct {
         errdefer terrain.deinit();
         var props = try props_mod.World.init(allocator, pack.world_props.definitions);
         errdefer props.deinit();
-        var operated = try operated_controls_mod.World.init(
-            allocator,
-            pack.controls.definitions,
-        );
+        var operated = try operated_controls_mod.World.init(allocator, pack.controls.definitions);
         errdefer operated.deinit();
         var locks = try key_locks.World.init(
             allocator,
@@ -415,21 +412,11 @@ pub const Scene = struct {
             pack.guards.profiles,
         );
         errdefer guards.deinit();
-        var visibility = try visibility_mod.World.init(
-            allocator,
-            pack.visibility.definitions,
-            256,
-        );
+        var visibility = try visibility_mod.World.init(allocator, pack.visibility.definitions, 256);
         errdefer visibility.deinit();
-        var guard_fire = try weapon_fire.World.init(
-            allocator,
-            pack.guards.weapons.len,
-        );
+        var guard_fire = try weapon_fire.World.init(allocator, pack.guards.weapons.len);
         errdefer guard_fire.deinit();
-        var barriers = try event_barriers.World.init(
-            allocator,
-            pack.barriers.definitions.len,
-        );
+        var barriers = try event_barriers.World.init(allocator, pack.barriers.definitions.len);
         errdefer barriers.deinit();
         var inventory_grants = try inventory_grants_mod.World.init(
             allocator,
@@ -448,10 +435,7 @@ pub const Scene = struct {
             pack.energy_stations.definitions,
         );
         errdefer energy_stations.deinit();
-        var hazards = try electrical_hazards.World.init(
-            allocator,
-            pack.hazards.definitions,
-        );
+        var hazards = try electrical_hazards.World.init(allocator, pack.hazards.definitions);
         errdefer hazards.deinit();
         var gunmen = try gunman.World.init(
             allocator,
@@ -465,16 +449,10 @@ pub const Scene = struct {
             pack.robots.profiles,
         );
         errdefer robots.deinit();
-        var enemy_fire = try weapon_fire.World.init(
-            allocator,
-            pack.gunmen.weapons.len,
-        );
+        var enemy_fire = try weapon_fire.World.init(allocator, pack.gunmen.weapons.len);
         errdefer enemy_fire.deinit();
         const contact_capacity = pack.gunmen.definitions.len + pack.robots.definitions.len + pack.guards.definitions.len + pack.world_props.definitions.len + pack.doors.definitions.len + pack.escort_followers.definitions.len + pack.quest_contacts.definitions.len + pack.attentive_contacts.definitions.len + pack.item_aid.definitions.len + pack.guides.definitions.len + pack.traders.definitions.len + pack.rescue_contacts.definitions.len + pack.enemy_barriers.definitions.len + 1;
-        const sensed_contacts = try allocator.alloc(
-            contacts.Participant,
-            contact_capacity,
-        );
+        const sensed_contacts = try allocator.alloc(contacts.Participant, contact_capacity);
         errdefer allocator.free(sensed_contacts);
         var detectors = try detectors_mod.World.init(
             allocator,
@@ -507,10 +485,7 @@ pub const Scene = struct {
             pack.world_props.definitions.len,
         );
         errdefer passengers.deinit();
-        var ceiling_fire = try weapon_fire.World.init(
-            allocator,
-            pack.ceiling_guns.weapons.len,
-        );
+        var ceiling_fire = try weapon_fire.World.init(allocator, pack.ceiling_guns.weapons.len);
         errdefer ceiling_fire.deinit();
         const force_fields = try allocator.alloc(
             force_fields_mod.Emitter,
@@ -602,11 +577,7 @@ pub const Scene = struct {
         };
     }
 
-    fn emitSound(
-        self: *Scene,
-        sound: motion.SoundId,
-        room: geometry.RoomId,
-    ) !void {
+    fn emitSound(self: *Scene, sound: motion.SoundId, room: geometry.RoomId) !void {
         var attenuation: u2 = 0;
         if (room != self.environment.room) {
             const current = try self.environment.map.room(self.environment.room);
@@ -736,10 +707,7 @@ pub const Scene = struct {
                         self.aborted = true;
                         return;
                     };
-                    message.keys = @as(u3, @intFromBool(sample.action)) | (@as(
-                        u3,
-                        @intFromBool(sample.use_item),
-                    ) << 1) | (@as(u3, @intFromBool(sample.weapon)) << 2);
+                    message.keys = @as(u3, @intFromBool(sample.action)) | (@as(u3, @intFromBool(sample.use_item)) << 1) | (@as(u3, @intFromBool(sample.weapon)) << 2);
                 }
                 message.latchInput();
                 continue;
@@ -1022,10 +990,7 @@ pub const Scene = struct {
             self.health -%= self.controller.damage_requested;
             if (self.controller.grant_protection) self.protection_steps = 60;
             self.weapon_toggle.advance(intent.weapon, self.equipment.carries(.gun));
-            if (self.controller.sound_requested) |sound| try self.emitSound(
-                sound,
-                self.environment.room,
-            );
+            if (self.controller.sound_requested) |sound| try self.emitSound(sound, self.environment.room);
             if (self.controller.fatal_landing) self.health = -1;
             if (self.death_wait == null) self.death_wait = self.controller.death_wait_requested;
             self.received_count = try self.equipment.advance(self.health, self.received_items);
@@ -1153,10 +1118,7 @@ pub const Scene = struct {
                 self.content.environmental_alarms.definitions,
             ) |instance, definition| {
                 if (instance.sound) |sound| try self.emitEffect(.{ .sound = sound });
-                if (instance.animation_sound) |sound| if (definition.room) |room| try self.emitSound(
-                    sound,
-                    room,
-                );
+                if (instance.animation_sound) |sound| if (definition.room) |room| try self.emitSound(sound, room);
             }
             try self.mission_terminals.advance(
                 self.content.mission_terminals.definitions,
@@ -1181,10 +1143,7 @@ pub const Scene = struct {
             for (
                 self.mission_terminals.instances,
                 self.content.mission_terminals.definitions,
-            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(
-                sound,
-                definition.footprint.room,
-            );
+            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             try self.energy_stations.advance(
                 self.content.energy_stations.definitions,
                 self.terrain.map(),
@@ -1695,10 +1654,7 @@ pub const Scene = struct {
             );
             for (self.enemy_fire.channels) |channel| {
                 if (channel.state.hit_requested) |hit| self.deliverHit(hit);
-                if (channel.state.sound_requested) |sound| try self.emitSound(
-                    sound,
-                    channel.state.effect.?.room,
-                );
+                if (channel.state.sound_requested) |sound| try self.emitSound(sound, channel.state.effect.?.room);
             }
             for (
                 self.guards.actors,
@@ -1722,10 +1678,7 @@ pub const Scene = struct {
             );
             for (self.guard_fire.channels) |channel| {
                 if (channel.state.hit_requested) |hit| self.deliverHit(hit);
-                if (channel.state.sound_requested) |sound| try self.emitSound(
-                    sound,
-                    channel.state.effect.?.room,
-                );
+                if (channel.state.sound_requested) |sound| try self.emitSound(sound, channel.state.effect.?.room);
             }
             self.barriers.route(
                 self.content.barrier_bindings,
@@ -1751,10 +1704,7 @@ pub const Scene = struct {
             );
             for (self.ceiling_fire.channels) |channel| {
                 if (channel.state.hit_requested) |hit| self.deliverHit(hit);
-                if (channel.state.sound_requested) |sound| try self.emitSound(
-                    sound,
-                    channel.state.effect.?.room,
-                );
+                if (channel.state.sound_requested) |sound| try self.emitSound(sound, channel.state.effect.?.room);
             }
             self.casings.advance(
                 self.content.casing_definition,
@@ -1842,10 +1792,7 @@ pub const Scene = struct {
                 self.pose,
                 self.environment.room,
             );
-            for (self.scripted_transport.effects) |instance| if (instance.sound) |sound| if (instance.effect_room) |room| try self.emitSound(
-                sound,
-                room,
-            );
+            for (self.scripted_transport.effects) |instance| if (instance.sound) |sound| if (instance.effect_room) |room| try self.emitSound(sound, room);
             self.timed_items.route(
                 self.content.timed_item_bindings,
                 self.scripted_transport.pulses[0..self.scripted_transport.pulse_count],
@@ -1866,10 +1813,7 @@ pub const Scene = struct {
                 self.content.timed_items.audible_rooms,
                 self.environment.room,
             ) != null) {
-                for (self.timed_items.instances) |instance| if (instance.sound) |sound| try self.emitEffect(.{
-                    .sound = sound,
-                    .attenuation = 1,
-                });
+                for (self.timed_items.instances) |instance| if (instance.sound) |sound| try self.emitEffect(.{ .sound = sound, .attenuation = 1 });
             }
             self.credential_terminals.route(
                 self.content.credential_terminal_bindings,
@@ -1921,15 +1865,9 @@ pub const Scene = struct {
                 self.content.transport_bindings,
                 self.arrival_triggers.pulses[0..self.arrival_triggers.pulse_count],
             );
-            for (self.escort_followers.actors) |actor| if (actor.sound) |sound| try self.emitSound(
-                sound,
-                actor.room,
-            );
+            for (self.escort_followers.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
             for (self.robots.outgoing[0..self.robots.outgoing_count]) |hit| self.deliverHit(hit);
-            for (self.robots.actors) |actor| if (actor.sound) |sound| try self.emitSound(
-                sound,
-                actor.room,
-            );
+            for (self.robots.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
             const deploy_field = if (selected) |item| if (item.definition.use_action) |action| action == .deploy_field and
                 intent.use_item and
                 !intent.action and
@@ -1945,19 +1883,13 @@ pub const Scene = struct {
                 );
                 if (field.sound) |sound| if (field.room) |room| try self.emitSound(sound, room);
             }
-            for (self.barrier_owners, self.gunmen.actors) |*owner, actor| owner.* = .{
-                .pose = actor.pose,
-                .room = actor.room,
-            };
+            for (self.barrier_owners, self.gunmen.actors) |*owner, actor| owner.* = .{ .pose = actor.pose, .room = actor.room };
             try self.enemy_barriers.advance(
                 self.content.enemy_barriers.definitions,
                 self.barrier_owners,
                 self.terrain.map(),
             );
-            for (self.enemy_barriers.emitters) |field| if (field.sound) |sound| if (field.room) |room| try self.emitSound(
-                sound,
-                room,
-            );
+            for (self.enemy_barriers.emitters) |field| if (field.sound) |sound| if (field.room) |room| try self.emitSound(sound, room);
             try self.ambient_people.advance(
                 self.content.ambient_people.definitions,
                 self.content.ambient_people.profiles,
@@ -1965,111 +1897,57 @@ pub const Scene = struct {
                 self.environment.room,
                 &self.random,
             );
-            for (self.ambient_people.actors) |actor| if (actor.sound) |sound| try self.emitSound(
-                sound,
-                actor.room,
-            );
-            for (self.triggered_effects.instances) |instance| if (instance.sound) |sound| try self.emitSound(
-                sound,
-                instance.room,
-            );
+            for (self.ambient_people.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
+            for (self.triggered_effects.instances) |instance| if (instance.sound) |sound| try self.emitSound(sound, instance.room);
             for (
                 self.traders.actors,
                 self.content.traders.definitions,
-            ) |actor, definition| if (actor.sound) |sound| try self.emitSound(
-                sound,
-                definition.footprint.room,
-            );
+            ) |actor, definition| if (actor.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (
                 self.story_stations.instances,
                 self.content.story_stations.definitions,
-            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(
-                sound,
-                definition.footprint.room,
-            );
-            for (self.guides.actors) |actor| if (actor.sound) |sound| try self.emitSound(
-                sound,
-                actor.room,
-            );
-            for (self.item_aid.actors) |actor| if (actor.sound) |sound| try self.emitSound(
-                sound,
-                actor.room,
-            );
-            for (self.lifts.instances) |instance| if (instance.sound) |sound| try self.emitSound(
-                sound,
-                instance.room,
-            );
+            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
+            for (self.guides.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
+            for (self.item_aid.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
+            for (self.lifts.instances) |instance| if (instance.sound) |sound| try self.emitSound(sound, instance.room);
             for (
                 self.doors.instances,
                 self.content.doors.definitions,
-            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(
-                sound,
-                definition.footprint.room,
-            );
+            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (
                 self.detectors.instances,
                 self.content.detectors.definitions,
-            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(
-                sound,
-                definition.room,
-            );
+            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.room);
             for (
                 self.ceiling_guns.instances,
                 self.content.ceiling_guns.definitions,
-            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(
-                sound,
-                definition.room,
-            );
+            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.room);
             for (
                 self.hazards.instances,
                 self.content.hazards.definitions,
-            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(
-                sound,
-                definition.footprint.room,
-            );
+            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (
                 self.energy_stations.instances,
                 self.content.energy_stations.definitions,
-            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(
-                sound,
-                definition.footprint.room,
-            );
+            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (
                 self.platform_sections.instances,
                 self.content.platform_sections.definitions,
-            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(
-                sound,
-                definition.footprint.room,
-            );
+            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (
                 self.locks.instances,
                 self.content.locks.definitions,
-            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(
-                sound,
-                definition.footprint.room,
-            );
+            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (
                 self.operated_controls.instances,
                 self.content.controls.definitions,
-            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(
-                sound,
-                definition.footprint.room,
-            );
-            for (self.props.objects) |object| if (object.sound_requested) |sound| try self.emitSound(
-                sound,
-                object.room,
-            );
-            if (self.pistol.sound_requested) |sound| try self.emitSound(
-                sound,
-                self.pistol.effect.?.room,
-            );
+            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
+            for (self.props.objects) |object| if (object.sound_requested) |sound| try self.emitSound(sound, object.room);
+            if (self.pistol.sound_requested) |sound| try self.emitSound(sound, self.pistol.effect.?.room);
             for (
                 self.surfaces.instances,
                 self.content.surfaces,
-            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(
-                sound,
-                definition.footprint.room,
-            );
+            ) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             if (self.last_ambient) |event| try self.emitSound(event.sound, event.room);
             if (self.props.acquired) |handle| {
                 const item = try self.equipment.item(handle);
@@ -2171,19 +2049,13 @@ pub const Scene = struct {
                 if (try self.interactionHint()) |hint| self.message_icon = hint.icon;
                 var presentation = notice;
                 presentation.icon = self.message_icon;
-                self.message = try world_messages.State.init(
-                    presentation,
-                    deadline,
-                );
+                self.message = try world_messages.State.init(presentation, deadline);
                 if (self.replay) |*replay| {
                     const sample = replay.next() orelse {
                         self.aborted = true;
                         return;
                     };
-                    self.message.?.keys = @as(u3, @intFromBool(sample.action)) | (@as(
-                        u3,
-                        @intFromBool(sample.use_item),
-                    ) << 1) | (@as(u3, @intFromBool(sample.weapon)) << 2);
+                    self.message.?.keys = @as(u3, @intFromBool(sample.action)) | (@as(u3, @intFromBool(sample.use_item)) << 1) | (@as(u3, @intFromBool(sample.weapon)) << 2);
                     self.message.?.latchInput();
                 }
                 self.input = .{};
@@ -2209,10 +2081,7 @@ pub const Scene = struct {
                     entry.* = .{
                         .icon = try self.content.frame(item.definition.icon),
                         .label = item.definition.label,
-                        .quantity = if (item.definition.show_quantity) @as(
-                            u16,
-                            @bitCast(item.quantity),
-                        ) else null,
+                        .quantity = if (item.definition.show_quantity) @as(u16, @bitCast(item.quantity)) else null,
                     };
                 }
                 self.dialog = .{
@@ -2904,10 +2773,7 @@ pub const Scene = struct {
             .prop => |index| blk: {
                 const object = self.props.objects[index];
                 break :blk .{
-                    .body = if (try self.props.visible(
-                        index,
-                        &self.equipment,
-                    )) object.contact else null,
+                    .body = if (try self.props.visible(index, &self.equipment)) object.contact else null,
                     .active = object.active,
                 };
             },
@@ -2965,10 +2831,7 @@ pub const Scene = struct {
                 if (field.room == hit.sender_room) field.hit = true;
                 return;
             }
-            if (self.content.doors.definitions[index].footprint.room == hit.sender_room) self.doors.hit(
-                self.content.doors.definitions,
-                index,
-            );
+            if (self.content.doors.definitions[index].footprint.room == hit.sender_room) self.doors.hit(self.content.doors.definitions, index);
         }
     }
 
@@ -3075,10 +2938,7 @@ pub const Scene = struct {
         for (self.props.objects, self.props.definitions, 0..) |object, definition, index| {
             if (definition.layer != layer or
                 object.room != self.environment.room or
-                !try self.props.visible(
-                    index,
-                    &self.equipment,
-                )) continue;
+                !try self.props.visible(index, &self.equipment)) continue;
             const art = try self.content.frame(object.pose.visual.id);
             try sprite_renderer.draw(
                 indices,
@@ -3335,10 +3195,7 @@ pub const Scene = struct {
         self.gunmen.hashInto(&hash);
         self.robots.hashInto(&hash);
         hash.update(&.{if (self.pending_movie) |movie| 1 + @as(u8, @backingInt(movie)) else 0});
-        if (self.replay) |replay| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(
-            u64,
-            replay.cursor,
-        )));
+        if (self.replay) |replay| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, replay.cursor)));
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, self.score)));
         hash.update(&.{
             self.inventory_cooldown,
@@ -3360,10 +3217,7 @@ pub const Scene = struct {
                 @intFromBool(dialog.menu.score_next),
                 @intFromBool(dialog.menu.view == .score),
             });
-            if (dialog.menu.view == .items) hash.update(&std.mem.toBytes(std.mem.nativeToLittle(
-                u64,
-                dialog.menu.view.items,
-            )));
+            if (dialog.menu.view == .items) hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, dialog.menu.view.items)));
             const keys = dialog.keys;
             for ([_]bool{
                 keys.directions.right,
@@ -3410,10 +3264,7 @@ pub const Scene = struct {
             .crouching => |p| @backingInt(p),
             .rolling => |roll| @backingInt(roll.phase),
             .wounded => |state| @backingInt(state.phase),
-            .falling => |fall| @as(u32, @backingInt(fall.phase)) | (@as(
-                u32,
-                @intFromBool(fall.already_dead),
-            ) << 8),
+            .falling => |fall| @as(u32, @backingInt(fall.phase)) | (@as(u32, @intFromBool(fall.already_dead)) << 8),
             .ledge => |state| @backingInt(state.phase),
             .operating => |state| @backingInt(state),
             .transporting => |state| @backingInt(state),
@@ -3451,14 +3302,8 @@ pub const Scene = struct {
             @intFromBool(self.input.down),
             @intFromBool(self.input.left_action),
             @intFromBool(self.input.right_action),
-            if (self.input.previous_direction.horizontal) |direction| 1 + @as(
-                u8,
-                @backingInt(direction),
-            ) else 0,
-            if (self.input.previous_direction.vertical) |direction| 1 + @as(
-                u8,
-                @backingInt(direction),
-            ) else 0,
+            if (self.input.previous_direction.horizontal) |direction| 1 + @as(u8, @backingInt(direction)) else 0,
+            if (self.input.previous_direction.vertical) |direction| 1 + @as(u8, @backingInt(direction)) else 0,
             @intFromBool(self.input.previous_direction.conflict),
         };
         hash.update(&held);

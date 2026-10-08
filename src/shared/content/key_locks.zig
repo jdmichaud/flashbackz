@@ -71,23 +71,17 @@ fn repairable(group: rules.Group) ?Spec {
         repair.conditions[1].code != 0 or
         repair.effect.code < 35 or
         repair.effect.code > 38) return null;
-    if (broken.source != repair.source or broken.target != repair.source or broken.next != 0 or !op(
-        broken.conditions[0],
-        34,
-        30,
-    ) or !op(
-        broken.conditions[1],
-        90,
-        24,
-    ) or broken.effect.code != 123 or broken.effect.argument < 0) return null;
+    if (broken.source != repair.source or
+        broken.target != repair.source or
+        broken.next != 0 or
+        !op(broken.conditions[0], 34, 30) or
+        !op(broken.conditions[1], 90, 24) or
+        broken.effect.code != 123 or
+        broken.effect.argument < 0) return null;
     if (operate.source != repair.target or
         operate.target != repair.target or
         operate.next != 4 or
-        !op(
-            operate.conditions[0],
-            34,
-            30,
-        ) or
+        !op(operate.conditions[0], 34, 30) or
         operate.conditions[1].code != 125 or
         operate.conditions[1].argument < 0 or
         operate.conditions[1].argument >= 66 or
@@ -145,11 +139,7 @@ pub fn recognize(group: rules.Group) ?Spec {
             hint.dx != 0 or
             hint.dy != 0 or
             hint.flags != 0 or
-            !op(
-                hint.conditions[0],
-                34,
-                30,
-            ) or
+            !op(hint.conditions[0], 34, 30) or
             hint.conditions[1].code != 0 or
             hint.effect.code != 123 or
             hint.effect.argument < 0 or
@@ -163,10 +153,7 @@ pub fn recognize(group: rules.Group) ?Spec {
         const used = i >= 3;
         const sleeping = i == 1 or i == 3;
         const state = if (used) use.target else use.source;
-        if (r.source != state or r.target != state or r.next != (if (used) @as(
-            u16,
-            @intCast(begin + 3),
-        ) else 0) or r.dx != 0 or r.dy != 0 or r.flags != 0) return null;
+        if (r.source != state or r.target != state or r.next != (if (used) @as(u16, @intCast(begin + 3)) else 0) or r.dx != 0 or r.dy != 0 or r.flags != 0) return null;
         if (!op(
             r.conditions[0],
             if (sleeping) 77 else 0,

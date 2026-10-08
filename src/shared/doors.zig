@@ -130,11 +130,7 @@ pub const Instance = struct {
                 profile.hold_player or
                 participant.kind == .enemy and
                     profile.hold_enemies) and
-                try layout.overlaps(
-                    map,
-                    definition.footprint,
-                    participant.footprint,
-                )) return true;
+                try layout.overlaps(map, definition.footprint, participant.footprint)) return true;
         }
         return false;
     }
@@ -148,18 +144,9 @@ pub const Instance = struct {
         const snap = self.requests.snap and profile.snap_closed[@backingInt(self.phase)];
         switch (self.phase) {
             .closed => {
-                if (profile.automatic_open and self.requests.close or snap) try self.close(
-                    definition,
-                    world,
-                ) else if (self.requests.open and !profile.automatic_open) self.set(
-                    .opening,
-                    0,
-                ) else {
+                if (profile.automatic_open and self.requests.close or snap) try self.close(definition, world) else if (self.requests.open and !profile.automatic_open) self.set(.opening, 0) else {
                     try write(definition, world, .solid);
-                    if (profile.automatic_open) self.set(
-                        .opening,
-                        0,
-                    ) else return !profile.sleep_closed;
+                    if (profile.automatic_open) self.set(.opening, 0) else return !profile.sleep_closed;
                 }
             },
             .opening => {
@@ -180,10 +167,7 @@ pub const Instance = struct {
                 if (profile.automatic_open and self.requests.close) {
                     try write(definition, world, profile.start_closing_clearance);
                     self.set(.closing, 0);
-                } else if (snap) try self.close(
-                    definition,
-                    world,
-                ) else if (profile.keep_open_request and self.requests.open) {
+                } else if (snap) try self.close(definition, world) else if (profile.keep_open_request and self.requests.open) {
                     if (definition.hold_steps) |steps| self.timer = steps;
                 } else if (definition.hold_steps != null and try occupied(
                     definition,
@@ -207,19 +191,13 @@ pub const Instance = struct {
             },
             .closing => {
                 const segment = profile.closing[self.segment];
-                if (snap) try self.close(
-                    definition,
-                    world,
-                ) else if (self.requests.open and segment.reverse != null) {
+                if (snap) try self.close(definition, world) else if (self.requests.open and segment.reverse != null) {
                     const reverse = segment.reverse.?;
                     try write(definition, world, reverse.clearance);
                     self.set(.opening, reverse.segment);
                 } else {
                     try write(definition, world, segment.clearance_after);
-                    if (self.segment + 1 < profile.closing.len) self.segment += 1 else self.set(
-                        .closed,
-                        0,
-                    );
+                    if (self.segment + 1 < profile.closing.len) self.segment += 1 else self.set(.closed, 0);
                 }
             },
         }
@@ -311,10 +289,7 @@ pub const World = struct {
             if (!instance.active) continue;
             const profile = profiles[definition.profile];
             var clip = instance.clip(profile);
-            if (instance.accepts(profile)) instance.playback.completeDisplacement(
-                clip,
-                &instance.pose,
-            );
+            if (instance.accepts(profile)) instance.playback.completeDisplacement(clip, &instance.pose);
             if (instance.playback.exhausted(clip)) {
                 const audible = try instance.finish(definition, profile, world, participants);
                 if (!audible and (!definition.wake_nearby or !near.near)) instance.active = false;

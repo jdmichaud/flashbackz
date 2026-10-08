@@ -85,11 +85,8 @@ pub const World = struct {
             instance.ready = instance.pending;
             instance.pending = false;
             instance.sound = null;
-            if (instance.phase == .ready and try layout.overlaps(
-                map,
-                player,
-                definition.footprint,
-            )) self.candidate = index;
+            if (instance.phase == .ready and
+                try layout.overlaps(map, player, definition.footprint)) self.candidate = index;
         }
     }
     pub fn route(self: *World, bindings: []const Binding, pulses: []const Circuit) void {

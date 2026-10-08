@@ -144,11 +144,7 @@ pub const World = struct {
             if (transitioned) {
                 switch (instance.phase) {
                     .cycling => |index| {
-                        if (instance.requests.disable) instance.phase = .disabled else if (try layout.overlaps(
-                            map,
-                            definition.footprint,
-                            player,
-                        )) instance.phase = .contact else {
+                        if (instance.requests.disable) instance.phase = .disabled else if (try layout.overlaps(map, definition.footprint, player)) instance.phase = .contact else {
                             instance.phase = .{ .cycling = (index + 1) % definition.cycle.len };
                             if (!same_room) audible_entry = false;
                             if (!same_room and

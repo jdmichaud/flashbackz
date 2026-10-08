@@ -8,12 +8,9 @@ pub fn recognize(group: rules.Group) ?Spec {
     const take = group.at(1);
     const idle = group.at(2);
     const remove = group.at(3);
-    for ([_]rules.Rule{
-        sleep,
-        take,
-        idle,
-        remove,
-    }) |r| if (r.dx != 0 or r.dy != 0 or r.flags != 0) return null;
+    for ([_]rules.Rule{ sleep, take, idle, remove }) |r| if (r.dx != 0 or
+        r.dy != 0 or
+        r.flags != 0) return null;
     if (sleep.source != sleep.target or
         idle.source != sleep.source or
         idle.target != sleep.source or

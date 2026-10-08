@@ -22,13 +22,9 @@ pub fn recognize(group: rules.Group) ?Spec {
     const sleep = group.at(3);
     const remove = group.at(4);
     const fuse = take.conditions[1].argument == 36;
-    for ([_]rules.Rule{
-        take,
-        use,
-        contact,
-        sleep,
-        remove,
-    }) |r| if (r.dx != 0 or r.dy != 0 or r.flags != 0) return null;
+    for ([_]rules.Rule{ take, use, contact, sleep, remove }) |r| if (r.dx != 0 or
+        r.dy != 0 or
+        r.flags != 0) return null;
     if (take.source != take.target or
         use.source != take.source or
         use.target == take.source or
@@ -42,30 +38,21 @@ pub fn recognize(group: rules.Group) ?Spec {
         use.next != 4 or
         contact.next != 0 or
         sleep.next != 0 or
-        remove.next != (if (fuse) @as(
-            u16,
-            4,
-        ) else 0)) return null;
+        remove.next != (if (fuse) @as(u16, 4) else 0)) return null;
     if (!op(take.conditions[0], 34, 30) or !op(
         take.conditions[1],
         90,
         if (fuse) 36 else 2,
     ) or !op(take.effect, 48, 0)) return null;
-    if (!op(
-        use.conditions[0],
-        34,
-        102,
-    ) or use.conditions[1].code != 72 or !op(use.effect, 0, 0)) return null;
-    if (!op(
-        contact.conditions[0],
-        80,
-        7,
-    ) or !op(contact.conditions[1], 0, 0) or !op(contact.effect, 0, 0)) return null;
-    if (!op(
-        sleep.conditions[0],
-        0,
-        0,
-    ) or !op(sleep.conditions[1], 0, 0) or !op(sleep.effect, 67, 0)) return null;
+    if (!op(use.conditions[0], 34, 102) or
+        use.conditions[1].code != 72 or
+        !op(use.effect, 0, 0)) return null;
+    if (!op(contact.conditions[0], 80, 7) or
+        !op(contact.conditions[1], 0, 0) or
+        !op(contact.effect, 0, 0)) return null;
+    if (!op(sleep.conditions[0], 0, 0) or
+        !op(sleep.conditions[1], 0, 0) or
+        !op(sleep.effect, 67, 0)) return null;
     // Scenes 3 (key) and 22 (fuse repair) are unassigned in the supplied edition.
     if (!op(
         remove.conditions[0],

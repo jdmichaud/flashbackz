@@ -56,23 +56,16 @@ pub const State = struct {
                     pose.position.y +%= 56;
                     return .long_fall;
                 }
-                if (try environment.at(pose.*, .torso, 0) or try environment.ledge(
-                    pose.*,
-                    .support,
-                    0,
-                    .ahead,
-                )) return .landing;
+                if (try environment.at(pose.*, .torso, 0) or
+                    try environment.ledge(pose.*, .support, 0, .ahead)) return .landing;
                 return .low_landing;
             },
             .reversing => {
                 const supported = try environment.at(pose.*, .support, 0);
                 const upright = supported and try environment.ledge(pose.*, .support, 0, .behind);
-                const catchable = !supported and intent.action and try environment.ledge(
-                    pose.*,
-                    .support,
-                    -1,
-                    .ahead,
-                );
+                const catchable = !supported and
+                    intent.action and
+                    try environment.ledge(pose.*, .support, -1, .ahead);
                 pose.facing = if (pose.facing == .left) .right else .left;
                 if (supported) return if (upright) .landing else .low_landing;
                 if (catchable) {
@@ -83,11 +76,9 @@ pub const State = struct {
                 return .long_fall;
             },
             .short_jump => {
-                const vertical = (try environment.at(pose.*, .torso, 1) and !try environment.at(
-                    pose.*,
-                    .support,
-                    0,
-                )) or try environment.at(pose.*, .support, 2);
+                const vertical = (try environment.at(pose.*, .torso, 1) and
+                    !try environment.at(pose.*, .support, 0)) or
+                    try environment.at(pose.*, .support, 2);
                 shift(pose, 4);
                 pose.position.y +%= 8;
                 self.phase = if (vertical) .vertical else .gliding;
@@ -104,11 +95,9 @@ pub const State = struct {
                 }
                 const supported = try environment.at(pose.*, .support, 0);
                 const torso = try environment.at(pose.*, .torso, 0);
-                if ((self.phase == .gliding and !supported) or (torso and !try environment.at(
-                    pose.*,
-                    .support,
-                    -1,
-                ))) {
+                if ((self.phase == .gliding and !supported) or
+                    (torso and !try environment.at(pose.*, .support, -1)))
+                {
                     pose.position.y +%= 72;
                     return .long_fall;
                 }

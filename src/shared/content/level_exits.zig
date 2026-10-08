@@ -52,12 +52,7 @@ pub fn load(
             b.next != 0 or
             c.next != 0 or
             d.next != 3) return error.UnsupportedInventoryExit;
-        for ([_]rules.Rule{
-            a,
-            b,
-            c,
-            d,
-        }) |rule| if (rule.dx != 0 or
+        for ([_]rules.Rule{ a, b, c, d }) |rule| if (rule.dx != 0 or
             rule.dy != 0 or
             rule.flags != 0) return error.MovingInventoryExit;
         const item: equipment.Kind = switch (a.conditions[1].argument) {

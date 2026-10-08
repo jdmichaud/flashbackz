@@ -20,12 +20,7 @@ pub const Assets = struct {
         self.allocator.free(self.clips);
     }
 };
-const Spec = struct {
-    waiting: u16,
-    running: u16,
-    signal: i16,
-    delta: motion.Position,
-};
+const Spec = struct { waiting: u16, running: u16, signal: i16, delta: motion.Position };
 fn recognize(group: rules.Group) ?Spec {
     if (group.count() != 4) return null;
     const a = group.at(0);
@@ -49,12 +44,8 @@ fn recognize(group: rules.Group) ?Spec {
         b.dy != 0 or
         c.dx != d.dx or
         c.dy != d.dy) return null;
-    for ([_]rules.Rule{
-        a,
-        b,
-        c,
-        d,
-    }) |r| if (r.flags != 0 or r.conditions[1].code != 0) return null;
+    for ([_]rules.Rule{ a, b, c, d }) |r| if (r.flags != 0 or
+        r.conditions[1].code != 0) return null;
     if (a.conditions[0].code != 34 or
         a.effect.code != 0 or
         b.conditions[0].code != 0 or

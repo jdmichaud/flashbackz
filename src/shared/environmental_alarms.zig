@@ -43,10 +43,7 @@ pub const World = struct {
     shake_rows: u2 = 0,
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
-        for (
-            instances,
-            definitions,
-        ) |*instance, definition| instance.* = .{ .active = definition.initially_active };
+        for (instances, definitions) |*instance, definition| instance.* = .{ .active = definition.initially_active };
         return .{ .allocator = allocator, .instances = instances };
     }
     pub fn deinit(self: *World) void {
@@ -65,11 +62,7 @@ pub const World = struct {
             if (binding.next_step) self.instances[binding.target].pending.add(binding.action) else self.instances[binding.target].ready.add(binding.action);
         };
     }
-    pub fn advance(
-        self: *World,
-        definitions: []const Definition,
-        random: *random_mod.Stream,
-    ) void {
+    pub fn advance(self: *World, definitions: []const Definition, random: *random_mod.Stream) void {
         for (self.instances, definitions) |*instance, definition| {
             if ((instance.ready.start or instance.ready.stop) and
                 definition.accepts_signals) instance.active = true;

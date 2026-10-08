@@ -102,12 +102,7 @@ pub const World = struct {
             actor.pending_release = false;
             actor.late_displacement = 0;
             actor.sound = null;
-            const near = try activation.around(
-                map,
-                player.room,
-                actor.room,
-                actor.pose.position.y,
-            );
+            const near = try activation.around(map, player.room, actor.room, actor.pose.position.y);
             if (definition.wake_nearby and near.wake) actor.active = true;
             if (try layout.overlaps(map, player, actor.contact)) self.candidate = index;
             if (definition.clips[@backingInt(actor.phase)].presses_floor_switches) {
@@ -203,20 +198,8 @@ pub const World = struct {
                 const close = awareness.player(false, definition.gap);
                 const room = try map.room(actor.room);
                 const same = actor.room == player.room;
-                const above = if (same) @divTrunc(
-                    player.position.y -% 8,
-                    72,
-                ) < @divTrunc(
-                    actor.pose.position.y,
-                    72,
-                ) else room.edges.up == .room and room.edges.up.room == player.room;
-                const below = if (same) @divTrunc(
-                    player.position.y -% 8,
-                    72,
-                ) > @divTrunc(
-                    actor.pose.position.y,
-                    72,
-                ) else room.edges.down == .room and room.edges.down.room == player.room;
+                const above = if (same) @divTrunc(player.position.y -% 8, 72) < @divTrunc(actor.pose.position.y, 72) else room.edges.up == .room and room.edges.up.room == player.room;
+                const below = if (same) @divTrunc(player.position.y -% 8, 72) > @divTrunc(actor.pose.position.y, 72) else room.edges.down == .room and room.edges.down.room == player.room;
                 const support = try env.at(actor.pose, .support, 1);
                 const wall = try env.at(actor.pose, .torso, 1);
                 switch (actor.phase) {

@@ -72,11 +72,9 @@ pub fn recognize(group: rules.Group) ?Spec {
         if (touching.source != spec.cycle[i] or
             touching.target != spec.contact or
             touching.next != count * 5 or
-            !op(
-                touching.conditions[0],
-                80,
-                1,
-            ) or !op(touching.conditions[1], 0, 0) or !op(touching.effect, 0, 0)) return null;
+            !op(touching.conditions[0], 80, 1) or
+            !op(touching.conditions[1], 0, 0) or
+            !op(touching.effect, 0, 0)) return null;
         for (3..5) |j| {
             const row = group.at(i * 5 + j);
             if (row.source != spec.cycle[i] or
@@ -93,11 +91,11 @@ pub fn recognize(group: rules.Group) ?Spec {
             )) return null;
         }
     }
-    if (contact.target != spec.cycle[0] or contact.next != 0 or !op(
-        contact.conditions[0],
-        90,
-        9,
-    ) or !op(contact.conditions[1], 0, 0) or !op(contact.effect, 79, 1)) return null;
+    if (contact.target != spec.cycle[0] or
+        contact.next != 0 or
+        !op(contact.conditions[0], 90, 9) or
+        !op(contact.conditions[1], 0, 0) or
+        !op(contact.effect, 79, 1)) return null;
     if (enable.target != spec.cycle[0] or enable.next != 0 or !op(
         enable.conditions[0],
         34,
@@ -106,11 +104,9 @@ pub fn recognize(group: rules.Group) ?Spec {
     if (disabled.source != spec.disabled or
         disabled.target != spec.disabled or
         disabled.next != count * 5 + 1 or
-        !op(
-            disabled.conditions[0],
-            0,
-            0,
-        ) or !op(disabled.conditions[1], 0, 0) or !op(disabled.effect, 67, 0)) return null;
+        !op(disabled.conditions[0], 0, 0) or
+        !op(disabled.conditions[1], 0, 0) or
+        !op(disabled.effect, 67, 0)) return null;
     for (spec.disable_messages) |message| if (message == spec.enable_message) return null;
     return spec;
 }
@@ -160,18 +156,12 @@ pub fn load(
         const spec = recognize(try rules.group(rule_bytes, record.rule_group)) orelse continue;
         if (record.room >= rooms.len) return error.InvalidHazardRoom;
         const phase: runtime.Phase = if (record.initial_state == spec.disabled) .disabled else if (record.initial_state == spec.contact) .contact else cycling: {
-            for (
-                spec.cycle[0..spec.count],
-                0..,
-            ) |state, i| if (state == record.initial_state) break :cycling .{ .cycling = i };
+            for (spec.cycle[0..spec.count], 0..) |state, i| if (state == record.initial_state) break :cycling .{ .cycling = i };
             return error.InvalidHazardStart;
         };
         const cycle = try allocator.alloc(motion.Clip, spec.count);
         errdefer allocator.free(cycle);
-        for (
-            spec.cycle[0..spec.count],
-            cycle,
-        ) |state, *destination| destination.* = try resolveClip(
+        for (spec.cycle[0..spec.count], cycle) |state, *destination| destination.* = try resolveClip(
             allocator,
             &clips,
             animations,

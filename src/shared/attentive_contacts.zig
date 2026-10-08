@@ -227,24 +227,16 @@ pub const World = struct {
                         const chances = definition.chances[@intFromBool(instance.acquainted)];
                         switch (instance.posture) {
                             .centered => if (!touching) {
-                                if (back) instance.posture = .turning_behind else if (front) instance.posture = .turning_ahead else if (chance(
-                                    random,
-                                    chances[0],
-                                )) instance.posture = .turning_ahead else if (chance(
-                                    random,
-                                    chances[1],
-                                )) instance.posture = .turning_behind;
+                                if (back) instance.posture = .turning_behind else if (front) instance.posture = .turning_ahead else if (chance(random, chances[0])) instance.posture = .turning_ahead else if (chance(random, chances[1])) instance.posture = .turning_behind;
                             },
-                            .watching_behind => if (touching or (!back and !chance(
-                                random,
-                                chances[2],
-                            ))) {
+                            .watching_behind => if (touching or
+                                (!back and !chance(random, chances[2])))
+                            {
                                 instance.posture = .centering_from_behind;
                             },
-                            .watching_ahead => if (touching or (!front and !chance(
-                                random,
-                                chances[3],
-                            ))) {
+                            .watching_ahead => if (touching or
+                                (!front and !chance(random, chances[3])))
+                            {
                                 instance.posture = .centering_from_ahead;
                             },
                             else => instance.posture = settled(instance.posture),

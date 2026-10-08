@@ -172,11 +172,7 @@ pub const World = struct {
             if (definition.behavior != .floor_switch or
                 !definition.behavior.floor_switch.wake_on_contact) continue;
             if (try layout.overlaps(map, player, definition.footprint)) object.active = true;
-            for (self.actor_contacts) |contact| if (try layout.overlaps(
-                map,
-                contact,
-                definition.footprint,
-            )) {
+            for (self.actor_contacts) |contact| if (try layout.overlaps(map, contact, definition.footprint)) {
                 object.active = true;
             };
             for (self.objects, 0..) |other, j| {
@@ -253,11 +249,7 @@ pub const World = struct {
         self.acquired = null;
         self.movie = null;
         const layout: contacts.Layout = .{};
-        for (
-            self.objects,
-            self.definitions,
-            0..,
-        ) |*object, definition, index| switch (definition.behavior) {
+        for (self.objects, self.definitions, 0..) |*object, definition, index| switch (definition.behavior) {
             .collectible => |item| {
                 if (self.incoming[index]) |response| {
                     try self.respond(index, response, items, false);
@@ -311,21 +303,14 @@ pub const World = struct {
                             definition.footprint,
                             self.player_contact,
                         );
-                        if (plate.accepts_objects) for (
-                            self.objects,
-                            self.definitions,
-                            0..,
-                        ) |other, other_definition, j| {
+                        if (plate.accepts_objects) for (self.objects, self.definitions, 0..) |other, other_definition, j| {
                             if (j == index or !other.contact_present) continue;
                             const other_clip = switch (other_definition.behavior) {
                                 .collectible => |value| value.idle,
                                 .floor_switch => |value| if (other.pressing) value.press else value.rest,
                             };
-                            if (other_clip.presses_floor_switches and try layout.overlaps(
-                                map,
-                                object.contact,
-                                other.contact,
-                            )) occupied = true;
+                            if (other_clip.presses_floor_switches and
+                                try layout.overlaps(map, object.contact, other.contact)) occupied = true;
                         };
                         if (plate.accepts_objects) for (self.actor_contacts) |contact| {
                             if (try layout.overlaps(map, object.contact, contact)) occupied = true;
@@ -371,10 +356,7 @@ pub const World = struct {
     }
 
     pub fn hashInto(self: *const World, hash: *std.hash.Wyhash) void {
-        for (
-            self.incoming,
-            self.pending,
-        ) |ready, pending| for ([_]?Response{ ready, pending }) |response| {
+        for (self.incoming, self.pending) |ready, pending| for ([_]?Response{ ready, pending }) |response| {
             const value: u16 = if (response) |event| switch (event) {
                 .reveal => 1,
                 .redeem => |movie| 2 + @as(u16, @backingInt(movie)),

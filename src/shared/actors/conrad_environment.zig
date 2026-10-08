@@ -47,11 +47,9 @@ pub const Environment = struct {
         const level: Height = if (height == .head) .head else .support;
         const above: Height = if (height == .head) .above_head else .torso;
         const neighbor = ahead +% (if (open_side == .ahead) @as(i16, 1) else -1);
-        return try self.at(pose, level, ahead) and !try self.at(
-            pose,
-            level,
-            neighbor,
-        ) and !try self.at(pose, above, ahead);
+        return try self.at(pose, level, ahead) and
+            !try self.at(pose, level, neighbor) and
+            !try self.at(pose, above, ahead);
     }
 
     pub fn motionBoundary(self: *Environment, pose: *motion.Pose) !void {

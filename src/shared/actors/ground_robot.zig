@@ -67,10 +67,7 @@ pub const Actor = struct {
 
     pub fn vulnerability(self: Actor) combat.Vulnerability {
         return switch (self.phase) {
-            .open_idle_a, .open_idle_b, .open_walk_a, .open_walk_b, .open_turn => .{
-                .rear_low = true,
-                .front_low = true,
-            },
+            .open_idle_a, .open_idle_b, .open_walk_a, .open_walk_b, .open_turn => .{ .rear_low = true, .front_low = true },
             else => .{},
         };
     }
@@ -208,27 +205,11 @@ pub const World = struct {
                     actor.phase = if (hit == .front_low) .collapsing_front else .collapsing_rear;
                 } else switch (actor.phase) {
                     .closed_idle, .closed_walk => {
-                        if (awareness.player(
-                            false,
-                            profile.deployment_distance,
-                        )) actor.phase = if (previous == .closed_idle) .deploying else .closed_idle else if (awareness.player(
-                            false,
-                            0,
-                        ) and try environment.at(
-                            actor.pose,
-                            .torso,
-                            profile.wall_ahead,
-                        )) actor.phase = .closed_idle else if (awareness.player(
-                            false,
-                            0,
-                        ) and try environment.at(
+                        if (awareness.player(false, profile.deployment_distance)) actor.phase = if (previous == .closed_idle) .deploying else .closed_idle else if (awareness.player(false, 0) and try environment.at(actor.pose, .torso, profile.wall_ahead)) actor.phase = .closed_idle else if (awareness.player(false, 0) and try environment.at(
                             actor.pose,
                             .support,
                             profile.floor_ahead,
-                        )) actor.phase = .closed_walk else if (awareness.player(
-                            true,
-                            0,
-                        )) actor.phase = .closed_turn else {
+                        )) actor.phase = .closed_walk else if (awareness.player(true, 0)) actor.phase = .closed_turn else {
                             actor.phase = .closed_idle;
                             if (previous == .closed_idle) {
                                 audible = false;
@@ -246,17 +227,7 @@ pub const World = struct {
                             terrain,
                             targets,
                             first_target,
-                        )) actor.phase = alternate else if (awareness.player(
-                            true,
-                            0,
-                        )) actor.phase = .open_turn else if (awareness.player(
-                            false,
-                            profile.obstacle_distance,
-                        ) and try environment.at(
-                            actor.pose,
-                            .torso,
-                            profile.wall_ahead,
-                        )) actor.phase = alternate else if (awareness.player(
+                        )) actor.phase = alternate else if (awareness.player(true, 0)) actor.phase = .open_turn else if (awareness.player(false, profile.obstacle_distance) and try environment.at(actor.pose, .torso, profile.wall_ahead)) actor.phase = alternate else if (awareness.player(
                             false,
                             profile.pursuit_distance[@intFromBool(previous == .open_idle_b)],
                         ) and try environment.at(
@@ -282,17 +253,7 @@ pub const World = struct {
                             terrain,
                             targets,
                             first_target,
-                        )) actor.phase = .open_idle_a else if (awareness.player(
-                            false,
-                            profile.obstacle_distance,
-                        ) and try environment.at(
-                            actor.pose,
-                            .torso,
-                            profile.wall_ahead,
-                        )) actor.phase = .open_idle_a else if (awareness.player(
-                            false,
-                            profile.walking_pursuit_distance,
-                        ) and try environment.at(
+                        )) actor.phase = .open_idle_a else if (awareness.player(false, profile.obstacle_distance) and try environment.at(actor.pose, .torso, profile.wall_ahead)) actor.phase = .open_idle_a else if (awareness.player(false, profile.walking_pursuit_distance) and try environment.at(
                             actor.pose,
                             .support,
                             profile.floor_ahead,
@@ -310,10 +271,7 @@ pub const World = struct {
                                 targets,
                                 first_target,
                             )) actor.reverse();
-                        } else if (awareness.player(
-                            false,
-                            profile.explosion_distance,
-                        )) _ = try self.strike(
+                        } else if (awareness.player(false, profile.explosion_distance)) _ = try self.strike(
                             actor,
                             definition,
                             terrain,
@@ -330,10 +288,8 @@ pub const World = struct {
                 }
                 if (previous == .closed_turn or previous == .open_turn) actor.reverse();
                 if (previous == .closed_walk) shift(&actor.pose, profile.closed_step);
-                if (previous == .open_walk_a or previous == .open_walk_b) shift(
-                    &actor.pose,
-                    profile.open_step,
-                );
+                if (previous == .open_walk_a or
+                    previous == .open_walk_b) shift(&actor.pose, profile.open_step);
                 actor.playback = .{};
                 _ = try terrain.geometry.handoff(&actor.room, &actor.pose.position);
                 clip = profile.clip(actor.phase);

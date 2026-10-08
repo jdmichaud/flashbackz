@@ -17,11 +17,7 @@ pub const Definition = struct {
     wake_nearby: bool,
     accepts_signals: bool,
 };
-pub const Binding = struct {
-    circuit: world_props.CircuitId,
-    target: usize,
-    next_step: bool,
-};
+pub const Binding = struct { circuit: world_props.CircuitId, target: usize, next_step: bool };
 pub const Instance = struct {
     room: geometry.RoomId,
     pose: motion.Pose,
@@ -97,10 +93,8 @@ pub const World = struct {
                     definition.accepts_signals) instance.active = true;
             if (!instance.active) continue;
             var clip = if (instance.running) definition.running else definition.waiting;
-            if (instance.ready and !instance.running) instance.playback.completeDisplacement(
-                clip,
-                &instance.pose,
-            );
+            if (instance.ready and
+                !instance.running) instance.playback.completeDisplacement(clip, &instance.pose);
             if (instance.playback.exhausted(clip)) {
                 if (instance.running) {
                     instance.pose.position.x +%= if (instance.pose.facing == .left) definition.loop_delta.x else -definition.loop_delta.x;

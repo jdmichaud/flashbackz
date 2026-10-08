@@ -18,11 +18,7 @@ pub fn linkedVersion(buf: []u8) []const u8 {
     return std.fmt.bufPrint(buf, "{d}.{d}.{d}", .{ v.major, v.minor, v.patch }) catch unreachable;
 }
 
-pub const VersionCheck = struct {
-    linked: []const u8,
-    pinned: []const u8,
-    matches: bool,
-};
+pub const VersionCheck = struct { linked: []const u8, pinned: []const u8, matches: bool };
 
 /// Compares the linked SDL2 release with the release that build.zig recorded: the one that
 /// pkg-config reported on Linux, the `sdl2` package's on Windows.

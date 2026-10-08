@@ -99,10 +99,7 @@ pub const Menu = struct {
         } else if (input.up) {
             if (self.cursor >= 4) self.cursor -= 4;
         } else if (input.down) {
-            if (self.cursor / 4 < (self.count - 1) / 4) self.cursor = @min(
-                self.cursor + 4,
-                self.count - 1,
-            );
+            if (self.cursor / 4 < (self.count - 1) / 4) self.cursor = @min(self.cursor + 4, self.count - 1);
         }
         self.score_next = input.score;
         return .stay;

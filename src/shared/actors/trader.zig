@@ -37,11 +37,7 @@ pub const Definition = struct {
     purse: equipment.ItemHandle,
     outputs: []const Circuit,
 };
-pub const Binding = struct {
-    item: equipment.ItemHandle,
-    trader: usize,
-    next_step: bool,
-};
+pub const Binding = struct { item: equipment.ItemHandle, trader: usize, next_step: bool };
 pub const Actor = struct {
     pose: motion.Pose,
     contact: contacts.Footprint,
@@ -214,50 +210,19 @@ pub const World = struct {
                         if (!near.same) {
                             actor.phase = .idle;
                             if (!(definition.wake_nearby and near.near)) actor.active = false;
-                        } else if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(
-                            actor,
-                            definition,
-                            profile,
-                            items,
-                        ) else if (!front) actor.phase = .idle;
+                        } else if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(actor, definition, profile, items) else if (!front) actor.phase = .idle;
                     },
                     .idle => {
-                        if (!near.same) actor.phase = .watching else if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(
-                            actor,
-                            definition,
-                            profile,
-                            items,
-                        ) else if (chance(
-                            random,
-                            profile.look_chance,
-                        )) actor.phase = .looking else if (chance(
-                            random,
-                            profile.fidget_chance,
-                        )) actor.phase = .fidgeting else if (back) actor.phase = .looking_back;
+                        if (!near.same) actor.phase = .watching else if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(actor, definition, profile, items) else if (chance(random, profile.look_chance)) actor.phase = .looking else if (chance(random, profile.fidget_chance)) actor.phase = .fidgeting else if (back) actor.phase = .looking_back;
                     },
                     .looking_back => {
-                        if (!near.same) actor.phase = .idle else if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(
-                            actor,
-                            definition,
-                            profile,
-                            items,
-                        ) else if (front) actor.phase = .idle;
+                        if (!near.same) actor.phase = .idle else if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(actor, definition, profile, items) else if (front) actor.phase = .idle;
                     },
                     .looking => {
-                        if (actor.ready) try self.accept(
-                            actor,
-                            definition,
-                            profile,
-                            items,
-                        ) else if (speaking) actor.phase = .talking else actor.phase = .idle;
+                        if (actor.ready) try self.accept(actor, definition, profile, items) else if (speaking) actor.phase = .talking else actor.phase = .idle;
                     },
                     .fidgeting => {
-                        if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(
-                            actor,
-                            definition,
-                            profile,
-                            items,
-                        ) else actor.phase = .idle;
+                        if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(actor, definition, profile, items) else actor.phase = .idle;
                     },
                     .talking => {
                         if (actor.ready) try self.accept(actor, definition, profile, items) else {

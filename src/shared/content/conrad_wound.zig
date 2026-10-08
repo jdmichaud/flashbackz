@@ -74,10 +74,8 @@ fn entry(rule: rules.Rule) !runtime.Entry {
         117 => .forward_low_confined,
         else => return error.UnsupportedPlayerHitEntry,
     };
-    if (rule.effect.code != 0 or rule.flags & ~@as(
-        u8,
-        3,
-    ) != 0) return error.UnsupportedPlayerHitEffect;
+    if (rule.effect.code != 0 or
+        rule.flags & ~@as(u8, 3) != 0) return error.UnsupportedPlayerHitEffect;
     return .{
         .phase = phase,
         .forward = -@as(i16, rule.dx),

@@ -25,10 +25,7 @@ pub const DirectoryAssetSource = struct {
     /// short-read loop of `readAll`.
     max_read: usize = 0,
 
-    const Handle = struct {
-        file: std.Io.File,
-        length: u64,
-    };
+    const Handle = struct { file: std.Io.File, length: u64 };
 
     pub const OpenError = error{ NotFound, NotADirectory, AccessDenied, Io, Canceled };
 
@@ -38,11 +35,7 @@ pub const DirectoryAssetSource = struct {
         io: std.Io,
         path: []const u8,
     ) OpenError!DirectoryAssetSource {
-        const dir = std.Io.Dir.cwd().openDir(
-            io,
-            path,
-            .{ .iterate = true },
-        ) catch |err| return switch (err) {
+        const dir = std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true }) catch |err| return switch (err) {
             error.FileNotFound => error.NotFound,
             error.NotDir => error.NotADirectory,
             error.AccessDenied, error.PermissionDenied => error.AccessDenied,
@@ -133,11 +126,7 @@ pub const DirectoryAssetSource = struct {
             if (last) {
                 return dir.openFile(io, host_name, .{}) catch |err| return mapError(err);
             }
-            const next = dir.openDir(
-                io,
-                host_name,
-                .{ .iterate = true },
-            ) catch |err| return mapError(err);
+            const next = dir.openDir(io, host_name, .{ .iterate = true }) catch |err| return mapError(err);
             if (owned_dir) dir.close(io);
             dir = next;
             owned_dir = true;
@@ -227,11 +216,7 @@ pub const DirectoryAssetSource = struct {
         if (self.max_read != 0) n = @min(n, self.max_read);
         const remaining = h.length - offset;
         if (remaining < n) n = @intCast(remaining);
-        return h.file.readPositional(
-            self.io,
-            &.{dst[0..n]},
-            offset,
-        ) catch |err| return mapError(err);
+        return h.file.readPositional(self.io, &.{dst[0..n]}, offset) catch |err| return mapError(err);
     }
 
     fn lookup(self: *DirectoryAssetSource, file: platform.AssetHandle) ?Handle {
@@ -286,11 +271,7 @@ pub const DirectoryAssetSource = struct {
             switch (kind) {
                 .directory => {
                     if (depth >= platform.max_asset_depth or full.len + 1 >= logical.len) continue;
-                    var sub = dir.openDir(
-                        io,
-                        entry.name,
-                        .{ .iterate = true },
-                    ) catch |err| switch (err) {
+                    var sub = dir.openDir(io, entry.name, .{ .iterate = true }) catch |err| switch (err) {
                         error.Canceled => return error.Canceled,
                         else => continue,
                     };

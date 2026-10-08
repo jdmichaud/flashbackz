@@ -95,10 +95,7 @@ pub const World = struct {
         };
     }
     pub fn requesting(self: World) ?usize {
-        for (
-            self.instances,
-            0..,
-        ) |instance, index| if (instance.request_ready and
+        for (self.instances, 0..) |instance, index| if (instance.request_ready and
             instance.phase == .awaiting_player) return index;
         return null;
     }
@@ -113,11 +110,7 @@ pub const World = struct {
         const layout: contacts.Layout = .{};
         for (self.instances, definitions, 0..) |*instance, definition, index| {
             if (instance.phase == .finished) continue;
-            const touching = if (definition.contact) |body| try layout.overlaps(
-                map,
-                body,
-                player,
-            ) else true;
+            const touching = if (definition.contact) |body| try layout.overlaps(map, body, player) else true;
             if (instance.ready and
                 definition.accepts_signals or
                 definition.wake_on_contact and

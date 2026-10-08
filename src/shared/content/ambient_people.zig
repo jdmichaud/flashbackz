@@ -146,13 +146,7 @@ fn validate(group: rules.Group) bool {
             row.next != target or
             row.dy != 0 or
             row.flags != 0 or
-            row.conditions[0].code != (if (random) @as(
-                u8,
-                97,
-            ) else if (sleep) @as(
-                u8,
-                77,
-            ) else 0) or row.conditions[1].code != 0 or row.effect.code != (if (sleep) @as(
+            row.conditions[0].code != (if (random) @as(u8, 97) else if (sleep) @as(u8, 77) else 0) or row.conditions[1].code != 0 or row.effect.code != (if (sleep) @as(
             u8,
             67,
         ) else 0)) return false;
@@ -202,24 +196,8 @@ pub fn load(
             break;
         };
         const idle_rows = if (style == 0) [_]usize{ 26, 31, 35 } else [_]usize{ 46, 51, 55 };
-        const starts = if (style == 0) [_]usize{
-            40,
-            44,
-            43,
-            39,
-            45,
-            41,
-            42,
-        } else [_]usize{ 60, 65, 66, 59, 64, 63, 62 };
-        const choices_rows = if (style == 0) [_]usize{
-            26,
-            27,
-            28,
-            31,
-            32,
-            35,
-            36,
-        } else [_]usize{ 46, 47, 48, 51, 52, 55, 56 };
+        const starts = if (style == 0) [_]usize{ 40, 44, 43, 39, 45, 41, 42 } else [_]usize{ 60, 65, 66, 59, 64, 63, 62 };
+        const choices_rows = if (style == 0) [_]usize{ 26, 27, 28, 31, 32, 35, 36 } else [_]usize{ 46, 47, 48, 51, 52, 55, 56 };
         const key = (@as(u32, record.rule_group) << 1) | @as(u32, @intCast(style));
         const profile_index = cached.get(key) orelse create: {
             var profile: runtime.Profile = undefined;
@@ -310,17 +288,8 @@ pub fn load(
             break :create result;
         };
         const initial: runtime.Activity = initial: {
-            for (
-                idle_rows,
-                0..,
-            ) |row, i| if (group.at(row).source == record.initial_state) break :initial .{ .idle = @fromBackingInt(@as(
-                u2,
-                @intCast(i),
-            )) };
-            for (
-                starts,
-                0..,
-            ) |row, i| if (group.at(row).source == record.initial_state) break :initial .{ .gesture = .{ .index = i } };
+            for (idle_rows, 0..) |row, i| if (group.at(row).source == record.initial_state) break :initial .{ .idle = @fromBackingInt(@as(u2, @intCast(i))) };
+            for (starts, 0..) |row, i| if (group.at(row).source == record.initial_state) break :initial .{ .gesture = .{ .index = i } };
             if (style == 1 and
                 record.initial_state == group.at(67).source) break :initial .{ .gesture = .{
                 .index = 2,

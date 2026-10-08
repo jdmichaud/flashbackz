@@ -112,11 +112,7 @@ pub const State = struct {
             intent.direction != pose.facing;
         const neutral = !intent.action and intent.direction == null and intent.vertical == null;
         switch (self.phase) {
-            .running_approach => self.phase = if (try environment.at(
-                pose.*,
-                .torso,
-                3,
-            )) .running_brace else .running_reach,
+            .running_approach => self.phase = if (try environment.at(pose.*, .torso, 3)) .running_brace else .running_reach,
             .running_reach => if (up) self.climb(pose, clips.extended_depth) else {
                 self.phase = .settling_grip;
             },
@@ -135,30 +131,15 @@ pub const State = struct {
             .hanging, .reaching => {
                 const extended = self.phase == .reaching;
                 const depth = if (extended) clips.extended_depth else clips.grip_depth;
-                if (up) self.climb(pose, depth) else if (down and !try environment.at(
-                    pose.*,
-                    .support,
-                    -1,
-                )) {
+                if (up) self.climb(pose, depth) else if (down and !try environment.at(pose.*, .support, -1)) {
                     pose.position.y +%= clips.grip_depth - depth;
                     self.phase = .tumbling_release;
                 } else if (backward) {
                     pose.position.y +%= clips.grip_depth - depth;
                     self.phase = .turning_release;
-                } else if (down or neutral or (!extended and !intent.action)) self.release(
-                    pose,
-                    clips,
-                    depth,
-                ) else if (extended) self.phase = .settling_grip;
+                } else if (down or neutral or (!extended and !intent.action)) self.release(pose, clips, depth) else if (extended) self.phase = .settling_grip;
             },
-            .settling_grip => if (up) self.climb(
-                pose,
-                clips.grip_depth,
-            ) else if (neutral) self.release(
-                pose,
-                clips,
-                clips.grip_depth,
-            ) else {
+            .settling_grip => if (up) self.climb(pose, clips.grip_depth) else if (neutral) self.release(pose, clips, clips.grip_depth) else {
                 self.phase = .hanging;
             },
             .climbing => if (weapon_desired) return .armed_draw else {
@@ -166,18 +147,7 @@ pub const State = struct {
             },
             .standing_up => return .standing,
             .releasing => {
-                if (!try environment.at(
-                    pose.*,
-                    .support,
-                    0,
-                ) or (try environment.at(pose.*, .torso, 0) and !try environment.at(
-                    pose.*,
-                    .support,
-                    -1,
-                ))) self.fall(
-                    pose,
-                    clips.falling_entry_down,
-                ) else if (down and try environment.ledge(pose.*, .support, 0, .behind)) {
+                if (!try environment.at(pose.*, .support, 0) or (try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .support, -1))) self.fall(pose, clips.falling_entry_down) else if (down and try environment.ledge(pose.*, .support, 0, .behind)) {
                     self.phase = .bracing;
                 } else return .upright_landing;
             },
@@ -185,38 +155,16 @@ pub const State = struct {
                 if (intent.action and try environment.ledge(pose.*, .support, 1, .behind)) {
                     pose.position.y +%= clips.drop_catch_down;
                     self.phase = .catching;
-                } else if (!try environment.at(
-                    pose.*,
-                    .support,
-                    0,
-                ) or (try environment.at(pose.*, .torso, 0) and !try environment.at(
-                    pose.*,
-                    .support,
-                    -1,
-                ))) {
+                } else if (!try environment.at(pose.*, .support, 0) or (try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .support, -1))) {
                     pose.position.y +%= clips.long_fall_down;
                     return .long_fall;
-                } else if ((try environment.at(pose.*, .torso, 0) and !try environment.at(
-                    pose.*,
-                    .torso,
-                    -1,
-                )) or !try environment.at(
-                    pose.*,
-                    .support,
-                    1,
-                )) return .upright_landing else return .low_recovery;
+                } else if ((try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .torso, -1)) or !try environment.at(pose.*, .support, 1)) return .upright_landing else return .low_recovery;
             },
             .turning_release => {
-                const blocked = try environment.at(pose.*, .torso, 0) and !try environment.at(
-                    pose.*,
-                    .support,
-                    -1,
-                );
-                const supported = try environment.at(
-                    pose.*,
-                    .support,
-                    0,
-                ) and try environment.at(pose.*, .support, 1);
+                const blocked = try environment.at(pose.*, .torso, 0) and
+                    !try environment.at(pose.*, .support, -1);
+                const supported = try environment.at(pose.*, .support, 0) and
+                    try environment.at(pose.*, .support, 1);
                 const catches = if (!blocked and
                     !supported and
                     intent.action) try environment.ledge(
@@ -226,10 +174,7 @@ pub const State = struct {
                     .ahead,
                 ) else false;
                 reverse(pose);
-                if (blocked) self.fall(
-                    pose,
-                    clips.falling_entry_down,
-                ) else if (supported) return .upright_landing else if (catches) {
+                if (blocked) self.fall(pose, clips.falling_entry_down) else if (supported) return .upright_landing else if (catches) {
                     pose.position.y +%= clips.drop_catch_down;
                     self.phase = .catching;
                 } else self.fall(pose, clips.falling_entry_down);
@@ -238,10 +183,7 @@ pub const State = struct {
                 if (intent.action and try environment.ledge(pose.*, .head, 1, .behind)) {
                     pose.position.y -%= clips.tumble_catch_up;
                     self.phase = .catching;
-                } else if (!try environment.at(pose.*, .head, 0)) self.fall(
-                    pose,
-                    clips.tumble_drop_down,
-                ) else return .waiting;
+                } else if (!try environment.at(pose.*, .head, 0)) self.fall(pose, clips.tumble_drop_down) else return .waiting;
             },
             .bracing => self.phase = .braced_lowering,
         }

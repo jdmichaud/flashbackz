@@ -108,12 +108,7 @@ pub const World = struct {
                 .width = definition.width,
             };
             if (actor.hidden or actor.removed) continue;
-            const near = try activation.around(
-                map,
-                player.room,
-                actor.room,
-                actor.pose.position.y,
-            );
+            const near = try activation.around(map, player.room, actor.room, actor.pose.position.y);
             if (definition.wake_nearby and near.wake) actor.active = true;
             if (try layout.overlaps(map, player, actor.contact)) self.candidate = index;
         }
@@ -147,12 +142,7 @@ pub const World = struct {
             &actor.pose,
         );
         if (actor.playback.exhausted(clip)) {
-            const near = try activation.around(
-                map,
-                player.room,
-                actor.room,
-                actor.pose.position.y,
-            );
+            const near = try activation.around(map, player.room, actor.room, actor.pose.position.y);
             var output: ?Circuit = null;
             if (actor.hidden) {
                 if (actor.ready) actor.hidden = false else actor.active = false;

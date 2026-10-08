@@ -82,11 +82,7 @@ pub fn load(
             if (plain(condition, 15, 0)) {
                 const bounce = try branches(group, condition.target);
                 const settle = bounce.at(bounce.count - 1);
-                if (!plain(
-                    settle,
-                    0,
-                    0,
-                ) or
+                if (!plain(settle, 0, 0) or
                     settle.dy != 0 or
                     settle.target != ground or
                     bounce.count > 2) return error.UnsupportedThrowRebound;
@@ -115,45 +111,33 @@ pub fn load(
         current = fallback.target;
     }
     const dropping = try branches(group, drop_start orelse return error.MissingThrowDrop);
-    if (dropping.count != 2 or !plain(
-        dropping.at(0),
-        15,
-        0,
-    ) or !plain(dropping.at(1), 0, 0)) return error.UnsupportedThrowDrop;
+    if (dropping.count != 2 or
+        !plain(dropping.at(0), 15, 0) or
+        !plain(dropping.at(1), 0, 0)) return error.UnsupportedThrowDrop;
     const continuing = dropping.at(1).target;
     const rebound = dropping.at(0).target;
     const fall_state = falling orelse return error.MissingThrowFall;
     const fall = try branches(group, fall_state);
-    if (fall.count != 2 or !plain(
-        fall.at(0),
-        27,
-        0,
-    ) or fall.at(0).target != fall_state or fall.at(0).dy != fall_down or !plain(
-        fall.at(1),
-        0,
-        0,
-    )) return error.UnsupportedThrowFall;
+    if (fall.count != 2 or
+        !plain(fall.at(0), 27, 0) or
+        fall.at(0).target != fall_state or
+        fall.at(0).dy != fall_down or
+        !plain(fall.at(1), 0, 0)) return error.UnsupportedThrowFall;
     const landing = fall.at(1).target;
     const land = try branches(group, landing);
-    if (land.count != 1 or !plain(
-        land.at(0),
-        0,
-        0,
-    ) or land.at(0).target != ground) return error.UnsupportedThrowLanding;
+    if (land.count != 1 or
+        !plain(land.at(0), 0, 0) or
+        land.at(0).target != ground) return error.UnsupportedThrowLanding;
     for (
         [_]u16{ continuing, rebound, edge_drop orelse return error.MissingThrowEdge },
         0..,
     ) |state, i| {
         const end = try branches(group, state);
-        if (end.count != 2 or !plain(
-            end.at(0),
-            27,
-            0,
-        ) or end.at(0).target != fall_state or end.at(0).dy != fall_down or !plain(
-            end.at(1),
-            0,
-            0,
-        ) or
+        if (end.count != 2 or
+            !plain(end.at(0), 27, 0) or
+            end.at(0).target != fall_state or
+            end.at(0).dy != fall_down or
+            !plain(end.at(1), 0, 0) or
             end.at(1).target != (if (i == 2) ground else landing)) return error.UnsupportedThrowDescent;
     }
     // Resolve before transferring the arc allocation so failures retain simple ownership.

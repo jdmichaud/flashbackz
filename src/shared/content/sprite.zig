@@ -23,11 +23,8 @@ pub fn fromArchive(
     offsets: []const u8,
     index: u16,
 ) !Frame {
-    if (sprites.len < 12 or !std.mem.eql(
-        u8,
-        sprites[0..3],
-        "SPP",
-    )) return error.InvalidSpriteArchive;
+    if (sprites.len < 12 or
+        !std.mem.eql(u8, sprites[0..3], "SPP")) return error.InvalidSpriteArchive;
     if (offsets.len < 2 or
         (offsets.len - 2) % 6 != 0 or
         (offsets.len - 2) / 6 > 4096) return error.InvalidSpriteDirectory;

@@ -22,10 +22,7 @@ pub fn recognize(group: rules.Group) ?u16 {
     if (group.count() != 2) return null;
     const sleep = group.at(0);
     const idle = group.at(1);
-    for ([_]rules.Rule{
-        sleep,
-        idle,
-    }) |r| if (r.dx != 0 or
+    for ([_]rules.Rule{ sleep, idle }) |r| if (r.dx != 0 or
         r.dy != 0 or
         r.flags != 0 or
         r.next != 0 or
@@ -65,10 +62,7 @@ pub fn load(
         if (record.kind != 9 or
             record.room >= rooms.len or
             record.minimum_difficulty > @backingInt(difficulty)) continue;
-        const state = recognize(try rules.group(
-            rule_bytes,
-            record.rule_group,
-        )) orelse return error.UnsupportedEnergyStationFamily;
+        const state = recognize(try rules.group(rule_bytes, record.rule_group)) orelse return error.UnsupportedEnergyStationFamily;
         if (record.initial_state != state) return error.UnsupportedEnergyStationStart;
         var source = try animation.decode(allocator, animations, state);
         defer source.deinit();

@@ -130,11 +130,7 @@ pub const State = struct {
             intent.direction != pose.facing;
         const up = direction_allowed and intent.vertical == .up;
         const down = direction_allowed and intent.vertical == .down;
-        const turn_obstructed = if (backward) try environment.at(
-            pose.*,
-            .torso,
-            0,
-        ) and !try environment.at(pose.*, .torso, 1) else false;
+        const turn_obstructed = if (backward) try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .torso, 1) else false;
         switch (self.phase) {
             .firing => self.phase = .aiming,
             .firing_crouched => self.phase = .aiming_crouched,
@@ -144,11 +140,9 @@ pub const State = struct {
             },
             .clearing_draw => return .unarmed_standing,
             .draw_start => {
-                if (try environment.at(
-                    pose.*,
-                    .torso,
-                    1,
-                ) and try environment.at(pose.*, .torso, 0)) {
+                if (try environment.at(pose.*, .torso, 1) and
+                    try environment.at(pose.*, .torso, 0))
+                {
                     self.phase = .clearing_draw;
                     return .continued;
                 }
@@ -211,11 +205,11 @@ pub const State = struct {
                 }
             },
             .walking => {
-                if (!try environment.at(
-                    pose.*,
-                    .support,
-                    1,
-                ) or !forward or intent.action or try environment.at(pose.*, .torso, 1)) {
+                if (!try environment.at(pose.*, .support, 1) or
+                    !forward or
+                    intent.action or
+                    try environment.at(pose.*, .torso, 1))
+                {
                     self.phase = .standing;
                 }
             },
@@ -243,11 +237,9 @@ pub const State = struct {
                     self.phase = .rising;
                 } else if (forward and !intent.action) {
                     if (!try environment.at(pose.*, .support, 1)) return .roll_drop;
-                    if (try environment.rollPassage(pose.*, 1) or !try environment.at(
-                        pose.*,
-                        .torso,
-                        1,
-                    )) {
+                    if (try environment.rollPassage(pose.*, 1) or
+                        !try environment.at(pose.*, .torso, 1))
+                    {
                         rolling.shiftForward(pose, 16);
                         return .roll;
                     }

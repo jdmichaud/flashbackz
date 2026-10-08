@@ -90,10 +90,9 @@ pub fn observe(
     objects: []const contacts.Footprint,
 ) !Awareness {
     var result: Awareness = .{};
-    if (observer.room == player.room and @divTrunc(
-        observer.pose.position.y,
-        72,
-    ) == @divTrunc(player.position.y -% 8, 72)) {
+    if (observer.room == player.room and
+        @divTrunc(observer.pose.position.y, 72) == @divTrunc(player.position.y -% 8, 72))
+    {
         var distance = player.position.x -% observer.pose.position.x;
         if (observer.pose.facing == .left) distance = -%distance;
         // The unlimited rear query includes equal X only for a left-facing observer.
@@ -143,10 +142,7 @@ pub fn scanObjects(
     const band = @divTrunc(observer.pose.position.y, 72);
     if (band < 0 or band >= bands or cells_per_room <= 0) return null;
     var terrain_room = observer.room;
-    var contact_index = slot * cells_per_room + band * columns + column + @as(
-        i16,
-        if (left) 0 else 1,
-    );
+    var contact_index = slot * cells_per_room + band * columns + column + @as(i16, if (left) 0 else 1);
     const layout: contacts.Layout = .{};
     for (1..17) |step| {
         column += if (left) @as(i16, -1) else 1;
@@ -178,10 +174,9 @@ pub fn scanObjects(
                         .y = object.position.y,
                     },
                 ) orelse continue;
-                if (cell.room == room and cell.column == @mod(
-                    local,
-                    columns,
-                ) and cell.row == @divTrunc(local, columns)) return @intCast(step);
+                if (cell.room == room and
+                    cell.column == @mod(local, columns) and
+                    cell.row == @divTrunc(local, columns)) return @intCast(step);
             };
         }
         if (try map.blocked(terrain_room, column, band * 2 + 1)) return null;

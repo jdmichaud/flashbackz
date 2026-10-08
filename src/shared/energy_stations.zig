@@ -61,11 +61,7 @@ pub const World = struct {
     ) !void {
         self.candidate = null;
         const layout: contacts.Layout = .{};
-        for (definitions, 0..) |definition, index| if (try layout.overlaps(
-            map,
-            player,
-            definition.footprint,
-        )) {
+        for (definitions, 0..) |definition, index| if (try layout.overlaps(map, player, definition.footprint)) {
             self.candidate = index;
         };
     }

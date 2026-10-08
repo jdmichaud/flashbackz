@@ -146,10 +146,7 @@ fn seatedGuest(group: rules.Group) ?Spec {
             row.next != target or
             row.dy != 0 or
             row.flags != 0 or
-            !codes(
-                row,
-                operations,
-            )) return null;
+            !codes(row, operations)) return null;
         const shifts = i == 8 or i == 10 or i == 19 or i == 21;
         if (row.dx != (if (shifts) group.at(8).dx else 0)) return null;
         if (row.conditions[0].code == 34 and
@@ -233,10 +230,9 @@ pub fn recognize(group: rules.Group) ?Spec {
         };
         for (sources, next, ops, 0..) |source, target, operations, i| {
             const row = group.at(i);
-            if (row.source != group.at(source).source or row.next != target or !codes(
-                row,
-                operations,
-            )) return null;
+            if (row.source != group.at(source).source or
+                row.next != target or
+                !codes(row, operations)) return null;
         }
         if (talk.conditions[0].argument != 30 or
             reply.conditions[0].argument != 30 or
@@ -273,16 +269,11 @@ pub fn recognize(group: rules.Group) ?Spec {
         const sleep = group.at(2);
         const idle = group.at(3);
         const leave = group.at(4);
-        if (!codes(
-            reveal,
-            .{ 34, 0, 87 },
-        ) or !codes(
-            talk,
-            .{ 34, 123, 36 },
-        ) or !codes(
-            sleep,
-            .{ 77, 0, 67 },
-        ) or !codes(idle, .{ 0, 0, 0 }) or !codes(leave, .{ 35, 0, 75 })) return null;
+        if (!codes(reveal, .{ 34, 0, 87 }) or
+            !codes(talk, .{ 34, 123, 36 }) or
+            !codes(sleep, .{ 77, 0, 67 }) or
+            !codes(idle, .{ 0, 0, 0 }) or
+            !codes(leave, .{ 35, 0, 75 })) return null;
         if (reveal.source != reveal.target or
             talk.source != reveal.source or
             sleep.source != reveal.source or
@@ -334,13 +325,7 @@ pub fn recognize(group: rules.Group) ?Spec {
         for (operations, 0..) |ops, i| {
             const row = group.at(i);
             const state = if (i < 3) reveal.source else reveal.target;
-            if (row.source != state or row.next != (if (i == 0 or i >= 3) @as(
-                u16,
-                3,
-            ) else 0) or !codes(
-                row,
-                ops,
-            )) return null;
+            if (row.source != state or row.next != (if (i == 0 or i >= 3) @as(u16, 3) else 0) or !codes(row, ops)) return null;
         }
         if (reveal.effect.argument < 0 or
             reveal.effect.argument > 3 or
@@ -455,10 +440,9 @@ pub fn recognize(group: rules.Group) ?Spec {
         };
         for (sources, next, operations, 0..) |source, target, ops, i| {
             const r = group.at(i);
-            if (r.source != group.at(source).source or r.next != target or !codes(
-                r,
-                ops,
-            )) return null;
+            if (r.source != group.at(source).source or
+                r.next != target or
+                !codes(r, ops)) return null;
         }
         const talk = group.at(0);
         const reveal = group.at(24);
@@ -530,10 +514,9 @@ pub fn recognize(group: rules.Group) ?Spec {
         };
         for (sources, next, operations, 0..) |source, target, ops, i| {
             const r = group.at(i);
-            if (r.source != group.at(source).source or r.next != target or !codes(
-                r,
-                ops,
-            )) return null;
+            if (r.source != group.at(source).source or
+                r.next != target or
+                !codes(r, ops)) return null;
         }
         const accept = group.at(0);
         const talk = group.at(1);
@@ -543,11 +526,7 @@ pub fn recognize(group: rules.Group) ?Spec {
                 r.conditions[1].argument != accept.conditions[1].argument or
                 r.effect.argument != accept.effect.argument) return null;
         }
-        for ([_]usize{
-            1,
-            6,
-            12,
-        }) |i| if (group.at(i).conditions[0].argument != 30 or
+        for ([_]usize{ 1, 6, 12 }) |i| if (group.at(i).conditions[0].argument != 30 or
             group.at(i).effect.argument != talk.effect.argument) return null;
         if (talk.effect.argument < 0) return null;
         return .{
@@ -596,23 +575,10 @@ pub fn recognize(group: rules.Group) ?Spec {
             const random_slot: usize = if (random_first) 1 else 2;
             const chance = slot == random_slot or phase == 1 and slot == 3;
             const target: usize = if (chance) (if (phase == 1) (if (slot == 2) 9 else 0) else 4) else start;
-            const expected: [3]u8 = if (slot == 0) (if (conditional_notice) [3]u8{
-                34,
-                123,
-                0,
-            } else [3]u8{
-                34,
-                0,
-                123,
-            }) else if (slot == sleep_slot) .{
-                77,
-                0,
-                67,
-            } else if (chance) .{ 97, 0, 0 } else .{ 0, 0, 0 };
-            if (r.source != group.at(start).source or r.next != target or !codes(
-                r,
-                expected,
-            )) return null;
+            const expected: [3]u8 = if (slot == 0) (if (conditional_notice) [3]u8{ 34, 123, 0 } else [3]u8{ 34, 0, 123 }) else if (slot == sleep_slot) .{ 77, 0, 67 } else if (chance) .{ 97, 0, 0 } else .{ 0, 0, 0 };
+            if (r.source != group.at(start).source or
+                r.next != target or
+                !codes(r, expected)) return null;
         }
         if (group.at(start).conditions[0].argument != 30 or
             (if (conditional_notice) group.at(start).conditions[1].argument else group.at(start).effect.argument) != notice) return null;
@@ -622,16 +588,7 @@ pub fn recognize(group: rules.Group) ?Spec {
         const a = group.at(13);
         const b = group.at(14);
         const c = group.at(15);
-        if (!codes(
-            a,
-            .{ 34, 87, 0 },
-        ) or !codes(
-            b,
-            .{ 77, 0, 67 },
-        ) or !codes(
-            c,
-            .{ 0, 0, 0 },
-        ) or
+        if (!codes(a, .{ 34, 87, 0 }) or !codes(b, .{ 77, 0, 67 }) or !codes(c, .{ 0, 0, 0 }) or
             a.next != 0 or
             b.next != 13 or
             c.next != 13 or
@@ -693,11 +650,7 @@ pub const Assets = struct {
     pub fn bind(self: Assets, connections: []const routes.Connection) ![]runtime.Binding {
         var result: std.ArrayList(runtime.Binding) = .empty;
         errdefer result.deinit(self.allocator);
-        for (
-            self.sources,
-            self.inputs,
-            0..,
-        ) |source, inputs, index| for (connections) |connection| if (connection.recipient == source) {
+        for (self.sources, self.inputs, 0..) |source, inputs, index| for (connections) |connection| if (connection.recipient == source) {
             const action: runtime.Action = if (inputs.reveal == connection.message) .reveal else if (inputs.deliver == connection.message) .deliver else continue;
             try result.append(
                 self.allocator,
@@ -755,10 +708,7 @@ pub fn load(
             record.initial_state == h.state else false;
         if (!hidden and
             record.initial_state != spec.idle[0]) return error.UnsupportedQuestContactStart;
-        const room = if (hidden) record.parameters[spec.hidden.?.parameter] else @as(
-            i16,
-            record.room,
-        );
+        const room = if (hidden) record.parameters[spec.hidden.?.parameter] else @as(i16, record.room);
         if (room < 0 or
             room >= rooms.len or
             record.contact_icon == 0) return error.InvalidQuestContactPlacement;
@@ -842,10 +792,7 @@ pub fn load(
             const purse_source = record.parameters[offer.purse_parameter];
             if (purse_source < 0 or purse_source >= table.count) return error.InvalidSellerPurse;
             const wallet = try table.record(@intCast(purse_source));
-            const signal = credit_wallet.signal(try rules.group(
-                bytes,
-                wallet.rule_group,
-            )) orelse return error.UnsupportedSellerPurse;
+            const signal = credit_wallet.signal(try rules.group(bytes, wallet.rule_group)) orelse return error.UnsupportedSellerPurse;
             if (signal != offer.signal or
                 wallet.parameters[0] != record.kind) return error.UnsupportedSellerPayment;
             const purse: equipment.ItemHandle = for (supplies, 0..) |item, i| {
@@ -882,10 +829,7 @@ pub fn load(
             allocator,
             .{
                 .speech = speech,
-                .reply_notice = if (spec.reply_notice) |id| @fromBackingInt(@as(
-                    u16,
-                    @intCast(id),
-                )) else null,
+                .reply_notice = if (spec.reply_notice) |id| @fromBackingInt(@as(u16, @intCast(id))) else null,
                 .after_chances = spec.after_chances,
                 .release_unless_chance = spec.release_unless_chance,
                 .talking_forward = spec.talking_forward,

@@ -82,10 +82,7 @@ fn discover(group: rules.Group) !?Sources {
     put(&sources, .exploding, (try find(group, source(sources, .overloading), 0, null)).target);
     const removal = try find(group, source(sources, .exploding), 75, null);
     if (removal.target != removal.source) return error.UnsupportedRobotRemoval;
-    for (
-        sources,
-        0..,
-    ) |state, i| for (sources[0..i]) |previous| if (state == previous) return error.AmbiguousRobotMotion;
+    for (sources, 0..) |state, i| for (sources[0..i]) |previous| if (state == previous) return error.AmbiguousRobotMotion;
     return sources;
 }
 fn profile(
@@ -102,17 +99,10 @@ fn profile(
     const open_step = (try find(group, source(sources, .open_walk_a), 0, null)).dx;
     for (0..group.count()) |i| {
         const rule = group.at(i);
-        const expected_dx: i8 = if (rule.source == source(
-            sources,
-            .closed_walk,
-        )) closed_step else if (rule.source == source(
-            sources,
-            .open_walk_a,
-        ) or rule.source == walking) open_step else 0;
-        if (rule.dx != expected_dx or rule.dy != 0 or rule.flags & ~@as(
-            u8,
-            1,
-        ) != 0) return error.UnsupportedRobotMotionEntry;
+        const expected_dx: i8 = if (rule.source == source(sources, .closed_walk)) closed_step else if (rule.source == source(sources, .open_walk_a) or rule.source == walking) open_step else 0;
+        if (rule.dx != expected_dx or
+            rule.dy != 0 or
+            rule.flags & ~@as(u8, 1) != 0) return error.UnsupportedRobotMotionEntry;
     }
     const wall = try find(group, closed, 14, null);
     const floor = try find(group, closed, 17, null);

@@ -55,11 +55,7 @@ pub const Definition = struct {
     wake_nearby: bool,
     accepts_signals: bool,
 };
-pub const Payment = struct {
-    item: equipment.ItemHandle,
-    contact: usize,
-    next_step: bool,
-};
+pub const Payment = struct { item: equipment.ItemHandle, contact: usize, next_step: bool };
 pub const Binding = struct { circuit: Circuit, target: usize, action: Action, next_step: bool };
 pub const Instance = struct {
     pose: motion.Pose,
@@ -150,12 +146,7 @@ pub const World = struct {
             instance.payment = instance.pending_payment;
             instance.pending_payment = false;
             if (instance.body(definition)) |body| {
-                const near = try activation.around(
-                    map,
-                    player.room,
-                    body.room,
-                    body.position.y,
-                );
+                const near = try activation.around(map, player.room, body.room, body.position.y);
                 if (definition.wake_nearby and near.wake) instance.active = true;
                 if (try layout.overlaps(map, player, body)) self.candidate = index;
             }
@@ -342,10 +333,7 @@ pub const World = struct {
                     instance.stage = .removed;
                     instance.active = false;
                 } else if (receiving) {
-                    if (definition.sale) |sale| try items.debit(
-                        sale.purse,
-                        sale.debit,
-                    ) else instance.stage = .departing;
+                    if (definition.sale) |sale| try items.debit(sale.purse, sale.debit) else instance.stage = .departing;
                     self.emit(bindings, definition.outputs);
                 } else if (speaking) {
                     const adjustment = definition.talking_forward[@backingInt(instance.idle_pose)];
@@ -373,11 +361,7 @@ pub const World = struct {
                     !(definition.finish_gestures_offscreen and instance.idle_pose != .resting))
                 {
                     const before = instance.idle_pose;
-                    if (definition.offscreen_choice_first[@backingInt(before)]) choosePose(
-                        instance,
-                        definition,
-                        random,
-                    );
+                    if (definition.offscreen_choice_first[@backingInt(before)]) choosePose(instance, definition, random);
                     if (instance.idle_pose == before and
                         !(definition.wake_nearby and near.near)) instance.active = false;
                 } else choosePose(instance, definition, random);

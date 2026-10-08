@@ -33,10 +33,8 @@ pub fn fromArchive(
 }
 
 pub fn decode(allocator: std.mem.Allocator, record: []const u8, bank: []const u8) !sprite.Frame {
-    if (record.len < 6 or record.len != 6 + @as(
-        usize,
-        record[5],
-    ) * 4) return error.TruncatedObjectArt;
+    if (record.len < 6 or
+        record.len != 6 + @as(usize, record[5]) * 4) return error.TruncatedObjectArt;
     if (record[5] == 0) return error.EmptyObjectArt;
     var width: u16 = 0;
     var height: u16 = 0;

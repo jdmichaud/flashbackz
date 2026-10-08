@@ -906,10 +906,7 @@ fn assembleLevel(
         for (0..placement_table.count) |i| if ((try placement_table.record(@intCast(i))).initial_state == 1143) break :forest true;
         break :forest false;
     };
-    const forest_calls = try allocator.alloc(
-        ambience.Call,
-        if (forest_enabled) 5 else 0,
-    );
+    const forest_calls = try allocator.alloc(ambience.Call, if (forest_enabled) 5 else 0);
     errdefer allocator.free(forest_calls);
     var forest_quiet_steps: u16 = 0;
     if (forest_enabled) {
@@ -1035,10 +1032,7 @@ fn assembleLevel(
     placement_table.register(@intCast(gun.parameters[0]), .weapon_effects);
     placement_table.register(@intCast(shot.parameters[3]), .casings);
     if (forest_enabled) for (0..placement_table.count) |i| {
-        if ((try placement_table.record(@intCast(i))).initial_state == 1143) placement_table.register(
-            @intCast(i),
-            .ambience,
-        );
+        if ((try placement_table.record(@intCast(i))).initial_state == 1143) placement_table.register(@intCast(i), .ambience);
     };
     const starting = try starting_equipment.recover(
         allocator,
@@ -1744,12 +1738,7 @@ const RoomSource = union(enum) {
         return .{ .compact = .{
             .rooms = rooms,
             .tiles = tiles,
-            .background = if (files.tile_bias != 0) try readLevel(
-                source,
-                files.rooms,
-                "SGD",
-                1024 * 1024,
-            ) else null,
+            .background = if (files.tile_bias != 0) try readLevel(source, files.rooms, "SGD", 1024 * 1024) else null,
             .tile_bias = files.tile_bias,
         } };
     }

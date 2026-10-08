@@ -65,29 +65,14 @@ const Scale = struct {
         const origin = self.origin orelse input;
         self.origin = origin;
         return .{
-            .x = @truncate(@as(
-                i32,
-                self.pivot.x,
-            ) - self.rounded(@as(
-                i32,
-                self.pivot.x,
-            ) - origin.x) + self.rounded(@as(i32, input.x) - origin.x)),
-            .y = @truncate(@as(
-                i32,
-                self.pivot.y,
-            ) - self.rounded(@as(
-                i32,
-                self.pivot.y,
-            ) - origin.y) + self.rounded(@as(i32, input.y) - origin.y)),
+            .x = @truncate(@as(i32, self.pivot.x) - self.rounded(@as(i32, self.pivot.x) - origin.x) + self.rounded(@as(i32, input.x) - origin.x)),
+            .y = @truncate(@as(i32, self.pivot.y) - self.rounded(@as(i32, self.pivot.y) - origin.y) + self.rounded(@as(i32, input.y) - origin.y)),
         };
     }
 };
 
 fn mapPoint(scale: *?Scale, rotation: ?transforms.Projection, point: shapes.Point) shapes.Point {
-    const projected = if (rotation) |projection| projection.point(
-        point,
-        scale.*.?.pivot,
-    ) else point;
+    const projected = if (rotation) |projection| projection.point(point, scale.*.?.pivot) else point;
     return if (scale.*) |*transform| transform.point(projected) else projected;
 }
 
@@ -119,10 +104,7 @@ const Builder = struct {
             self.captions = &.{};
             self.caption_band = false;
         }
-        if (self.background_mode == 0) try self.working.appendSlice(
-            self.allocator,
-            self.saved_background,
-        );
+        if (self.background_mode == 0) try self.working.appendSlice(self.allocator, self.saved_background);
     }
     fn present(self: *Builder, ticks: u32) !void {
         if (self.frames.items.len >= 10000) return error.CinematicTooLarge;
@@ -299,10 +281,7 @@ const Builder = struct {
                     vertex.x +%= placement.x;
                     vertex.y +%= placement.y;
                 }
-                drawing.geometry = .{ .polygon = try self.allocator.dupe(
-                    shapes.Point,
-                    points[0..used],
-                ) };
+                drawing.geometry = .{ .polygon = try self.allocator.dupe(shapes.Point, points[0..used]) };
                 self.vertices += used;
             }
             const tintable = drawing.geometry == .ellipse or drawing.geometry.polygon.len >= 3;
@@ -345,10 +324,7 @@ fn compileFrom(
     if (start > commands.len) return error.TruncatedCinematic;
     var reader: Reader = .{
         .bytes = commands,
-        .at = start + if (entry == 0) @as(usize, 0) else try wordAt(
-            commands,
-            2 + @as(usize, entry) * 2,
-        ),
+        .at = start + if (entry == 0) @as(usize, 0) else try wordAt(commands, 2 + @as(usize, entry) * 2),
     };
     var builder: Builder = .{ .allocator = content, .geometry = polygons, .source = source };
     try builder.frames.append(
@@ -421,15 +397,12 @@ fn compileFrom(
                 if (try reader.byte() != 255 or
                     fallback < 0) return error.UnsupportedCinematicInteraction;
                 const idle_target = start + @as(usize, @intCast(fallback));
-                if (destination >= 0 and start + @as(
-                    usize,
-                    @intCast(destination),
-                ) <= command_offset and idle_target > command_offset) {
+                if (destination >= 0 and
+                    start + @as(usize, @intCast(destination)) <= command_offset and
+                    idle_target > command_offset)
+                {
                     reader.at = idle_target; // Release loop; the following page awaits confirmation.
-                } else if (idle_target <= command_offset and (destination < 0 or start + @as(
-                    usize,
-                    @intCast(destination),
-                ) > command_offset)) {
+                } else if (idle_target <= command_offset and (destination < 0 or start + @as(usize, @intCast(destination)) > command_offset)) {
                     const first_output = command_frames.get(idle_target) orelse return error.UnsupportedCinematicInteraction;
                     // A branch-only self-loop waits on the picture already presented.
                     const loop_start = @min(first_output, builder.frames.items.len - 1);

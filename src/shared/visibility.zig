@@ -105,19 +105,11 @@ pub const World = struct {
         self.group_count = 0;
         for (self.entries, self.definitions) |*entry, definition| if (definition.wake_nearby) {
             if (entry.observation.body) |body| {
-                const near = try activation.around(
-                    map,
-                    view_room,
-                    body.room,
-                    body.position.y,
-                );
+                const near = try activation.around(map, view_room, body.room, body.position.y);
                 if (near.wake) entry.observation.active = true;
             }
         };
-        for (self.order, 0..) |*entity, index| entity.* = @fromBackingInt(@as(
-            u16,
-            @intCast(index),
-        ));
+        for (self.order, 0..) |*entity, index| entity.* = @fromBackingInt(@as(u16, @intCast(index)));
         const Context = struct {
             world: *const World,
             room: geometry.RoomId,
@@ -183,10 +175,9 @@ pub const World = struct {
                 const room = rooms[@intCast(@divTrunc(index, 48))] orelse return null;
                 const local = @mod(index, 48);
                 for (self.groups[0..self.group_count], 0..) |group, i| {
-                    if (group.cell.room == room and group.cell.row == @divTrunc(
-                        local,
-                        16,
-                    ) and group.cell.column == @mod(local, 16)) break :blk i;
+                    if (group.cell.room == room and
+                        group.cell.row == @divTrunc(local, 16) and
+                        group.cell.column == @mod(local, 16)) break :blk i;
                 }
                 return null;
             },
@@ -248,10 +239,7 @@ pub const World = struct {
         const band = @divTrunc(pose.position.y, 72);
         if (band < 0 or band > 2) return null;
         const left = (pose.facing == .left) != behind;
-        var cursor: Cursor = .{ .spatial = sector * 48 + @as(i32, band) * 16 + column + @as(
-            i32,
-            if (left) 0 else 1,
-        ) };
+        var cursor: Cursor = .{ .spatial = sector * 48 + @as(i32, band) * 16 + column + @as(i32, if (left) 0 else 1) };
         var last_cell = cursor;
         var terrain_room = observer_room;
         for (1..@as(usize, @min(distance, 16)) + 1) |step| {

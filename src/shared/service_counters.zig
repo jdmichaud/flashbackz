@@ -139,10 +139,8 @@ pub const World = struct {
             if ((instance.ready or speaking) and definition.accepts_signals) instance.active = true;
             if (!instance.active) continue;
             var clip = definition.clips[@backingInt(instance.phase)];
-            if (speaking or instance.ready) instance.playback.completeDisplacement(
-                clip,
-                &instance.pose,
-            );
+            if (speaking or
+                instance.ready) instance.playback.completeDisplacement(clip, &instance.pose);
             if (instance.playback.exhausted(clip)) {
                 if (instance.ready or speaking) {
                     if (instance.ready) {

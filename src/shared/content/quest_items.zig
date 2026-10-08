@@ -28,42 +28,30 @@ pub fn teleporter(group: rules.Group) ?Teleporter {
             r.flags != 0 or
             r.source != (if (i < 4) a.source else carried) or
             r.target != (if (i == 0 or i >= 4) carried else a.source) or
-            r.next != (if (i == 0 or i >= 4) @as(
-                u16,
-                4,
-            ) else 0)) return null;
+            r.next != (if (i == 0 or i >= 4) @as(u16, 4) else 0)) return null;
     }
-    if (!op(
-        a.conditions[0],
-        34,
-        30,
-    ) or !op(a.conditions[1], 90, 16) or !op(a.effect, 48, 0)) return null;
+    if (!op(a.conditions[0], 34, 30) or
+        !op(a.conditions[1], 90, 16) or
+        !op(a.effect, 48, 0)) return null;
     const b = group.at(1);
     const c = group.at(2);
     const d = group.at(3);
     const e = group.at(4);
     const f = group.at(5);
     const g = group.at(6);
-    if (!op(
-        b.conditions[0],
-        115,
-        8,
-    ) or b.conditions[1].code != 67 or b.effect.code != 0) return null;
-    if (c.conditions[0].code != 0 or c.conditions[1].code != 0 or c.effect.code != 0 or !op(
-        d.conditions[0],
-        77,
-        0,
-    ) or d.conditions[1].code != 0 or d.effect.code != 67) return null;
-    if (e.conditions[0].code != 34 or !op(
-        e.conditions[1],
-        90,
-        21,
-    ) or !op(e.effect, 74, 0)) return null;
-    if (!op(
-        f.conditions[0],
-        34,
-        102,
-    ) or
+    if (!op(b.conditions[0], 115, 8) or
+        b.conditions[1].code != 67 or
+        b.effect.code != 0) return null;
+    if (c.conditions[0].code != 0 or
+        c.conditions[1].code != 0 or
+        c.effect.code != 0 or
+        !op(d.conditions[0], 77, 0) or
+        d.conditions[1].code != 0 or
+        d.effect.code != 67) return null;
+    if (e.conditions[0].code != 34 or
+        !op(e.conditions[1], 90, 21) or
+        !op(e.effect, 74, 0)) return null;
+    if (!op(f.conditions[0], 34, 102) or
         f.conditions[1].code != 72 or
         f.effect.code != 0 or
         g.conditions[0].code != 0 or
@@ -115,32 +103,22 @@ pub fn card(group: rules.Group) ?Card {
         b.conditions[0].code != 0 or
         b.conditions[1].code != 0 or
         b.effect.code != 67) return null;
-    if (!op(
-        c.conditions[0],
-        34,
-        30,
-    ) or !op(c.conditions[1], 90, 18) or !op(c.effect, 48, 0)) return null;
-    if (!op(
-        d.conditions[0],
-        34,
-        102,
-    ) or d.conditions[1].code != 72 or d.effect.code != 0) return null;
-    if (!op(
-        e.conditions[0],
-        80,
-        7,
-    ) or
+    if (!op(c.conditions[0], 34, 30) or
+        !op(c.conditions[1], 90, 18) or
+        !op(c.effect, 48, 0)) return null;
+    if (!op(d.conditions[0], 34, 102) or
+        d.conditions[1].code != 72 or
+        d.effect.code != 0) return null;
+    if (!op(e.conditions[0], 80, 7) or
         e.conditions[1].code != 0 or
         e.effect.code != 0 or
         f.conditions[0].code != 0 or
         f.conditions[1].code != 0 or
         f.effect.code != 67) return null;
     // The use scene is explicitly unassigned in the supplied English movie directory.
-    if (!op(
-        g.conditions[0],
-        90,
-        19,
-    ) or g.conditions[1].code != 0 or g.effect.code != 67) return null;
+    if (!op(g.conditions[0], 90, 19) or
+        g.conditions[1].code != 0 or
+        g.effect.code != 67) return null;
     return .{
         .hidden = a.source,
         .idle = c.source,

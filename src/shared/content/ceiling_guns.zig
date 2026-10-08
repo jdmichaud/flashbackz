@@ -117,11 +117,7 @@ fn discover(group: rules.Group) !?Spec {
         const waiting_end = find(group, waiting, 63) orelse return error.MissingCeilingGunWait;
         spec.charge_parameter = try parameter(waiting_end.conditions[1]);
         if (cycle == .repeating) {
-            spec.repeat_parameter = try parameter((find(
-                group,
-                shot.target,
-                0,
-            ) orelse return error.MissingCeilingGunCooling).effect);
+            spec.repeat_parameter = try parameter((find(group, shot.target, 0) orelse return error.MissingCeilingGunCooling).effect);
         } else {
             const stop = find(group, waiting, 34) orelse return error.MissingCeilingGunStop;
             const rearm = find(group, shot.target, 34) orelse return error.MissingCeilingGunRearm;
@@ -189,10 +185,7 @@ pub fn load(
         if (record.kind != 4 or record.minimum_difficulty > @backingInt(difficulty)) continue;
         if (record.rule_group >= families.len) return error.InvalidCeilingGunGroup;
         if (families[record.rule_group] == null) {
-            const spec = try discover(try rules.group(
-                rule_bytes,
-                record.rule_group,
-            )) orelse continue;
+            const spec = try discover(try rules.group(rule_bytes, record.rule_group)) orelse continue;
             var resolved: [7]motion.Clip = undefined;
             for (spec.states, &resolved) |state, *clip| clip.* = try resolve(
                 allocator,

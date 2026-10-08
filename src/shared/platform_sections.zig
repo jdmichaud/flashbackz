@@ -19,11 +19,7 @@ pub const Definition = struct {
     palette_bank: u4,
     behind_player: bool,
 };
-pub const Binding = struct {
-    circuit: world_props.CircuitId,
-    target: usize,
-    next_step: bool,
-};
+pub const Binding = struct { circuit: world_props.CircuitId, target: usize, next_step: bool };
 pub const Instance = struct {
     pose: motion.Pose,
     playback: motion.Playback = .{},

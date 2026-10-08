@@ -103,11 +103,7 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
         const source_level = word(data, 0xfe2 + index * 4);
         if (source_level >= 7) return error.InvalidDemoLevel;
         var filename: [12]u8 = @splat(0);
-        const length = std.mem.indexOfScalar(
-            u8,
-            data[name..][0..12],
-            0,
-        ) orelse return error.InvalidDemoFilename;
+        const length = std.mem.indexOfScalar(u8, data[name..][0..12], 0) orelse return error.InvalidDemoFilename;
         @memcpy(filename[0..length], data[name..][0..length]);
         const room: i16 = @bitCast(word(data, 0xfec + index * 8));
         if (room >= 64) return error.InvalidDemoRoom;
@@ -125,11 +121,7 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
     }
     var continue_labels: [5][48]u8 = @splat(@splat(0));
     for ([_]usize{ 0x215f, 0x217d, 0x2185, 0x218e, 0x2194 }, &continue_labels) |offset, *label| {
-        const length = std.mem.indexOfScalar(
-            u8,
-            data[offset..][0..48],
-            0,
-        ) orelse return error.InvalidContinueLabel;
+        const length = std.mem.indexOfScalar(u8, data[offset..][0..48], 0) orelse return error.InvalidContinueLabel;
         @memcpy(label[0..length], data[offset..][0..length]);
     }
     var score_awards: [16]u16 = undefined;
@@ -137,11 +129,7 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
     var actor_libraries: [4]actor_art.Library = undefined;
     for (&actor_libraries, 0..) |*library, i| {
         const name = word(data, 0xe42 + i * 2);
-        const length = std.mem.indexOfScalar(
-            u8,
-            data[name..][0..12],
-            0,
-        ) orelse return error.InvalidActorLibrary;
+        const length = std.mem.indexOfScalar(u8, data[name..][0..12], 0) orelse return error.InvalidActorLibrary;
         library.name = @splat(0);
         for (
             data[name..][0..length],

@@ -42,10 +42,7 @@ pub const Clock = struct {
             cadence.units_per_tick == 0 or
             cadence.initial_gap_ticks == 0 or
             cadence.regular_gap_ticks == 0 or
-            largest_gap > (std.math.maxInt(u64) - @as(
-                u64,
-                cadence.units_per_second,
-            )) / std.time.ns_per_s) return error.InvalidCadence;
+            largest_gap > (std.math.maxInt(u64) - @as(u64, cadence.units_per_second)) / std.time.ns_per_s) return error.InvalidCadence;
         return .{ .cadence = cadence, .origin_ns = origin_ns };
     }
 
@@ -59,10 +56,7 @@ pub const Clock = struct {
 
     pub fn consume(self: *Clock) void {
         const gap = if (self.emitted == 0) self.cadence.initial_gap_ticks else self.cadence.regular_gap_ticks;
-        const numerator = @as(
-            u64,
-            gap,
-        ) * self.cadence.units_per_tick * std.time.ns_per_s + self.remainder;
+        const numerator = @as(u64, gap) * self.cadence.units_per_tick * std.time.ns_per_s + self.remainder;
         self.elapsed_ns +|= numerator / self.cadence.units_per_second;
         self.remainder = numerator % self.cadence.units_per_second;
         self.next_tick += gap;

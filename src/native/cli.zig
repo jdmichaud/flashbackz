@@ -35,18 +35,7 @@ pub const Options = struct {
     pub fn take(self: *Options, arg: []const u8, args: anytype) TakeError!bool {
         if (std.mem.eql(u8, arg, "--scene")) {
             const value = args.next() orelse return error.MissingValue;
-            self.entry = if (std.mem.eql(
-                u8,
-                value,
-                "jungle",
-            )) .jungle_development else if (std.mem.eql(
-                u8,
-                value,
-                "menu",
-            )) .menu_development else if (std.meta.stringToEnum(
-                flashbackz.content.level.Id,
-                value,
-            )) |level| .{ .level_development = level } else return error.UnknownScene;
+            self.entry = if (std.mem.eql(u8, value, "jungle")) .jungle_development else if (std.mem.eql(u8, value, "menu")) .menu_development else if (std.meta.stringToEnum(flashbackz.content.level.Id, value)) |level| .{ .level_development = level } else return error.UnknownScene;
             return true;
         }
         if (std.mem.eql(u8, arg, "--saves")) {
@@ -124,20 +113,13 @@ pub const Providers = struct {
         if (options.additional_count > options.additional_assets.len) return error.InvalidImage;
         self.content = Pack.init(allocator);
         try self.importPath(io, path);
-        for (options.additional_assets[0..options.additional_count]) |additional| try self.importPath(
-            io,
-            additional,
-        );
+        for (options.additional_assets[0..options.additional_count]) |additional| try self.importPath(io, additional);
         flashbackz.content.archive.expandAll(&self.content.?) catch |err| return mapImportError(err);
     }
 
     fn importPath(self: *Providers, io: std.Io, path: []const u8) OpenError!void {
         const allocator = self.allocator;
-        const kind: AssetKind = if (DirectoryAssetSource.open(
-            allocator,
-            io,
-            path,
-        )) |opened| directory: {
+        const kind: AssetKind = if (DirectoryAssetSource.open(allocator, io, path)) |opened| directory: {
             var directory = opened;
             defer directory.deinit();
             const source = directory.assetSource();
@@ -146,10 +128,7 @@ pub const Providers = struct {
             for (listing.names) |name| {
                 // Refuse the superseded edition before reading large movies.
                 if (platform.assetNameEql(name, "GAME_E.OVL")) return error.InvalidImage;
-                var data = source.readAll(
-                    name,
-                    Pack.limit - self.content.?.total,
-                ) catch return error.InvalidImage;
+                var data = source.readAll(name, Pack.limit - self.content.?.total) catch return error.InvalidImage;
                 defer data.deinit();
                 self.content.?.add(name, data.bytes) catch |err| return mapImportError(err);
             }
@@ -163,10 +142,7 @@ pub const Providers = struct {
                 .limited(4 * 1024 * 1024),
             ) catch return error.InvalidImage;
             defer allocator.free(image_bytes);
-            var imported = flashbackz.floppy.load(
-                allocator,
-                image_bytes,
-            ) catch |failure| return mapImportError(failure);
+            var imported = flashbackz.floppy.load(allocator, image_bytes) catch |failure| return mapImportError(failure);
             defer imported.deinit();
             self.content.?.merge(&imported) catch |failure| return mapImportError(failure);
             break :image .floppy;

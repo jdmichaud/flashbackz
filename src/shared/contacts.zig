@@ -47,10 +47,9 @@ pub const Layout = struct {
         };
         const column = @divFloor(x +% self.x_inset, self.column_pixels);
         const row = @divTrunc(y -% self.y_inset, self.tier_pixels);
-        if (column >= @divTrunc(
-            room.width,
-            self.column_pixels,
-        ) or row < 0 or row >= @divTrunc(room.height, self.tier_pixels)) return null;
+        if (column >= @divTrunc(room.width, self.column_pixels) or
+            row < 0 or
+            row >= @divTrunc(room.height, self.tier_pixels)) return null;
         // The DOS routine has an unsigned lower-bound test, so coordinates beyond one
         // leftward seam can alias unrelated contact spaces. Do not silently discard them.
         if (column < 0) return error.UnverifiedNegativeContactColumn;

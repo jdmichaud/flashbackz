@@ -31,11 +31,7 @@ pub const Assets = struct {
     pub fn bind(self: Assets, connections: []const routes.Connection) ![]runtime.Binding {
         var bindings: std.ArrayList(runtime.Binding) = .empty;
         errdefer bindings.deinit(self.allocator);
-        for (
-            self.sources,
-            self.signals,
-            0..,
-        ) |source, signal, index| for (connections) |connection| if (connection.recipient == source and
+        for (self.sources, self.signals, 0..) |source, signal, index| for (connections) |connection| if (connection.recipient == source and
             connection.message == signal)
         {
             try bindings.append(

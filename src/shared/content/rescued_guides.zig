@@ -141,20 +141,13 @@ fn recognize(group: rules.Group) ?Spec {
             r.next != target or
             r.dx != 0 or
             r.dy != 0 or
-            r.flags != @as(
-                u8,
-                if (index == 3 or index == 16) 1 else 0,
-            )) return null;
+            r.flags != @as(u8, if (index == 3 or index == 16) 1 else 0)) return null;
         for (
             [_]rules.Operation{ r.conditions[0], r.conditions[1], r.effect },
             operations,
         ) |operation, code| if (operation.code != code) return null;
     }
-    for ([_]usize{
-        11,
-        14,
-        23,
-    }) |index| if (group.at(index).conditions[0].argument != 30) return null;
+    for ([_]usize{ 11, 14, 23 }) |index| if (group.at(index).conditions[0].argument != 30) return null;
     if (group.at(4).conditions[0].argument != group.at(22).conditions[0].argument or
         group.at(11).conditions[1].argument != group.at(23).conditions[1].argument) return null;
     var states: [14]u16 = undefined;
@@ -253,10 +246,7 @@ pub fn load(
         for (0..table.count) |source| {
             const item = try table.record(@intCast(source));
             if (item.initially_active == 0 or item.parameters[0] != record.kind) continue;
-            const signal = credit_wallet.signal(try rules.group(
-                rule_bytes,
-                item.rule_group,
-            )) orelse continue;
+            const signal = credit_wallet.signal(try rules.group(rule_bytes, item.rule_group)) orelse continue;
             if (signal != spec.incoming) continue;
             for (supplies, 0..) |supply, item_index| if (supply.kind == .credits) {
                 try payments.append(

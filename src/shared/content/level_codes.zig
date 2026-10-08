@@ -4,10 +4,7 @@ const level = @import("level.zig");
 const floppy_interface = @import("floppy_interface.zig");
 const platform = @import("../platform.zig");
 const settings = @import("../settings.zig");
-pub const Destination = struct {
-    level: level.Id,
-    difficulty: settings.Difficulty,
-};
+pub const Destination = struct { level: level.Id, difficulty: settings.Difficulty };
 pub const Table = [7][3][7]u8;
 
 pub fn match(codes: Table, input: []const u8) ?Destination {

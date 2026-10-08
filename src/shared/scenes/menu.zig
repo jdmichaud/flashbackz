@@ -37,10 +37,7 @@ pub const Menu = struct {
         if (indices.len != background.pixels.len) return error.InvalidFrameLength;
         @memcpy(indices, background.pixels);
         for (artwork.labels, 0..) |label, row| {
-            try text.draw(indices, background.width, background.height, artwork.font, label, layout.left, layout.top + @as(
-                i32,
-                @intCast(row),
-            ) * layout.row_height, .{
+            try text.draw(indices, background.width, background.height, artwork.font, label, layout.left, layout.top + @as(i32, @intCast(row)) * layout.row_height, .{
                 .foreground = if (row == @backingInt(self.selected)) layout.selected_color else layout.normal_color,
                 .shadow = layout.shadow_color,
             });

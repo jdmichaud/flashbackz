@@ -27,10 +27,9 @@ pub const Font = struct {
 };
 
 pub fn decode(allocator: std.mem.Allocator, bytes: []const u8) !Font {
-    if (bytes.len == 0 or bytes.len % glyph_bytes != 0 or bytes.len / glyph_bytes > 256 - @as(
-        usize,
-        first_character,
-    ))
+    if (bytes.len == 0 or
+        bytes.len % glyph_bytes != 0 or
+        bytes.len / glyph_bytes > 256 - @as(usize, first_character))
         return error.InvalidFontLength;
     const pixels = try allocator.alloc(u8, bytes.len * 2);
     for (bytes, 0..) |value, i| {

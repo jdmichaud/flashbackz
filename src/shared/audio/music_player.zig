@@ -5,10 +5,7 @@ const score_mod = @import("score.zig");
 const opl = @import("opl.zig");
 
 pub const RegisterWrite = struct { tick: u64, register: u8, value: u8 };
-pub const Observer = struct { context: *anyopaque, write: *const fn (
-    *anyopaque,
-    RegisterWrite,
-) void };
+pub const Observer = struct { context: *anyopaque, write: *const fn (*anyopaque, RegisterWrite) void };
 const Voice = struct { part: u4, pitch: u8, channel: u8, percussion: bool };
 const Cursor = struct { event: usize = 0, origin: u64 = 0 };
 // Equal-tempered pitches measured at the original chip boundary.
@@ -65,12 +62,7 @@ pub const Player = struct {
         for (all_operators) |op| self.write(0x40 + op, 0x3f);
         for (0..9) |i| self.write(0xb0 + @as(u8, @intCast(i)), 0);
         for (0..9) |i| self.write(0xc0 + @as(u8, @intCast(i)), 0);
-        for ([_]u8{
-            0x60,
-            0x80,
-            0x20,
-            0xe0,
-        }) |base| for (all_operators) |op| self.write(base + op, 0);
+        for ([_]u8{ 0x60, 0x80, 0x20, 0xe0 }) |base| for (all_operators) |op| self.write(base + op, 0);
         self.write(1, 0x20);
         self.write(1, 0);
         for (0..9) |i| {

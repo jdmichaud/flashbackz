@@ -6,11 +6,7 @@
 const std = @import("std");
 pub extern "c" fn SDL_SetWindowTitle(window: *Window, title: [*:0]const u8) void;
 
-pub const Version = extern struct {
-    major: u8,
-    minor: u8,
-    patch: u8,
-};
+pub const Version = extern struct { major: u8, minor: u8, patch: u8 };
 
 pub const Window = opaque {};
 pub const Renderer = opaque {};
@@ -22,12 +18,7 @@ pub const Bool = c_int;
 pub const FALSE: Bool = 0;
 pub const TRUE: Bool = 1;
 
-pub const Rect = extern struct {
-    x: c_int,
-    y: c_int,
-    w: c_int,
-    h: c_int,
-};
+pub const Rect = extern struct { x: c_int, y: c_int, w: c_int, h: c_int };
 
 // --- subsystems ------------------------------------------------------------------------------
 
@@ -188,17 +179,9 @@ pub const TEXTINPUTEVENT_TEXT_SIZE = 32;
 
 pub const JoystickID = i32;
 
-pub const Keysym = extern struct {
-    scancode: c_uint,
-    sym: i32,
-    mod: u16,
-    unused: u32,
-};
+pub const Keysym = extern struct { scancode: c_uint, sym: i32, mod: u16, unused: u32 };
 
-pub const CommonEvent = extern struct {
-    type: u32,
-    timestamp: u32,
-};
+pub const CommonEvent = extern struct { type: u32, timestamp: u32 };
 
 pub const WindowEvent = extern struct {
     type: u32,

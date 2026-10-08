@@ -38,17 +38,9 @@ pub const RgbaFrame = struct {
     /// pixel. All arithmetic is checked.
     pub fn validate(f: RgbaFrame) ValidateError!void {
         if (f.width == 0 or f.height == 0) return error.InvalidFrame;
-        const row_bytes = std.math.mul(
-            usize,
-            f.width,
-            bytes_per_pixel,
-        ) catch return error.InvalidFrame;
+        const row_bytes = std.math.mul(usize, f.width, bytes_per_pixel) catch return error.InvalidFrame;
         if (f.stride < row_bytes) return error.InvalidFrame;
-        const padded_rows = std.math.mul(
-            usize,
-            f.stride,
-            f.height - 1,
-        ) catch return error.InvalidFrame;
+        const padded_rows = std.math.mul(usize, f.stride, f.height - 1) catch return error.InvalidFrame;
         const needed = std.math.add(usize, padded_rows, row_bytes) catch return error.InvalidFrame;
         if (f.pixels.len < needed) return error.InvalidFrame;
     }
@@ -60,10 +52,7 @@ pub const RgbaFrame = struct {
     }
 };
 
-pub const AudioFormat = struct {
-    channels: u8 = 2,
-    sample_rate: u32 = 44100,
-};
+pub const AudioFormat = struct { channels: u8 = 2, sample_rate: u32 = 44100 };
 
 pub const AudioStatus = struct {
     queued_frames: u64 = 0,
@@ -341,10 +330,7 @@ pub const OwnedSaveNames = OwnedNames;
 
 pub const AssetHandle = enum(u32) { _ };
 
-pub const OpenedAsset = struct {
-    handle: AssetHandle,
-    length: u64,
-};
+pub const OpenedAsset = struct { handle: AssetHandle, length: u64 };
 
 pub const AssetError = error{
     NotFound,
@@ -406,13 +392,7 @@ pub const AssetSource = struct {
     }
 };
 
-pub const StorageError = error{
-    NotFound,
-    InvalidName,
-    Io,
-    OutOfMemory,
-    Canceled,
-};
+pub const StorageError = error{ NotFound, InvalidName, Io, OutOfMemory, Canceled };
 
 /// Persistent named byte records in one flat collection.
 pub const Storage = struct {

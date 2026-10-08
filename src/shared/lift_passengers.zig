@@ -81,10 +81,8 @@ pub const State = struct {
     ) !void {
         self.candidate = null;
         for (self.items, self.pending, 0..) |*owner, *pending, index| {
-            if (!try objects.visible(
-                index,
-                equipment_,
-            ) or objects.objects[index].flight != null) owner.* = null;
+            if (!try objects.visible(index, equipment_) or
+                objects.objects[index].flight != null) owner.* = null;
             if (pending.*) |platform| try self.board(
                 index,
                 platform,
@@ -109,11 +107,7 @@ pub const State = struct {
             binding.next_step and
             self.automatic_ready[binding.prop] and
             objects.objects[binding.prop].active and
-            try inView(
-                map,
-                player.room,
-                objects.objects[binding.prop].room,
-            ))
+            try inView(map, player.room, objects.objects[binding.prop].room))
         {
             try self.board(
                 binding.prop,
@@ -137,11 +131,8 @@ pub const State = struct {
             occupancy.* = .{ .contacts = touching };
             if (touching) self.candidate = index;
             for (objects.objects) |object| {
-                if (!object.contact_present or !try layout.overlaps(
-                    map,
-                    footprint,
-                    object.contact,
-                )) continue;
+                if (!object.contact_present or
+                    !try layout.overlaps(map, footprint, object.contact)) continue;
                 occupancy.contacts = true;
             }
         }
@@ -173,10 +164,7 @@ pub const State = struct {
                 )) continue;
                 const attached = self.items[j] == index and
                     object.flight == null and
-                    try objects.visible(
-                        j,
-                        equipment_,
-                    );
+                    try objects.visible(j, equipment_);
                 if (!attached) occupancy.unboarded_items = true;
             }
         }
@@ -260,11 +248,7 @@ pub const State = struct {
             !binding.next_step and
             self.automatic_ready[binding.prop] and
             objects.objects[binding.prop].active and
-            try inView(
-                map,
-                player_room,
-                objects.objects[binding.prop].room,
-            ))
+            try inView(map, player_room, objects.objects[binding.prop].room))
         {
             try self.board(
                 binding.prop,

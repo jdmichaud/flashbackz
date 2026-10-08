@@ -83,10 +83,9 @@ fn discover(group: rules.Group) !?Spec {
         if (r.conditions[0].code != 120 and
             r.conditions[0].code != 121 and
             !(r.conditions[0].code == 0 and r.conditions[1].code == 64)) return null;
-        if (detecting != null and (r.target != detecting.? or !std.meta.eql(
-            route,
-            out,
-        ))) return error.UnsupportedDetectorPulse;
+        if (detecting != null and
+            (r.target != detecting.? or
+                !std.meta.eql(route, out))) return error.UnsupportedDetectorPulse;
         detecting = r.target;
         route = out;
     }
@@ -200,10 +199,7 @@ pub fn load(
                 spec.states[@backingInt(runtime.Phase.monitoring)],
             );
             errdefer allocator.free(acquire);
-            const sustain = if (spec.disable_after_pulse) try allocator.alloc(
-                runtime.Sense,
-                0,
-            ) else try senses(
+            const sustain = if (spec.disable_after_pulse) try allocator.alloc(runtime.Sense, 0) else try senses(
                 allocator,
                 group,
                 spec.states[@backingInt(runtime.Phase.detecting)],

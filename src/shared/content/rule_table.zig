@@ -37,15 +37,13 @@ pub fn group(data: []const u8, index: u16) !Group {
     if (data.len < 2) return error.TruncatedRuleDirectory;
     const count = word(data, 0);
     const body = data[2..];
-    if (count > 256 or index >= count or @as(
-        usize,
-        count,
-    ) * 4 > body.len) return error.InvalidRuleDirectory;
+    if (count > 256 or
+        index >= count or
+        @as(usize, count) * 4 > body.len) return error.InvalidRuleDirectory;
     const offset = std.mem.readInt(u32, body[@as(usize, index) * 4 ..][0..4], .little);
-    if (offset < @as(
-        usize,
-        count,
-    ) * 4 or offset > body.len or body.len - offset < 2) return error.InvalidRuleOffset;
+    if (offset < @as(usize, count) * 4 or
+        offset > body.len or
+        body.len - offset < 2) return error.InvalidRuleOffset;
     const bytes = @as(usize, word(body, offset)) * 18;
     if (bytes > body.len - offset - 2) return error.TruncatedRules;
     return .{ .records = body[offset + 2 ..][0..bytes] };

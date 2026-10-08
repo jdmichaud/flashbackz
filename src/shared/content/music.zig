@@ -8,11 +8,7 @@ fn word(bytes: []const u8, at: usize) u16 {
     return std.mem.readInt(u16, bytes[at..][0..2], .little);
 }
 fn terminated(bytes: []const u8) ![]const u8 {
-    return bytes[0 .. std.mem.indexOfScalar(
-        u8,
-        bytes,
-        0,
-    ) orelse return error.UnterminatedMusicName];
+    return bytes[0 .. std.mem.indexOfScalar(u8, bytes, 0) orelse return error.UnterminatedMusicName];
 }
 fn read(
     source: platform.AssetSource,
@@ -48,18 +44,12 @@ fn operator(bytes: []const u8, waveform: u16) music.Operator {
 }
 pub fn instrument(bytes: []const u8) !music.Instrument {
     if (bytes.len != 80) return error.InvalidInstrumentSize;
-    const percussion: ?music.Percussion = if (bytes[0] == 0) null else std.enums.fromInt(
-        music.Percussion,
-        bytes[1],
-    ) orelse return error.InvalidPercussionInstrument;
+    const percussion: ?music.Percussion = if (bytes[0] == 0) null else std.enums.fromInt(music.Percussion, bytes[1]) orelse return error.InvalidPercussionInstrument;
     return .{
         .percussion = percussion,
         .modulator = operator(bytes[2..28], word(bytes, 74)),
         .carrier = operator(bytes[28..54], word(bytes, 76)),
-        .feedback_connection = @truncate((word(bytes, 6) << 1) | @as(
-            u16,
-            if (word(bytes, 26) == 0) 1 else 0,
-        )),
+        .feedback_connection = @truncate((word(bytes, 6) << 1) | @as(u16, if (word(bytes, 26) == 0) 1 else 0)),
         .scale_modulator = bytes[26] == 0,
     };
 }
@@ -190,11 +180,8 @@ pub fn decode(
 ) !music.Score {
     var reader: Reader = .{ .bytes = midi };
     const header = try reader.chunk("MThd");
-    if (header.len != 6 or std.mem.readInt(
-        u16,
-        header[0..2],
-        .big,
-    ) > 1) return error.InvalidMidiHeader;
+    if (header.len != 6 or
+        std.mem.readInt(u16, header[0..2], .big) > 1) return error.InvalidMidiHeader;
     const count = std.mem.readInt(u16, header[2..4], .big);
     if (count == 0 or count > 16) return error.TooManyMusicParts;
     const parts = try allocator.alloc(music.Part, count);

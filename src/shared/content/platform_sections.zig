@@ -31,12 +31,9 @@ fn recognize(group: rules.Group, initial: u16) ?Pair {
         const b = group.at(at + 1);
         const c = group.at(at + 2);
         const d = group.at(at + 3);
-        for ([_]rules.Rule{
-            a,
-            b,
-            c,
-            d,
-        }) |r| if (r.dx != 0 or r.dy != 0 or r.flags != 0) return null;
+        for ([_]rules.Rule{ a, b, c, d }) |r| if (r.dx != 0 or
+            r.dy != 0 or
+            r.flags != 0) return null;
         if (a.source != b.source or
             b.target != a.source or
             c.source != a.target or
@@ -101,10 +98,7 @@ pub fn load(
             record.initial_state,
         ) orelse continue;
         const present = record.initial_state == pair.visible;
-        const destination = if (present) @as(
-            i16,
-            record.room,
-        ) else record.parameters[pair.room_parameter];
+        const destination = if (present) @as(i16, record.room) else record.parameters[pair.room_parameter];
         if (destination < 0 or
             destination >= rooms.len or
             record.collision_width == 0) return error.InvalidPlatformSectionPlacement;

@@ -122,11 +122,7 @@ pub const State = struct {
         const alive = health > 0;
         switch (self.phase) {
             .front_impact => {
-                self.phase = if (try environment.at(
-                    pose.*,
-                    .torso,
-                    -1,
-                )) .backward_confined else .backward_flight;
+                self.phase = if (try environment.at(pose.*, .torso, -1)) .backward_confined else .backward_flight;
                 shift(pose, -16);
                 pose.position.y -%= 16;
                 return .{ .damage = true };
@@ -136,44 +132,7 @@ pub const State = struct {
                 if (wall_one and try environment.at(pose.*, .torso, 0)) {
                     self.phase = .forward_confined;
                 } else {
-                    if (wall_one) self.phase = .forward_confined else if (!try environment.at(
-                        pose.*,
-                        .support,
-                        3,
-                    )) self.phase = .forward_edge else if (try environment.at(
-                        pose.*,
-                        .torso,
-                        3,
-                    ) and !try environment.at(
-                        pose.*,
-                        .support,
-                        2,
-                    )) self.phase = .forward_edge_mid else if (try environment.at(
-                        pose.*,
-                        .torso,
-                        2,
-                    ) and !try environment.at(
-                        pose.*,
-                        .support,
-                        1,
-                    )) self.phase = .forward_edge_near else if (try environment.at(
-                        pose.*,
-                        .torso,
-                        2,
-                    )) self.phase = .forward_near_wall else if (try environment.at(
-                        pose.*,
-                        .torso,
-                        3,
-                    )) self.phase = .forward_mid_wall else if (try environment.at(
-                        pose.*,
-                        .torso,
-                        4,
-                    )) self.phase = .forward_far_wall else if (try environment.ledge(
-                        pose.*,
-                        .support,
-                        3,
-                        .ahead,
-                    )) self.phase = .forward_edge else self.phase = .forward_flight;
+                    if (wall_one) self.phase = .forward_confined else if (!try environment.at(pose.*, .support, 3)) self.phase = .forward_edge else if (try environment.at(pose.*, .torso, 3) and !try environment.at(pose.*, .support, 2)) self.phase = .forward_edge_mid else if (try environment.at(pose.*, .torso, 2) and !try environment.at(pose.*, .support, 1)) self.phase = .forward_edge_near else if (try environment.at(pose.*, .torso, 2)) self.phase = .forward_near_wall else if (try environment.at(pose.*, .torso, 3)) self.phase = .forward_mid_wall else if (try environment.at(pose.*, .torso, 4)) self.phase = .forward_far_wall else if (try environment.ledge(pose.*, .support, 3, .ahead)) self.phase = .forward_edge else self.phase = .forward_flight;
                     shift(pose, 16);
                 }
                 return .{ .damage = true };
@@ -183,11 +142,7 @@ pub const State = struct {
                 if (!alive and (ledge or !try environment.at(pose.*, .support, 1))) {
                     pose.position.y +%= 16;
                     self.phase = .fatal_drop_start;
-                } else if (try environment.at(
-                    pose.*,
-                    .torso,
-                    0,
-                )) self.phase = .backward_staggered else if (intent.action and ledge) {
+                } else if (try environment.at(pose.*, .torso, 0)) self.phase = .backward_staggered else if (intent.action and ledge) {
                     pose.position.y +%= 16;
                     return .{ .boundary = .catch_ledge };
                 } else if (ledge or !try environment.at(pose.*, .support, 1)) {
@@ -203,11 +158,7 @@ pub const State = struct {
                     shift(pose, 16);
                     pose.position.y +%= 16;
                     return .{ .boundary = .catch_ledge };
-                } else if (try environment.at(
-                    pose.*,
-                    .support,
-                    0,
-                )) self.phase = .backward_landing else {
+                } else if (try environment.at(pose.*, .support, 0)) self.phase = .backward_landing else {
                     pose.position.y +%= 24;
                     self.phase = .backward_drop;
                 }
@@ -216,11 +167,7 @@ pub const State = struct {
             .backward_landing => self.phase = .backward_rest,
             .backward_rest, .confined_rest => {
                 if (!alive) return .{ .boundary = .death_wait };
-                self.phase = if (!try environment.at(
-                    pose.*,
-                    .torso,
-                    1,
-                ) and weapon_desired) .backward_armed_rise else .backward_rise;
+                self.phase = if (!try environment.at(pose.*, .torso, 1) and weapon_desired) .backward_armed_rise else .backward_rise;
             },
             .backward_rise, .forward_rise => return .{ .boundary = .standing },
             .backward_armed_rise, .forward_armed_rise => return .{ .boundary = .armed },
@@ -238,12 +185,10 @@ pub const State = struct {
                 self.phase = if (weapon_desired) .forward_armed_rise else .forward_rise;
             },
             .forward_edge, .forward_edge_mid, .forward_edge_near => {
-                if (alive and intent.action and try environment.ledge(
-                    pose.*,
-                    .support,
-                    1,
-                    .behind,
-                )) {
+                if (alive and
+                    intent.action and
+                    try environment.ledge(pose.*, .support, 1, .behind))
+                {
                     pose.position.y +%= 32;
                     return .{ .boundary = .catch_ledge };
                 }
@@ -270,28 +215,18 @@ pub const State = struct {
                 return .{};
             },
             .forward_airborne => {
-                const confined = try environment.at(pose.*, .torso, 0) and !try environment.at(
-                    pose.*,
-                    .torso,
-                    -1,
-                );
+                const confined = try environment.at(pose.*, .torso, 0) and
+                    !try environment.at(pose.*, .torso, -1);
                 if (confined) self.phase = .forward_low_confined else {
-                    const blocked = try environment.at(
-                        pose.*,
-                        .torso,
-                        3,
-                    ) or try environment.at(pose.*, .torso, 2);
+                    const blocked = try environment.at(pose.*, .torso, 3) or
+                        try environment.at(pose.*, .torso, 2);
                     shift(pose, 16);
                     self.phase = if (blocked) .forward_low_wall else .forward_low;
                 }
                 pose.position.y +%= 8;
             },
             .forward_low => {
-                if (try environment.at(
-                    pose.*,
-                    .support,
-                    0,
-                )) self.phase = .forward_low_landing else {
+                if (try environment.at(pose.*, .support, 0)) self.phase = .forward_low_landing else {
                     pose.position.y +%= 72;
                     return .{ .boundary = .long_fall };
                 }
@@ -316,12 +251,10 @@ pub const State = struct {
                     self.phase = .final_landing;
                     return .{};
                 }
-                if (alive and intent.action and try environment.ledge(
-                    pose.*,
-                    .support,
-                    1,
-                    .behind,
-                )) {
+                if (alive and
+                    intent.action and
+                    try environment.ledge(pose.*, .support, 1, .behind))
+                {
                     pose.position.y +%= 32;
                     return .{ .boundary = .catch_ledge };
                 }

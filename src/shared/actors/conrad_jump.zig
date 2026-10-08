@@ -76,16 +76,11 @@ pub const State = struct {
         }
         switch (self.phase) {
             .takeoff, .flight => {
-                if (try environment.at(pose.*, .torso, 0) and !try environment.at(
-                    pose.*,
-                    .torso,
-                    -1,
-                )) return .wall_collision;
-                if (try environment.at(
-                    pose.*,
-                    .torso,
-                    1,
-                ) and !try environment.at(pose.*, .torso, 0)) {
+                if (try environment.at(pose.*, .torso, 0) and
+                    !try environment.at(pose.*, .torso, -1)) return .wall_collision;
+                if (try environment.at(pose.*, .torso, 1) and
+                    !try environment.at(pose.*, .torso, 0))
+                {
                     const shift = clips.forward.landing_forward_shift;
                     pose.position.x +%= if (pose.facing == .right) shift else -%shift;
                     return .wall_collision;
@@ -93,17 +88,11 @@ pub const State = struct {
                 if (self.phase == .takeoff) {
                     self.phase = .flight;
                 } else {
-                    const falls_short = !try environment.at(
-                        pose.*,
-                        .support,
-                        0,
-                    ) and try environment.at(pose.*, .torso, 2);
-                    const catches = !falls_short and intent.action and try environment.ledge(
-                        pose.*,
-                        .support,
-                        3,
-                        .behind,
-                    );
+                    const falls_short = !try environment.at(pose.*, .support, 0) and
+                        try environment.at(pose.*, .torso, 2);
+                    const catches = !falls_short and
+                        intent.action and
+                        try environment.ledge(pose.*, .support, 3, .behind);
                     if (falls_short or catches or !try environment.at(pose.*, .support, 2)) {
                         const shift = clips.forward.landing_forward_shift;
                         pose.position.x +%= if (pose.facing == .right) shift else -%shift;

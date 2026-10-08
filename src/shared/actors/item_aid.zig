@@ -118,12 +118,7 @@ pub const World = struct {
             actor.contact.room = actor.room;
             actor.contact.position = actor.pose.position;
             if (actor.phase == .gone) continue;
-            const near = try activation.around(
-                map,
-                player.room,
-                actor.room,
-                actor.pose.position.y,
-            );
+            const near = try activation.around(map, player.room, actor.room, actor.pose.position.y);
             if (definition.wake_nearby and near.wake) actor.active = true;
             if (try layout.overlaps(map, player, actor.contact)) self.candidate = index;
         }
@@ -176,12 +171,7 @@ pub const World = struct {
         const layout: contacts.Layout = .{};
         for (self.actors, definitions, 0..) |*actor, definition, index| {
             if (actor.phase == .gone) continue;
-            const near = try activation.around(
-                map,
-                player.room,
-                actor.room,
-                actor.pose.position.y,
-            );
+            const near = try activation.around(map, player.room, actor.room, actor.pose.position.y);
             if (definition.wake_nearby and near.wake) actor.active = true;
             if (actor.ready and definition.accepts_signals) actor.active = true;
             if (!actor.active) continue;
@@ -220,15 +210,7 @@ pub const World = struct {
                             actor.phase = .requesting;
                             self.notice = profile.request_message;
                             self.notice_priority = definition.interaction_priority;
-                        } else if (actor.ready) self.accept(
-                            actor,
-                            definition,
-                            true,
-                        ) else if (!(try layout.overlaps(
-                            map,
-                            actor.contact,
-                            player,
-                        )) and !seen) {
+                        } else if (actor.ready) self.accept(actor, definition, true) else if (!(try layout.overlaps(map, actor.contact, player)) and !seen) {
                             actor.remaining = profile.wait_steps;
                             actor.phase = .waiting_entry;
                         }
@@ -245,11 +227,7 @@ pub const World = struct {
                         if (seen) actor.phase = .attention_return else if (!near.same) actor.phase = .idle;
                     },
                     .requesting => {
-                        if (actor.ready) self.accept(
-                            actor,
-                            definition,
-                            false,
-                        ) else actor.phase = .attentive;
+                        if (actor.ready) self.accept(actor, definition, false) else actor.phase = .attentive;
                     },
                     .thanking => {
                         self.notice = profile.thanks_message;

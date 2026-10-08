@@ -116,11 +116,7 @@ fn discover(group: rules.Group) !?Spec {
         if (r.source == closed and r.conditions[0].code == 107) spec.shoot_to_open = true;
     }
     spec.height = height orelse return null;
-    var state = if (spec.automatic) rest.target else (received(
-        group,
-        closed,
-        spec.open_message,
-    ) orelse return null).target;
+    var state = if (spec.automatic) rest.target else (received(group, closed, spec.open_message) orelse return null).target;
     while (true) {
         const next = progress(group, state) orelse return error.MissingDoorOpeningContinuation;
         if (next.target == state) {
@@ -136,10 +132,9 @@ fn discover(group: rules.Group) !?Spec {
         spec.opening_count += 1;
         state = next.target;
     }
-    if (spec.opening_count == 0 or spec.open == closed or material(progress(
-        group,
-        spec.open,
-    ).?) != .empty) return null;
+    if (spec.opening_count == 0 or
+        spec.open == closed or
+        material(progress(group, spec.open).?) != .empty) return null;
     var closing_start: ?u16 = null;
     for (0..group.count()) |i| {
         const r = group.at(i);
@@ -220,11 +215,7 @@ fn track(
             .clearance_after = material(progress(group, state).?),
         };
         if (received(group, state, reverse_message)) |reverse| segment.reverse = .{
-            .segment = std.mem.indexOfScalar(
-                u16,
-                opposite,
-                reverse.target,
-            ) orelse return error.InvalidDoorReversal,
+            .segment = std.mem.indexOfScalar(u16, opposite, reverse.target) orelse return error.InvalidDoorReversal,
             .clearance = material(reverse),
         };
     }
@@ -262,26 +253,11 @@ fn recoverProfile(
     errdefer allocator.free(closing);
     var snap: [4]bool = @splat(false);
     for (spec.reset_messages) |message| {
-        if (received(
-            group,
-            spec.closed,
-            message,
-        ) != null) snap[@backingInt(runtime.Phase.closed)] = true;
-        if (received(
-            group,
-            spec.open,
-            message,
-        ) != null) snap[@backingInt(runtime.Phase.open)] = true;
-        if (received(
-            group,
-            spec.opening[0],
-            message,
-        ) != null) snap[@backingInt(runtime.Phase.opening)] = true;
-        if (spec.closing_count != 0 and received(
-            group,
-            spec.closing[0],
-            message,
-        ) != null) snap[@backingInt(runtime.Phase.closing)] = true;
+        if (received(group, spec.closed, message) != null) snap[@backingInt(runtime.Phase.closed)] = true;
+        if (received(group, spec.open, message) != null) snap[@backingInt(runtime.Phase.open)] = true;
+        if (received(group, spec.opening[0], message) != null) snap[@backingInt(runtime.Phase.opening)] = true;
+        if (spec.closing_count != 0 and
+            received(group, spec.closing[0], message) != null) snap[@backingInt(runtime.Phase.closing)] = true;
     }
     var hold_player = false;
     var hold_enemies = false;
@@ -311,11 +287,7 @@ fn recoverProfile(
         .hold_enemies = hold_enemies,
         .sleep_closed = has(progress(group, spec.closed).?, 67),
         .sleep_open = has(progress(group, spec.open).?, 67),
-        .start_closing_clearance = if (received(
-            group,
-            spec.open,
-            spec.close_message,
-        )) |r| material(r) else null,
+        .start_closing_clearance = if (received(group, spec.open, spec.close_message)) |r| material(r) else null,
     };
 }
 pub fn load(
@@ -394,10 +366,7 @@ pub fn load(
             }
             return error.UnsupportedDoorStart;
         };
-        const column = ((record.position.x +% 8) >> 4) - (if (record.facing_right != 0) @as(
-            i16,
-            record.collision_width,
-        ) - 1 else 0);
+        const column = ((record.position.x +% 8) >> 4) - (if (record.facing_right != 0) @as(i16, record.collision_width) - 1 else 0);
         const row = (@divTrunc(record.position.y, 36) & ~@as(i16, 1)) + spec.height;
         if (record.room >= rooms.len or
             record.collision_width == 0 or

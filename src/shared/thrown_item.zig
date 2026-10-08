@@ -81,64 +81,22 @@ pub const State = struct {
             switch (self.phase) {
                 .arc => |index| {
                     const stage = definition.arc[index];
-                    if (stage.rebound != null and try blocked(
-                        map,
-                        room.*,
-                        pose.*,
-                        .body,
-                        0,
-                    )) self.phase = .{ .rebound = index } else switch (stage.finish) {
+                    if (stage.rebound != null and try blocked(map, room.*, pose.*, .body, 0)) self.phase = .{ .rebound = index } else switch (stage.finish) {
                         .next => self.phase = .{ .arc = index + 1 },
-                        .drop_or_next => self.phase = if (!try blocked(
-                            map,
-                            room.*,
-                            pose.*,
-                            .support,
-                            0,
-                        )) .drop_start else .{ .arc = index + 1 },
-                        .edge_or_next => self.phase = if (!try blocked(
-                            map,
-                            room.*,
-                            pose.*,
-                            .support,
-                            1,
-                        )) .edge_descent else .{ .arc = index + 1 },
+                        .drop_or_next => self.phase = if (!try blocked(map, room.*, pose.*, .support, 0)) .drop_start else .{ .arc = index + 1 },
+                        .edge_or_next => self.phase = if (!try blocked(map, room.*, pose.*, .support, 1)) .edge_descent else .{ .arc = index + 1 },
                         .settle => self.phase = .resting,
                     }
                 },
                 .rebound => |index| {
-                    if (definition.arc[index].rebound.?.may_fall and !try blocked(
-                        map,
-                        room.*,
-                        pose.*,
-                        .support,
-                        0,
-                    )) self.fall(definition, pose) else self.phase = .resting;
+                    if (definition.arc[index].rebound.?.may_fall and !try blocked(map, room.*, pose.*, .support, 0)) self.fall(definition, pose) else self.phase = .resting;
                 },
-                .drop_start => self.phase = if (try blocked(
-                    map,
-                    room.*,
-                    pose.*,
-                    .body,
-                    0,
-                )) .drop_rebound else .drop_continue,
+                .drop_start => self.phase = if (try blocked(map, room.*, pose.*, .body, 0)) .drop_rebound else .drop_continue,
                 .drop_continue, .drop_rebound, .falling => {
-                    if (!try blocked(
-                        map,
-                        room.*,
-                        pose.*,
-                        .support,
-                        0,
-                    )) self.fall(definition, pose) else self.phase = .landing;
+                    if (!try blocked(map, room.*, pose.*, .support, 0)) self.fall(definition, pose) else self.phase = .landing;
                 },
                 .edge_descent => {
-                    if (!try blocked(
-                        map,
-                        room.*,
-                        pose.*,
-                        .support,
-                        0,
-                    )) self.fall(definition, pose) else self.phase = .resting;
+                    if (!try blocked(map, room.*, pose.*, .support, 0)) self.fall(definition, pose) else self.phase = .resting;
                 },
                 .landing => self.phase = .resting,
                 .resting => {},

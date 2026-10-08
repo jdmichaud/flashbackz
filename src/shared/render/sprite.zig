@@ -24,10 +24,7 @@ pub fn draw(
     if (pixels.len != @as(usize, width) * height) return error.InvalidFrameLength;
     if (style.occlusion) |mask| if (mask.len != pixels.len) return error.InvalidOcclusionMask;
     const image = &frame.image;
-    if (image.pixels.len != @as(
-        usize,
-        image.width,
-    ) * image.height) return error.InvalidSpriteLength;
+    if (image.pixels.len != @as(usize, image.width) * image.height) return error.InvalidSpriteLength;
     const left: i64 = switch (style.facing) {
         .original => @as(i64, x) - frame.origin_x,
         .mirrored => @as(i64, x) + frame.origin_x - image.width,

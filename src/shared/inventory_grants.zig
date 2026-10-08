@@ -11,11 +11,7 @@ pub const Definition = struct {
     item: equipment.ItemHandle,
     movie: ?story_cue.Cue,
 };
-pub const Binding = struct {
-    circuit: world_props.CircuitId,
-    target: usize,
-    next_step: bool,
-};
+pub const Binding = struct { circuit: world_props.CircuitId, target: usize, next_step: bool };
 pub const World = struct {
     allocator: std.mem.Allocator,
     pending: []bool,
@@ -100,11 +96,7 @@ pub const World = struct {
     ) !void {
         for (pulses) |pulse| for (bindings) |binding| {
             if (binding.circuit != pulse) continue;
-            if (binding.next_step) self.pending[binding.target] = true else try self.grant(
-                definitions,
-                binding.target,
-                items,
-            );
+            if (binding.next_step) self.pending[binding.target] = true else try self.grant(definitions, binding.target, items);
         };
     }
     pub fn observeConsumptions(
@@ -112,10 +104,7 @@ pub const World = struct {
         definitions: []const Definition,
         items: *const equipment.Loadout,
     ) !void {
-        for (
-            self.waiting_consumption,
-            definitions,
-        ) |*waiting, definition| if (waiting.* and
+        for (self.waiting_consumption, definitions) |*waiting, definition| if (waiting.* and
             (try items.item(definition.item)).state == .consumed)
         {
             self.pulses[self.pulse_count] = definition.on_consumed.?;

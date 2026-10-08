@@ -99,12 +99,7 @@ pub const World = struct {
     ) !void {
         for (self.actors, definitions) |*actor, definition| {
             actor.sound = null;
-            const near = try activation.around(
-                map,
-                player_room,
-                actor.room,
-                actor.pose.position.y,
-            );
+            const near = try activation.around(map, player_room, actor.room, actor.pose.position.y);
             if (definition.wake_nearby and near.wake) actor.active = true;
             if (!actor.active) continue;
             const profile = profiles[definition.profile];

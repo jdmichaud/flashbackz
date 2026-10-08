@@ -37,10 +37,8 @@ pub const Table = struct {
     pub fn init(bytes: []const u8) !Table {
         if (bytes.len < 2) return error.InvalidPlacementTable;
         const count = word(bytes, 0);
-        if (count > 256 or bytes.len != 2 + @as(
-            usize,
-            count,
-        ) * 32) return error.InvalidPlacementTable;
+        if (count > 256 or
+            bytes.len != 2 + @as(usize, count) * 32) return error.InvalidPlacementTable;
         return .{ .bytes = bytes[2..], .count = count };
     }
 

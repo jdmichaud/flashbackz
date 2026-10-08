@@ -52,10 +52,7 @@ pub fn traceWall(view: terrain.View, room: geometry.RoomId, pose: motion.Pose, r
     const row = (@divTrunc(pose.position.y, 36) & ~@as(i16, 1)) + 1;
     const step: i16 = if (pose.facing == .right) 1 else -1;
     for (0..@as(usize, range) + 1) |_| {
-        const address = try view.geometry.locate(current_room, column, row) orelse return .{
-            .room = current_room,
-            .x = column *% 16,
-        };
+        const address = try view.geometry.locate(current_room, column, row) orelse return .{ .room = current_room, .x = column *% 16 };
         if (try view.sample(current_room, column, row) != .empty) return .{
             .room = address.room,
             .x = @as(i16, @intCast(address.column)) *% 16,
@@ -155,10 +152,7 @@ pub const State = struct {
                     effect.room = hit.room;
                     effect.pose.position.x = hit.x;
                     shift(&effect.pose, definition.impact_forward[@backingInt(effect.height)]);
-                    effect.pose.position.y -%= if (effect.phase == .ignition) (if (effect.height == .standing) @as(
-                        i16,
-                        35,
-                    ) else 22) else definition.impact_down[@backingInt(effect.height)];
+                    effect.pose.position.y -%= if (effect.phase == .ignition) (if (effect.height == .standing) @as(i16, 35) else 22) else definition.impact_down[@backingInt(effect.height)];
                     effect.phase = .impact;
                 }
                 effect.playback = .{};

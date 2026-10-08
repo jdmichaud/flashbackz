@@ -44,12 +44,9 @@ fn recognize(group: rules.Group) ?Spec {
         d.target != a.target or
         a.source == a.target) return null;
     if (a.next != 2 or b.next != 0 or c.next != 2 or d.next != 2) return null;
-    for ([_]rules.Rule{
-        a,
-        b,
-        c,
-        d,
-    }) |rule| if (rule.dx != 0 or rule.dy != 0 or rule.flags != 0) return null;
+    for ([_]rules.Rule{ a, b, c, d }) |rule| if (rule.dx != 0 or
+        rule.dy != 0 or
+        rule.flags != 0) return null;
     if (a.conditions[0].code != 34 or
         a.conditions[1].code != 0 or
         a.effect.code != 0 or

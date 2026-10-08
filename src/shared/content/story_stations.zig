@@ -64,13 +64,9 @@ fn recognize(group: rules.Group) ?Spec {
         c.next != 4 or
         d.next != 2 or
         e.next != 4) return null;
-    for ([_]rules.Rule{
-        a,
-        b,
-        c,
-        d,
-        e,
-    }) |r| if (r.dx != 0 or r.dy != 0 or r.flags != 0) return null;
+    for ([_]rules.Rule{ a, b, c, d, e }) |r| if (r.dx != 0 or
+        r.dy != 0 or
+        r.flags != 0) return null;
     if (a.conditions[0].code != 34 or
         a.conditions[1].code != 87 or
         a.conditions[1].argument < 0 or

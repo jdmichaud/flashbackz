@@ -162,16 +162,9 @@ pub const State = struct {
 
     /// A record of another version is refused, not converted: there is one save format.
     pub fn decode(bytes: []const u8) error{ NotAState, WrongVersion }!State {
-        if (bytes.len != record_len or !std.mem.eql(
-            u8,
-            bytes[0..magic.len],
-            magic,
-        )) return error.NotAState;
-        if (std.mem.readInt(
-            u16,
-            bytes[magic.len..][0..2],
-            .little,
-        ) != version) return error.WrongVersion;
+        if (bytes.len != record_len or
+            !std.mem.eql(u8, bytes[0..magic.len], magic)) return error.NotAState;
+        if (std.mem.readInt(u16, bytes[magic.len..][0..2], .little) != version) return error.WrongVersion;
         var v: [6]u32 = undefined;
         for (&v, 0..) |*field, i| field.* = std.mem.readInt(
             u32,
@@ -310,10 +303,7 @@ pub const Game = struct {
                     @intFromBool(story.skip),
                     @intFromBool(story.player.confirmed),
                 });
-                hash.update(&std.mem.toBytes(std.mem.nativeToLittle(
-                    u64,
-                    story.player.playback.frame,
-                )));
+                hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, story.player.playback.frame)));
                 return hash.final();
             }
             return world;
@@ -388,11 +378,7 @@ pub const Game = struct {
                     self.demo_index = 0;
                     try front.intro();
                 } else {
-                    const recording = try demo.load(
-                        self.allocator,
-                        self.assets.?,
-                        self.demo_index,
-                    );
+                    const recording = try demo.load(self.allocator, self.assets.?, self.demo_index);
                     errdefer self.allocator.free(recording.controls);
                     var next = try jungle_mod.Scene.loadLevel(
                         self.allocator,
@@ -418,10 +404,7 @@ pub const Game = struct {
                     front.difficulty,
                 );
                 next.pending_movie = content_level.opening(front.selected_level);
-                if (next.pending_movie != null) next.clock = try step_clock.Clock.init(
-                    step_clock.jungle,
-                    p.nowNs(),
-                );
+                if (next.pending_movie != null) next.clock = try step_clock.Clock.init(step_clock.jungle, p.nowNs());
                 self.level = front.selected_level;
                 next.settings = self.preferences;
                 self.difficulty = front.difficulty;
@@ -476,10 +459,7 @@ pub const Game = struct {
             };
             if (scene.aborted or (scene.defeated and scene.replay != null)) {
                 scene.stopAudio(p);
-                const art = (try menu_art.load(
-                    self.allocator,
-                    self.assets.?,
-                )) orelse return error.MissingMenu;
+                const art = (try menu_art.load(self.allocator, self.assets.?)) orelse return error.MissingMenu;
                 var next = front_end.Scene.init(self.allocator, self.assets.?, art);
                 next.difficulty = self.difficulty;
                 next.music_enabled = self.preferences.music;
@@ -497,10 +477,7 @@ pub const Game = struct {
                 next.random = scene.random;
                 next.input = scene.input;
                 std.mem.swap(@TypeOf(next.pending), &next.pending, &scene.pending);
-                next.clock = try step_clock.Clock.init(
-                    step_clock.jungle,
-                    now,
-                );
+                next.clock = try step_clock.Clock.init(step_clock.jungle, now);
                 next.pending_movie = content_level.opening(destination);
                 self.level = destination;
                 scene.stopAudio(p);
@@ -524,17 +501,11 @@ pub const Game = struct {
             const dialog = &self.scene.continue_game;
             try dialog.update(p.nowNs());
             if (dialog.menu.outcome) |choice| {
-                const art = (try menu_art.load(
-                    self.allocator,
-                    self.assets.?,
-                )) orelse return error.MissingMenu;
+                const art = (try menu_art.load(self.allocator, self.assets.?)) orelse return error.MissingMenu;
                 var next = front_end.Scene.init(self.allocator, self.assets.?, art);
                 errdefer next.deinit();
                 next.difficulty = self.difficulty;
-                if (choice == .retry) try next.startLevel(
-                    self.level,
-                    dialog.menu.activation_key,
-                ) else try next.gameOver(dialog.menu.activation_key);
+                if (choice == .retry) try next.startLevel(self.level, dialog.menu.activation_key) else try next.gameOver(dialog.menu.activation_key);
                 dialog.deinit();
                 self.scene = .{ .menu = next };
             }
@@ -601,10 +572,7 @@ pub const Game = struct {
     fn applyPreferences(self: *Game, settings: game_options.Settings) void {
         const volume_changed = self.preferences.volume != settings.volume;
         self.preferences = settings;
-        if (volume_changed) volume_preference.save(
-            self.storage,
-            settings.volume,
-        ) catch {};
+        if (volume_changed) volume_preference.save(self.storage, settings.volume) catch {};
     }
 
     fn saveState(self: *Game) void {
@@ -769,14 +737,10 @@ test "the ball stays inside the walls" {
     var s: State = .{ .dx = max_speed, .dy = -max_speed };
     for (0..5000) |_| {
         _ = s.step();
-        try testing.expect(s.x >= @as(i32, wall) * one and s.x <= @as(
-            i32,
-            page_width - wall - ball_size,
-        ) * one);
-        try testing.expect(s.y >= @as(i32, wall) * one and s.y <= @as(
-            i32,
-            page_height - wall - ball_size,
-        ) * one);
+        try testing.expect(s.x >= @as(i32, wall) * one and
+            s.x <= @as(i32, page_width - wall - ball_size) * one);
+        try testing.expect(s.y >= @as(i32, wall) * one and
+            s.y <= @as(i32, page_height - wall - ball_size) * one);
     }
 }
 

@@ -155,10 +155,7 @@ pub const Scene = struct {
         });
         hash.update(self.password[0..self.password_length]);
         hash.update(&.{@backingInt(self.introduction_part)});
-        if (self.player) |player| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(
-            u64,
-            player.playback.frame,
-        )));
+        if (self.player) |player| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, player.playback.frame)));
         return hash.final();
     }
 
@@ -218,11 +215,7 @@ pub const Scene = struct {
         try self.startLevel(.jungle, key);
     }
 
-    pub fn startLevel(
-        self: *Scene,
-        level: content_level.Id,
-        key: ?platform.Key,
-    ) !void {
+    pub fn startLevel(self: *Scene, level: content_level.Id, key: ?platform.Key) !void {
         self.selected_level = level;
         if (level == .jungle) {
             try self.play("DEBUT");

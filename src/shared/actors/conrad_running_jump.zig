@@ -52,11 +52,8 @@ pub const State = struct {
         };
     }
     fn wall(environment: anytype, pose: motion.Pose, ahead: i16) !bool {
-        return try environment.at(pose, .torso, ahead) and !try environment.at(
-            pose,
-            .torso,
-            ahead - 1,
-        );
+        return try environment.at(pose, .torso, ahead) and
+            !try environment.at(pose, .torso, ahead - 1);
     }
     pub fn finishPhase(
         self: *State,
@@ -97,11 +94,8 @@ pub const State = struct {
                 self.phase = .descending;
             },
             .descending => {
-                const collided = try wall(
-                    environment,
-                    pose.*,
-                    1,
-                ) or try wall(environment, pose.*, 2);
+                const collided = try wall(environment, pose.*, 1) or
+                    try wall(environment, pose.*, 2);
                 shift(pose, clips.alignment);
                 if (collided) return .wall_collision;
                 self.phase = .landing;
@@ -139,11 +133,8 @@ pub const State = struct {
             },
             .running_recovery => {
                 if (try wall(environment, pose.*, 1)) return .wall_stop;
-                if (try wall(
-                    environment,
-                    pose.*,
-                    2,
-                ) or try wall(environment, pose.*, 3)) return .brake;
+                if (try wall(environment, pose.*, 2) or
+                    try wall(environment, pose.*, 3)) return .brake;
                 if (intent.action and !intent.directions_conflict and intent.vertical != .down) {
                     if (intent.direction != null and
                         intent.direction != pose.facing) return .reverse_run;

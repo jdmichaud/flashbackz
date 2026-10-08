@@ -72,11 +72,7 @@ pub const World = struct {
     ) !void {
         self.candidate = null;
         const layout: contacts.Layout = .{};
-        for (definitions, 0..) |definition, i| if (try layout.overlaps(
-            map,
-            player,
-            definition.footprint,
-        )) {
+        for (definitions, 0..) |definition, i| if (try layout.overlaps(map, player, definition.footprint)) {
             self.candidate = i;
         };
     }
@@ -144,10 +140,7 @@ pub const World = struct {
             @backingInt(instance.pose.visual.id),
             @intFromBool(instance.pose.visual.mirrored),
         }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
-        for (self.pulses[0..self.pulse_count]) |pulse| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(
-            u16,
-            @backingInt(pulse),
-        )));
+        for (self.pulses[0..self.pulse_count]) |pulse| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u16, @backingInt(pulse))));
     }
 };
 

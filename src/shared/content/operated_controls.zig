@@ -47,30 +47,21 @@ pub fn recognize(group: rules.Group) ?Relay {
         d.target != a.source or
         b.target == a.source) return null;
     if (a.next != 0 or b.next != 3 or c.next != 0 or d.next != 0) return null;
-    if (!op(
-        a.conditions[0],
-        77,
-        0,
-    ) or !op(a.conditions[1], 0, 0) or !op(a.effect, 67, 0)) return null;
+    if (!op(a.conditions[0], 77, 0) or
+        !op(a.conditions[1], 0, 0) or
+        !op(a.effect, 67, 0)) return null;
     // Scene 23 is explicitly unassigned (FFFF) in the pinned English floppy movie table.
-    if (!op(
-        b.conditions[0],
-        34,
-        30,
-    ) or !op(b.conditions[1], 90, 23) or b.effect.code < 35 or b.effect.code > 38) return null;
-    if (!op(
-        c.conditions[0],
-        0,
-        0,
-    ) or !op(c.conditions[1], 0, 0) or !op(c.effect, 0, 0)) return null;
+    if (!op(b.conditions[0], 34, 30) or
+        !op(b.conditions[1], 90, 23) or
+        b.effect.code < 35 or
+        b.effect.code > 38) return null;
+    if (!op(c.conditions[0], 0, 0) or
+        !op(c.conditions[1], 0, 0) or
+        !op(c.effect, 0, 0)) return null;
     if (d.conditions[0].code != 125 or
         d.conditions[0].argument < 0 or
         d.conditions[0].argument >= 66 or
-        !op(
-            d.conditions[1],
-            0,
-            0,
-        ) or !op(d.effect, 0, 0)) return null;
+        !op(d.conditions[1], 0, 0) or !op(d.effect, 0, 0)) return null;
     return .{
         .idle = a.source,
         .pressed = b.target,
@@ -115,10 +106,7 @@ pub fn load(
                 connection.recipient == target and
                 connection.message == relay.signal) break connection.circuit;
         } else fresh: {
-            const id: world_props.CircuitId = @fromBackingInt(@as(
-                u16,
-                @intCast(connections.items.len),
-            ));
+            const id: world_props.CircuitId = @fromBackingInt(@as(u16, @intCast(connections.items.len)));
             try connections.append(
                 allocator,
                 .{

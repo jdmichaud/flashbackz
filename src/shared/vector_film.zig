@@ -51,10 +51,8 @@ pub const View = struct {
     }
 
     pub fn draw(self: View, frame_index: usize, pixels: []u8, rgba: []u8) !void {
-        if (frame_index >= self.frames.len or pixels.len != @as(
-            usize,
-            self.width,
-        ) * self.height) return error.InvalidFilmFrame;
+        if (frame_index >= self.frames.len or
+            pixels.len != @as(usize, self.width) * self.height) return error.InvalidFilmFrame;
         @memset(pixels, self.background);
         const frame = self.frames[frame_index];
         const canvas: shapes.Canvas = .{
@@ -69,10 +67,7 @@ pub const View = struct {
         const bottom = @min(@as(i32, self.viewport.y) + self.viewport.height, self.height);
         while (y < bottom) : (y += 1) {
             if (left < right) @memset(
-                pixels[@as(usize, @intCast(y)) * self.width + @as(
-                    usize,
-                    @intCast(left),
-                ) ..][0..@intCast(right - left)],
+                pixels[@as(usize, @intCast(y)) * self.width + @as(usize, @intCast(left)) ..][0..@intCast(right - left)],
                 frame.background,
             );
         }

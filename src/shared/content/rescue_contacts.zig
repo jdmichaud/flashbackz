@@ -27,11 +27,7 @@ pub const Assets = struct {
     pub fn bind(self: Assets, connections: []const routes.Connection) ![]runtime.Binding {
         var bindings: std.ArrayList(runtime.Binding) = .empty;
         errdefer bindings.deinit(self.allocator);
-        for (
-            self.sources,
-            self.signals,
-            0..,
-        ) |source, signal, index| for (connections) |connection| if (connection.recipient == source and
+        for (self.sources, self.signals, 0..) |source, signal, index| for (connections) |connection| if (connection.recipient == source and
             connection.message == signal)
         {
             try bindings.append(
@@ -76,10 +72,7 @@ fn recognize(group: rules.Group) bool {
             row.next != target or
             row.dx != 0 or
             row.dy != 0 or
-            row.flags != (if (i == 4) @as(
-                u8,
-                1,
-            ) else 0)) return false;
+            row.flags != (if (i == 4) @as(u8, 1) else 0)) return false;
         for (
             [_]rules.Operation{ row.conditions[0], row.conditions[1], row.effect },
             ops,
@@ -126,10 +119,7 @@ pub fn load(
         const group = try rules.group(bytes, record.rule_group);
         if (!recognize(group)) continue;
         const hidden = record.room >= rooms.len;
-        const room = if (hidden) record.parameters[@intCast(group.at(0).effect.argument)] else @as(
-            i16,
-            record.room,
-        );
+        const room = if (hidden) record.parameters[@intCast(group.at(0).effect.argument)] else @as(i16, record.room);
         if (room < 0 or
             room >= rooms.len or
             record.contact_icon == 0) return error.InvalidRescueContact;

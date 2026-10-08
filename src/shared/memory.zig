@@ -190,10 +190,7 @@ pub const MemoryStorage = struct {
 
     fn listSaves(ctx: *anyopaque) platform.StorageError!platform.OwnedSaveNames {
         const self: *MemoryStorage = @ptrCast(@alignCast(ctx));
-        const names = self.allocator.alloc(
-            []const u8,
-            self.records.count(),
-        ) catch return error.OutOfMemory;
+        const names = self.allocator.alloc([]const u8, self.records.count()) catch return error.OutOfMemory;
         var filled: usize = 0;
         errdefer {
             for (names[0..filled]) |n| self.allocator.free(n);

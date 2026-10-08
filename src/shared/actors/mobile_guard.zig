@@ -157,16 +157,11 @@ pub const Actor = struct {
         ally_ahead: bool,
     ) !void {
         const layout: contacts.Layout = .{};
-        const contact = if (self.contact) |body| try layout.overlaps(
-            environment.map,
-            body,
-            player,
-        ) else false;
-        if (contact and !try environment.at(self.pose, .torso, 0) and try environment.at(
-            self.pose,
-            .support,
-            1,
-        )) {
+        const contact = if (self.contact) |body| try layout.overlaps(environment.map, body, player) else false;
+        if (contact and
+            !try environment.at(self.pose, .torso, 0) and
+            try environment.at(self.pose, .support, 1))
+        {
             self.activity = .{ .walking = 0 };
             return;
         }
@@ -188,12 +183,10 @@ pub const Actor = struct {
             self.activity = .{ .walking = 0 };
             return;
         }
-        if (above and (try environment.ledge(self.pose, .head, 0, .ahead) or try environment.ledge(
-            self.pose,
-            .head,
-            1,
-            .behind,
-        ))) {
+        if (above and
+            (try environment.ledge(self.pose, .head, 0, .ahead) or
+                try environment.ledge(self.pose, .head, 1, .behind)))
+        {
             self.activity = .{ .flying = .{ .kind = .ascend } };
             return;
         }
@@ -205,21 +198,11 @@ pub const Actor = struct {
             self.activity = .{ .flying = .{ .kind = .descend, .phase = .aligning } };
             return;
         }
-        if ((above and try environment.ledge(
-            self.pose,
-            .head,
-            0,
-            .behind,
-        )) or (below and try environment.ledge(
-            self.pose,
-            .support,
-            0,
-            .behind,
-        )) or ((above or below) and try environment.at(
-            self.pose,
-            .torso,
-            1,
-        )) or awareness.player(true, 0)) {
+        if ((above and try environment.ledge(self.pose, .head, 0, .behind)) or
+            (below and try environment.ledge(self.pose, .support, 0, .behind)) or
+            ((above or below) and try environment.at(self.pose, .torso, 1)) or
+            awareness.player(true, 0))
+        {
             self.activity = .turning;
             return;
         }
@@ -241,10 +224,7 @@ pub const Actor = struct {
         switch (state.posture) {
             .standing => switch (state.phase) {
                 .windup => {
-                    if (!try environment.at(self.pose, .support, 0)) self.activity = .{ .flying = .{
-                        .kind = .descend,
-                        .phase = .aligning,
-                    } } else if (!try environment.at(self.pose, .torso, 1)) {
+                    if (!try environment.at(self.pose, .support, 0)) self.activity = .{ .flying = .{ .kind = .descend, .phase = .aligning } } else if (!try environment.at(self.pose, .torso, 1)) {
                         self.shot = .standing;
                         self.activity = .{ .firing = .{
                             .posture = .standing,
@@ -258,10 +238,7 @@ pub const Actor = struct {
                 .discharge => {
                     const unsupported = !try environment.at(self.pose, .support, 0);
                     shift(&self.pose, profile.recoil_compensation);
-                    self.activity = if (unsupported) .{ .flying = .{
-                        .kind = .descend,
-                        .phase = .aligning,
-                    } } else .{ .firing = .{
+                    self.activity = if (unsupported) .{ .flying = .{ .kind = .descend, .phase = .aligning } } else .{ .firing = .{
                         .posture = .standing,
                         .phase = .recovery,
                     } };
@@ -280,11 +257,10 @@ pub const Actor = struct {
                         @as(i16, @bitCast(random.next())),
                         profile.flight_fire_exit_chance,
                     ) == 0;
-                    if (!leave and !try environment.at(
-                        self.pose,
-                        .torso,
-                        1,
-                    ) and awareness.player(false, 0)) {
+                    if (!leave and
+                        !try environment.at(self.pose, .torso, 1) and
+                        awareness.player(false, 0))
+                    {
                         self.shot = .airborne;
                         self.activity = .{ .firing = .{
                             .posture = .airborne,
@@ -496,10 +472,8 @@ pub const World = struct {
                     break;
                 }
             }
-            if (actor.activity == .dormant and actor.ready) actor.playback.completeDisplacement(
-                clip,
-                &actor.pose,
-            );
+            if (actor.activity == .dormant and
+                actor.ready) actor.playback.completeDisplacement(clip, &actor.pose);
             if (actor.playback.exhausted(clip)) {
                 if (actor.activity == .dormant) {
                     if (actor.ready) {
@@ -512,26 +486,11 @@ pub const World = struct {
                     const awareness = try perception.observe(map, observer, player, &.{});
                     const origin = try map.room(room);
                     const same = room == player.room;
-                    const above = if (same) @divTrunc(
-                        player.position.y -% 8,
-                        72,
-                    ) < @divTrunc(
-                        actor.pose.position.y,
-                        72,
-                    ) else origin.edges.up == .room and origin.edges.up.room == player.room;
-                    const below = if (same) @divTrunc(
-                        player.position.y -% 8,
-                        72,
-                    ) > @divTrunc(
-                        actor.pose.position.y,
-                        72,
-                    ) else origin.edges.down == .room and origin.edges.down.room == player.room;
+                    const above = if (same) @divTrunc(player.position.y -% 8, 72) < @divTrunc(actor.pose.position.y, 72) else origin.edges.up == .room and origin.edges.up.room == player.room;
+                    const below = if (same) @divTrunc(player.position.y -% 8, 72) > @divTrunc(actor.pose.position.y, 72) else origin.edges.down == .room and origin.edges.down.room == player.room;
                     switch (actor.activity) {
                         .standing => {
-                            const id: combat.Id = @fromBackingInt(@as(
-                                u16,
-                                @intCast(first_target + index),
-                            ));
+                            const id: combat.Id = @fromBackingInt(@as(u16, @intCast(first_target + index)));
                             const duck = try perception.unhittableTarget(
                                 map,
                                 observer,
@@ -540,19 +499,17 @@ pub const World = struct {
                                 targets,
                                 &profile.crouch_senses,
                             );
-                            const ally = awareness.player(
-                                false,
-                                profile.ally_wait_distance,
-                            ) and (try visibility.scan(
-                                map,
-                                player.room,
-                                visibility_entities[index],
-                                actor.pose,
-                                room,
-                                .enemy,
-                                profile.ally_scan_cells,
-                                false,
-                            )) != null;
+                            const ally = awareness.player(false, profile.ally_wait_distance) and
+                                (try visibility.scan(
+                                    map,
+                                    player.room,
+                                    visibility_entities[index],
+                                    actor.pose,
+                                    room,
+                                    .enemy,
+                                    profile.ally_scan_cells,
+                                    false,
+                                )) != null;
                             try actor.chooseGround(
                                 profile,
                                 environment,
@@ -575,33 +532,14 @@ pub const World = struct {
                             }
                         },
                         .walking => |stride| {
-                            const stop = (same and awareness.player(
-                                false,
-                                profile.shoot_distance,
-                            )) or try environment.at(
-                                actor.pose,
-                                .torso,
-                                1,
-                            ) or try environment.ledge(
-                                actor.pose,
-                                .support,
-                                0,
-                                .ahead,
-                            ) or (above and (try environment.ledge(
-                                actor.pose,
-                                .head,
-                                0,
-                                .ahead,
-                            ) or try environment.ledge(
-                                actor.pose,
-                                .head,
-                                0,
-                                .behind,
-                            )));
-                            actor.activity = if (stop) .standing else if (below or awareness.player(
-                                false,
-                                0,
-                            ) or (stride == 1 and above)) .{ .walking = stride ^ 1 } else .standing;
+                            const stop = (same and
+                                awareness.player(false, profile.shoot_distance)) or
+                                try environment.at(actor.pose, .torso, 1) or
+                                try environment.ledge(actor.pose, .support, 0, .ahead) or
+                                (above and
+                                    (try environment.ledge(actor.pose, .head, 0, .ahead) or
+                                        try environment.ledge(actor.pose, .head, 0, .behind)));
+                            actor.activity = if (stop) .standing else if (below or awareness.player(false, 0) or (stride == 1 and above)) .{ .walking = stride ^ 1 } else .standing;
                         },
                         .turning => {
                             actor.turn();
@@ -609,12 +547,7 @@ pub const World = struct {
                         },
                         .checking_takeoff => {
                             actor.activity = .standing;
-                            for (profile.takeoff_ledges) |distance| if (try environment.ledge(
-                                actor.pose,
-                                .support,
-                                distance,
-                                .behind,
-                            )) {
+                            for (profile.takeoff_ledges) |distance| if (try environment.ledge(actor.pose, .support, distance, .behind)) {
                                 actor.activity = .{ .flying = .{} };
                                 break;
                             };
@@ -677,10 +610,7 @@ pub const World = struct {
                 }
                 actor.playback = .{};
                 clip = profile.clip(actor.activity);
-                if (actor.room) |*room| _ = map.handoff(
-                    room,
-                    &actor.pose.position,
-                ) catch |err| switch (err) {
+                if (actor.room) |*room| _ = map.handoff(room, &actor.pose.position) catch |err| switch (err) {
                     error.ExitWithoutDestination => {
                         actor.activity = .removed;
                         actor.active = false;

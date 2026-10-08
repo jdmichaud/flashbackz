@@ -36,11 +36,7 @@ pub const Profile = struct {
 };
 pub const Definition = struct { profile: usize, initial_phase: Phase, footprint: contacts.Footprint, facing: motion.Facing, palette_bank: u4, behind_player: bool, initially_active: bool, wake_nearby: bool, accepts_signals: bool, interaction_priority: u16, hint: motion.VisualId, label: []const u8, offer_threshold: i16, path: Circuit, station: Circuit, reward: Circuit };
 pub const Binding = struct { circuit: Circuit, actor: usize, next_step: bool };
-pub const Payment = struct {
-    item: equipment.ItemHandle,
-    actor: usize,
-    next_step: bool,
-};
+pub const Payment = struct { item: equipment.ItemHandle, actor: usize, next_step: bool };
 pub const Actor = struct {
     pose: motion.Pose,
     room: geometry.RoomId,
@@ -117,12 +113,7 @@ pub const World = struct {
                 .position = actor.pose.position,
                 .width = definition.footprint.width,
             };
-            const near = try activation.around(
-                map,
-                player.room,
-                actor.room,
-                actor.pose.position.y,
-            );
+            const near = try activation.around(map, player.room, actor.room, actor.pose.position.y);
             if (definition.wake_nearby and near.wake) actor.active = true;
             if (try layout.overlaps(map, player, actor.contact)) self.candidate = index;
         }
@@ -194,10 +185,7 @@ pub const World = struct {
                             player,
                             &.{},
                         );
-                        if (awareness.player(
-                            false,
-                            profile.attention_distance,
-                        )) actor.phase = .retreating else if (!near.same and
+                        if (awareness.player(false, profile.attention_distance)) actor.phase = .retreating else if (!near.same and
                             !(definition.wake_nearby and near.near)) actor.active = false;
                     },
                     .retreating => {

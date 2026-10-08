@@ -143,14 +143,7 @@ pub fn recognize(group: rules.Group) ?Spec {
     const payment = r[2].conditions[0].argument;
     const debit = r[2].conditions[1].argument;
     if (debit < 0 or debit > 2) return null;
-    for ([_]usize{
-        2,
-        7,
-        14,
-        17,
-        21,
-        23,
-    }) |i| if (r[i].conditions[0].argument != payment or
+    for ([_]usize{ 2, 7, 14, 17, 21, 23 }) |i| if (r[i].conditions[0].argument != payment or
         r[i].conditions[1].argument != debit or
         r[i].effect.argument != 44) return null;
     for ([_]usize{ 1, 6, 13, 18, 20 }) |i| if (r[i].conditions[0].argument != 30) return null;
@@ -250,10 +243,7 @@ pub fn load(
         const source_purse = record.parameters[spec.debit_parameter];
         if (source_purse < 0 or source_purse >= table.count) return error.InvalidTraderPurse;
         const purse_record = try table.record(@intCast(source_purse));
-        const signal = credit_wallet.signal(try rules.group(
-            rule_bytes,
-            purse_record.rule_group,
-        )) orelse return error.UnsupportedTraderPurse;
+        const signal = credit_wallet.signal(try rules.group(rule_bytes, purse_record.rule_group)) orelse return error.UnsupportedTraderPurse;
         if (purse_record.kind != 3 or
             purse_record.initially_active == 0 or
             purse_record.parameters[0] != record.kind or
@@ -265,10 +255,7 @@ pub fn load(
             allocator,
             .{ .item = purse, .trader = definitions.items.len, .next_step = source_purse >= i },
         );
-        const outputs = try allocator.alloc(
-            world_props.CircuitId,
-            spec.outputs.len,
-        );
+        const outputs = try allocator.alloc(world_props.CircuitId, spec.outputs.len);
         errdefer allocator.free(outputs);
         for (spec.outputs, outputs) |output, *circuit| {
             const target = record.parameters[output.parameter];

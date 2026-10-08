@@ -36,10 +36,7 @@ pub fn draw(
                     0 => continue,
                     15 => style.foreground,
                     2 => style.shadow,
-                    else => if (style.palette_bank) |bank| (@as(
-                        u8,
-                        bank,
-                    ) << 4) | ink else return error.UnknownGlyphInk,
+                    else => if (style.palette_bank) |bank| (@as(u8, bank) << 4) | ink else return error.UnknownGlyphInk,
                 };
                 pixels[@as(usize, @intCast(dy)) * width + @as(usize, @intCast(dx))] = color;
             }

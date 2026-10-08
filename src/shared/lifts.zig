@@ -124,10 +124,7 @@ pub const Instance = struct {
     fn floor(self: Instance, definition: Definition) terrain.Span {
         var column = @divFloor(@as(i32, self.pose.position.x) + 8, 16);
         if (self.pose.facing == .right) column -= definition.width - 1;
-        const row = (@divTrunc(
-            @as(i32, self.pose.position.y),
-            36,
-        ) & ~@as(i32, 1)) + definition.floor_row_offset;
+        const row = (@divTrunc(@as(i32, self.pose.position.y), 36) & ~@as(i32, 1)) + definition.floor_row_offset;
         return .{
             .origin = .{ .room = self.room, .column = @intCast(column), .row = @intCast(row) },
             .length = definition.width,
@@ -225,11 +222,7 @@ pub const Instance = struct {
             },
             .travelling => {
                 self.remaining -%= 1;
-                if (self.remaining == 0) try self.arrive(
-                    definition,
-                    profile,
-                    world,
-                ) else self.move(profile.trips[@backingInt(self.destination)].speed);
+                if (self.remaining == 0) try self.arrive(definition, profile, world) else self.move(profile.trips[@backingInt(self.destination)].speed);
             },
             .arriving => {
                 if (profile.trips[@backingInt(self.destination)].transfer) |transfer| {

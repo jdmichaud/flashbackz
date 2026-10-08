@@ -153,11 +153,8 @@ pub const Controller = struct {
     operate_requested: bool = false,
 
     fn wallAt(environment: anytype, pose: motion.Pose, ahead: i16) !bool {
-        return try environment.at(pose, .torso, ahead) and !try environment.at(
-            pose,
-            .torso,
-            ahead - 1,
-        );
+        return try environment.at(pose, .torso, ahead) and
+            !try environment.at(pose, .torso, ahead - 1);
     }
 
     fn selectedClip(self: Controller, clips: Clips) !motion.Clip {
@@ -257,10 +254,7 @@ pub const Controller = struct {
         if (self.health_before_step <= 0) return;
         for (policy.priority) |impact| {
             if (!hits.accepts(impact)) continue;
-            const entry = try policy.responses[@backingInt(impact)].select(
-                pose.*,
-                environment,
-            ) orelse continue;
+            const entry = try policy.responses[@backingInt(impact)].select(pose.*, environment) orelse continue;
             if (entry.turn) pose.facing = if (pose.facing == .right) .left else .right;
             rolling.shiftForward(pose, entry.forward);
             pose.position.y +%= entry.down;
@@ -459,44 +453,19 @@ pub const Controller = struct {
                         self.activity = .{ .operating = .reaching };
                     } else if (intent.vertical) |vertical| {
                         if (vertical == .up) {
-                            if (!intent.action and try environment.ledge(
-                                pose.*,
-                                .head,
-                                0,
-                                .ahead,
-                            )) {
+                            if (!intent.action and
+                                try environment.ledge(pose.*, .head, 0, .ahead))
+                            {
                                 self.activity = .{ .turning = .preparation };
                             } else {
                                 if (clips.jumps == null) return .locomotion_requested;
                                 if (intent.action) {
-                                    if (!try environment.at(
-                                        pose.*,
-                                        .torso,
-                                        1,
-                                    )) self.activity = .{ .jumping = .{ .kind = .forward } };
-                                } else self.activity = .{ .jumping = .{ .kind = if (try environment.at(
-                                    pose.*,
-                                    .torso,
-                                    0,
-                                )) .low_clearance else .upward } };
+                                    if (!try environment.at(pose.*, .torso, 1)) self.activity = .{ .jumping = .{ .kind = .forward } };
+                                } else self.activity = .{ .jumping = .{ .kind = if (try environment.at(pose.*, .torso, 0)) .low_clearance else .upward } };
                             }
                         } else if (intent.action) {
-                            if (try environment.ledge(
-                                pose.*,
-                                .support,
-                                0,
-                                .ahead,
-                            )) self.activity = .{ .turning = .preparation } else if (try environment.ledge(
-                                pose.*,
-                                .support,
-                                0,
-                                .behind,
-                            )) self.activity = .{ .ledge = .{ .phase = .lowering } };
-                        } else if (try environment.at(pose.*, .torso, 0) and !try environment.at(
-                            pose.*,
-                            .torso,
-                            -1,
-                        )) {
+                            if (try environment.ledge(pose.*, .support, 0, .ahead)) self.activity = .{ .turning = .preparation } else if (try environment.ledge(pose.*, .support, 0, .behind)) self.activity = .{ .ledge = .{ .phase = .lowering } };
+                        } else if (try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .torso, -1)) {
                             self.activity = .{ .turning = .preparation };
                         } else {
                             if (clips.crouch == null) return .locomotion_requested;
@@ -508,25 +477,15 @@ pub const Controller = struct {
                         } else {
                             if (clips.walk == null or
                                 (intent.action and clips.run == null)) return .locomotion_requested;
-                            if (try environment.at(pose.*, .torso, 0) and !try environment.at(
-                                pose.*,
-                                .torso,
-                                -1,
-                            )) {
+                            if (try environment.at(pose.*, .torso, 0) and
+                                !try environment.at(pose.*, .torso, -1))
+                            {
                                 // Already touching the blocked side of a wall edge.
                             } else if (!try environment.at(pose.*, .support, 1)) {
                                 if (clips.descend == null) return .terrain_transition_requested;
                                 self.activity = .stepping_down;
-                            } else if (!try environment.at(
-                                pose.*,
-                                .torso,
-                                0,
-                            ) or !try environment.at(pose.*, .torso, 1)) {
-                                self.activity = if (intent.action and !try wallAt(
-                                    environment,
-                                    pose.*,
-                                    1,
-                                )) .{ .running = .starting } else .{ .walking = .starting };
+                            } else if (!try environment.at(pose.*, .torso, 0) or !try environment.at(pose.*, .torso, 1)) {
+                                self.activity = if (intent.action and !try wallAt(environment, pose.*, 1)) .{ .running = .starting } else .{ .walking = .starting };
                             }
                         }
                     }
@@ -544,19 +503,13 @@ pub const Controller = struct {
                         .starting => gait.start.torso_clearance_ahead,
                         .stride => |i| gait.strides[i].torso_clearance_ahead,
                     };
-                    if (!try environment.at(pose.*, .support, 1) or try environment.at(
-                        pose.*,
-                        .torso,
-                        clearance,
-                    )) {
+                    if (!try environment.at(pose.*, .support, 1) or
+                        try environment.at(pose.*, .torso, clearance))
+                    {
                         self.activity = .standing;
                     } else if (intent.direction == pose.facing) {
                         if (intent.action) {
-                            if (!try environment.at(
-                                pose.*,
-                                .torso,
-                                1,
-                            )) self.activity = .{ .changing_pace = .accelerating } else self.activity = .standing;
+                            if (!try environment.at(pose.*, .torso, 1)) self.activity = .{ .changing_pace = .accelerating } else self.activity = .standing;
                         } else {
                             if (gait.strides.len == 0) return error.InvalidGait;
                             self.activity = .{ .walking = .{ .stride = switch (phase) {
@@ -574,58 +527,32 @@ pub const Controller = struct {
                         phase.stride == 0 and
                         intent.action and
                         backward and
-                        try environment.at(
-                            pose.*,
-                            .torso,
-                            2,
-                        ))
+                        try environment.at(pose.*, .torso, 2))
                     {
                         self.activity = .{ .stopping_run = .braking };
-                    } else if (!try environment.at(
-                        pose.*,
-                        .support,
-                        1,
-                    ) or
+                    } else if (!try environment.at(pose.*, .support, 1) or
                         (phase != .starting and
                             intent.action and
                             intent.vertical == .down and
-                            !try environment.at(
-                                pose.*,
-                                .support,
-                                2,
-                            )))
+                            !try environment.at(pose.*, .support, 2)))
                     {
                         rolling.shiftForward(pose, 16);
                         self.activity = .{ .descending = .{ .phase = .running } };
                     } else if (phase == .starting and try wallAt(environment, pose.*, 1)) {
                         self.activity = .{ .stopping_run = .wall };
-                    } else if (phase == .starting and (try wallAt(
-                        environment,
-                        pose.*,
-                        2,
-                    ) or try wallAt(environment, pose.*, 3))) {
+                    } else if (phase == .starting and (try wallAt(environment, pose.*, 2) or try wallAt(environment, pose.*, 3))) {
                         self.activity = .{ .stopping_run = .braking };
                     } else if (phase != .starting and
                         intent.action and
                         intent.vertical == .up and
-                        !try environment.ledge(
-                            pose.*,
-                            .support,
-                            2,
-                            .ahead,
-                        ))
+                        !try environment.ledge(pose.*, .support, 2, .ahead))
                     {
                         rolling.shiftForward(pose, 16);
                         self.activity = .{ .running_jump = .{} };
                     } else if (phase != .starting and
                         intent.action and
                         intent.neutralDirections() and
-                        try environment.ledge(
-                            pose.*,
-                            .head,
-                            4,
-                            .behind,
-                        ))
+                        try environment.ledge(pose.*, .head, 4, .behind))
                     {
                         rolling.shiftForward(pose, 16);
                         self.activity = .{ .ledge = .{ .phase = .running_approach } };
@@ -689,11 +616,7 @@ pub const Controller = struct {
                         self.activity = .{ .running_jump = .{} };
                     } else if (intent.action and intent.vertical == .down) {
                         self.activity = .{ .rolling = .{ .phase = .running_entry } };
-                    } else if (!try environment.at(
-                        pose.*,
-                        .support,
-                        2,
-                    )) self.activity = .{ .stopping_run = .edge } else if (intent.action and
+                    } else if (!try environment.at(pose.*, .support, 2)) self.activity = .{ .stopping_run = .edge } else if (intent.action and
                         intent.direction != null and
                         intent.direction != pose.facing)
                     {
@@ -705,30 +628,14 @@ pub const Controller = struct {
                 },
                 .changing_pace => |phase| {
                     if (phase == .slowing) {
-                        if (!try environment.at(
-                            pose.*,
-                            .support,
-                            1,
-                        ) or
+                        if (!try environment.at(pose.*, .support, 1) or
                             intent.direction != pose.facing) self.activity = .standing else if (intent.action) self.activity = .{ .changing_pace = .accelerating } else self.activity = .{ .walking = .{ .stride = 1 } };
                     } else {
                         if (!try environment.at(pose.*, .support, 1)) {
                             rolling.shiftForward(pose, 16);
                             self.activity = .{ .descending = .{ .phase = .running } };
                         } else {
-                            if (try wallAt(
-                                environment,
-                                pose.*,
-                                1,
-                            )) self.activity = .{ .stopping_run = .wall } else if (try wallAt(
-                                environment,
-                                pose.*,
-                                2,
-                            ) or try wallAt(
-                                environment,
-                                pose.*,
-                                3,
-                            )) self.activity = .{ .stopping_run = .braking } else if (intent.direction == pose.facing and
+                            if (try wallAt(environment, pose.*, 1)) self.activity = .{ .stopping_run = .wall } else if (try wallAt(environment, pose.*, 2) or try wallAt(environment, pose.*, 3)) self.activity = .{ .stopping_run = .braking } else if (intent.direction == pose.facing and
                                 !intent.action)
                             {
                                 rolling.shiftForward(pose, 16);
@@ -736,11 +643,7 @@ pub const Controller = struct {
                             } else if (intent.direction == pose.facing and
                                 intent.action) self.activity = .{ .running = .{ .stride = 0 } } else if (intent.neutralDirections() and
                                 !intent.action and
-                                !try environment.at(
-                                    pose.*,
-                                    .support,
-                                    2,
-                                )) self.activity = .{ .stopping_run = .edge } else self.activity = .{ .stopping_run = .braking };
+                                !try environment.at(pose.*, .support, 2)) self.activity = .{ .stopping_run = .edge } else self.activity = .{ .stopping_run = .braking };
                         }
                     }
                 },
@@ -825,22 +728,11 @@ pub const Controller = struct {
                                 const roll = clips.roll orelse return .locomotion_requested;
                                 if (!try environment.at(pose.*, .support, 1)) {
                                     self.activity = .{ .rolling = .{ .phase = .drop } };
-                                } else if (try environment.rollPassage(
-                                    pose.*,
-                                    1,
-                                ) or !try environment.at(
-                                    pose.*,
-                                    .torso,
-                                    1,
-                                )) {
+                                } else if (try environment.rollPassage(pose.*, 1) or !try environment.at(pose.*, .torso, 1)) {
                                     rolling.shiftForward(pose, roll.alignment_forward);
                                     self.activity = .{ .rolling = .{} };
                                 } else self.activity = .{ .crouching = .rising };
-                            } else if (!try environment.at(
-                                pose.*,
-                                .torso,
-                                -1,
-                            )) self.activity = .{ .crouching = .turning } else self.activity = .{ .crouching = .rising };
+                            } else if (!try environment.at(pose.*, .torso, -1)) self.activity = .{ .crouching = .turning } else self.activity = .{ .crouching = .rising };
                         } else self.activity = .{ .crouching = .rising };
                     },
                 },
@@ -905,10 +797,7 @@ pub const Controller = struct {
                     .catch_ledge => self.activity = .{ .ledge = .{ .phase = .catching } },
                     .running => self.activity = .{ .running = .{ .stride = 0 } },
                     .running_jump => self.activity = .{ .running_jump = .{} },
-                    .jump_flight => self.activity = .{ .jumping = .{
-                        .kind = .forward,
-                        .phase = .flight,
-                    } },
+                    .jump_flight => self.activity = .{ .jumping = .{ .kind = .forward, .phase = .flight } },
                     .running_drop => self.activity = .{ .descending = .{ .phase = .running } },
                     .brake => self.activity = .{ .stopping_run = .braking },
                     .wall_stop => self.activity = .{ .stopping_run = .wall },

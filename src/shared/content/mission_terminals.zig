@@ -124,11 +124,7 @@ pub const Assets = struct {
     pub fn bind(self: Assets, connections: []const routes.Connection) ![]runtime.Binding {
         var result: std.ArrayList(runtime.Binding) = .empty;
         errdefer result.deinit(self.allocator);
-        for (
-            self.sources,
-            self.signals,
-            0..,
-        ) |source, signals, index| for (connections) |connection| {
+        for (self.sources, self.signals, 0..) |source, signals, index| for (connections) |connection| {
             if (connection.recipient != source) continue;
             for (
                 signals,
@@ -199,10 +195,7 @@ pub fn load(
         const purse_source = record.parameters[spec.purse_parameter];
         if (purse_source < 0 or purse_source >= table.count) return error.InvalidMissionPurse;
         const wallet = try table.record(@intCast(purse_source));
-        if (credit_wallet.signal(try rules.group(
-            bytes,
-            wallet.rule_group,
-        )) == null) return error.UnsupportedMissionPurse;
+        if (credit_wallet.signal(try rules.group(bytes, wallet.rule_group)) == null) return error.UnsupportedMissionPurse;
         const purse: equipment.ItemHandle = for (supplies, 0..) |item, i| {
             if (item.kind == .credits) break .{ .index = @intCast(i), .generation = 1 };
         } else return error.MissingMissionPurse;

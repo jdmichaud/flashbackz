@@ -97,10 +97,8 @@ pub const Emitter = struct {
     ) !void {
         self.sound = null;
         var clip = self.currentClip(definition);
-        if (self.hit and self.phase == .shielding) self.playback.completeDisplacement(
-            clip,
-            &self.pose,
-        );
+        if (self.hit and
+            self.phase == .shielding) self.playback.completeDisplacement(clip, &self.pose);
         if (self.playback.exhausted(clip)) {
             switch (self.phase) {
                 .ready => if (deploy) {

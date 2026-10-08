@@ -31,17 +31,11 @@ pub const Menu = struct {
             .left, .right => switch (self.selection) {
                 .sound_fx => self.settings.sound_fx = !self.settings.sound_fx,
                 .music => self.settings.music = !self.settings.music,
-                .volume => self.settings.volume = if (key_code == .right) @min(
-                    100,
-                    self.settings.volume + 10,
-                ) else self.settings.volume -| 10,
+                .volume => self.settings.volume = if (key_code == .right) @min(100, self.settings.volume + 10) else self.settings.volume -| 10,
                 .joystick => self.settings.joystick = !self.settings.joystick,
                 .zoom => self.settings.zoom = @fromBackingInt(@as(
                     u2,
-                    @intCast((@as(u8, @backingInt(self.settings.zoom)) + @as(
-                        u8,
-                        if (key_code == .right) 1 else 2,
-                    )) % 3),
+                    @intCast((@as(u8, @backingInt(self.settings.zoom)) + @as(u8, if (key_code == .right) 1 else 2)) % 3),
                 )),
                 else => {},
             },

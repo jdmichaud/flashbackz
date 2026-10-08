@@ -191,10 +191,7 @@ test "compressed strips cover consecutive rows while raw planes interleave colum
     var linear = try decode(allocator, &compressed, &colors, 0);
     defer linear.deinit();
     for (0..4) |strip| {
-        for (linear.image.pixels[strip * strip_size ..][0..strip_size]) |value| try std.testing.expectEqual(
-            @as(u8, @intCast(strip * 16)),
-            value,
-        );
+        for (linear.image.pixels[strip * strip_size ..][0..strip_size]) |value| try std.testing.expectEqual(@as(u8, @intCast(strip * 16)), value);
     }
     try std.testing.expectError(error.AbsentRoom, decode(allocator, &compressed, &colors, 1));
     try std.testing.expectError(error.InvalidRoom, decode(allocator, &compressed, &colors, 64));
