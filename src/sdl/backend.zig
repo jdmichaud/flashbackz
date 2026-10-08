@@ -181,7 +181,10 @@ pub const SdlBackend = struct {
         // display's DPI: on a display scaled to 150%, every pixel of the frame is 1.5 pixels
         // wide. SDL declares it when video starts, and then sizes the window in the display's
         // own pixels, which the window scale divides exactly.
-        if (builtin.os.tag == .windows) _ = c.SDL_SetHint(c.HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
+        if (builtin.os.tag == .windows) _ = c.SDL_SetHint(
+            c.HINT_WINDOWS_DPI_AWARENESS,
+            "permonitorv2",
+        );
         const held = self.subsystems;
         errdefer {
             const acquired = self.subsystems & ~held;
@@ -245,7 +248,12 @@ pub const SdlBackend = struct {
 
     /// The window size for a mode: the resolution times the scale preference. The scale is
     /// reduced until the window fits the usable display bounds, but never below 1.
-    pub fn fitWindowSize(width: u32, height: u32, scale: u32, bounds: ?platform.Size) platform.Size {
+    pub fn fitWindowSize(
+        width: u32,
+        height: u32,
+        scale: u32,
+        bounds: ?platform.Size,
+    ) platform.Size {
         var s: u32 = std.math.clamp(scale, 1, max_window_scale);
         if (bounds) |b| {
             while (s > 1 and (width * s > b.width or height * s > b.height)) s -= 1;
@@ -255,7 +263,12 @@ pub const SdlBackend = struct {
 
     /// The largest rectangle with the aspect ratio of the frame that fits the output, centred.
     pub fn fitRect(out_w: i32, out_h: i32, width: u32, height: u32) c.Rect {
-        if (out_w <= 0 or out_h <= 0 or width == 0 or height == 0) return .{ .x = 0, .y = 0, .w = 0, .h = 0 };
+        if (out_w <= 0 or out_h <= 0 or width == 0 or height == 0) return .{
+            .x = 0,
+            .y = 0,
+            .w = 0,
+            .h = 0,
+        };
         const ow: i64 = out_w;
         const oh: i64 = out_h;
         const w: i64 = width;
@@ -309,8 +322,14 @@ pub const SdlBackend = struct {
     /// scaled. Outside the blit, the position is clamped to the page, where the pointer is drawn.
     fn pagePoint(self: *SdlBackend, x: i32, y: i32) struct { x: i32, y: i32 } {
         const found = self.presentRect() orelse return .{ .x = x, .y = y };
-        const page_x = @divTrunc(@as(i64, x - found.rect.x) * @as(i64, found.page.width), found.rect.w);
-        const page_y = @divTrunc(@as(i64, y - found.rect.y) * @as(i64, found.page.height), found.rect.h);
+        const page_x = @divTrunc(
+            @as(i64, x - found.rect.x) * @as(i64, found.page.width),
+            found.rect.w,
+        );
+        const page_y = @divTrunc(
+            @as(i64, y - found.rect.y) * @as(i64, found.page.height),
+            found.rect.h,
+        );
         return .{
             .x = @intCast(std.math.clamp(page_x, 0, @as(i64, found.page.width) - 1)),
             .y = @intCast(std.math.clamp(page_y, 0, @as(i64, found.page.height) - 1)),
@@ -320,7 +339,10 @@ pub const SdlBackend = struct {
     fn setResolution(ctx: *anyopaque, width: u32, height: u32) platform.PlatformError!void {
         const self = cast(ctx);
         if (!self.started) return error.NotStarted;
-        if (width == 0 or height == 0 or width > max_dimension or height > max_dimension) return error.InvalidResolution;
+        if (width == 0 or
+            height == 0 or
+            width > max_dimension or
+            height > max_dimension) return error.InvalidResolution;
         // An unchanged resolution is not a mode change. The film player sets its size on every
         // frame. A new texture and a window resize on each frame stall the update loop, and the
         // sound queue then runs empty.
@@ -333,7 +355,11 @@ pub const SdlBackend = struct {
             // Make the new texture before the change. The old texture stays until the new one
             // exists.
             const renderer = self.renderer orelse return error.DeviceFailure;
-            const fresh = self.createTexture(renderer, width, height) orelse return error.DeviceFailure;
+            const fresh = self.createTexture(
+                renderer,
+                width,
+                height,
+            ) orelse return error.DeviceFailure;
             if (self.texture) |old| c.SDL_DestroyTexture(old);
             self.texture = fresh;
             self.refitWindow(width, height);
@@ -345,7 +371,10 @@ pub const SdlBackend = struct {
     fn displayBounds(self: *const SdlBackend) ?platform.Size {
         const index = if (self.window) |w| @max(c.SDL_GetWindowDisplayIndex(w), 0) else 0;
         var rect: c.Rect = undefined;
-        if (c.SDL_GetDisplayUsableBounds(index, &rect) != 0 or rect.w <= 0 or rect.h <= 0) return null;
+        if (c.SDL_GetDisplayUsableBounds(
+            index,
+            &rect,
+        ) != 0 or rect.w <= 0 or rect.h <= 0) return null;
         return .{ .width = @intCast(rect.w), .height = @intCast(rect.h) };
     }
 
@@ -358,16 +387,36 @@ pub const SdlBackend = struct {
         var h: c_int = 0;
         c.SDL_GetWindowSize(window, &w, &h);
         if (w < 0 or h < 0) return;
-        if (@as(u32, @intCast(w)) != self.window_size.width or @as(u32, @intCast(h)) != self.window_size.height) return;
-        const size = fitWindowSize(width, height, self.options.initial_window_scale, self.displayBounds());
+        if (@as(
+            u32,
+            @intCast(w),
+        ) != self.window_size.width or @as(u32, @intCast(h)) != self.window_size.height) return;
+        const size = fitWindowSize(
+            width,
+            height,
+            self.options.initial_window_scale,
+            self.displayBounds(),
+        );
         c.SDL_SetWindowSize(window, @intCast(size.width), @intCast(size.height));
         self.window_size = size;
     }
 
     fn createPresentation(self: *SdlBackend, width: u32, height: u32) platform.PlatformError!void {
-        const size = fitWindowSize(width, height, self.options.initial_window_scale, self.displayBounds());
+        const size = fitWindowSize(
+            width,
+            height,
+            self.options.initial_window_scale,
+            self.displayBounds(),
+        );
         const flags = c.WINDOW_SHOWN | c.WINDOW_RESIZABLE | c.WINDOW_ALLOW_HIGHDPI;
-        const window = c.SDL_CreateWindow(self.title.ptr, c.WINDOWPOS_CENTERED, c.WINDOWPOS_CENTERED, @intCast(size.width), @intCast(size.height), flags) orelse {
+        const window = c.SDL_CreateWindow(
+            self.title.ptr,
+            c.WINDOWPOS_CENTERED,
+            c.WINDOWPOS_CENTERED,
+            @intCast(size.width),
+            @intCast(size.height),
+            flags,
+        ) orelse {
             std.log.err("SDL_CreateWindow failed: {s}", .{c.SDL_GetError()});
             return error.DeviceFailure;
         };
@@ -378,7 +427,11 @@ pub const SdlBackend = struct {
         };
         errdefer c.SDL_DestroyRenderer(created.renderer);
         self.recordRendererInfo(created);
-        const texture = self.createTexture(created.renderer, width, height) orelse return error.DeviceFailure;
+        const texture = self.createTexture(
+            created.renderer,
+            width,
+            height,
+        ) orelse return error.DeviceFailure;
         self.window = window;
         self.renderer = created.renderer;
         self.texture = texture;
@@ -393,11 +446,18 @@ pub const SdlBackend = struct {
             return .{ .renderer = r, .asked_vsync = false };
         }
         if (self.options.prefer_vsync) {
-            if (c.SDL_CreateRenderer(window, -1, c.RENDERER_ACCELERATED | c.RENDERER_PRESENTVSYNC)) |r| {
+            if (c.SDL_CreateRenderer(
+                window,
+                -1,
+                c.RENDERER_ACCELERATED | c.RENDERER_PRESENTVSYNC,
+            )) |r| {
                 return .{ .renderer = r, .asked_vsync = true };
             }
         }
-        if (c.SDL_CreateRenderer(window, -1, c.RENDERER_ACCELERATED)) |r| return .{ .renderer = r, .asked_vsync = false };
+        if (c.SDL_CreateRenderer(window, -1, c.RENDERER_ACCELERATED)) |r| return .{
+            .renderer = r,
+            .asked_vsync = false,
+        };
         const r = c.SDL_CreateRenderer(window, -1, c.RENDERER_SOFTWARE) orelse return null;
         return .{ .renderer = r, .asked_vsync = false };
     }
@@ -410,7 +470,9 @@ pub const SdlBackend = struct {
         var info: c.RendererInfo = undefined;
         if (c.SDL_GetRendererInfo(created.renderer, &info) != 0) return;
         self.software = info.flags & c.RENDERER_SOFTWARE != 0;
-        self.vsync = created.asked_vsync and !self.software and info.flags & c.RENDERER_PRESENTVSYNC != 0;
+        self.vsync = created.asked_vsync and
+            !self.software and
+            info.flags & c.RENDERER_PRESENTVSYNC != 0;
         // The SDL driver in use, for the host's start-up line: "opengl", "software",
         // "opengles2" and others. A window that never paints is almost always a driver problem,
         // and only this code knows the driver.
@@ -425,13 +487,27 @@ pub const SdlBackend = struct {
         return self.renderer_name_buf[0..self.renderer_name_len];
     }
 
-    fn createTexture(self: *SdlBackend, renderer: *c.Renderer, width: u32, height: u32) ?*c.Texture {
+    fn createTexture(
+        self: *SdlBackend,
+        renderer: *c.Renderer,
+        width: u32,
+        height: u32,
+    ) ?*c.Texture {
         if (self.fail_next_texture) {
             self.fail_next_texture = false;
             return null;
         }
-        return c.SDL_CreateTexture(renderer, c.PIXELFORMAT_RGBA32, c.TEXTUREACCESS_STREAMING, @intCast(width), @intCast(height)) orelse {
-            std.log.err("SDL_CreateTexture({d}x{d}) failed: {s}", .{ width, height, c.SDL_GetError() });
+        return c.SDL_CreateTexture(
+            renderer,
+            c.PIXELFORMAT_RGBA32,
+            c.TEXTUREACCESS_STREAMING,
+            @intCast(width),
+            @intCast(height),
+        ) orelse {
+            std.log.err(
+                "SDL_CreateTexture({d}x{d}) failed: {s}",
+                .{ width, height, c.SDL_GetError() },
+            );
             return null;
         };
     }
@@ -466,9 +542,22 @@ pub const SdlBackend = struct {
         const renderer = self.renderer orelse return error.InvalidResolution;
         const texture = self.texture orelse return error.InvalidResolution;
         // SDL copies the rows into the texture. The backend keeps no reference to the buffer.
-        if (c.SDL_UpdateTexture(texture, null, frame.pixels.ptr, pitch) != 0) return error.DeviceFailure;
-        const out = self.outputSize() orelse platform.Size{ .width = res.width, .height = res.height };
-        const dst = fitRect(@intCast(@min(out.width, std.math.maxInt(i32))), @intCast(@min(out.height, std.math.maxInt(i32))), res.width, res.height);
+        if (c.SDL_UpdateTexture(
+            texture,
+            null,
+            frame.pixels.ptr,
+            pitch,
+        ) != 0) return error.DeviceFailure;
+        const out = self.outputSize() orelse platform.Size{
+            .width = res.width,
+            .height = res.height,
+        };
+        const dst = fitRect(
+            @intCast(@min(out.width, std.math.maxInt(i32))),
+            @intCast(@min(out.height, std.math.maxInt(i32))),
+            res.width,
+            res.height,
+        );
         _ = c.SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         _ = c.SDL_RenderClear(renderer);
         if (c.SDL_RenderCopy(renderer, texture, null, &dst) != 0) return error.DeviceFailure;
@@ -490,7 +579,9 @@ pub const SdlBackend = struct {
 
     fn poll(self: *SdlBackend, dst: []platform.Event) usize {
         var n: usize = 0;
-        while (n < dst.len and self.pending_next < self.pending.items.len) : (self.pending_next += 1) {
+        while (n < dst.len and
+            self.pending_next < self.pending.items.len) : (self.pending_next += 1)
+        {
             dst[n] = self.pending.items[self.pending_next];
             n += 1;
         }
@@ -553,11 +644,16 @@ pub const SdlBackend = struct {
                 }
                 // Ctrl+F10 is the host's chord, and the game never sees it. It moves the pointer
                 // between the desktop and the game.
-                if (keyFromScancode(ev.key.keysym.scancode) == .f10 and (ev.key.keysym.mod & c.KMOD_CTRL) != 0) {
+                if (keyFromScancode(ev.key.keysym.scancode) == .f10 and
+                    (ev.key.keysym.mod & c.KMOD_CTRL) != 0)
+                {
                     if (ev.type == c.KEYDOWN) self.setCapture(!self.captured);
                     return 0;
                 }
-                const key: platform.Event.KeyEvent = .{ .key = keyFromScancode(ev.key.keysym.scancode), .repeat = ev.key.repeat != 0 };
+                const key: platform.Event.KeyEvent = .{
+                    .key = keyFromScancode(ev.key.keysym.scancode),
+                    .repeat = ev.key.repeat != 0,
+                };
                 break :blk if (ev.type == c.KEYDOWN) .{ .key_down = key } else .{ .key_up = key };
             },
             c.TEXTINPUT => {
@@ -568,7 +664,12 @@ pub const SdlBackend = struct {
                 if (self.relative_wanted and !self.captured) return 0;
                 const motion = self.pageMotion(ev.motion.xrel, ev.motion.yrel);
                 const at = self.pagePoint(ev.motion.x, ev.motion.y);
-                break :blk .{ .mouse_motion = .{ .dx = motion.dx, .dy = motion.dy, .x = at.x, .y = at.y } };
+                break :blk .{ .mouse_motion = .{
+                    .dx = motion.dx,
+                    .dy = motion.dy,
+                    .x = at.x,
+                    .y = at.y,
+                } };
             },
             c.MOUSEBUTTONDOWN, c.MOUSEBUTTONUP => blk: {
                 // A click while the desktop has the pointer captures the pointer. The game does
@@ -583,12 +684,19 @@ pub const SdlBackend = struct {
                     return 0;
                 }
                 const at = self.pagePoint(ev.button.x, ev.button.y);
-                const button: platform.Event.MouseButtonEvent = .{ .button = mouseButton(ev.button.button), .x = at.x, .y = at.y };
+                const button: platform.Event.MouseButtonEvent = .{
+                    .button = mouseButton(ev.button.button),
+                    .x = at.x,
+                    .y = at.y,
+                };
                 break :blk if (ev.type == c.MOUSEBUTTONDOWN) .{ .mouse_button_down = button } else .{ .mouse_button_up = button };
             },
             c.MOUSEWHEEL => blk: {
                 const sign: i32 = if (ev.wheel.direction == c.MOUSEWHEEL_FLIPPED) -1 else 1;
-                break :blk .{ .mouse_wheel = .{ .dx = ev.wheel.x * sign, .dy = ev.wheel.y * sign } };
+                break :blk .{ .mouse_wheel = .{
+                    .dx = ev.wheel.x * sign,
+                    .dy = ev.wheel.y * sign,
+                } };
             },
             c.CONTROLLERDEVICEADDED => blk: {
                 const id = self.openController(ev.cdevice.which) orelse return 0;
@@ -599,10 +707,17 @@ pub const SdlBackend = struct {
                 break :blk .{ .controller_removed = controllerId(ev.cdevice.which) };
             },
             c.CONTROLLERBUTTONDOWN, c.CONTROLLERBUTTONUP => blk: {
-                const button: platform.Event.ControllerButtonEvent = .{ .controller = controllerId(ev.cbutton.which), .button = @fromBackingInt(ev.cbutton.button) };
+                const button: platform.Event.ControllerButtonEvent = .{
+                    .controller = controllerId(ev.cbutton.which),
+                    .button = @fromBackingInt(ev.cbutton.button),
+                };
                 break :blk if (ev.type == c.CONTROLLERBUTTONDOWN) .{ .controller_button_down = button } else .{ .controller_button_up = button };
             },
-            c.CONTROLLERAXISMOTION => .{ .controller_axis = .{ .controller = controllerId(ev.caxis.which), .axis = @fromBackingInt(ev.caxis.axis), .value = ev.caxis.value } },
+            c.CONTROLLERAXISMOTION => .{ .controller_axis = .{
+                .controller = controllerId(ev.caxis.which),
+                .axis = @fromBackingInt(ev.caxis.axis),
+                .value = ev.caxis.value,
+            } },
             else => return 0,
         };
         out[0] = .{ .time_ns = self.eventTimeNs(ev.common.timestamp), .payload = payload };
@@ -662,11 +777,16 @@ pub const SdlBackend = struct {
 
     // --- audio -------------------------------------------------------------------------------
 
-    fn audioOpen(ctx: *anyopaque, requested: platform.AudioFormat) platform.PlatformError!platform.AudioFormat {
+    fn audioOpen(
+        ctx: *anyopaque,
+        requested: platform.AudioFormat,
+    ) platform.PlatformError!platform.AudioFormat {
         const self = cast(ctx);
         if (!self.started) return error.NotStarted;
         if (!self.capabilities.audio) return error.Unsupported;
-        if (requested.channels == 0 or requested.sample_rate == 0 or requested.sample_rate > std.math.maxInt(c_int)) return error.Unsupported;
+        if (requested.channels == 0 or
+            requested.sample_rate == 0 or
+            requested.sample_rate > std.math.maxInt(c_int)) return error.Unsupported;
         self.closeAudio();
         const desired: c.AudioSpec = .{
             .freq = @intCast(requested.sample_rate),
@@ -680,7 +800,13 @@ pub const SdlBackend = struct {
             .userdata = null,
         };
         var obtained: c.AudioSpec = undefined;
-        const device = c.SDL_OpenAudioDevice(null, 0, &desired, &obtained, c.AUDIO_ALLOW_FREQUENCY_CHANGE | c.AUDIO_ALLOW_CHANNELS_CHANGE);
+        const device = c.SDL_OpenAudioDevice(
+            null,
+            0,
+            &desired,
+            &obtained,
+            c.AUDIO_ALLOW_FREQUENCY_CHANGE | c.AUDIO_ALLOW_CHANNELS_CHANGE,
+        );
         if (device == 0) {
             std.log.err("SDL_OpenAudioDevice failed: {s}", .{c.SDL_GetError()});
             return error.DeviceFailure;
@@ -689,7 +815,10 @@ pub const SdlBackend = struct {
             c.SDL_CloseAudioDevice(device);
             return error.Unsupported;
         }
-        const format: platform.AudioFormat = .{ .channels = obtained.channels, .sample_rate = @intCast(obtained.freq) };
+        const format: platform.AudioFormat = .{
+            .channels = obtained.channels,
+            .sample_rate = @intCast(obtained.freq),
+        };
         self.audio = .{
             .device = device,
             .format = format,
@@ -714,7 +843,11 @@ pub const SdlBackend = struct {
         const accepted: usize = @intCast(@min(offered, room));
         if (accepted == 0) return 0;
         const bytes: u32 = @intCast(accepted * self.audio.bytes_per_frame);
-        if (c.SDL_QueueAudio(self.audio.device, samples.ptr, bytes) != 0) return error.DeviceFailure;
+        if (c.SDL_QueueAudio(
+            self.audio.device,
+            samples.ptr,
+            bytes,
+        ) != 0) return error.DeviceFailure;
         self.audio.accepted_frames += accepted;
         return accepted;
     }
@@ -765,7 +898,10 @@ pub const SdlBackend = struct {
         self.captured = actual;
         _ = c.SDL_ShowCursor(if (actual) c.CURSOR_DISABLE else c.CURSOR_ENABLE);
         const t = self.orderedTime(self.elapsedNs());
-        self.pending.append(self.allocator, .{ .time_ns = t, .payload = .{ .capture_changed = actual } }) catch return error.OutOfMemory;
+        self.pending.append(
+            self.allocator,
+            .{ .time_ns = t, .payload = .{ .capture_changed = actual } },
+        ) catch return error.OutOfMemory;
         if (rc != 0) return error.Unsupported;
     }
 
@@ -781,7 +917,11 @@ pub const SdlBackend = struct {
     /// The scale, for the line the host prints.
     pub fn mouseScaleText(self: *SdlBackend) []const u8 {
         var buf: [32]u8 = undefined;
-        const text = std.fmt.bufPrint(&buf, "{d}/{d} of the device's counts", .{ self.mouse_scale_num, self.mouse_scale_den }) catch return "an unprintable scale";
+        const text = std.fmt.bufPrint(
+            &buf,
+            "{d}/{d} of the device's counts",
+            .{ self.mouse_scale_num, self.mouse_scale_den },
+        ) catch return "an unprintable scale";
         @memcpy(self.scale_text[0..text.len], text);
         self.scale_text_len = text.len;
         return self.scale_text[0..self.scale_text_len];
@@ -795,7 +935,10 @@ pub const SdlBackend = struct {
         self.captured = c.SDL_GetRelativeMouseMode() == c.TRUE;
         _ = c.SDL_ShowCursor(if (self.captured) c.CURSOR_DISABLE else c.CURSOR_ENABLE);
         const t = self.orderedTime(self.elapsedNs());
-        self.pending.append(self.allocator, .{ .time_ns = t, .payload = .{ .capture_changed = self.captured } }) catch {};
+        self.pending.append(
+            self.allocator,
+            .{ .time_ns = t, .payload = .{ .capture_changed = self.captured } },
+        ) catch {};
         self.motion_residue_x = 0;
         self.motion_residue_y = 0;
     }
@@ -869,7 +1012,10 @@ fn useDummyDrivers() void {
 
 fn startedBackend(scale: u32) !SdlBackend {
     useDummyDrivers();
-    var backend = try SdlBackend.init(std.testing.allocator, .{ .title = "flashbackz test", .initial_window_scale = scale });
+    var backend = try SdlBackend.init(
+        std.testing.allocator,
+        .{ .title = "flashbackz test", .initial_window_scale = scale },
+    );
     backend.force_software_renderer = true;
     return backend;
 }
@@ -877,7 +1023,13 @@ fn startedBackend(scale: u32) !SdlBackend {
 /// Reads the whole output of the renderer as RGBA32 rows of `width * 4` bytes.
 fn readBack(backend: *SdlBackend, dst: []u8, width: u32) !void {
     const renderer = backend.renderer orelse return error.NoRenderer;
-    if (c.SDL_RenderReadPixels(renderer, null, c.PIXELFORMAT_RGBA32, dst.ptr, @intCast(width * 4)) != 0) return error.ReadBackFailed;
+    if (c.SDL_RenderReadPixels(
+        renderer,
+        null,
+        c.PIXELFORMAT_RGBA32,
+        dst.ptr,
+        @intCast(width * 4),
+    ) != 0) return error.ReadBackFailed;
 }
 
 fn patternByte(x: u32, y: u32, channel: u32) u8 {
@@ -912,22 +1064,49 @@ test "every named key has a scancode" {
 
 test "fitting: window size and letterbox rectangle" {
     const fit = SdlBackend.fitWindowSize;
-    try std.testing.expectEqual(platform.Size{ .width = 960, .height = 600 }, fit(320, 200, 3, .{ .width = 1024, .height = 768 }));
-    try std.testing.expectEqual(platform.Size{ .width = 640, .height = 400 }, fit(320, 200, 3, .{ .width = 800, .height = 600 }));
-    try std.testing.expectEqual(platform.Size{ .width = 320, .height = 200 }, fit(320, 200, 3, .{ .width = 100, .height = 100 }));
-    try std.testing.expectEqual(platform.Size{ .width = 320, .height = 200 }, fit(320, 200, 0, null));
-    try std.testing.expectEqual(platform.Size{ .width = 1280, .height = 800 }, fit(320, 200, 4, null));
+    try std.testing.expectEqual(
+        platform.Size{ .width = 960, .height = 600 },
+        fit(320, 200, 3, .{ .width = 1024, .height = 768 }),
+    );
+    try std.testing.expectEqual(
+        platform.Size{ .width = 640, .height = 400 },
+        fit(320, 200, 3, .{ .width = 800, .height = 600 }),
+    );
+    try std.testing.expectEqual(
+        platform.Size{ .width = 320, .height = 200 },
+        fit(320, 200, 3, .{ .width = 100, .height = 100 }),
+    );
+    try std.testing.expectEqual(
+        platform.Size{ .width = 320, .height = 200 },
+        fit(320, 200, 0, null),
+    );
+    try std.testing.expectEqual(
+        platform.Size{ .width = 1280, .height = 800 },
+        fit(320, 200, 4, null),
+    );
     // A very large scale is clamped, so the multiplication does not overflow.
     const capped = fit(1024, 768, std.math.maxInt(u32), null);
     try std.testing.expectEqual(1024 * SdlBackend.max_window_scale, capped.width);
 
     const rect = SdlBackend.fitRect;
-    try std.testing.expectEqual(c.Rect{ .x = 0, .y = 0, .w = 640, .h = 400 }, rect(640, 400, 320, 200));
-    try std.testing.expectEqual(c.Rect{ .x = 0, .y = 100, .w = 640, .h = 400 }, rect(640, 600, 320, 200));
-    try std.testing.expectEqual(c.Rect{ .x = 160, .y = 0, .w = 320, .h = 200 }, rect(640, 200, 320, 200));
+    try std.testing.expectEqual(
+        c.Rect{ .x = 0, .y = 0, .w = 640, .h = 400 },
+        rect(640, 400, 320, 200),
+    );
+    try std.testing.expectEqual(
+        c.Rect{ .x = 0, .y = 100, .w = 640, .h = 400 },
+        rect(640, 600, 320, 200),
+    );
+    try std.testing.expectEqual(
+        c.Rect{ .x = 160, .y = 0, .w = 320, .h = 200 },
+        rect(640, 200, 320, 200),
+    );
     try std.testing.expectEqual(c.Rect{ .x = 0, .y = 0, .w = 0, .h = 0 }, rect(0, 200, 320, 200));
     try std.testing.expectEqual(@as(u64, 1_500_000_000), SdlBackend.counterToNs(1500, 1000));
-    try std.testing.expectEqual(@as(u64, 3_000_000_000), SdlBackend.counterToNs(3_000_000_000, 1_000_000_000));
+    try std.testing.expectEqual(
+        @as(u64, 3_000_000_000),
+        SdlBackend.counterToNs(3_000_000_000, 1_000_000_000),
+    );
 }
 
 test "text input splits between code points into 8-byte chunks" {
@@ -993,8 +1172,14 @@ test "present honours channel order and stride and retains nothing" {
         }
     }
     try std.testing.expectEqual(@as(u64, 1), backend.frames_presented);
-    try std.testing.expectError(error.InvalidFrame, p.present(.{ .width = 8, .height = 6, .stride = 31, .pixels = &pixels }));
-    try std.testing.expectError(error.InvalidFrame, p.present(.{ .width = 4, .height = 6, .stride = 16, .pixels = &pixels }));
+    try std.testing.expectError(
+        error.InvalidFrame,
+        p.present(.{ .width = 8, .height = 6, .stride = 31, .pixels = &pixels }),
+    );
+    try std.testing.expectError(
+        error.InvalidFrame,
+        p.present(.{ .width = 4, .height = 6, .stride = 16, .pixels = &pixels }),
+    );
     try std.testing.expect(p.nowNs() > 0);
 }
 
@@ -1012,12 +1197,18 @@ test "a failed mode change leaves the previous mode usable" {
     try std.testing.expectError(error.DeviceFailure, p.setResolution(16, 12));
     try std.testing.expectEqual(platform.Size{ .width = 8, .height = 6 }, backend.resolution.?);
     try p.present(.{ .width = 8, .height = 6, .stride = 32, .pixels = &small });
-    try std.testing.expectError(error.InvalidResolution, p.setResolution(SdlBackend.max_dimension + 1, 12));
+    try std.testing.expectError(
+        error.InvalidResolution,
+        p.setResolution(SdlBackend.max_dimension + 1, 12),
+    );
 
     try p.setResolution(16, 12);
     var large: [16 * 12 * 4]u8 = @splat(0x40);
     try p.present(.{ .width = 16, .height = 12, .stride = 64, .pixels = &large });
-    try std.testing.expectError(error.InvalidFrame, p.present(.{ .width = 8, .height = 6, .stride = 32, .pixels = &small }));
+    try std.testing.expectError(
+        error.InvalidFrame,
+        p.present(.{ .width = 8, .height = 6, .stride = 32, .pixels = &small }),
+    );
     // The user did not resize the window, so it follows the new mode at the same scale.
     try std.testing.expectEqual(platform.Size{ .width = 16, .height = 12 }, backend.outputSize().?);
     var back: [16 * 12 * 4]u8 = undefined;
@@ -1133,9 +1324,15 @@ test "relative mouse requests report the actual capture state" {
         break :blk false;
     };
     try std.testing.expectEqual(@as(usize, 1), p.pollEvents(&buf));
-    try std.testing.expectEqual(platform.Event.Kind.capture_changed, std.meta.activeTag(buf[0].payload));
+    try std.testing.expectEqual(
+        platform.Event.Kind.capture_changed,
+        std.meta.activeTag(buf[0].payload),
+    );
     try std.testing.expectEqual(granted, buf[0].payload.capture_changed);
-    try std.testing.expectEqual(c.SDL_GetRelativeMouseMode() == c.TRUE, buf[0].payload.capture_changed);
+    try std.testing.expectEqual(
+        c.SDL_GetRelativeMouseMode() == c.TRUE,
+        buf[0].payload.capture_changed,
+    );
     p.setRelativeMouse(false) catch {};
     try std.testing.expectEqual(@as(usize, 1), p.pollEvents(&buf));
     try std.testing.expect(!buf[0].payload.capture_changed);
@@ -1149,20 +1346,52 @@ test "translation: keys, buttons, wheel direction and timestamps" {
     _ = try p.start();
     var out: [4]platform.Event = undefined;
     var ev: c.Event = .{ .raw = @splat(0) };
-    ev.key = .{ .type = c.KEYDOWN, .timestamp = @truncate(c.SDL_GetTicks64()), .window_id = 0, .state = c.PRESSED, .repeat = 1, .padding2 = 0, .padding3 = 0, .keysym = .{ .scancode = 22, .sym = 0, .mod = 0, .unused = 0 } };
+    ev.key = .{
+        .type = c.KEYDOWN,
+        .timestamp = @truncate(c.SDL_GetTicks64()),
+        .window_id = 0,
+        .state = c.PRESSED,
+        .repeat = 1,
+        .padding2 = 0,
+        .padding3 = 0,
+        .keysym = .{ .scancode = 22, .sym = 0, .mod = 0, .unused = 0 },
+    };
     try std.testing.expectEqual(@as(usize, 1), backend.translate(&ev, &out));
     try std.testing.expectEqual(platform.Key.s, out[0].payload.key_down.key);
     try std.testing.expect(out[0].payload.key_down.repeat);
     try std.testing.expect(out[0].time_ns <= p.nowNs());
 
-    ev.wheel = .{ .type = c.MOUSEWHEEL, .timestamp = 0, .window_id = 0, .which = 0, .x = 0, .y = 1, .direction = c.MOUSEWHEEL_FLIPPED, .precise_x = 0, .precise_y = 1, .mouse_x = 0, .mouse_y = 0 };
+    ev.wheel = .{
+        .type = c.MOUSEWHEEL,
+        .timestamp = 0,
+        .window_id = 0,
+        .which = 0,
+        .x = 0,
+        .y = 1,
+        .direction = c.MOUSEWHEEL_FLIPPED,
+        .precise_x = 0,
+        .precise_y = 1,
+        .mouse_x = 0,
+        .mouse_y = 0,
+    };
     try std.testing.expectEqual(@as(usize, 1), backend.translate(&ev, &out));
     try std.testing.expectEqual(@as(i32, -1), out[0].payload.mouse_wheel.dy);
     // A time stamp of 0 ms is before the backend's origin. It is clamped to the time of the
     // previous event, never earlier, so the delivery order and the time stamps agree.
     const first = out[0].time_ns;
 
-    ev.button = .{ .type = c.MOUSEBUTTONUP, .timestamp = @truncate(c.SDL_GetTicks64()), .window_id = 0, .which = 0, .button = c.BUTTON_RIGHT, .state = c.RELEASED, .clicks = 1, .padding1 = 0, .x = 3, .y = 4 };
+    ev.button = .{
+        .type = c.MOUSEBUTTONUP,
+        .timestamp = @truncate(c.SDL_GetTicks64()),
+        .window_id = 0,
+        .which = 0,
+        .button = c.BUTTON_RIGHT,
+        .state = c.RELEASED,
+        .clicks = 1,
+        .padding1 = 0,
+        .x = 3,
+        .y = 4,
+    };
     try std.testing.expectEqual(@as(usize, 1), backend.translate(&ev, &out));
     try std.testing.expectEqual(platform.MouseButton.right, out[0].payload.mouse_button_up.button);
     try std.testing.expectEqual(@as(i32, 4), out[0].payload.mouse_button_up.y);
@@ -1188,9 +1417,22 @@ test "translation: window state, quit and controller events" {
     var out: [4]platform.Event = undefined;
     var ev: c.Event = .{ .raw = @splat(0) };
 
-    ev.window = .{ .type = c.WINDOWEVENT, .timestamp = 0, .window_id = 0, .event = c.WINDOWEVENT_FOCUS_GAINED, .padding1 = 0, .padding2 = 0, .padding3 = 0, .data1 = 0, .data2 = 0 };
+    ev.window = .{
+        .type = c.WINDOWEVENT,
+        .timestamp = 0,
+        .window_id = 0,
+        .event = c.WINDOWEVENT_FOCUS_GAINED,
+        .padding1 = 0,
+        .padding2 = 0,
+        .padding3 = 0,
+        .data1 = 0,
+        .data2 = 0,
+    };
     try std.testing.expectEqual(@as(usize, 1), backend.translate(&ev, &out));
-    try std.testing.expectEqual(platform.Event.Kind.focus_gained, std.meta.activeTag(out[0].payload));
+    try std.testing.expectEqual(
+        platform.Event.Kind.focus_gained,
+        std.meta.activeTag(out[0].payload),
+    );
     ev.window.event = c.WINDOWEVENT_FOCUS_LOST;
     try std.testing.expectEqual(@as(usize, 1), backend.translate(&ev, &out));
     try std.testing.expectEqual(platform.Event.Kind.focus_lost, std.meta.activeTag(out[0].payload));
@@ -1210,13 +1452,40 @@ test "translation: window state, quit and controller events" {
 
     // SDL's controller button and axis numbers are the project's numbers, so no mapping table is
     // necessary.
-    ev.cbutton = .{ .type = c.CONTROLLERBUTTONDOWN, .timestamp = 0, .which = 7, .button = 3, .state = c.PRESSED, .padding1 = 0, .padding2 = 0 };
+    ev.cbutton = .{
+        .type = c.CONTROLLERBUTTONDOWN,
+        .timestamp = 0,
+        .which = 7,
+        .button = 3,
+        .state = c.PRESSED,
+        .padding1 = 0,
+        .padding2 = 0,
+    };
     try std.testing.expectEqual(@as(usize, 1), backend.translate(&ev, &out));
-    try std.testing.expectEqual(platform.ControllerButton.y, out[0].payload.controller_button_down.button);
-    try std.testing.expectEqual(@as(u32, 7), @backingInt(out[0].payload.controller_button_down.controller));
-    ev.caxis = .{ .type = c.CONTROLLERAXISMOTION, .timestamp = 0, .which = 7, .axis = 5, .padding1 = 0, .padding2 = 0, .padding3 = 0, .value = -1234, .padding4 = 0 };
+    try std.testing.expectEqual(
+        platform.ControllerButton.y,
+        out[0].payload.controller_button_down.button,
+    );
+    try std.testing.expectEqual(
+        @as(u32, 7),
+        @backingInt(out[0].payload.controller_button_down.controller),
+    );
+    ev.caxis = .{
+        .type = c.CONTROLLERAXISMOTION,
+        .timestamp = 0,
+        .which = 7,
+        .axis = 5,
+        .padding1 = 0,
+        .padding2 = 0,
+        .padding3 = 0,
+        .value = -1234,
+        .padding4 = 0,
+    };
     try std.testing.expectEqual(@as(usize, 1), backend.translate(&ev, &out));
-    try std.testing.expectEqual(platform.ControllerAxis.trigger_right, out[0].payload.controller_axis.axis);
+    try std.testing.expectEqual(
+        platform.ControllerAxis.trigger_right,
+        out[0].payload.controller_axis.axis,
+    );
     try std.testing.expectEqual(@as(i16, -1234), out[0].payload.controller_axis.value);
     // A removal reports the instance id, even when this backend has no open controller.
     ev.cdevice = .{ .type = c.CONTROLLERDEVICEREMOVED, .timestamp = 0, .which = 7 };
@@ -1239,7 +1508,10 @@ test "a failed start leaves a backend that deinit cleans up" {
     try std.testing.expectEqual(@as(u32, 0), backend.subsystems);
     var buf: [4]platform.Event = undefined;
     try std.testing.expectEqual(@as(usize, 0), p.pollEvents(&buf));
-    try std.testing.expectError(error.NotStarted, p.present(.{ .width = 1, .height = 1, .stride = 4, .pixels = &.{ 0, 0, 0, 255 } }));
+    try std.testing.expectError(
+        error.NotStarted,
+        p.present(.{ .width = 1, .height = 1, .stride = 4, .pixels = &.{ 0, 0, 0, 255 } }),
+    );
 
     // The failure returned SDL to its initial state: the same backend starts when a driver exists.
     useDummyDrivers();

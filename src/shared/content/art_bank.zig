@@ -50,13 +50,19 @@ test "raw banks use low offset bits and return independently owned storage" {
     try std.testing.expectEqual(@as(usize, 32), bank.len);
     try std.testing.expectError(error.MissingArtBank, archive.decode(std.testing.allocator, 1));
     try std.testing.expectError(error.MissingArtBank, archive.decode(std.testing.allocator, 2));
-    try std.testing.expectError(error.TruncatedArtBank, (try Archive.init(bytes[0..43])).decode(std.testing.allocator, 0));
+    try std.testing.expectError(
+        error.TruncatedArtBank,
+        (try Archive.init(bytes[0..43])).decode(std.testing.allocator, 0),
+    );
 }
 
 test "bank directory, packet boundaries and declared output size are checked" {
     const allocator = std.testing.allocator;
     try std.testing.expectError(error.InvalidArtBankDirectory, Archive.init(&.{}));
-    try std.testing.expectError(error.InvalidArtBankDirectory, Archive.init(&.{ 2, 0, 0, 0, 0, 0 }));
+    try std.testing.expectError(
+        error.InvalidArtBankDirectory,
+        Archive.init(&.{ 2, 0, 0, 0, 0, 0 }),
+    );
     var bytes = [_]u8{ 1, 0, 0, 18, 0, 1, 3, 0, 0x30, 0x40, 3, 0, 0x30, 0x40, 0, 0, 0, 4 };
     const archive = try Archive.init(&bytes);
     try std.testing.expectError(error.ArtBankSizeMismatch, archive.decode(allocator, 0));

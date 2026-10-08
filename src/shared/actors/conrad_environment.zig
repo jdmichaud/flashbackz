@@ -36,11 +36,21 @@ pub const Environment = struct {
         return try materials.sample(self.room, point.column, point.row) == .restricted;
     }
 
-    pub fn ledge(self: *const Environment, pose: motion.Pose, height: enum { head, support }, ahead: i16, open_side: enum { ahead, behind }) !bool {
+    pub fn ledge(
+        self: *const Environment,
+        pose: motion.Pose,
+        height: enum { head, support },
+        ahead: i16,
+        open_side: enum { ahead, behind },
+    ) !bool {
         const level: Height = if (height == .head) .head else .support;
         const above: Height = if (height == .head) .above_head else .torso;
         const neighbor = ahead +% (if (open_side == .ahead) @as(i16, 1) else -1);
-        return try self.at(pose, level, ahead) and !try self.at(pose, level, neighbor) and !try self.at(pose, above, ahead);
+        return try self.at(pose, level, ahead) and !try self.at(
+            pose,
+            level,
+            neighbor,
+        ) and !try self.at(pose, above, ahead);
     }
 
     pub fn motionBoundary(self: *Environment, pose: *motion.Pose) !void {
@@ -53,11 +63,23 @@ test "changing a gate material changes rolling clearance without losing standing
     const id: geometry.RoomId = @fromBackingInt(41);
     const empty: [18]bool = @splat(false);
     const cells: [18]terrain.Material = @splat(.empty);
-    const rooms = [_]geometry.Room{.{ .id = id, .columns = 6, .rows = 3, .blocking = &empty, .width = 96, .height = 72, .edges = .{ .left = .blocked, .right = .blocked, .up = .blocked, .down = .blocked } }};
+    const rooms = [_]geometry.Room{.{
+        .id = id,
+        .columns = 6,
+        .rows = 3,
+        .blocking = &empty,
+        .width = 96,
+        .height = 72,
+        .edges = .{ .left = .blocked, .right = .blocked, .up = .blocked, .down = .blocked },
+    }};
     var state = try terrain.State.init(std.testing.allocator, .{ .rooms = &rooms }, &cells, .{});
     defer state.deinit();
     const environment: Environment = .{ .map = state.map(), .materials = state.view(), .room = id };
-    const pose: motion.Pose = .{ .position = .{ .x = 24, .y = 70 }, .facing = .right, .visual = .{ .id = @fromBackingInt(0) } };
+    const pose: motion.Pose = .{
+        .position = .{ .x = 24, .y = 70 },
+        .facing = .right,
+        .visual = .{ .id = @fromBackingInt(0) },
+    };
     const gate: terrain.Span = .{ .origin = .{ .room = id, .column = 2, .row = 1 }, .length = 1 };
     _ = try state.replace(gate, .solid);
     try std.testing.expect(try environment.at(pose, .torso, 0));

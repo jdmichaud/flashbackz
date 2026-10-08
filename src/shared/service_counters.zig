@@ -23,7 +23,15 @@ pub const Definition = struct {
     accepts_signals: bool,
 };
 pub const Binding = struct { circuit: Circuit, target: usize, next_step: bool };
-pub const Instance = struct { pose: motion.Pose, phase: Phase = .neutral, playback: motion.Playback = .{}, active: bool, ready: bool = false, pending: bool = false, sound: ?motion.SoundId = null };
+pub const Instance = struct {
+    pose: motion.Pose,
+    phase: Phase = .neutral,
+    playback: motion.Playback = .{},
+    active: bool,
+    ready: bool = false,
+    pending: bool = false,
+    sound: ?motion.SoundId = null,
+};
 pub const World = struct {
     allocator: std.mem.Allocator,
     instances: []Instance,
@@ -39,15 +47,34 @@ pub const World = struct {
                 .frame => |frame| frame.visual,
                 .hold => return error.MissingCounterVisual,
             };
-            instance.* = .{ .active = definition.initially_active, .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } } };
+            instance.* = .{
+                .active = definition.initially_active,
+                .pose = .{
+                    .position = definition.footprint.position,
+                    .facing = definition.facing,
+                    .visual = .{
+                        .id = visual.id,
+                        .mirrored = visual.mirrored != (definition.facing == .left),
+                    },
+                },
+            };
         }
-        return .{ .allocator = allocator, .instances = instances, .pulses = try allocator.alloc(Circuit, definitions.len) };
+        return .{
+            .allocator = allocator,
+            .instances = instances,
+            .pulses = try allocator.alloc(Circuit, definitions.len),
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.instances);
         self.allocator.free(self.pulses);
     }
-    pub fn prepare(self: *World, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint) !void {
+    pub fn prepare(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        player: contacts.Footprint,
+    ) !void {
         self.candidate = null;
         self.notice = null;
         self.pulse_count = 0;
@@ -56,7 +83,12 @@ pub const World = struct {
             instance.ready = instance.pending;
             instance.pending = false;
             instance.sound = null;
-            const near = try @import("activation.zig").around(map, player.room, definition.footprint.room, instance.pose.position.y);
+            const near = try @import("activation.zig").around(
+                map,
+                player.room,
+                definition.footprint.room,
+                instance.pose.position.y,
+            );
             if (definition.wake_nearby and near.wake) instance.active = true;
             if (try layout.overlaps(map, player, definition.footprint)) self.candidate = index;
         }
@@ -66,13 +98,37 @@ pub const World = struct {
             if (binding.next_step) self.instances[binding.target].pending = true else self.instances[binding.target].ready = true;
         };
     }
-    pub fn advance(self: *World, definitions: []const Definition, map: geometry.Map, room: geometry.RoomId, operate: bool, random: anytype) !void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        room: geometry.RoomId,
+        operate: bool,
+        random: anytype,
+    ) !void {
         return self.advanceRange(definitions, map, room, operate, random, 0, self.instances.len);
     }
-    pub fn advanceOne(self: *World, index: usize, definitions: []const Definition, map: geometry.Map, room: geometry.RoomId, operate: bool, random: anytype) !void {
+    pub fn advanceOne(
+        self: *World,
+        index: usize,
+        definitions: []const Definition,
+        map: geometry.Map,
+        room: geometry.RoomId,
+        operate: bool,
+        random: anytype,
+    ) !void {
         return self.advanceRange(definitions, map, room, operate, random, index, index + 1);
     }
-    fn advanceRange(self: *World, definitions: []const Definition, map: geometry.Map, room: geometry.RoomId, operate: bool, random: anytype, range_start: usize, range_end: usize) !void {
+    fn advanceRange(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        room: geometry.RoomId,
+        operate: bool,
+        random: anytype,
+        range_start: usize,
+        range_end: usize,
+    ) !void {
         for (range_start..range_end) |index| {
             const instance = &self.instances[index];
             const definition = definitions[index];
@@ -80,24 +136,42 @@ pub const World = struct {
             if ((instance.ready or speaking) and definition.accepts_signals) instance.active = true;
             if (!instance.active) continue;
             var clip = definition.clips[@backingInt(instance.phase)];
-            if (speaking or instance.ready) instance.playback.completeDisplacement(clip, &instance.pose);
+            if (speaking or instance.ready) instance.playback.completeDisplacement(
+                clip,
+                &instance.pose,
+            );
             if (instance.playback.exhausted(clip)) {
                 if (instance.ready or speaking) {
                     if (instance.ready) {
                         self.pulses[self.pulse_count] = definition.output;
                         self.pulse_count += 1;
-                    } else self.notice = .{ .message = definition.notice, .icon = definition.hint, .priority = definition.priority };
+                    } else self.notice = .{
+                        .message = definition.notice,
+                        .icon = definition.hint,
+                        .priority = definition.priority,
+                    };
                     if (instance.phase == .turning) instance.phase = .turned else if (instance.phase == .returning) instance.phase = .neutral;
                 } else {
-                    const near = try @import("activation.zig").around(map, room, definition.footprint.room, instance.pose.position.y);
+                    const near = try @import("activation.zig").around(
+                        map,
+                        room,
+                        definition.footprint.room,
+                        instance.pose.position.y,
+                    );
                     if (!near.same) {
                         if (!(definition.wake_nearby and near.near)) instance.active = false;
                     } else switch (instance.phase) {
                         .neutral => {
-                            if (@rem(@as(i16, @bitCast(random.next())), definition.gesture_chance) == 0) instance.phase = .turning;
+                            if (@rem(
+                                @as(i16, @bitCast(random.next())),
+                                definition.gesture_chance,
+                            ) == 0) instance.phase = .turning;
                         },
                         .turned => {
-                            if (@rem(@as(i16, @bitCast(random.next())), definition.return_chance) == 0) instance.phase = .returning;
+                            if (@rem(
+                                @as(i16, @bitCast(random.next())),
+                                definition.return_chance,
+                            ) == 0) instance.phase = .returning;
                         },
                         .turning => instance.phase = .turned,
                         .returning => instance.phase = .neutral,
@@ -112,6 +186,12 @@ pub const World = struct {
         }
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
-        for (self.instances) |instance| for ([_]u64{ @backingInt(instance.phase), instance.playback.next_step, @intFromBool(instance.active), @intFromBool(instance.ready), @intFromBool(instance.pending) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        for (self.instances) |instance| for ([_]u64{
+            @backingInt(instance.phase),
+            instance.playback.next_step,
+            @intFromBool(instance.active),
+            @intFromBool(instance.ready),
+            @intFromBool(instance.pending),
+        }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
     }
 };

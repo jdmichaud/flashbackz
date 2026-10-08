@@ -10,14 +10,22 @@ fn find(group: rules.Group, state: u16, code: u8, ordinal: usize) !rules.Rule {
     for (0..group.count()) |i| {
         const r = group.at(i);
         if (r.source != state) continue;
-        const matches = if (code == 0) r.conditions[0].code == 0 and r.conditions[1].code == 0 else r.conditions[0].code == code or r.conditions[1].code == code;
+        const matches = if (code == 0) r.conditions[0].code == 0 and
+            r.conditions[1].code == 0 else r.conditions[0].code == code or
+            r.conditions[1].code == code;
         if (!matches) continue;
         if (seen == ordinal) return r;
         seen += 1;
     }
     return error.UnsupportedGunmanDefeat;
 }
-fn clip(allocator: std.mem.Allocator, animations: []const u8, state: u16, owned: *std.ArrayList(animation.OwnedClip), resolver: anytype) !motion.Clip {
+fn clip(
+    allocator: std.mem.Allocator,
+    animations: []const u8,
+    state: u16,
+    owned: *std.ArrayList(animation.OwnedClip),
+    resolver: anytype,
+) !motion.Clip {
     var source = try animation.decode(allocator, animations, state);
     defer source.deinit();
     var resolved = try source.resolve(allocator, resolver);
@@ -25,10 +33,28 @@ fn clip(allocator: std.mem.Allocator, animations: []const u8, state: u16, owned:
     try owned.append(allocator, resolved);
     return resolved.clip();
 }
-fn move(allocator: std.mem.Allocator, animations: []const u8, rule: rules.Rule, owned: *std.ArrayList(animation.OwnedClip), resolver: anytype) !runtime.Move {
-    return .{ .clip = try clip(allocator, animations, rule.target, owned, resolver), .forward = -@as(i16, rule.dx), .down = rule.dy };
+fn move(
+    allocator: std.mem.Allocator,
+    animations: []const u8,
+    rule: rules.Rule,
+    owned: *std.ArrayList(animation.OwnedClip),
+    resolver: anytype,
+) !runtime.Move {
+    return .{
+        .clip = try clip(allocator, animations, rule.target, owned, resolver),
+        .forward = -@as(i16, rule.dx),
+        .down = rule.dy,
+    };
 }
-pub fn track(allocator: std.mem.Allocator, group: rules.Group, animations: []const u8, impact: u16, backward: bool, owned: *std.ArrayList(animation.OwnedClip), resolver: anytype) !runtime.Track {
+pub fn track(
+    allocator: std.mem.Allocator,
+    group: rules.Group,
+    animations: []const u8,
+    impact: u16,
+    backward: bool,
+    owned: *std.ArrayList(animation.OwnedClip),
+    resolver: anytype,
+) !runtime.Track {
     var result: runtime.Track = undefined;
     result.notify_on_landing = false;
     result.notify_on_fall_landing = false;
@@ -39,7 +65,12 @@ pub fn track(allocator: std.mem.Allocator, group: rules.Group, animations: []con
     var free_flight: u16 = undefined;
     var notify_landing: ?bool = null;
     for (&result.paths, 0..) |*path, i| {
-        const launch = try find(group, impact, if (i == 4) 0 else if (backward) 16 else 14, if (i == 4) 0 else i);
+        const launch = try find(
+            group,
+            impact,
+            if (i == 4) 0 else if (backward) 16 else 14,
+            if (i == 4) 0 else i,
+        );
         const flight = launch.target;
         if (i == 4) free_flight = flight;
         const landing = try find(group, flight, 0, 0);
@@ -48,14 +79,43 @@ pub fn track(allocator: std.mem.Allocator, group: rules.Group, animations: []con
         fall = drop.target;
         const settled = try find(group, landing.target, 0, 0);
         const notify = settled.effect.code == 38;
-        if (notify_landing != null and notify_landing.? != notify) return error.UnsupportedMixedDefeatNotification;
+        if (notify_landing != null and
+            notify_landing.? != notify) return error.UnsupportedMixedDefeatNotification;
         notify_landing = notify;
-        path.* = .{ .launch = try move(allocator, animations, launch, owned, resolver), .landing = try move(allocator, animations, landing, owned, resolver), .drop = try move(allocator, animations, drop, owned, resolver) };
+        path.* = .{
+            .launch = try move(allocator, animations, launch, owned, resolver),
+            .landing = try move(allocator, animations, landing, owned, resolver),
+            .drop = try move(allocator, animations, drop, owned, resolver),
+        };
     }
-    result.ledge_launch = if (backward) null else try move(allocator, animations, try find(group, impact, 32, 0), owned, resolver);
-    result.ledge_landing = if (backward) try move(allocator, animations, try find(group, free_flight, 32, 0), owned, resolver) else null;
-    result.fall = try move(allocator, animations, try find(group, fall.?, if (backward) 27 else 0, 0), owned, resolver);
-    result.ledge_fall = if (backward) null else try move(allocator, animations, try find(group, fall.?, 32, 0), owned, resolver);
+    result.ledge_launch = if (backward) null else try move(
+        allocator,
+        animations,
+        try find(group, impact, 32, 0),
+        owned,
+        resolver,
+    );
+    result.ledge_landing = if (backward) try move(
+        allocator,
+        animations,
+        try find(group, free_flight, 32, 0),
+        owned,
+        resolver,
+    ) else null;
+    result.fall = try move(
+        allocator,
+        animations,
+        try find(group, fall.?, if (backward) 27 else 0, 0),
+        owned,
+        resolver,
+    );
+    result.ledge_fall = if (backward) null else try move(
+        allocator,
+        animations,
+        try find(group, fall.?, 32, 0),
+        owned,
+        resolver,
+    );
     const landing = try find(group, fall.?, if (backward) 0 else 18, 0);
     result.fall_landing = try move(allocator, animations, landing, owned, resolver);
     const rest = try find(group, landing.target, 0, 0);
@@ -67,8 +127,12 @@ pub fn track(allocator: std.mem.Allocator, group: rules.Group, animations: []con
         const row = group.at(i);
         if (row.source != rest.target) continue;
         result.mark_dead = result.mark_dead or row.flags & 8 != 0;
-        result.notify_while_resting = result.notify_while_resting or row.conditions[0].code == 38 or row.conditions[1].code == 38 or row.effect.code == 38;
-        result.remove_offscreen = result.remove_offscreen or (row.conditions[0].code == 77 and row.effect.code == 75);
+        result.notify_while_resting = result.notify_while_resting or
+            row.conditions[0].code == 38 or
+            row.conditions[1].code == 38 or
+            row.effect.code == 38;
+        result.remove_offscreen = result.remove_offscreen or
+            (row.conditions[0].code == 77 and row.effect.code == 75);
     }
     return result;
 }

@@ -24,11 +24,23 @@ pub const Assets = struct {
     }
 
     pub fn artwork(self: *const Assets) menu.Artwork {
-        return .{ .background = &self.background, .marker = &self.marker, .previous_page = &self.previous_page, .next_page = &self.next_page, .font = &self.font, .level_label = self.level_label };
+        return .{
+            .background = &self.background,
+            .marker = &self.marker,
+            .previous_page = &self.previous_page,
+            .next_page = &self.next_page,
+            .font = &self.font,
+            .level_label = self.level_label,
+        };
     }
 };
 
-pub fn load(allocator: std.mem.Allocator, icons: []const u8, font_bytes: []const u8, label: []const u8) !Assets {
+pub fn load(
+    allocator: std.mem.Allocator,
+    icons: []const u8,
+    font_bytes: []const u8,
+    label: []const u8,
+) !Assets {
     const pixels = try allocator.alloc(u8, 144 * 80);
     errdefer allocator.free(pixels);
     for (0..45) |index| {
@@ -36,7 +48,10 @@ pub fn load(allocator: std.mem.Allocator, icons: []const u8, font_bytes: []const
         defer tile.deinit();
         const x = index % 9 * 16;
         const y = index / 9 * 16;
-        for (0..16) |row| @memcpy(pixels[(y + row) * 144 + x ..][0..16], tile.image.pixels[row * 16 ..][0..16]);
+        for (0..16) |row| @memcpy(
+            pixels[(y + row) * 144 + x ..][0..16],
+            tile.image.pixels[row * 16 ..][0..16],
+        );
     }
     var marker = try sprite.fromIcons(allocator, icons, 76);
     errdefer marker.deinit();
@@ -47,7 +62,11 @@ pub fn load(allocator: std.mem.Allocator, icons: []const u8, font_bytes: []const
     var font = try font_mod.decode(allocator, font_bytes);
     errdefer font.deinit();
     return .{
-        .background = .{ .image = .{ .allocator = allocator, .width = 144, .height = 80, .pixels = pixels }, .origin_x = 0, .origin_y = 0 },
+        .background = .{
+            .image = .{ .allocator = allocator, .width = 144, .height = 80, .pixels = pixels },
+            .origin_x = 0,
+            .origin_y = 0,
+        },
         .marker = marker,
         .previous_page = previous,
         .next_page = next,

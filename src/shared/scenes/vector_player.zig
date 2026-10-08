@@ -19,7 +19,15 @@ const Cadence = struct {
         const target_tick = try std.math.add(u64, elapsed_ticks, ticks);
         const whole = target_tick / timer_denominator;
         const rest = target_tick % timer_denominator;
-        const target_ns = try std.math.add(u64, try std.math.mul(u64, whole, timer_numerator), try std.math.divCeil(u64, try std.math.mul(u64, rest, timer_numerator), timer_denominator));
+        const target_ns = try std.math.add(
+            u64,
+            try std.math.mul(u64, whole, timer_numerator),
+            try std.math.divCeil(
+                u64,
+                try std.math.mul(u64, rest, timer_numerator),
+                timer_denominator,
+            ),
+        );
         self.deadline_ns = try std.math.mul(u64, target_ns / refresh_ns + 1, refresh_ns);
     }
 };
@@ -49,7 +57,12 @@ pub const Player = struct {
         if (self.awaitingInput()) self.confirmed = true;
     }
 
-    pub fn open(allocator: std.mem.Allocator, source: platform.AssetSource, name: []const u8, entry: u16) !Player {
+    pub fn open(
+        allocator: std.mem.Allocator,
+        source: platform.AssetSource,
+        name: []const u8,
+        entry: u16,
+    ) !Player {
         var movie = try content.load(allocator, source, name, entry);
         errdefer movie.deinit();
         const playback = try film.Playback.init(movie.view());
@@ -113,7 +126,12 @@ test "confirmation loops keep animating and one confirmation cannot skip the nex
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 8, .input_loop_start = 0 },
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 0, .input_loop_start = 2 },
     };
-    var player: Player = .{ .movie = .{ .allocator = allocator, .arena = arena, .frames = &frames }, .playback = try film.Playback.init(.{ .frames = &frames }), .cadence = .{}, .origin_ns = 0 };
+    var player: Player = .{
+        .movie = .{ .allocator = allocator, .arena = arena, .frames = &frames },
+        .playback = try film.Playback.init(.{ .frames = &frames }),
+        .cadence = .{},
+        .origin_ns = 0,
+    };
     defer player.deinit();
     try player.cadence.hold(frames[0].hold_ticks);
     try std.testing.expect(player.awaitingInput());

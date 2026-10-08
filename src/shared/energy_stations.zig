@@ -15,7 +15,12 @@ pub const Definition = struct {
     hint: ?motion.VisualId,
     label: []const u8,
 };
-pub const Instance = struct { pose: motion.Pose, active: bool, playback: motion.Playback = .{}, sound: ?motion.SoundId = null };
+pub const Instance = struct {
+    pose: motion.Pose,
+    active: bool,
+    playback: motion.Playback = .{},
+    sound: ?motion.SoundId = null,
+};
 pub const World = struct {
     allocator: std.mem.Allocator,
     instances: []Instance,
@@ -29,28 +34,58 @@ pub const World = struct {
                 .frame => |frame| frame.visual,
                 .hold => return error.MissingStationVisual,
             };
-            instance.* = .{ .active = definition.initially_active, .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } } };
+            instance.* = .{
+                .active = definition.initially_active,
+                .pose = .{
+                    .position = definition.footprint.position,
+                    .facing = definition.facing,
+                    .visual = .{
+                        .id = visual.id,
+                        .mirrored = visual.mirrored != (definition.facing == .left),
+                    },
+                },
+            };
         }
         return .{ .allocator = allocator, .instances = instances };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.instances);
     }
-    pub fn prepare(self: *World, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint) !void {
+    pub fn prepare(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        player: contacts.Footprint,
+    ) !void {
         self.candidate = null;
         const layout: contacts.Layout = .{};
-        for (definitions, 0..) |definition, index| if (try layout.overlaps(map, player, definition.footprint)) {
+        for (definitions, 0..) |definition, index| if (try layout.overlaps(
+            map,
+            player,
+            definition.footprint,
+        )) {
             self.candidate = index;
         };
     }
-    pub fn advance(self: *World, definitions: []const Definition, map: geometry.Map, player_room: geometry.RoomId) !void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        player_room: geometry.RoomId,
+    ) !void {
         for (self.instances, definitions) |*instance, definition| {
             instance.sound = null;
-            const near = try @import("activation.zig").around(map, player_room, definition.footprint.room, definition.footprint.position.y);
+            const near = try @import("activation.zig").around(
+                map,
+                player_room,
+                definition.footprint.room,
+                definition.footprint.position.y,
+            );
             if (definition.wake_when_near and near.wake) instance.active = true;
             if (!instance.active) continue;
             if (instance.playback.exhausted(definition.idle)) {
-                if (!near.same and !(definition.wake_when_near and near.near)) instance.active = false;
+                if (!near.same and
+                    !(definition.wake_when_near and near.near)) instance.active = false;
                 instance.playback = .{};
             }
             instance.sound = instance.playback.soundOnEntry(definition.idle);
@@ -58,6 +93,11 @@ pub const World = struct {
         }
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
-        for (self.instances) |instance| for ([_]u64{ @intFromBool(instance.active), instance.playback.next_step, @backingInt(instance.pose.visual.id), @intFromBool(instance.pose.visual.mirrored) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        for (self.instances) |instance| for ([_]u64{
+            @intFromBool(instance.active),
+            instance.playback.next_step,
+            @backingInt(instance.pose.visual.id),
+            @intFromBool(instance.pose.visual.mirrored),
+        }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
     }
 };

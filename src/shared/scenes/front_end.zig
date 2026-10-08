@@ -9,7 +9,16 @@ const menu_mod = @import("menu.zig");
 const soundtrack = @import("../audio/soundtrack.zig");
 const vector_player = @import("vector_player.zig");
 pub const Difficulty = @import("../settings.zig").Difficulty;
-pub const Stage = enum { branding, introduction, awakening, game_over, menu, ready, demo_ready, quit };
+pub const Stage = enum {
+    branding,
+    introduction,
+    awakening,
+    game_over,
+    menu,
+    ready,
+    demo_ready,
+    quit,
+};
 pub const View = enum { main, skill, info, password, unavailable };
 
 pub const Scene = struct {
@@ -36,12 +45,21 @@ pub const Scene = struct {
     password_length: usize = 0,
     notice: []const u8 = "",
 
-    pub fn init(allocator: std.mem.Allocator, source: platform.AssetSource, assets: menu_art.Assets) Scene {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        source: platform.AssetSource,
+        assets: menu_art.Assets,
+    ) Scene {
         return .{ .allocator = allocator, .source = source, .assets = assets };
     }
 
     pub fn intro(self: *Scene) !void {
-        for ([_][]const u8{ "DATA/INTRO1.CMD", "DATA/INTRO1.POL", "DATA/INTRO2.CMD", "DATA/INTRO2.POL" }) |path| {
+        for ([_][]const u8{
+            "DATA/INTRO1.CMD",
+            "DATA/INTRO1.POL",
+            "DATA/INTRO2.CMD",
+            "DATA/INTRO2.POL",
+        }) |path| {
             const asset = try self.source.open(path);
             self.source.close(asset.handle);
         }
@@ -105,7 +123,12 @@ pub const Scene = struct {
                 .game_over => "GAMEOVE3",
                 .menu => "OPTION3",
             };
-            const replacement = try soundtrack.Soundtrack.open(self.allocator, self.source, name, self.music_rate.?);
+            const replacement = try soundtrack.Soundtrack.open(
+                self.allocator,
+                self.source,
+                name,
+                self.music_rate.?,
+            );
             p.audioClear();
             if (self.music) |*previous| previous.deinit();
             self.music = replacement;
@@ -119,10 +142,20 @@ pub const Scene = struct {
 
     pub fn stateHash(self: *const Scene) u64 {
         var hash = std.hash.Wyhash.init(0);
-        hash.update(&.{ @backingInt(self.stage), @backingInt(self.view), @backingInt(self.menu.selected), @backingInt(self.difficulty), @backingInt(self.pending_difficulty), @backingInt(self.selected_level) });
+        hash.update(&.{
+            @backingInt(self.stage),
+            @backingInt(self.view),
+            @backingInt(self.menu.selected),
+            @backingInt(self.difficulty),
+            @backingInt(self.pending_difficulty),
+            @backingInt(self.selected_level),
+        });
         hash.update(self.password[0..self.password_length]);
         hash.update(&.{@backingInt(self.introduction_part)});
-        if (self.player) |player| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, player.playback.frame)));
+        if (self.player) |player| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(
+            u64,
+            player.playback.frame,
+        )));
         return hash.final();
     }
 
@@ -182,7 +215,11 @@ pub const Scene = struct {
         try self.startLevel(.jungle, key);
     }
 
-    pub fn startLevel(self: *Scene, level: @import("../content/level.zig").Id, key: ?platform.Key) !void {
+    pub fn startLevel(
+        self: *Scene,
+        level: @import("../content/level.zig").Id,
+        key: ?platform.Key,
+    ) !void {
         self.selected_level = level;
         if (level == .jungle) {
             try self.play("DEBUT");
@@ -212,15 +249,22 @@ pub const Scene = struct {
         const key = press.key;
         const confirm = key == .enter or key == .space or key == .left_shift or key == .right_shift;
         if (self.player != null) {
-            if (!press.repeat and (key == .tab or key == .escape or confirm)) self.skip_requested = true;
+            if (!press.repeat and
+                (key == .tab or key == .escape or confirm)) self.skip_requested = true;
             return;
         }
         if (self.stage != .menu) return;
         switch (self.view) {
             .main => {
                 const index: usize = @backingInt(self.menu.selected);
-                if (key == .up) self.menu.selected = @fromBackingInt(@as(u3, @intCast((index + menu_mod.action_count - 1) % menu_mod.action_count)));
-                if (key == .down) self.menu.selected = @fromBackingInt(@as(u3, @intCast((index + 1) % menu_mod.action_count)));
+                if (key == .up) self.menu.selected = @fromBackingInt(@as(
+                    u3,
+                    @intCast((index + menu_mod.action_count - 1) % menu_mod.action_count),
+                ));
+                if (key == .down) self.menu.selected = @fromBackingInt(@as(
+                    u3,
+                    @intCast((index + 1) % menu_mod.action_count),
+                ));
                 if (key == .escape) self.stage = .quit;
                 if (confirm and !press.repeat) switch (self.menu.selected) {
                     .start => try self.start(key),
@@ -239,8 +283,10 @@ pub const Scene = struct {
             },
             .skill => {
                 const selected: u2 = @backingInt(self.pending_difficulty);
-                if (key == .up and selected != 0) self.pending_difficulty = @fromBackingInt(selected - 1);
-                if (key == .down and selected != 2) self.pending_difficulty = @fromBackingInt(selected + 1);
+                if (key == .up and
+                    selected != 0) self.pending_difficulty = @fromBackingInt(selected - 1);
+                if (key == .down and
+                    selected != 2) self.pending_difficulty = @fromBackingInt(selected + 1);
                 if (confirm and !press.repeat) {
                     self.difficulty = self.pending_difficulty;
                     self.mainMenu();
@@ -258,7 +304,8 @@ pub const Scene = struct {
                     return;
                 }
                 const code = @backingInt(key);
-                const character: ?u8 = if (code >= @backingInt(platform.Key.a) and code <= @backingInt(platform.Key.z)) @intCast('A' + code - @backingInt(platform.Key.a)) else if (key == .space) ' ' else null;
+                const character: ?u8 = if (code >= @backingInt(platform.Key.a) and
+                    code <= @backingInt(platform.Key.z)) @intCast('A' + code - @backingInt(platform.Key.a)) else if (key == .space) ' ' else null;
                 if (character) |value| if (self.password_length < self.password.len) {
                     self.password[self.password_length] = value;
                     self.password_length += 1;
@@ -268,7 +315,11 @@ pub const Scene = struct {
     }
 
     fn submitPassword(self: *Scene, key: platform.Key) !void {
-        const destination = try @import("../content/level_codes.zig").lookup(self.allocator, self.source, self.password[0..self.password_length]);
+        const destination = try @import("../content/level_codes.zig").lookup(
+            self.allocator,
+            self.source,
+            self.password[0..self.password_length],
+        );
         self.mainMenu();
         if (destination) |entry| {
             self.difficulty = entry.difficulty;
@@ -283,18 +334,84 @@ pub const Scene = struct {
         @memcpy(indices, assets.background.pixels);
         switch (self.view) {
             .skill => {
-                try text.draw(indices, 256, 224, &assets.font, "SKILL LEVEL :", 32, 96, .{ .foreground = 2, .shadow = 0 });
-                for ([_][]const u8{ "EASY", "NORMAL", "EXPERT" }, 0..) |label, i| try text.draw(indices, 256, 224, &assets.font, label, 112, 120 + @as(i32, @intCast(i)) * 16, .{ .foreground = if (i == @backingInt(self.pending_difficulty)) 1 else 2, .shadow = 0 });
+                try text.draw(
+                    indices,
+                    256,
+                    224,
+                    &assets.font,
+                    "SKILL LEVEL :",
+                    32,
+                    96,
+                    .{ .foreground = 2, .shadow = 0 },
+                );
+                for ([_][]const u8{ "EASY", "NORMAL", "EXPERT" }, 0..) |label, i| try text.draw(
+                    indices,
+                    256,
+                    224,
+                    &assets.font,
+                    label,
+                    112,
+                    120 + @as(i32, @intCast(i)) * 16,
+                    .{
+                        .foreground = if (i == @backingInt(self.pending_difficulty)) 1 else 2,
+                        .shadow = 0,
+                    },
+                );
             },
             .password => {
-                try text.draw(indices, 256, 224, &assets.font, "Enter password for desired", 24, 120, .{ .foreground = 2, .shadow = 0 });
-                try text.draw(indices, 256, 224, &assets.font, "level :", 24, 136, .{ .foreground = 2, .shadow = 0 });
-                try text.draw(indices, 256, 224, &assets.font, self.password[0..self.password_length], 120, 168, .{ .foreground = 2, .shadow = 0 });
+                try text.draw(
+                    indices,
+                    256,
+                    224,
+                    &assets.font,
+                    "Enter password for desired",
+                    24,
+                    120,
+                    .{ .foreground = 2, .shadow = 0 },
+                );
+                try text.draw(
+                    indices,
+                    256,
+                    224,
+                    &assets.font,
+                    "level :",
+                    24,
+                    136,
+                    .{ .foreground = 2, .shadow = 0 },
+                );
+                try text.draw(
+                    indices,
+                    256,
+                    224,
+                    &assets.font,
+                    self.password[0..self.password_length],
+                    120,
+                    168,
+                    .{ .foreground = 2, .shadow = 0 },
+                );
             },
             .unavailable => {
                 const x = @divTrunc(256 - @as(i32, @intCast(self.notice.len)) * 8, 2);
-                try text.draw(indices, 256, 224, &assets.font, self.notice, x, 120, .{ .foreground = 2, .shadow = 0 });
-                try text.draw(indices, 256, 224, &assets.font, "PRESS ENTER TO RETURN", 44, 152, .{ .foreground = 2, .shadow = 0 });
+                try text.draw(
+                    indices,
+                    256,
+                    224,
+                    &assets.font,
+                    self.notice,
+                    x,
+                    120,
+                    .{ .foreground = 2, .shadow = 0 },
+                );
+                try text.draw(
+                    indices,
+                    256,
+                    224,
+                    &assets.font,
+                    "PRESS ENTER TO RETURN",
+                    44,
+                    152,
+                    .{ .foreground = 2, .shadow = 0 },
+                );
             },
             .info => {},
             .main => unreachable,

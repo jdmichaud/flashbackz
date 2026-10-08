@@ -32,13 +32,26 @@ pub const Assets = struct {
         var bindings: std.ArrayList(runtime.Binding) = .empty;
         errdefer bindings.deinit(self.allocator);
         for (self.sources, 0..) |source, index| for (routes) |route| {
-            if (route.recipient == source and route.message == self.activation_signal) try bindings.append(self.allocator, .{ .circuit = route.circuit, .actor = index, .next_step = route.sender >= source });
+            if (route.recipient == source and
+                route.message == self.activation_signal) try bindings.append(
+                self.allocator,
+                .{ .circuit = route.circuit, .actor = index, .next_step = route.sender >= source },
+            );
         };
         return bindings.toOwnedSlice(self.allocator);
     }
 };
 fn recognize(group: rules.Group) bool {
-    return group.count() == 207 and group.at(0).conditions[0].code == 107 and group.at(1).conditions[0].code == 107 and group.at(2).conditions[1].code == 122 and group.at(9).conditions[0].code == 118 and group.at(11).conditions[0].code == 119 and group.at(201).conditions[0].code == 34 and group.at(201).effect.code == 87 and group.at(201).target == group.at(0).source and group.at(206).effect.code == 75;
+    return group.count() == 207 and
+        group.at(0).conditions[0].code == 107 and
+        group.at(1).conditions[0].code == 107 and
+        group.at(2).conditions[1].code == 122 and
+        group.at(9).conditions[0].code == 118 and
+        group.at(11).conditions[0].code == 119 and
+        group.at(201).conditions[0].code == 34 and
+        group.at(201).effect.code == 87 and
+        group.at(201).target == group.at(0).source and
+        group.at(206).effect.code == 75;
 }
 const Import = struct {
     allocator: std.mem.Allocator,
@@ -66,17 +79,34 @@ const Import = struct {
             for (std.enums.values(combat.Impact), 0..) |impact, slot| {
                 if (policy.responses[slot] != null) continue;
                 const op = rule.conditions[0];
-                const matches = (op.code == 107 and op.argument == @as(i16, if (impact == .rear_high or impact == .rear_low) 0 else 1)) or (op.code == 34 and op.argument == @as(i16, @intCast(slot + 1)));
+                const matches = (op.code == 107 and op.argument == @as(
+                    i16,
+                    if (impact == .rear_high or impact == .rear_low) 0 else 1,
+                )) or (op.code == 34 and op.argument == @as(i16, @intCast(slot + 1)));
                 if (!matches) continue;
-                if (rule.conditions[1].code != 0 or rule.effect.code != 0 or rule.flags & ~@as(u8, 5) != 0) return error.UnsupportedGuardHit;
+                if (rule.conditions[1].code != 0 or rule.effect.code != 0 or rule.flags & ~@as(
+                    u8,
+                    5,
+                ) != 0) return error.UnsupportedGuardHit;
                 const direction: wound.Direction = if (rule.target == self.group.at(155).source) .forward else if (rule.target == self.group.at(172).source) .backward else return error.UnsupportedGuardHit;
-                policy.responses[slot] = .{ .direction = direction, .forward = -@as(i16, rule.dx), .down = rule.dy, .turn = rule.flags & 1 != 0, .health_delta = if (rule.flags & 4 != 0) 1 else 0 };
+                policy.responses[slot] = .{
+                    .direction = direction,
+                    .forward = -@as(i16, rule.dx),
+                    .down = rule.dy,
+                    .turn = rule.flags & 1 != 0,
+                    .health_delta = if (rule.flags & 4 != 0) 1 else 0,
+                };
                 order[slot] = index;
             }
         }
         for (1..4) |index| {
             var at = index;
-            while (at > 0 and order[@backingInt(policy.priority[at])] < order[@backingInt(policy.priority[at - 1])]) : (at -= 1) std.mem.swap(combat.Impact, &policy.priority[at], &policy.priority[at - 1]);
+            while (at > 0 and
+                order[@backingInt(policy.priority[at])] < order[@backingInt(policy.priority[at - 1])]) : (at -= 1) std.mem.swap(
+                combat.Impact,
+                &policy.priority[at],
+                &policy.priority[at - 1],
+            );
         }
         resolved.hit_profile = @fromBackingInt(@as(u16, @intCast(self.policies.items.len)));
         try self.policies.append(self.allocator, policy);
@@ -85,9 +115,18 @@ const Import = struct {
         try self.clips.append(self.allocator, resolved);
         return result;
     }
-    fn landing(self: *Import, target_rule: usize, transition_rule: usize, resolver: anytype) !wound.Landing {
+    fn landing(
+        self: *Import,
+        target_rule: usize,
+        transition_rule: usize,
+        resolver: anytype,
+    ) !wound.Landing {
         const rule = self.group.at(transition_rule);
-        return .{ .clip = try self.clip(target_rule, resolver), .forward = -@as(i16, rule.dx), .down = rule.dy };
+        return .{
+            .clip = try self.clip(target_rule, resolver),
+            .forward = -@as(i16, rule.dx),
+            .down = rule.dy,
+        };
     }
     fn profile(self: *Import, resolver: anytype) !runtime.Profile {
         const g = self.group;
@@ -102,14 +141,38 @@ const Import = struct {
             .dormant = try self.clip(201, resolver),
             .defeated = try self.clip(206, resolver),
             .firing = .{
-                .{ .windup = try self.clip(50, resolver), .discharge = try self.clip(55, resolver), .recovery = try self.clip(59, resolver) },
-                .{ .windup = try self.clip(70, resolver), .discharge = try self.clip(74, resolver), .recovery = try self.clip(65, resolver) },
-                .{ .windup = try self.clip(80, resolver), .discharge = try self.clip(83, resolver), .recovery = try self.clip(85, resolver) },
+                .{
+                    .windup = try self.clip(50, resolver),
+                    .discharge = try self.clip(55, resolver),
+                    .recovery = try self.clip(59, resolver),
+                },
+                .{
+                    .windup = try self.clip(70, resolver),
+                    .discharge = try self.clip(74, resolver),
+                    .recovery = try self.clip(65, resolver),
+                },
+                .{
+                    .windup = try self.clip(80, resolver),
+                    .discharge = try self.clip(83, resolver),
+                    .recovery = try self.clip(85, resolver),
+                },
             },
             .flight = .{
-                .starts = .{ try self.clip(93, resolver), try self.clip(116, resolver), try self.clip(126, resolver) },
-                .thrusts = .{ try self.clip(96, resolver), try self.clip(119, resolver), try self.clip(129, resolver) },
-                .alignments = .{ try self.clip(99, resolver), try self.clip(123, resolver), try self.clip(132, resolver) },
+                .starts = .{
+                    try self.clip(93, resolver),
+                    try self.clip(116, resolver),
+                    try self.clip(126, resolver),
+                },
+                .thrusts = .{
+                    try self.clip(96, resolver),
+                    try self.clip(119, resolver),
+                    try self.clip(129, resolver),
+                },
+                .alignments = .{
+                    try self.clip(99, resolver),
+                    try self.clip(123, resolver),
+                    try self.clip(132, resolver),
+                },
                 .landing = try self.clip(101, resolver),
                 .braking = try self.clip(105, resolver),
                 .drifting = try self.clip(108, resolver),
@@ -121,23 +184,60 @@ const Import = struct {
                 .turn_confirmed = try self.clip(153, resolver),
                 .rising_to_ledge = try self.clip(154, resolver),
                 .drifting_to_ledge = try self.clip(113, resolver),
-                .search_distances = .{ g.at(137).conditions[1].argument, g.at(139).conditions[1].argument, g.at(141).conditions[1].argument },
+                .search_distances = .{
+                    g.at(137).conditions[1].argument,
+                    g.at(139).conditions[1].argument,
+                    g.at(141).conditions[1].argument,
+                },
                 .landing_advance = -@as(i16, g.at(100).dx),
             },
             .wound = .{
                 .impacts = .{ try self.clip(155, resolver), try self.clip(172, resolver) },
-                .forward_recovery = .{ try self.clip(187, resolver), try self.clip(186, resolver), try self.clip(185, resolver) },
-                .backward_recovery = .{ try self.clip(191, resolver), try self.clip(190, resolver), try self.clip(189, resolver), try self.clip(188, resolver) },
+                .forward_recovery = .{
+                    try self.clip(187, resolver),
+                    try self.clip(186, resolver),
+                    try self.clip(185, resolver),
+                },
+                .backward_recovery = .{
+                    try self.clip(191, resolver),
+                    try self.clip(190, resolver),
+                    try self.clip(189, resolver),
+                    try self.clip(188, resolver),
+                },
                 .forward_fatal = .{
-                    .{ .launch = try self.clip(170, resolver), .ground = try self.landing(195, 171, resolver), .drop = try self.landing(198, 170, resolver) },
-                    .{ .launch = try self.clip(168, resolver), .ground = try self.landing(194, 169, resolver), .drop = try self.landing(197, 168, resolver) },
-                    .{ .launch = try self.clip(164, resolver), .ground = try self.landing(193, 167, resolver), .drop = try self.landing(196, 164, resolver) },
+                    .{
+                        .launch = try self.clip(170, resolver),
+                        .ground = try self.landing(195, 171, resolver),
+                        .drop = try self.landing(198, 170, resolver),
+                    },
+                    .{
+                        .launch = try self.clip(168, resolver),
+                        .ground = try self.landing(194, 169, resolver),
+                        .drop = try self.landing(197, 168, resolver),
+                    },
+                    .{
+                        .launch = try self.clip(164, resolver),
+                        .ground = try self.landing(193, 167, resolver),
+                        .drop = try self.landing(196, 164, resolver),
+                    },
                     .{ .launch = try self.clip(192, resolver) },
                 },
                 .backward_fatal = .{
-                    .{ .launch = try self.clip(183, resolver), .ground = try self.landing(199, 184, resolver), .drop = try self.landing(200, 183, resolver) },
-                    .{ .launch = try self.clip(181, resolver), .ground = try self.landing(199, 182, resolver), .drop = try self.landing(200, 181, resolver) },
-                    .{ .launch = try self.clip(179, resolver), .ground = try self.landing(199, 180, resolver), .drop = try self.landing(200, 179, resolver) },
+                    .{
+                        .launch = try self.clip(183, resolver),
+                        .ground = try self.landing(199, 184, resolver),
+                        .drop = try self.landing(200, 183, resolver),
+                    },
+                    .{
+                        .launch = try self.clip(181, resolver),
+                        .ground = try self.landing(199, 182, resolver),
+                        .drop = try self.landing(200, 181, resolver),
+                    },
+                    .{
+                        .launch = try self.clip(179, resolver),
+                        .ground = try self.landing(199, 180, resolver),
+                        .drop = try self.landing(200, 179, resolver),
+                    },
                 },
                 // Main6c0e awards on each successful health predicate, including when
                 // the following clearance predicate rejects that particular branch.
@@ -146,11 +246,18 @@ const Import = struct {
                 .backward_scores = .{ 100, 200, 300 },
             },
             .hits = &.{},
-            .crouch_senses = .{ .{ .category = .player, .same_facing = false, .impact = .front_high }, .{ .category = .player, .same_facing = true, .impact = .rear_high } },
+            .crouch_senses = .{
+                .{ .category = .player, .same_facing = false, .impact = .front_high },
+                .{ .category = .player, .same_facing = true, .impact = .rear_high },
+            },
             .shoot_distance = g.at(6).conditions[1].argument * 16,
             .ally_wait_distance = g.at(5).conditions[0].argument * 16,
             .ally_scan_cells = @intCast(g.at(5).conditions[1].argument),
-            .takeoff_ledges = .{ -g.at(89).conditions[1].argument, -g.at(90).conditions[1].argument, -g.at(91).conditions[1].argument },
+            .takeoff_ledges = .{
+                -g.at(89).conditions[1].argument,
+                -g.at(90).conditions[1].argument,
+                -g.at(91).conditions[1].argument,
+            },
             .flight_fire_exit_chance = g.at(80).conditions[0].argument,
             .recoil_compensation = -@as(i16, g.at(58).dx),
         };
@@ -159,7 +266,16 @@ const Import = struct {
     }
 };
 
-pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []const u8, animations: []const u8, rooms: *const [64]geometry.RoomId, difficulty: @import("../settings.zig").Difficulty, routes: *std.ArrayList(routes_mod.Connection), resolver: anytype) !Assets {
+pub fn load(
+    allocator: std.mem.Allocator,
+    table: placement.Table,
+    rule_bytes: []const u8,
+    animations: []const u8,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: @import("../settings.zig").Difficulty,
+    routes: *std.ArrayList(routes_mod.Connection),
+    resolver: anytype,
+) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
     errdefer definitions.deinit(allocator);
     var profiles: std.ArrayList(runtime.Profile) = .empty;
@@ -187,7 +303,13 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         const group = try rules.group(rule_bytes, record.rule_group);
         if (!recognize(group)) continue;
         const profile_id = imported.get(record.rule_group) orelse new: {
-            var importer: Import = .{ .allocator = allocator, .group = group, .animations = animations, .clips = &clips, .cached = .init(allocator) };
+            var importer: Import = .{
+                .allocator = allocator,
+                .group = group,
+                .animations = animations,
+                .clips = &clips,
+                .cached = .init(allocator),
+            };
             defer importer.deinit();
             const profile = try importer.profile(resolver);
             errdefer allocator.free(profile.hits);
@@ -197,14 +319,23 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
             break :new id;
         };
         const dormant = record.initial_state == group.at(201).source;
-        if (!dormant and record.initial_state != group.at(0).source) return error.UnsupportedGuardStart;
+        if (!dormant and
+            record.initial_state != group.at(0).source) return error.UnsupportedGuardStart;
         const signal = group.at(201).conditions[0].argument;
-        if (activation_signal != 0 and activation_signal != signal) return error.UnsupportedMixedGuardSignals;
+        if (activation_signal != 0 and
+            activation_signal != signal) return error.UnsupportedMixedGuardSignals;
         activation_signal = signal;
         const endpoint = record.parameters[1];
         if (endpoint < 0 or endpoint >= table.count) return error.InvalidGuardWeapon;
         const weapon = weapon_ids.get(@intCast(endpoint)) orelse new: {
-            const result = try @import("weapon_effects.zig").load(allocator, try table.record(@intCast(endpoint)), rule_bytes, animations, &clips, resolver);
+            const result = try @import("weapon_effects.zig").load(
+                allocator,
+                try table.record(@intCast(endpoint)),
+                rule_bytes,
+                animations,
+                &clips,
+                resolver,
+            );
             const id = weapons.items.len;
             try weapon_ids.put(@intCast(endpoint), id);
             try weapons.append(allocator, result);
@@ -212,12 +343,39 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         };
         const recipient = record.parameters[3];
         if (recipient < 0 or recipient >= table.count) return error.InvalidGuardDefeatLink;
-        const output = try routes_mod.internConnection(allocator, routes, @intCast(index), @intCast(recipient), group.at(192).effect.argument);
+        const output = try routes_mod.internConnection(
+            allocator,
+            routes,
+            @intCast(index),
+            @intCast(recipient),
+            group.at(192).effect.argument,
+        );
         const arrival = record.parameters[2];
         if (dormant and (arrival < 0 or arrival >= rooms.len)) return error.InvalidGuardArrival;
         table.register(@intCast(index), .mobile_guards);
         table.register(@intCast(endpoint), .weapon_effects);
-        try definitions.append(allocator, .{ .profile = profile_id, .room = if (record.room < rooms.len) rooms[record.room] else null, .arrival_room = if (dormant) rooms[@intCast(arrival)] else null, .position = record.position, .facing = if (record.facing_right == 0) .left else .right, .dormant = dormant, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .contact_width = record.collision_width, .health = record.life, .posture_range = record.parameters[0], .weapon = weapon, .shot_next_step = index >= endpoint, .defeat_output = output, .palette_bank = 5, .behind_player = record.visual_flags & 8 != 0 });
+        try definitions.append(
+            allocator,
+            .{
+                .profile = profile_id,
+                .room = if (record.room < rooms.len) rooms[record.room] else null,
+                .arrival_room = if (dormant) rooms[@intCast(arrival)] else null,
+                .position = record.position,
+                .facing = if (record.facing_right == 0) .left else .right,
+                .dormant = dormant,
+                .initially_active = record.initially_active != 0,
+                .wake_nearby = record.flags & 4 != 0,
+                .accepts_signals = record.flags & 1 != 0,
+                .contact_width = record.collision_width,
+                .health = record.life,
+                .posture_range = record.parameters[0],
+                .weapon = weapon,
+                .shot_next_step = index >= endpoint,
+                .defeat_output = output,
+                .palette_bank = 5,
+                .behind_player = record.visual_flags & 8 != 0,
+            },
+        );
         try sources.append(allocator, @intCast(index));
     }
     const owned = try definitions.toOwnedSlice(allocator);
@@ -234,5 +392,13 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         for (owned_clips) |*clip| clip.deinit();
         allocator.free(owned_clips);
     }
-    return .{ .allocator = allocator, .definitions = owned, .profiles = owned_profiles, .weapons = owned_weapons, .clips = owned_clips, .sources = try sources.toOwnedSlice(allocator), .activation_signal = activation_signal };
+    return .{
+        .allocator = allocator,
+        .definitions = owned,
+        .profiles = owned_profiles,
+        .weapons = owned_weapons,
+        .clips = owned_clips,
+        .sources = try sources.toOwnedSlice(allocator),
+        .activation_signal = activation_signal,
+    };
 }

@@ -21,13 +21,22 @@ pub const Archive = struct {
     background: []const u8 = &.{},
     tile_bias: u16 = 0,
 
-    pub fn decode(self: Archive, allocator: std.mem.Allocator, colors: []const u8, room: u8) !artwork.Artwork {
+    pub fn decode(
+        self: Archive,
+        allocator: std.mem.Allocator,
+        colors: []const u8,
+        room: u8,
+    ) !artwork.Artwork {
         if (room >= 64 or self.rooms.len < 256) return error.InvalidRoomDirectory;
         const end = try big32(self.rooms, @as(usize, room) * 4);
         const previous = if (room == 0) 256 else try big32(self.rooms, @as(usize, room - 1) * 4);
         if (end < previous or previous < 256) return error.InvalidRoomRange;
         if (end == previous) return error.AbsentRoom;
-        const description = try backward.decode(allocator, try slice(self.rooms, 256, end - 256), 16384);
+        const description = try backward.decode(
+            allocator,
+            try slice(self.rooms, 256, end - 256),
+            16384,
+        );
         defer allocator.free(description);
         _ = try slice(description, 0, 16);
         var selectors: [4]u8 = undefined;
@@ -43,11 +52,21 @@ pub const Archive = struct {
         @memset(pixels, 0);
         const background_start = try big16(description, 10);
         if (description[1] == 0) {
-            try drawTiles(pixels, try slice(description, background_start, 1792), tiles, self.tile_bias);
+            try drawTiles(
+                pixels,
+                try slice(description, background_start, 1792),
+                tiles,
+                self.tile_bias,
+            );
         } else {
             try self.drawBackground(allocator, pixels, description, background_start);
         }
-        try drawTiles(pixels, try slice(description, try big16(description, 12), 1792), tiles, self.tile_bias);
+        try drawTiles(
+            pixels,
+            try slice(description, try big16(description, 12), 1792),
+            tiles,
+            self.tile_bias,
+        );
         return artwork.fromPixels(allocator, pixels, colors, selectors);
     }
 
@@ -68,7 +87,14 @@ pub const Archive = struct {
             const count: i16 = @bitCast(try big16(self.banks, bank * 6 + 4));
             const size = @as(usize, @abs(count)) * 32;
             if (count == 0 or size > 32768 or offset < directory) return error.InvalidArtBank;
-            const bytes = if (count < 0) try allocator.dupe(u8, try slice(self.banks, offset, size)) else try backward.decode(allocator, try slice(self.banks, directory, offset - directory), size);
+            const bytes = if (count < 0) try allocator.dupe(
+                u8,
+                try slice(self.banks, offset, size),
+            ) else try backward.decode(
+                allocator,
+                try slice(self.banks, directory, offset - directory),
+                size,
+            );
             defer allocator.free(bytes);
             if (bytes.len != size) return error.ArtBankSizeMismatch;
             const selected = (try slice(description, at, 1))[0];
@@ -78,7 +104,10 @@ pub const Archive = struct {
             } else {
                 const indices = try slice(description, at, @as(usize, selected) + 1);
                 at += indices.len;
-                for (indices) |index| try result.appendSlice(allocator, try slice(bytes, @as(usize, index) * 32, 32));
+                for (indices) |index| try result.appendSlice(
+                    allocator,
+                    try slice(bytes, @as(usize, index) * 32, 32),
+                );
             }
             if (result.items.len > 32768) return error.RoomTilesTooLarge;
             if (selection & 0x8000 != 0) return result.toOwnedSlice(allocator);
@@ -86,7 +115,13 @@ pub const Archive = struct {
         return error.UnterminatedRoomBanks;
     }
 
-    fn drawBackground(self: Archive, allocator: std.mem.Allocator, pixels: []u8, description: []const u8, at: usize) !void {
+    fn drawBackground(
+        self: Archive,
+        allocator: std.mem.Allocator,
+        pixels: []u8,
+        description: []const u8,
+        at: usize,
+    ) !void {
         const count = try big16(description, at);
         const placements = try slice(description, at + 2, @as(usize, count) * 6);
         for (0..count) |i| {
@@ -94,15 +129,24 @@ pub const Archive = struct {
             const code = try big16(placement, 0);
             if (code == 0xffff) continue;
             const index = code & 0x7fff;
-            if (self.background.len < 4 or index >= self.background[0]) return error.InvalidBackgroundIndex;
+            if (self.background.len < 4 or
+                index >= self.background[0]) return error.InvalidBackgroundIndex;
             var offset: i32 = @bitCast(try big32(self.background, @as(usize, index) * 4));
             if (index == 0) offset &= 0x00ffffff;
             const start: usize = @abs(offset);
             const size = try big16(self.background, start);
             const encoded = try slice(self.background, start + 2, size);
-            const decoded = if (offset < 0) try allocator.dupe(u8, encoded) else try expandRuns(allocator, encoded);
+            const decoded = if (offset < 0) try allocator.dupe(u8, encoded) else try expandRuns(
+                allocator,
+                encoded,
+            );
             defer allocator.free(decoded);
-            try drawBackgroundPiece(pixels, decoded, @as(i16, @bitCast(try big16(placement, 2))), @as(i16, @bitCast(try big16(placement, 4))));
+            try drawBackgroundPiece(
+                pixels,
+                decoded,
+                @as(i16, @bitCast(try big16(placement, 2))),
+                @as(i16, @bitCast(try big16(placement, 4))),
+            );
         }
     }
 };
@@ -141,9 +185,17 @@ fn drawBackgroundPiece(pixels: []u8, bytes: []const u8, x: i32, y: i32) !void {
         if (dy < 0 or dy >= 224) continue;
         for (0..width) |column| {
             const dx = x + @as(i32, @intCast(column));
-            if (dx < 0 or dx >= 256 or mask[row * (width / 8) + column / 8] & (@as(u8, 128) >> @as(u3, @intCast(column % 8))) == 0) continue;
+            if (dx < 0 or dx >= 256 or mask[row * (width / 8) + column / 8] & (@as(u8, 128) >> @as(
+                u3,
+                @intCast(column % 8),
+            )) == 0) continue;
             const value = colors[row * (width / 2) + column / 2];
-            pixels[@as(usize, @intCast(dy)) * 256 + @as(usize, @intCast(dx))] = if (column % 2 == 0) value >> 4 else value & 15;
+            pixels[
+                @as(
+                    usize,
+                    @intCast(dy),
+                ) * 256 + @as(usize, @intCast(dx))
+            ] = if (column % 2 == 0) value >> 4 else value & 15;
         }
     }
 }
@@ -174,7 +226,10 @@ test "floppy background clipping preserves mask transparency" {
     try drawBackgroundPiece(&pixels, &.{ 0, 0, 0, 1, 0xc0, 0x12, 0, 0, 0 }, -1, 0);
     try std.testing.expectEqual(@as(u8, 2), pixels[0]);
     try std.testing.expectEqual(@as(u8, 9), pixels[1]);
-    try std.testing.expectError(error.InvalidBackgroundMask, drawBackgroundPiece(&pixels, &.{ 1, 0, 0, 1 }, 0, 0));
+    try std.testing.expectError(
+        error.InvalidBackgroundMask,
+        drawBackgroundPiece(&pixels, &.{ 1, 0, 0, 1 }, 0, 0),
+    );
 }
 
 test "floppy tile flips retain foreground and reject missing art" {

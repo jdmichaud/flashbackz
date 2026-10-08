@@ -58,7 +58,10 @@ pub const Playback = struct {
             .hold => {},
             .frame => |frame| {
                 displace(pose, frame.forward, frame.down);
-                pose.visual = .{ .id = frame.visual.id, .mirrored = frame.visual.mirrored != (pose.facing == .left) };
+                pose.visual = .{
+                    .id = frame.visual.id,
+                    .mirrored = frame.visual.mirrored != (pose.facing == .left),
+                };
             },
         }
         self.next_step += 1;
@@ -73,7 +76,11 @@ test "interruption completes only remaining displacement without presenting skip
         .{ .frame = .{ .visual = .{ .id = @fromBackingInt(9) }, .forward = 5, .down = 16 } },
     };
     const clip: Clip = .{ .steps = &frames, .sound = @fromBackingInt(3) };
-    var pose: Pose = .{ .position = .{ .x = 100, .y = 70 }, .facing = .left, .visual = .{ .id = @fromBackingInt(0) } };
+    var pose: Pose = .{
+        .position = .{ .x = 100, .y = 70 },
+        .facing = .left,
+        .visual = .{ .id = @fromBackingInt(0) },
+    };
     var playback: Playback = .{};
     _ = playback.advance(clip, &pose);
     const visible = pose.visual;
@@ -90,7 +97,10 @@ test "interruption completes only remaining displacement without presenting skip
 test "motion holds preserve the pose and clip completion is explicit" {
     const old_visual: VisualId = @fromBackingInt(7);
     const new_visual: VisualId = @fromBackingInt(9);
-    const steps = [_]Step{ .hold, .{ .frame = .{ .visual = .{ .id = new_visual }, .forward = 3, .down = -2 } } };
+    const steps = [_]Step{
+        .hold,
+        .{ .frame = .{ .visual = .{ .id = new_visual }, .forward = 3, .down = -2 } },
+    };
     const clip: Clip = .{ .steps = &steps };
     var pose: Pose = .{ .position = .{ .x = 100, .y = 60 }, .visual = .{ .id = old_visual } };
     var playback: Playback = .{};
@@ -107,8 +117,16 @@ test "motion holds preserve the pose and clip completion is explicit" {
 }
 
 test "facing reflects displacement and artwork with explicit signed wrapping" {
-    const steps = [_]Step{.{ .frame = .{ .visual = .{ .id = @fromBackingInt(1), .mirrored = true }, .forward = -128, .down = 1 } }};
-    var pose: Pose = .{ .position = .{ .x = 32760, .y = 32767 }, .facing = .left, .visual = .{ .id = @fromBackingInt(0) } };
+    const steps = [_]Step{.{ .frame = .{
+        .visual = .{ .id = @fromBackingInt(1), .mirrored = true },
+        .forward = -128,
+        .down = 1,
+    } }};
+    var pose: Pose = .{
+        .position = .{ .x = 32760, .y = 32767 },
+        .facing = .left,
+        .visual = .{ .id = @fromBackingInt(0) },
+    };
     var playback: Playback = .{};
     _ = playback.advance(.{ .steps = &steps }, &pose);
     try std.testing.expectEqual(Position{ .x = -32648, .y = -32768 }, pose.position);

@@ -36,7 +36,14 @@ pub const World = struct {
         const followup_in = try allocator.alloc(?u16, count);
         errdefer allocator.free(followup_in);
         @memset(followup_in, null);
-        return .{ .allocator = allocator, .pending = pending, .applied = applied, .waiting_consumption = waiting_consumption, .followup_in = followup_in, .pulses = try allocator.alloc(@import("world_props.zig").CircuitId, count * 3) };
+        return .{
+            .allocator = allocator,
+            .pending = pending,
+            .applied = applied,
+            .waiting_consumption = waiting_consumption,
+            .followup_in = followup_in,
+            .pulses = try allocator.alloc(@import("world_props.zig").CircuitId, count * 3),
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.pending);
@@ -45,7 +52,12 @@ pub const World = struct {
         self.allocator.free(self.followup_in);
         self.allocator.free(self.pulses);
     }
-    fn grant(self: *World, definitions: []const Definition, index: usize, items: *equipment.Loadout) !void {
+    fn grant(
+        self: *World,
+        definitions: []const Definition,
+        index: usize,
+        items: *equipment.Loadout,
+    ) !void {
         if (self.applied[index]) return;
         try items.grant(definitions[index].item);
         self.applied[index] = true;
@@ -57,7 +69,11 @@ pub const World = struct {
         if (definitions[index].followup) |followup| self.followup_in[index] = followup.steps;
         if (definitions[index].movie) |movie| self.movie = movie;
     }
-    pub fn beginStep(self: *World, definitions: []const Definition, items: *equipment.Loadout) !void {
+    pub fn beginStep(
+        self: *World,
+        definitions: []const Definition,
+        items: *equipment.Loadout,
+    ) !void {
         @memset(self.applied, false);
         self.movie = null;
         self.pulse_count = 0;
@@ -73,14 +89,33 @@ pub const World = struct {
             try self.grant(definitions, index, items);
         };
     }
-    pub fn deliver(self: *World, definitions: []const Definition, bindings: []const Binding, pulses: []const @import("world_props.zig").CircuitId, items: *equipment.Loadout) !void {
+    pub fn deliver(
+        self: *World,
+        definitions: []const Definition,
+        bindings: []const Binding,
+        pulses: []const @import("world_props.zig").CircuitId,
+        items: *equipment.Loadout,
+    ) !void {
         for (pulses) |pulse| for (bindings) |binding| {
             if (binding.circuit != pulse) continue;
-            if (binding.next_step) self.pending[binding.target] = true else try self.grant(definitions, binding.target, items);
+            if (binding.next_step) self.pending[binding.target] = true else try self.grant(
+                definitions,
+                binding.target,
+                items,
+            );
         };
     }
-    pub fn observeConsumptions(self: *World, definitions: []const Definition, items: *const equipment.Loadout) !void {
-        for (self.waiting_consumption, definitions) |*waiting, definition| if (waiting.* and (try items.item(definition.item)).state == .consumed) {
+    pub fn observeConsumptions(
+        self: *World,
+        definitions: []const Definition,
+        items: *const equipment.Loadout,
+    ) !void {
+        for (
+            self.waiting_consumption,
+            definitions,
+        ) |*waiting, definition| if (waiting.* and
+            (try items.item(definition.item)).state == .consumed)
+        {
             self.pulses[self.pulse_count] = definition.on_consumed.?;
             self.pulse_count += 1;
             waiting.* = false;

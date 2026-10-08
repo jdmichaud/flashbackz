@@ -11,7 +11,12 @@ pub const State = struct {
     fn succeeds(random: anytype, denominator: u16) bool {
         return @rem(@as(i16, @bitCast(random.next())), @as(i16, @intCast(denominator))) == 0;
     }
-    pub fn advance(self: *State, definition: Definition, room: geometry.RoomId, random: anytype) ?Event {
+    pub fn advance(
+        self: *State,
+        definition: Definition,
+        room: geometry.RoomId,
+        random: anytype,
+    ) ?Event {
         const duration = if (self.call) |index| definition.calls[index].duration else definition.quiet_steps;
         var event: ?Event = null;
         if (self.elapsed == duration) {

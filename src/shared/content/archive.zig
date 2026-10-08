@@ -12,14 +12,21 @@ pub fn expand(pack: *Pack, bytes: []const u8, prefix: []const u8) !void {
     if (previous_end > bytes.len) return error.TruncatedArchive;
     for (0..count) |i| {
         const record = bytes[4 + i * 30 ..][0..30];
-        const name_end = std.mem.indexOfScalar(u8, record[0..14], 0) orelse return error.InvalidArchiveName;
+        const name_end = std.mem.indexOfScalar(
+            u8,
+            record[0..14],
+            0,
+        ) orelse return error.InvalidArchiveName;
         const name = record[0..name_end];
         if (std.mem.indexOfAny(u8, name, "/\\") != null) return error.InvalidArchiveName;
         const at: usize = std.mem.readInt(u32, record[14..18], .big);
         const stored_size: usize = std.mem.readInt(u32, record[18..22], .big);
         const size: usize = std.mem.readInt(u32, record[22..26], .big);
         if (!std.mem.eql(u8, record[26..30], "D.M.")) return error.InvalidArchiveTag;
-        if (at < previous_end or at > bytes.len or stored_size > bytes.len - at or stored_size > size) return error.InvalidArchiveExtent;
+        if (at < previous_end or
+            at > bytes.len or
+            stored_size > bytes.len - at or
+            stored_size > size) return error.InvalidArchiveExtent;
         if (size > Pack.limit - pack.total) return error.TooLarge;
         previous_end = at + stored_size;
         const allocator = pack.source.allocator;

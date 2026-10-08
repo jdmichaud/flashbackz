@@ -74,10 +74,18 @@ pub const MemoryAssetSource = struct {
         }
         self.handles.items[slot.?] = index;
         self.open_count += 1;
-        return .{ .handle = @fromBackingInt(@intCast(@as(u32, @intCast(slot.? + 1)))), .length = self.entries.values()[index].len };
+        return .{
+            .handle = @fromBackingInt(@intCast(@as(u32, @intCast(slot.? + 1)))),
+            .length = self.entries.values()[index].len,
+        };
     }
 
-    fn readAt(ctx: *anyopaque, file: platform.AssetHandle, offset: u64, dst: []u8) platform.AssetError!usize {
+    fn readAt(
+        ctx: *anyopaque,
+        file: platform.AssetHandle,
+        offset: u64,
+        dst: []u8,
+    ) platform.AssetError!usize {
         const self: *MemoryAssetSource = @ptrCast(@alignCast(ctx));
         const raw = @backingInt(file);
         if (raw == 0 or raw > self.handles.items.len) return error.InvalidHandle;
@@ -182,7 +190,10 @@ pub const MemoryStorage = struct {
 
     fn listSaves(ctx: *anyopaque) platform.StorageError!platform.OwnedSaveNames {
         const self: *MemoryStorage = @ptrCast(@alignCast(ctx));
-        const names = self.allocator.alloc([]const u8, self.records.count()) catch return error.OutOfMemory;
+        const names = self.allocator.alloc(
+            []const u8,
+            self.records.count(),
+        ) catch return error.OutOfMemory;
         var filled: usize = 0;
         errdefer {
             for (names[0..filled]) |n| self.allocator.free(n);

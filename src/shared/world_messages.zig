@@ -55,15 +55,42 @@ pub const State = struct {
     pub fn latchInput(self: *State) void {
         self.confirm_latched = self.keys != 0;
     }
-    pub fn draw(self: State, message: Message, font: *const @import("content/font.zig").Font, background: []const u8, pixels: []u8) !void {
-        if (pixels.len != 256 * 224 or background.len != pixels.len or self.page >= message.pages.len) return error.InvalidMessagePage;
-        for (26..58) |row| @memcpy(pixels[row * 256 + 16 ..][0..128], background[row * 256 + 16 ..][0..128]);
+    pub fn draw(
+        self: State,
+        message: Message,
+        font: *const @import("content/font.zig").Font,
+        background: []const u8,
+        pixels: []u8,
+    ) !void {
+        if (pixels.len != 256 * 224 or
+            background.len != pixels.len or
+            self.page >= message.pages.len) return error.InvalidMessagePage;
+        for (26..58) |row| @memcpy(
+            pixels[row * 256 + 16 ..][0..128],
+            background[row * 256 + 16 ..][0..128],
+        );
         for (message.pages[self.page].lines, 0..) |line, index| {
             const x = 88 - @as(i32, @intCast(line.text.len)) * 4;
-            try @import("render/text.zig").draw(pixels, 256, 224, font, line.text, x, 26 + @as(i32, @intCast(index)) * 8, .{ .foreground = line.ink, .shadow = 0xe2, .palette_bank = 14 });
+            try @import("render/text.zig").draw(
+                pixels,
+                256,
+                224,
+                font,
+                line.text,
+                x,
+                26 + @as(i32, @intCast(index)) * 8,
+                .{ .foreground = line.ink, .shadow = 0xe2, .palette_bank = 14 },
+            );
         }
     }
     pub fn hashInto(self: State, hash: *std.hash.Wyhash) void {
-        for ([_]u64{ @backingInt(self.request.message), @backingInt(self.request.icon), self.page, self.keys, @intFromBool(self.confirm_latched), self.clock.next_tick }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        for ([_]u64{
+            @backingInt(self.request.message),
+            @backingInt(self.request.icon),
+            self.page,
+            self.keys,
+            @intFromBool(self.confirm_latched),
+            self.clock.next_tick,
+        }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
     }
 };

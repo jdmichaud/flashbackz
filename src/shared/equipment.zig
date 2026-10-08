@@ -5,7 +5,26 @@ const std = @import("std");
 const inventory = @import("inventory.zig");
 const motion = @import("motion.zig");
 pub const ItemHandle = @import("identity.zig").ItemHandle;
-pub const Kind = enum { gun, shield, credits, holocube, teleporter, stone, key, cartridge, id_card, anti_g_belt, force_field, fuse, work_permit, parcel, papers, mission_time, terminal_card, photo };
+pub const Kind = enum {
+    gun,
+    shield,
+    credits,
+    holocube,
+    teleporter,
+    stone,
+    key,
+    cartridge,
+    id_card,
+    anti_g_belt,
+    force_field,
+    fuse,
+    work_permit,
+    parcel,
+    papers,
+    mission_time,
+    terminal_card,
+    photo,
+};
 pub const Credential = union(enum) { fixed: i16, item_charge };
 pub const Recharge = struct {
     movie_when: enum { start, completion } = .completion,
@@ -13,7 +32,11 @@ pub const Recharge = struct {
     restore: union(enum) { player_health: i16, item_charge: i16 },
     movie: @import("story_cue.zig").Cue,
 };
-pub const Recharged = struct { item: ItemHandle, health: ?i16, movie: ?@import("story_cue.zig").Cue };
+pub const Recharged = struct {
+    item: ItemHandle,
+    health: ?i16,
+    movie: ?@import("story_cue.zig").Cue,
+};
 pub const Definition = struct {
     consumption_movie: ?@import("story_cue.zig").Cue = null,
     consumption_notice: ?@import("world_messages.zig").Id = null,
@@ -26,7 +49,18 @@ pub const Definition = struct {
     initial_quantity: i16,
     label: []const u8 = "",
     show_quantity: bool = false,
-    use_action: ?union(enum) { story: @import("story_cue.zig").Cue, throw_item, pay, deploy_field, offer: struct { credential: i16 }, unlock: struct { credential: Credential, consume_after_steps: ?u16, movie: ?@import("story_cue.zig").Cue = null } } = null,
+    use_action: ?union(enum) {
+        story: @import("story_cue.zig").Cue,
+        throw_item,
+        pay,
+        deploy_field,
+        offer: struct { credential: i16 },
+        unlock: struct {
+            credential: Credential,
+            consume_after_steps: ?u16,
+            movie: ?@import("story_cue.zig").Cue = null,
+        },
+    } = null,
 };
 pub const Item = struct {
     definition: Definition,
@@ -54,7 +88,11 @@ pub const Loadout = struct {
             .state = if (definition.introduction_steps) |steps| .{ .introducing = steps } else .available,
             .quantity = definition.initial_quantity,
         };
-        return .{ .allocator = allocator, .entries = entries, .inventory = try inventory.Inventory.init(allocator, entries.len) };
+        return .{
+            .allocator = allocator,
+            .entries = entries,
+            .inventory = try inventory.Inventory.init(allocator, entries.len),
+        };
     }
 
     pub fn deinit(self: *Loadout) void {
@@ -64,7 +102,8 @@ pub const Loadout = struct {
     }
 
     pub fn item(self: *const Loadout, handle: ItemHandle) !*const Item {
-        if (handle.generation != 1 or handle.index >= self.entries.len) return error.InvalidItemHandle;
+        if (handle.generation != 1 or
+            handle.index >= self.entries.len) return error.InvalidItemHandle;
         return &self.entries[handle.index];
     }
 
@@ -77,8 +116,14 @@ pub const Loadout = struct {
 
     pub fn grant(self: *Loadout, handle: ItemHandle) !void {
         const entry = try self.item(handle);
-        if (entry.state != .available and entry.state != .carried and entry.state != .consumed) return error.ItemNotGrantable;
-        try inventory.transfer(handle, if (entry.state == .carried) &self.inventory else null, &self.inventory);
+        if (entry.state != .available and
+            entry.state != .carried and
+            entry.state != .consumed) return error.ItemNotGrantable;
+        try inventory.transfer(
+            handle,
+            if (entry.state == .carried) &self.inventory else null,
+            &self.inventory,
+        );
         self.entries[handle.index].state = .carried;
     }
     pub fn credit(self: *Loadout, handle: ItemHandle, amount: i16) !void {
@@ -128,7 +173,8 @@ pub const Loadout = struct {
     }
 
     pub fn carries(self: *const Loadout, kind: Kind) bool {
-        for (self.entries) |entry| if (entry.state == .carried and entry.definition.kind == kind) return true;
+        for (self.entries) |entry| if (entry.state == .carried and
+            entry.definition.kind == kind) return true;
         return false;
     }
 
@@ -179,11 +225,16 @@ pub const Loadout = struct {
                         .player_health => |value| restored_health = value,
                         .item_charge => |value| entry.quantity = value,
                     }
-                    self.recharged = .{ .item = .{ .index = @intCast(index), .generation = 1 }, .health = restored_health, .movie = if (capability.movie_when == .completion) capability.movie else null };
+                    self.recharged = .{
+                        .item = .{ .index = @intCast(index), .generation = 1 },
+                        .health = restored_health,
+                        .movie = if (capability.movie_when == .completion) capability.movie else null,
+                    };
                     entry.recharge_in = null;
                 } else entry.recharge_in = remaining - 1;
             }
-            if (entry.definition.kind == .shield and !charging) entry.quantity = shieldCharge(health);
+            if (entry.definition.kind == .shield and
+                !charging) entry.quantity = shieldCharge(health);
         }
         return count;
     }
@@ -196,7 +247,13 @@ pub const Loadout = struct {
                 .available => std.math.maxInt(u32),
                 .consumed => std.math.maxInt(u32) - 1,
             };
-            for ([_]u32{ @backingInt(entry.definition.kind), @as(u16, @bitCast(entry.quantity)), pending, if (entry.consume_in) |steps| @as(u32, steps) + 1 else 0, if (entry.recharge_in) |steps| @as(u32, steps) + 1 else 0 }) |value|
+            for ([_]u32{
+                @backingInt(entry.definition.kind),
+                @as(u16, @bitCast(entry.quantity)),
+                pending,
+                if (entry.consume_in) |steps| @as(u32, steps) + 1 else 0,
+                if (entry.recharge_in) |steps| @as(u32, steps) + 1 else 0,
+            }) |value|
                 hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
         }
         for (self.inventory.items()) |handle| {
@@ -212,8 +269,18 @@ pub fn shieldCharge(health: i16) i16 {
 
 test "quantity pickup updates the existing purse exactly once" {
     const definitions = [_]Definition{
-        .{ .kind = .credits, .icon = @fromBackingInt(1), .introduction_steps = 0, .initial_quantity = 7 },
-        .{ .kind = .credits, .icon = @fromBackingInt(2), .introduction_steps = null, .initial_quantity = 100 },
+        .{
+            .kind = .credits,
+            .icon = @fromBackingInt(1),
+            .introduction_steps = 0,
+            .initial_quantity = 7,
+        },
+        .{
+            .kind = .credits,
+            .icon = @fromBackingInt(2),
+            .introduction_steps = null,
+            .initial_quantity = 100,
+        },
     };
     var loadout = try Loadout.init(std.testing.allocator, &definitions);
     defer loadout.deinit();
@@ -230,9 +297,24 @@ test "quantity pickup updates the existing purse exactly once" {
 
 test "supplies arrive after their introductions and preserve simultaneous arrival order" {
     const definitions = [_]Definition{
-        .{ .kind = .gun, .icon = @fromBackingInt(4), .introduction_steps = 3, .initial_quantity = 1 },
-        .{ .kind = .shield, .icon = @fromBackingInt(8), .introduction_steps = 1, .initial_quantity = 0 },
-        .{ .kind = .credits, .icon = @fromBackingInt(3), .introduction_steps = 3, .initial_quantity = 7 },
+        .{
+            .kind = .gun,
+            .icon = @fromBackingInt(4),
+            .introduction_steps = 3,
+            .initial_quantity = 1,
+        },
+        .{
+            .kind = .shield,
+            .icon = @fromBackingInt(8),
+            .introduction_steps = 1,
+            .initial_quantity = 0,
+        },
+        .{
+            .kind = .credits,
+            .icon = @fromBackingInt(3),
+            .introduction_steps = 3,
+            .initial_quantity = 7,
+        },
     };
     var loadout = try Loadout.init(std.testing.allocator, &definitions);
     defer loadout.deinit();
@@ -252,11 +334,19 @@ test "supplies arrive after their introductions and preserve simultaneous arriva
     try std.testing.expectEqual(@as(u16, 0), loadout.inventory.items()[1].index);
     try std.testing.expectEqual(@as(u16, 2), loadout.inventory.items()[2].index);
     try std.testing.expectEqual(@as(usize, 0), try loadout.advance(3, &events));
-    try std.testing.expectError(error.InvalidItemHandle, loadout.item(.{ .index = 1, .generation = 2 }));
+    try std.testing.expectError(
+        error.InvalidItemHandle,
+        loadout.item(.{ .index = 1, .generation = 2 }),
+    );
 }
 
 test "a repeatable grant can reissue a consumed possession without duplicating its handle" {
-    const definitions = [_]Definition{.{ .kind = .papers, .icon = @fromBackingInt(0), .introduction_steps = null, .initial_quantity = 51 }};
+    const definitions = [_]Definition{.{
+        .kind = .papers,
+        .icon = @fromBackingInt(0),
+        .introduction_steps = null,
+        .initial_quantity = 51,
+    }};
     var loadout = try Loadout.init(std.testing.allocator, &definitions);
     defer loadout.deinit();
     const handle: ItemHandle = .{ .index = 0, .generation = 1 };

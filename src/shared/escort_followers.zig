@@ -52,28 +52,58 @@ pub const World = struct {
                 .frame => |f| f.visual,
                 .hold => return error.MissingEscortVisual,
             };
-            actor.* = .{ .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } }, .room = definition.footprint.room, .contact = definition.footprint, .active = definition.initially_active };
+            actor.* = .{
+                .pose = .{
+                    .position = definition.footprint.position,
+                    .facing = definition.facing,
+                    .visual = .{
+                        .id = visual.id,
+                        .mirrored = visual.mirrored != (definition.facing == .left),
+                    },
+                },
+                .room = definition.footprint.room,
+                .contact = definition.footprint,
+                .active = definition.initially_active,
+            };
         }
-        return .{ .allocator = allocator, .actors = actors, .weighted_contacts = try allocator.alloc(contacts.Footprint, definitions.len) };
+        return .{
+            .allocator = allocator,
+            .actors = actors,
+            .weighted_contacts = try allocator.alloc(contacts.Footprint, definitions.len),
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.actors);
         self.allocator.free(self.weighted_contacts);
     }
-    pub fn prepare(self: *World, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint) !void {
+    pub fn prepare(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        player: contacts.Footprint,
+    ) !void {
         self.candidate = null;
         self.notice = null;
         self.weighted_count = 0;
         const layout: contacts.Layout = .{};
         for (self.actors, definitions, 0..) |*actor, definition, index| {
-            actor.contact = .{ .room = actor.room, .position = actor.pose.position, .width = definition.footprint.width };
+            actor.contact = .{
+                .room = actor.room,
+                .position = actor.pose.position,
+                .width = definition.footprint.width,
+            };
             actor.invitation = actor.pending_invitation;
             actor.pending_invitation = null;
             actor.release = actor.pending_release;
             actor.pending_release = false;
             actor.late_displacement = 0;
             actor.sound = null;
-            const near = try @import("activation.zig").around(map, player.room, actor.room, actor.pose.position.y);
+            const near = try @import("activation.zig").around(
+                map,
+                player.room,
+                actor.room,
+                actor.pose.position.y,
+            );
             if (definition.wake_nearby and near.wake) actor.active = true;
             if (try layout.overlaps(map, player, actor.contact)) self.candidate = index;
             if (definition.clips[@backingInt(actor.phase)].presses_floor_switches) {
@@ -82,19 +112,44 @@ pub const World = struct {
             }
         }
     }
-    pub fn includeOccupancy(self: World, map: geometry.Map, lifts: *const platforms.World, definitions: []const platforms.Definition, occupancy: []platforms.Occupancy) !void {
+    pub fn includeOccupancy(
+        self: World,
+        map: geometry.Map,
+        lifts: *const platforms.World,
+        definitions: []const platforms.Definition,
+        occupancy: []platforms.Occupancy,
+    ) !void {
         const layout: contacts.Layout = .{};
-        for (self.actors) |actor| for (lifts.instances, definitions, occupancy, 0..) |lift, definition, *occupied, index| if (try layout.overlaps(map, actor.contact, lift.footprint(definition))) {
+        for (self.actors) |actor| for (
+            lifts.instances,
+            definitions,
+            occupancy,
+            0..,
+        ) |lift, definition, *occupied, index| if (try layout.overlaps(
+            map,
+            actor.contact,
+            lift.footprint(definition),
+        )) {
             occupied.contacts = true;
             if (actor.platform != index) occupied.unboarded_items = true;
         };
     }
-    pub fn receiveLiftEvents(self: *World, bindings: []const LiftBinding, lifts: *const platforms.World, definitions: []const platforms.Definition, map: geometry.Map) !void {
+    pub fn receiveLiftEvents(
+        self: *World,
+        bindings: []const LiftBinding,
+        lifts: *const platforms.World,
+        definitions: []const platforms.Definition,
+        map: geometry.Map,
+    ) !void {
         const layout: contacts.Layout = .{};
         for (bindings) |binding| {
             const actor = &self.actors[binding.actor];
             const lift = lifts.instances[binding.platform];
-            if (lift.invite_items and try layout.overlaps(map, actor.contact, lift.footprint(definitions[binding.platform]))) {
+            if (lift.invite_items and try layout.overlaps(
+                map,
+                actor.contact,
+                lift.footprint(definitions[binding.platform]),
+            )) {
                 if (binding.next_step) actor.pending_invitation = binding.platform else actor.invitation = binding.platform;
             }
             if (actor.platform == binding.platform) {
@@ -108,7 +163,13 @@ pub const World = struct {
     fn shift(actor: *Actor, amount: i16) void {
         actor.pose.position.x +%= if (actor.pose.facing == .right) amount else -amount;
     }
-    pub fn advance(self: *World, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint, talk: bool) !void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        player: contacts.Footprint,
+        talk: bool,
+    ) !void {
         for (self.actors, definitions, 0..) |*actor, definition, index| {
             if (!actor.active) {
                 actor.pose.position.y +%= actor.late_displacement;
@@ -116,30 +177,62 @@ pub const World = struct {
                 continue;
             }
             var clip = definition.clips[@backingInt(actor.phase)];
-            const speaking = talk and self.candidate == index and (actor.phase == .waiting or actor.phase == .turning);
-            if (speaking or (actor.phase == .waiting and actor.invitation != null) or (actor.phase == .riding and actor.release)) actor.playback.completeDisplacement(clip, &actor.pose);
+            const speaking = talk and
+                self.candidate == index and
+                (actor.phase == .waiting or actor.phase == .turning);
+            if (speaking or
+                (actor.phase == .waiting and actor.invitation != null) or
+                (actor.phase == .riding and actor.release)) actor.playback.completeDisplacement(
+                clip,
+                &actor.pose,
+            );
             if (actor.playback.exhausted(clip)) {
                 const env: Environment = .{ .map = map, .room = actor.room };
-                const awareness = try @import("actors/perception.zig").observe(map, .{ .room = actor.room, .pose = actor.pose }, player, &.{});
+                const awareness = try @import("actors/perception.zig").observe(
+                    map,
+                    .{ .room = actor.room, .pose = actor.pose },
+                    player,
+                    &.{},
+                );
                 const front = awareness.player(false, 0);
                 const behind = awareness.player(true, 0);
                 const close = awareness.player(false, definition.gap);
                 const room = try map.room(actor.room);
                 const same = actor.room == player.room;
-                const above = if (same) @divTrunc(player.position.y -% 8, 72) < @divTrunc(actor.pose.position.y, 72) else room.edges.up == .room and room.edges.up.room == player.room;
-                const below = if (same) @divTrunc(player.position.y -% 8, 72) > @divTrunc(actor.pose.position.y, 72) else room.edges.down == .room and room.edges.down.room == player.room;
+                const above = if (same) @divTrunc(
+                    player.position.y -% 8,
+                    72,
+                ) < @divTrunc(
+                    actor.pose.position.y,
+                    72,
+                ) else room.edges.up == .room and room.edges.up.room == player.room;
+                const below = if (same) @divTrunc(
+                    player.position.y -% 8,
+                    72,
+                ) > @divTrunc(
+                    actor.pose.position.y,
+                    72,
+                ) else room.edges.down == .room and room.edges.down.room == player.room;
                 const support = try env.at(actor.pose, .support, 1);
                 const wall = try env.at(actor.pose, .torso, 1);
                 switch (actor.phase) {
                     .waiting => {
                         if (speaking) {
-                            self.notice = .{ .message = definition.notice, .icon = definition.hint, .priority = definition.priority };
+                            self.notice = .{
+                                .message = definition.notice,
+                                .icon = definition.hint,
+                                .priority = definition.priority,
+                            };
                         } else if (front and actor.invitation != null) {
                             actor.platform = actor.invitation;
                             actor.phase = .boarding;
                         } else if (((above or below) and (!support or wall)) or behind) {
                             actor.phase = .turning;
-                        } else if (front and (!support or wall or close)) {} else if (front and support) {
+                        } else if (front and
+                            (!support or wall or close))
+                        {} else if (front and
+                            support)
+                        {
                             shift(actor, definition.stride_advance);
                             actor.phase = .walk_first;
                         } else if (actor.invitation != null) {
@@ -150,7 +243,12 @@ pub const World = struct {
                             shift(actor, definition.stride_advance);
                             actor.phase = .walk_first;
                         } else if (!same) {
-                            const near = try @import("activation.zig").around(map, player.room, actor.room, actor.pose.position.y);
+                            const near = try @import("activation.zig").around(
+                                map,
+                                player.room,
+                                actor.room,
+                                actor.pose.position.y,
+                            );
                             if (!(definition.wake_nearby and near.near)) actor.active = false;
                         }
                     },
@@ -163,7 +261,11 @@ pub const World = struct {
                         } else actor.phase = .waiting;
                     },
                     .turning => {
-                        if (speaking) self.notice = .{ .message = definition.notice, .icon = definition.hint, .priority = definition.priority };
+                        if (speaking) self.notice = .{
+                            .message = definition.notice,
+                            .icon = definition.hint,
+                            .priority = definition.priority,
+                        };
                         actor.pose.facing = if (actor.pose.facing == .left) .right else .left;
                         actor.phase = .waiting;
                     },
@@ -186,6 +288,19 @@ pub const World = struct {
         }
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
-        for (self.actors) |actor| for ([_]u64{ @backingInt(actor.phase), @backingInt(actor.room), @as(u16, @bitCast(actor.pose.position.x)), @as(u16, @bitCast(actor.pose.position.y)), @backingInt(actor.pose.facing), actor.playback.next_step, @intFromBool(actor.active), if (actor.platform) |p| p + 1 else 0, if (actor.invitation) |p| p + 1 else 0, if (actor.pending_invitation) |p| p + 1 else 0, @intFromBool(actor.release), @intFromBool(actor.pending_release) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        for (self.actors) |actor| for ([_]u64{
+            @backingInt(actor.phase),
+            @backingInt(actor.room),
+            @as(u16, @bitCast(actor.pose.position.x)),
+            @as(u16, @bitCast(actor.pose.position.y)),
+            @backingInt(actor.pose.facing),
+            actor.playback.next_step,
+            @intFromBool(actor.active),
+            if (actor.platform) |p| p + 1 else 0,
+            if (actor.invitation) |p| p + 1 else 0,
+            if (actor.pending_invitation) |p| p + 1 else 0,
+            @intFromBool(actor.release),
+            @intFromBool(actor.pending_release),
+        }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
     }
 };

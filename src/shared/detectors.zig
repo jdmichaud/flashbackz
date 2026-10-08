@@ -50,14 +50,27 @@ const Requests = struct {
         }
     }
 };
-pub const Instance = struct { pose: motion.Pose, phase: Phase, playback: motion.Playback = .{}, active: bool, requests: Requests = .{}, pending: Requests = .{}, sound: ?motion.SoundId = null };
+pub const Instance = struct {
+    pose: motion.Pose,
+    phase: Phase,
+    playback: motion.Playback = .{},
+    active: bool,
+    requests: Requests = .{},
+    pending: Requests = .{},
+    sound: ?motion.SoundId = null,
+};
 pub const World = struct {
     allocator: std.mem.Allocator,
     instances: []Instance,
     scratch: []contacts.Footprint,
     pulses: []CircuitId,
     pulse_count: usize = 0,
-    pub fn init(allocator: std.mem.Allocator, definitions: []const Definition, profiles: []const Profile, contact_capacity: usize) !World {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        definitions: []const Definition,
+        profiles: []const Profile,
+        contact_capacity: usize,
+    ) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);
         var outputs: usize = 0;
@@ -66,12 +79,28 @@ pub const World = struct {
                 .frame => |frame| frame.visual,
                 .hold => return error.MissingDetectorVisual,
             };
-            instance.* = .{ .pose = .{ .position = definition.position, .facing = definition.facing, .visual = .{ .id = first.id, .mirrored = first.mirrored != (definition.facing == .left) } }, .phase = definition.initial_phase, .active = definition.initially_active };
+            instance.* = .{
+                .pose = .{
+                    .position = definition.position,
+                    .facing = definition.facing,
+                    .visual = .{
+                        .id = first.id,
+                        .mirrored = first.mirrored != (definition.facing == .left),
+                    },
+                },
+                .phase = definition.initial_phase,
+                .active = definition.initially_active,
+            };
             outputs += definition.outputs.len;
         }
         const scratch = try allocator.alloc(contacts.Footprint, contact_capacity);
         errdefer allocator.free(scratch);
-        return .{ .allocator = allocator, .instances = instances, .scratch = scratch, .pulses = try allocator.alloc(CircuitId, outputs) };
+        return .{
+            .allocator = allocator,
+            .instances = instances,
+            .scratch = scratch,
+            .pulses = try allocator.alloc(CircuitId, outputs),
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.instances);
@@ -92,36 +121,69 @@ pub const World = struct {
             if (binding.next_step) instance.pending.add(binding.action) else instance.requests.add(binding.action);
         };
     }
-    fn detects(self: *World, senses: []const Sense, observer: perception.Observer, map: geometry.Map, player: contacts.Footprint, participants: []const contacts.Participant) !bool {
+    fn detects(
+        self: *World,
+        senses: []const Sense,
+        observer: perception.Observer,
+        map: geometry.Map,
+        player: contacts.Footprint,
+        participants: []const contacts.Participant,
+    ) !bool {
         const awareness = try perception.observe(map, observer, player, &.{});
         const current = try map.room(player.room);
-        const horizontal = observer.room == player.room or (current.edges.left == .room and current.edges.left.room == observer.room) or (current.edges.right == .room and current.edges.right.room == observer.room);
+        const horizontal = observer.room == player.room or
+            (current.edges.left == .room and current.edges.left.room == observer.room) or
+            (current.edges.right == .room and current.edges.right.room == observer.room);
         for (senses) |sense| switch (sense) {
             .player_front => |range| if (awareness.player(false, range)) return true,
             .player_behind => |range| if (awareness.player(true, range)) return true,
             .contacts => |ray| {
                 if (!horizontal) continue;
                 var count: usize = 0;
-                for (participants) |participant| if (participant.active and participant.kind == ray.kind) {
+                for (participants) |participant| if (participant.active and
+                    participant.kind == ray.kind)
+                {
                     self.scratch[count] = participant.footprint;
                     count += 1;
                 };
-                const distance = try perception.scanObjects(map, player.room, observer, self.scratch[0..count], ray.behind);
+                const distance = try perception.scanObjects(
+                    map,
+                    player.room,
+                    observer,
+                    self.scratch[0..count],
+                    ray.behind,
+                );
                 if (distance != null and distance.? <= ray.cells) return true;
             },
         };
         return false;
     }
-    pub fn advance(self: *World, definitions: []const Definition, profiles: []const Profile, bindings: []const Binding, map: geometry.Map, player: contacts.Footprint, participants: []const contacts.Participant) !void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        profiles: []const Profile,
+        bindings: []const Binding,
+        map: geometry.Map,
+        player: contacts.Footprint,
+        participants: []const contacts.Participant,
+    ) !void {
         if (participants.len > self.scratch.len) return error.TooManyDetectorContacts;
         for (self.instances, definitions) |*instance, definition| {
-            const neighborhood = try activation.around(map, player.room, definition.room, instance.pose.position.y);
+            const neighborhood = try activation.around(
+                map,
+                player.room,
+                definition.room,
+                instance.pose.position.y,
+            );
             if (definition.wake_nearby and neighborhood.wake) instance.active = true;
-            if (instance.requests.wake and (instance.active or definition.accepts_signals)) instance.active = true else instance.requests = .{};
+            if (instance.requests.wake and
+                (instance.active or
+                    definition.accepts_signals)) instance.active = true else instance.requests = .{};
             if (!instance.active) continue;
             const profile = profiles[definition.profile];
             var clip = profile.clip(instance.phase);
-            const interrupted = (instance.phase == .disabled and instance.requests.enable) or (instance.phase == .monitoring and instance.requests.disable);
+            const interrupted = (instance.phase == .disabled and instance.requests.enable) or
+                (instance.phase == .monitoring and instance.requests.disable);
             if (interrupted) instance.playback.completeDisplacement(clip, &instance.pose);
             if (instance.playback.exhausted(clip)) {
                 var audible = true;
@@ -136,17 +198,32 @@ pub const World = struct {
                     .enabling => instance.phase = .monitoring,
                     .disabling => instance.phase = .disabled,
                     .monitoring => {
-                        if (instance.requests.disable) instance.phase = .disabling else if (neighborhood.same and try self.detects(profile.acquire, .{ .room = definition.room, .pose = instance.pose }, map, player, participants)) {
+                        if (instance.requests.disable) instance.phase = .disabling else if (neighborhood.same and
+                            try self.detects(
+                                profile.acquire,
+                                .{ .room = definition.room, .pose = instance.pose },
+                                map,
+                                player,
+                                participants,
+                            ))
+                        {
                             instance.phase = .detecting;
                             pulse = true;
                         } else {
                             audible = false;
-                            if (!definition.wake_nearby or !neighborhood.near) instance.active = false;
+                            if (!definition.wake_nearby or
+                                !neighborhood.near) instance.active = false;
                         }
                     },
                     .detecting => if (profile.disable_after_pulse) {
                         instance.phase = .disabling;
-                    } else if (try self.detects(profile.sustain, .{ .room = definition.room, .pose = instance.pose }, map, player, participants)) {
+                    } else if (try self.detects(
+                        profile.sustain,
+                        .{ .room = definition.room, .pose = instance.pose },
+                        map,
+                        player,
+                        participants,
+                    )) {
                         pulse = true;
                     } else {
                         instance.phase = .monitoring;
@@ -156,7 +233,10 @@ pub const World = struct {
                 clip = profile.clip(instance.phase);
                 if (audible) instance.sound = clip.sound;
                 if (pulse) {
-                    @memcpy(self.pulses[self.pulse_count..][0..definition.outputs.len], definition.outputs);
+                    @memcpy(
+                        self.pulses[self.pulse_count..][0..definition.outputs.len],
+                        definition.outputs,
+                    );
                     self.pulse_count += definition.outputs.len;
                     self.route(bindings, definition.outputs);
                 }
@@ -168,7 +248,11 @@ pub const World = struct {
         for (self.instances) |instance| {
             hash.update(&.{ @backingInt(instance.phase), @intFromBool(instance.active) });
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, instance.playback.next_step)));
-            for ([_]Requests{ instance.requests, instance.pending }) |r| hash.update(&.{ @intFromBool(r.wake), @intFromBool(r.enable), @intFromBool(r.disable) });
+            for ([_]Requests{ instance.requests, instance.pending }) |r| hash.update(&.{
+                @intFromBool(r.wake),
+                @intFromBool(r.enable),
+                @intFromBool(r.disable),
+            });
         }
     }
 };

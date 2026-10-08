@@ -5,12 +5,27 @@ const score_mod = @import("score.zig");
 const opl = @import("opl.zig");
 
 pub const RegisterWrite = struct { tick: u64, register: u8, value: u8 };
-pub const Observer = struct { context: *anyopaque, write: *const fn (*anyopaque, RegisterWrite) void };
+pub const Observer = struct { context: *anyopaque, write: *const fn (
+    *anyopaque,
+    RegisterWrite,
+) void };
 const Voice = struct { part: u4, pitch: u8, channel: u8, percussion: bool };
 const Cursor = struct { event: usize = 0, origin: u64 = 0 };
 // Equal-tempered pitches measured at the original chip boundary.
 const frequencies = [_]u16{ 343, 364, 385, 408, 433, 459, 486, 515, 546, 579, 614, 650 };
-const operators = [_][2]u8{ .{ 0, 3 }, .{ 1, 4 }, .{ 2, 5 }, .{ 8, 11 }, .{ 9, 12 }, .{ 10, 13 }, .{ 16, 19 }, .{ 20, 20 }, .{ 18, 18 }, .{ 21, 21 }, .{ 17, 17 } };
+const operators = [_][2]u8{
+    .{ 0, 3 },
+    .{ 1, 4 },
+    .{ 2, 5 },
+    .{ 8, 11 },
+    .{ 9, 12 },
+    .{ 10, 13 },
+    .{ 16, 19 },
+    .{ 20, 20 },
+    .{ 18, 18 },
+    .{ 21, 21 },
+    .{ 17, 17 },
+};
 const all_operators = [_]u8{ 0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21 };
 
 pub const Player = struct {
@@ -27,12 +42,20 @@ pub const Player = struct {
     observer: ?Observer = null,
 
     pub fn init(score: score_mod.Score, rate: u32, observer: ?Observer) Player {
-        var self: Player = .{ .score = score, .chip = opl.init(rate), .rate = rate, .observer = observer };
+        var self: Player = .{
+            .score = score,
+            .chip = opl.init(rate),
+            .rate = rate,
+            .observer = observer,
+        };
         self.silence();
         return self;
     }
     fn write(self: *Player, register: u8, value: u8) void {
-        if (self.observer) |observer| observer.write(observer.context, .{ .tick = self.tick, .register = register, .value = value });
+        if (self.observer) |observer| observer.write(
+            observer.context,
+            .{ .tick = self.tick, .register = register, .value = value },
+        );
         opl.write(&self.chip, register, value);
     }
     pub fn silence(self: *Player) void {
@@ -42,7 +65,12 @@ pub const Player = struct {
         for (all_operators) |op| self.write(0x40 + op, 0x3f);
         for (0..9) |i| self.write(0xb0 + @as(u8, @intCast(i)), 0);
         for (0..9) |i| self.write(0xc0 + @as(u8, @intCast(i)), 0);
-        for ([_]u8{ 0x60, 0x80, 0x20, 0xe0 }) |base| for (all_operators) |op| self.write(base + op, 0);
+        for ([_]u8{
+            0x60,
+            0x80,
+            0x20,
+            0xe0,
+        }) |base| for (all_operators) |op| self.write(base + op, 0);
         self.write(1, 0x20);
         self.write(1, 0);
         for (0..9) |i| {
@@ -58,7 +86,10 @@ pub const Player = struct {
     }
     fn level(self: *const Player, op: score_mod.Operator, velocity: u7, scale: bool) u8 {
         const volume: i32 = (@as(i32, velocity) * self.master_volume) >> 6;
-        const attenuation = if (scale) 63 - @divTrunc(2 * (63 - @as(i32, op.attenuation)) * volume + 127, 254) else op.attenuation;
+        const attenuation = if (scale) 63 - @divTrunc(
+            2 * (63 - @as(i32, op.attenuation)) * volume + 127,
+            254,
+        ) else op.attenuation;
         return op.key_scale | @as(u8, @intCast(attenuation));
     }
     fn configure(self: *Player, instrument: score_mod.Instrument, channel: u8, velocity: u7) void {
@@ -95,7 +126,12 @@ pub const Player = struct {
         const slot = for (self.voices[first..], first..) |entry, i| {
             if (entry == null) break i;
         } else return;
-        self.voices[slot] = .{ .part = part, .pitch = note.pitch, .channel = channel, .percussion = instrument.percussion != null };
+        self.voices[slot] = .{
+            .part = part,
+            .pitch = note.pitch,
+            .channel = channel,
+            .percussion = instrument.percussion != null,
+        };
         self.configure(instrument, channel, note.velocity);
         const frequency = frequencies[note.pitch % 12];
         const high: u8 = @truncate((@as(u16, note.pitch / 12) << 2) | (frequency >> 8));
@@ -115,7 +151,10 @@ pub const Player = struct {
     fn release(self: *Player, part: u4, pitch: u8) void {
         for (&self.voices) |*entry| if (entry.*) |voice| {
             if (voice.part != part or voice.pitch != pitch) continue;
-            if (voice.percussion) self.releaseDrum(voice.channel) else self.write(0xb0 + voice.channel, @truncate((@as(u16, pitch / 12) << 2) | (frequencies[pitch % 12] >> 8)));
+            if (voice.percussion) self.releaseDrum(voice.channel) else self.write(
+                0xb0 + voice.channel,
+                @truncate((@as(u16, pitch / 12) << 2) | (frequencies[pitch % 12] >> 8)),
+            );
             entry.* = null;
             return;
         };
@@ -138,9 +177,15 @@ pub const Player = struct {
             octave -= 1;
             const product: i16 = @truncate(@rem(signed, 8192) * 25);
             const detune = @divTrunc(@as(i32, product), 8192);
-            const frequency: u16 = @intCast(@as(i32, frequencies[@intCast(@rem(semitone, 12))]) + detune);
+            const frequency: u16 = @intCast(@as(
+                i32,
+                frequencies[@intCast(@rem(semitone, 12))],
+            ) + detune);
             self.write(0xa0 + voice.channel, @truncate(frequency));
-            self.write(0xb0 + voice.channel, @truncate(@as(u32, @bitCast(octave * 4)) | 0x20 | (frequency >> 8)));
+            self.write(
+                0xb0 + voice.channel,
+                @truncate(@as(u32, @bitCast(octave * 4)) | 0x20 | (frequency >> 8)),
+            );
         };
     }
     pub fn advanceTick(self: *Player) void {
@@ -162,7 +207,9 @@ pub const Player = struct {
                     cursor.event = 0;
                 }
             }
-            while (cursor.event < part.events.len and part.events[cursor.event].tick + cursor.origin <= local_tick) : (cursor.event += 1) {
+            while (cursor.event < part.events.len and
+                part.events[cursor.event].tick + cursor.origin <= local_tick) : (cursor.event += 1)
+            {
                 switch (part.events[cursor.event].action) {
                     .play => |note| self.play(@intCast(i), note),
                     .release => |pitch| self.release(@intCast(i), pitch),
@@ -189,12 +236,34 @@ pub const Player = struct {
 };
 
 test "music rendering is independent of host buffer sizes" {
-    const op: score_mod.Operator = .{ .characteristics = 1, .key_scale = 0, .attenuation = 0, .attack_decay = 0xf2, .sustain_release = 0x24, .waveform = 0 };
+    const op: score_mod.Operator = .{
+        .characteristics = 1,
+        .key_scale = 0,
+        .attenuation = 0,
+        .attack_decay = 0xf2,
+        .sustain_release = 0x24,
+        .waveform = 0,
+    };
     var instruments: [16]?score_mod.Instrument = @splat(null);
-    instruments[0] = .{ .percussion = null, .modulator = op, .carrier = op, .feedback_connection = 1, .scale_modulator = true };
-    const events = [_]score_mod.Event{ .{ .tick = 1, .action = .{ .play = .{ .instrument = 0, .pitch = 48, .velocity = 100 } } }, .{ .tick = 20, .action = .{ .release = 48 } } };
+    instruments[0] = .{
+        .percussion = null,
+        .modulator = op,
+        .carrier = op,
+        .feedback_connection = 1,
+        .scale_modulator = true,
+    };
+    const events = [_]score_mod.Event{
+        .{ .tick = 1, .action = .{ .play = .{ .instrument = 0, .pitch = 48, .velocity = 100 } } },
+        .{ .tick = 20, .action = .{ .release = 48 } },
+    };
     const parts = [_]score_mod.Part{.{ .events = &events, .repeat_ticks = 32 }};
-    const score: score_mod.Score = .{ .instruments = instruments, .parts = &parts, .tick_pit_cycles = 3724, .stop_after_ticks = null, .restart_after_ticks = null };
+    const score: score_mod.Score = .{
+        .instruments = instruments,
+        .parts = &parts,
+        .tick_pit_cycles = 3724,
+        .stop_after_ticks = null,
+        .restart_after_ticks = null,
+    };
     var whole = Player.init(score, 44100, null);
     var split = Player.init(score, 44100, null);
     var a: [10000]i16 = undefined;

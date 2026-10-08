@@ -16,7 +16,11 @@ pub const Definition = struct {
     initially_active: bool,
     wake_on_contact: bool,
 };
-pub const Instance = struct { phase: Phase = .waiting, playback: motion.Playback = .{}, active: bool };
+pub const Instance = struct {
+    phase: Phase = .waiting,
+    playback: motion.Playback = .{},
+    active: bool,
+};
 pub const World = struct {
     allocator: std.mem.Allocator,
     instances: []Instance,
@@ -26,22 +30,40 @@ pub const World = struct {
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);
-        for (instances, definitions) |*instance, definition| instance.* = .{ .active = definition.initially_active };
-        return .{ .allocator = allocator, .instances = instances, .pulses = try allocator.alloc(Circuit, definitions.len) };
+        for (
+            instances,
+            definitions,
+        ) |*instance, definition| instance.* = .{ .active = definition.initially_active };
+        return .{
+            .allocator = allocator,
+            .instances = instances,
+            .pulses = try allocator.alloc(Circuit, definitions.len),
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.instances);
         self.allocator.free(self.pulses);
     }
-    pub fn advance(self: *World, definitions: []const Definition, map: geometry.Map, player_room: geometry.RoomId, participants: []const contacts.Participant, icon: motion.VisualId) !void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        player_room: geometry.RoomId,
+        participants: []const contacts.Participant,
+        icon: motion.VisualId,
+    ) !void {
         self.pulse_count = 0;
         self.notice = null;
         const layout: contacts.Layout = .{};
         for (self.instances, definitions) |*instance, definition| {
             if (instance.phase == .removed) continue;
             var occupied = false;
-            if (instance.active or definition.footprint.room == player_room) for (participants) |participant| {
-                if (participant.kind != definition.category or !participant.ordinary_contact or (!participant.active and participant.footprint.room != player_room)) continue;
+            if (instance.active or
+                definition.footprint.room == player_room) for (participants) |participant|
+            {
+                if (participant.kind != definition.category or
+                    !participant.ordinary_contact or
+                    (!participant.active and participant.footprint.room != player_room)) continue;
                 if (try layout.overlaps(map, definition.footprint, participant.footprint)) {
                     occupied = true;
                     break;
@@ -60,7 +82,11 @@ pub const World = struct {
                         instance.active = false;
                     },
                     .announcing => {
-                        self.notice = .{ .message = definition.notice, .icon = icon, .priority = definition.priority };
+                        self.notice = .{
+                            .message = definition.notice,
+                            .icon = icon,
+                            .priority = definition.priority,
+                        };
                         instance.phase = .completing;
                     },
                     .completing => {
@@ -76,11 +102,19 @@ pub const World = struct {
                 clip = definition.clips[@backingInt(instance.phase)];
             }
             // These destination clips are invisible, stationary cadence markers.
-            var pose: motion.Pose = .{ .position = definition.footprint.position, .facing = .right, .visual = .{ .id = @fromBackingInt(0) } };
+            var pose: motion.Pose = .{
+                .position = definition.footprint.position,
+                .facing = .right,
+                .visual = .{ .id = @fromBackingInt(0) },
+            };
             _ = instance.playback.advance(clip, &pose);
         }
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
-        for (self.instances) |instance| for ([_]u64{ @backingInt(instance.phase), instance.playback.next_step, @intFromBool(instance.active) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        for (self.instances) |instance| for ([_]u64{
+            @backingInt(instance.phase),
+            instance.playback.next_step,
+            @intFromBool(instance.active),
+        }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
     }
 };

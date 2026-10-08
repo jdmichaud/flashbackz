@@ -8,7 +8,12 @@ const front_end = @import("scenes/front_end.zig");
 const continue_mod = @import("scenes/continue_game.zig");
 const story_mod = @import("scenes/story.zig");
 const jungle_mod = @import("scenes/jungle.zig");
-pub const Entry = union(enum) { automatic, menu_development, jungle_development, level_development: @import("content/level.zig").Id };
+pub const Entry = union(enum) {
+    automatic,
+    menu_development,
+    jungle_development,
+    level_development: @import("content/level.zig").Id,
+};
 const Scene = union(enum) {
     smoke,
     menu: front_end.Scene,
@@ -111,7 +116,14 @@ pub const State = struct {
     /// exactly when their hashes do; the tests and the hosts compare this, not the pixels.
     pub fn hash(self: State) u64 {
         var h = std.hash.Wyhash.init(0);
-        for ([_]u32{ @bitCast(self.x), @bitCast(self.y), @bitCast(self.dx), @bitCast(self.dy), self.bounces, self.seed }) |v| {
+        for ([_]u32{
+            @bitCast(self.x),
+            @bitCast(self.y),
+            @bitCast(self.dx),
+            @bitCast(self.dy),
+            self.bounces,
+            self.seed,
+        }) |v| {
             h.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, v)));
         }
         return h.final();
@@ -127,7 +139,14 @@ pub const State = struct {
         @memcpy(out[0..magic.len], magic);
         std.mem.writeInt(u16, out[magic.len..][0..2], version, .little);
         var at: usize = magic.len + 2;
-        for ([_]u32{ @bitCast(self.x), @bitCast(self.y), @bitCast(self.dx), @bitCast(self.dy), self.bounces, self.seed }) |v| {
+        for ([_]u32{
+            @bitCast(self.x),
+            @bitCast(self.y),
+            @bitCast(self.dx),
+            @bitCast(self.dy),
+            self.bounces,
+            self.seed,
+        }) |v| {
             std.mem.writeInt(u32, out[at..][0..4], v, .little);
             at += 4;
         }
@@ -136,11 +155,30 @@ pub const State = struct {
 
     /// A record of another version is refused, not converted: there is one save format.
     pub fn decode(bytes: []const u8) error{ NotAState, WrongVersion }!State {
-        if (bytes.len != record_len or !std.mem.eql(u8, bytes[0..magic.len], magic)) return error.NotAState;
-        if (std.mem.readInt(u16, bytes[magic.len..][0..2], .little) != version) return error.WrongVersion;
+        if (bytes.len != record_len or !std.mem.eql(
+            u8,
+            bytes[0..magic.len],
+            magic,
+        )) return error.NotAState;
+        if (std.mem.readInt(
+            u16,
+            bytes[magic.len..][0..2],
+            .little,
+        ) != version) return error.WrongVersion;
         var v: [6]u32 = undefined;
-        for (&v, 0..) |*field, i| field.* = std.mem.readInt(u32, bytes[magic.len + 2 + 4 * i ..][0..4], .little);
-        return .{ .x = @bitCast(v[0]), .y = @bitCast(v[1]), .dx = @bitCast(v[2]), .dy = @bitCast(v[3]), .bounces = v[4], .seed = v[5] };
+        for (&v, 0..) |*field, i| field.* = std.mem.readInt(
+            u32,
+            bytes[magic.len + 2 + 4 * i ..][0..4],
+            .little,
+        );
+        return .{
+            .x = @bitCast(v[0]),
+            .y = @bitCast(v[1]),
+            .dx = @bitCast(v[2]),
+            .dy = @bitCast(v[3]),
+            .bounces = v[4],
+            .seed = v[5],
+        };
     }
 };
 
@@ -174,21 +212,47 @@ pub const Game = struct {
     level: @import("content/level.zig").Id = .jungle,
     story: ?story_mod.Story = null,
 
-    pub fn init(allocator: std.mem.Allocator, assets: ?platform.AssetSource, storage: ?platform.Storage) !Game {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        assets: ?platform.AssetSource,
+        storage: ?platform.Storage,
+    ) !Game {
         return initWithEntry(allocator, assets, storage, .automatic);
     }
 
-    pub fn initWithEntry(allocator: std.mem.Allocator, assets: ?platform.AssetSource, storage: ?platform.Storage, entry: Entry) !Game {
+    pub fn initWithEntry(
+        allocator: std.mem.Allocator,
+        assets: ?platform.AssetSource,
+        storage: ?platform.Storage,
+        entry: Entry,
+    ) !Game {
         const page = try allocator.alloc(u8, page_width * page_height);
         errdefer allocator.free(page);
-        const rgba = try allocator.alloc(u8, page_width * page_height * platform.RgbaFrame.bytes_per_pixel);
+        const rgba = try allocator.alloc(
+            u8,
+            page_width * page_height * platform.RgbaFrame.bytes_per_pixel,
+        );
         errdefer allocator.free(rgba);
         const preferences: @import("scenes/game_options.zig").Settings = .{ .volume = @import("volume_preference.zig").load(storage) };
         if (entry == .jungle_development or entry == .level_development) {
             const level: @import("content/level.zig").Id = if (entry == .level_development) entry.level_development else .jungle;
-            var scene = try jungle_mod.Scene.loadLevel(allocator, assets orelse return error.OriginalContentRequired, level, .normal);
+            var scene = try jungle_mod.Scene.loadLevel(
+                allocator,
+                assets orelse return error.OriginalContentRequired,
+                level,
+                .normal,
+            );
             scene.settings = preferences;
-            return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .preferences = preferences, .level = level, .scene = .{ .jungle = scene } };
+            return .{
+                .allocator = allocator,
+                .assets = assets,
+                .storage = storage,
+                .page = page,
+                .rgba = rgba,
+                .preferences = preferences,
+                .level = level,
+                .scene = .{ .jungle = scene },
+            };
         }
         const original_menu = if (assets) |source| try menu_art.load(allocator, source) else null;
         var scene: Scene = .smoke;
@@ -198,7 +262,15 @@ pub const Game = struct {
             if (entry == .automatic) try front.intro();
             scene = .{ .menu = front };
         }
-        return .{ .allocator = allocator, .assets = assets, .storage = storage, .page = page, .rgba = rgba, .preferences = preferences, .scene = scene };
+        return .{
+            .allocator = allocator,
+            .assets = assets,
+            .storage = storage,
+            .page = page,
+            .rgba = rgba,
+            .preferences = preferences,
+            .scene = scene,
+        };
     }
 
     pub fn deinit(self: *Game) void {
@@ -220,11 +292,21 @@ pub const Game = struct {
 
     pub fn stateHash(self: *const Game) u64 {
         if (self.scene == .jungle) {
-            const world = std.hash.Wyhash.hash(self.scene.jungle.stateHash(), &.{ @backingInt(self.level), @backingInt(self.difficulty) });
+            const world = std.hash.Wyhash.hash(
+                self.scene.jungle.stateHash(),
+                &.{ @backingInt(self.level), @backingInt(self.difficulty) },
+            );
             if (self.story) |story| {
                 var hash = std.hash.Wyhash.init(world);
-                hash.update(&.{ @backingInt(story.kind), @intFromBool(story.skip), @intFromBool(story.player.confirmed) });
-                hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, story.player.playback.frame)));
+                hash.update(&.{
+                    @backingInt(story.kind),
+                    @intFromBool(story.skip),
+                    @intFromBool(story.player.confirmed),
+                });
+                hash.update(&std.mem.toBytes(std.mem.nativeToLittle(
+                    u64,
+                    story.player.playback.frame,
+                )));
                 return hash.final();
             }
             return world;
@@ -271,7 +353,9 @@ pub const Game = struct {
             },
             .playing => {
                 try self.consumeEvents(p);
-                if (self.phase == .playing and self.scene == .smoke and self.state.step()) self.click_left = click_samples;
+                if (self.phase == .playing and
+                    self.scene == .smoke and
+                    self.state.step()) self.click_left = click_samples;
             },
             .finished => {},
         }
@@ -297,9 +381,18 @@ pub const Game = struct {
                     self.demo_index = 0;
                     try front.intro();
                 } else {
-                    const recording = try @import("content/demo.zig").load(self.allocator, self.assets.?, self.demo_index);
+                    const recording = try @import("content/demo.zig").load(
+                        self.allocator,
+                        self.assets.?,
+                        self.demo_index,
+                    );
                     errdefer self.allocator.free(recording.controls);
-                    var next = try jungle_mod.Scene.loadLevel(self.allocator, self.assets.?, recording.descriptor.level, .normal);
+                    var next = try jungle_mod.Scene.loadLevel(
+                        self.allocator,
+                        self.assets.?,
+                        recording.descriptor.level,
+                        .normal,
+                    );
                     next.settings = self.preferences;
                     next.replay = .{ .samples = recording.controls };
                     if (recording.descriptor.start) |start| {
@@ -311,9 +404,17 @@ pub const Game = struct {
                     self.demo_index += 1;
                 }
             } else if (front.stage == .ready) {
-                var next = try jungle_mod.Scene.loadLevel(self.allocator, self.assets.?, front.selected_level, front.difficulty);
+                var next = try jungle_mod.Scene.loadLevel(
+                    self.allocator,
+                    self.assets.?,
+                    front.selected_level,
+                    front.difficulty,
+                );
                 next.pending_movie = @import("content/level.zig").opening(front.selected_level);
-                if (next.pending_movie != null) next.clock = try @import("step_clock.zig").Clock.init(@import("step_clock.zig").jungle, p.nowNs());
+                if (next.pending_movie != null) next.clock = try @import("step_clock.zig").Clock.init(
+                    @import("step_clock.zig").jungle,
+                    p.nowNs(),
+                );
                 self.level = front.selected_level;
                 next.settings = self.preferences;
                 self.difficulty = front.difficulty;
@@ -324,19 +425,32 @@ pub const Game = struct {
         if (self.jungle()) |scene| {
             self.applyPreferences(scene.settings);
             const now = p.nowNs();
-            if (self.story == null and scene.message == null and scene.options == null and scene.dialog == null and scene.pending_movie != null and scene.needsCatchup(now)) {
+            if (self.story == null and
+                scene.message == null and
+                scene.options == null and
+                scene.dialog == null and
+                scene.pending_movie != null and
+                scene.needsCatchup(now))
+            {
                 const movie = scene.pending_movie.?;
                 scene.pending_movie = null;
                 if (try scene.latchMovieInput()) {
                     scene.stopAudio(p);
-                    self.story = try story_mod.Story.open(self.allocator, self.assets.?, movie, now, if (scene.input.use_held) .enter else if (scene.input.left_action) .left_shift else if (scene.input.right_action) .right_shift else null);
+                    self.story = try story_mod.Story.open(
+                        self.allocator,
+                        self.assets.?,
+                        movie,
+                        now,
+                        if (scene.input.use_held) .enter else if (scene.input.left_action) .left_shift else if (scene.input.right_action) .right_shift else null,
+                    );
                 }
             }
             if (self.story) |*story| {
                 story.music_enabled = self.preferences.music;
                 story.music.volume = self.preferences.volume;
                 if (try story.update(p)) {
-                    const defeated = story.kind == .disintegration or story.kind == .reactor_failure;
+                    const defeated = story.kind == .disintegration or
+                        story.kind == .reactor_failure;
                     const paused = now - story.started_ns;
                     story.stopAudio(p);
                     story.deinit();
@@ -355,20 +469,31 @@ pub const Game = struct {
             };
             if (scene.aborted or (scene.defeated and scene.replay != null)) {
                 scene.stopAudio(p);
-                const art = (try menu_art.load(self.allocator, self.assets.?)) orelse return error.MissingMenu;
+                const art = (try menu_art.load(
+                    self.allocator,
+                    self.assets.?,
+                )) orelse return error.MissingMenu;
                 var next = front_end.Scene.init(self.allocator, self.assets.?, art);
                 next.difficulty = self.difficulty;
                 next.music_enabled = self.preferences.music;
                 scene.deinit();
                 self.scene = .{ .menu = next };
             } else if (scene.exits.requested) |destination| {
-                var next = try jungle_mod.Scene.loadLevel(self.allocator, self.assets.?, destination, self.difficulty);
+                var next = try jungle_mod.Scene.loadLevel(
+                    self.allocator,
+                    self.assets.?,
+                    destination,
+                    self.difficulty,
+                );
                 next.settings = scene.settings;
                 next.score = scene.score;
                 next.random = scene.random;
                 next.input = scene.input;
                 std.mem.swap(@TypeOf(next.pending), &next.pending, &scene.pending);
-                next.clock = try @import("step_clock.zig").Clock.init(@import("step_clock.zig").jungle, now);
+                next.clock = try @import("step_clock.zig").Clock.init(
+                    @import("step_clock.zig").jungle,
+                    now,
+                );
                 next.pending_movie = @import("content/level.zig").opening(destination);
                 self.level = destination;
                 scene.stopAudio(p);
@@ -376,7 +501,11 @@ pub const Game = struct {
                 self.scene = .{ .jungle = next };
             } else if (scene.defeated) {
                 scene.stopAudio(p);
-                const next = try continue_mod.Scene.init(self.allocator, self.assets.?, scene.score);
+                const next = try continue_mod.Scene.init(
+                    self.allocator,
+                    self.assets.?,
+                    scene.score,
+                );
                 scene.deinit();
                 self.scene = .{ .continue_game = next };
             } else {
@@ -388,11 +517,17 @@ pub const Game = struct {
             const dialog = &self.scene.continue_game;
             try dialog.update(p.nowNs());
             if (dialog.menu.outcome) |choice| {
-                const art = (try menu_art.load(self.allocator, self.assets.?)) orelse return error.MissingMenu;
+                const art = (try menu_art.load(
+                    self.allocator,
+                    self.assets.?,
+                )) orelse return error.MissingMenu;
                 var next = front_end.Scene.init(self.allocator, self.assets.?, art);
                 errdefer next.deinit();
                 next.difficulty = self.difficulty;
-                if (choice == .retry) try next.startLevel(self.level, dialog.menu.activation_key) else try next.gameOver(dialog.menu.activation_key);
+                if (choice == .retry) try next.startLevel(
+                    self.level,
+                    dialog.menu.activation_key,
+                ) else try next.gameOver(dialog.menu.activation_key);
                 dialog.deinit();
                 self.scene = .{ .menu = next };
             }
@@ -459,7 +594,10 @@ pub const Game = struct {
     fn applyPreferences(self: *Game, settings: @import("scenes/game_options.zig").Settings) void {
         const volume_changed = self.preferences.volume != settings.volume;
         self.preferences = settings;
-        if (volume_changed) @import("volume_preference.zig").save(self.storage, settings.volume) catch {};
+        if (volume_changed) @import("volume_preference.zig").save(
+            self.storage,
+            settings.volume,
+        ) catch {};
     }
 
     fn saveState(self: *Game) void {
@@ -523,7 +661,12 @@ pub const Game = struct {
             const frame = self.rgba[0 .. 57344 * 4];
             try scene.draw(indices, frame);
             self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
-            try p.present(.{ .width = size.width, .height = size.height, .stride = size.width * 4, .pixels = frame });
+            try p.present(.{
+                .width = size.width,
+                .height = size.height,
+                .stride = size.width * 4,
+                .pixels = frame,
+            });
             self.frames_presented += 1;
             return;
         }
@@ -543,7 +686,12 @@ pub const Game = struct {
             const frame = self.rgba[0 .. count * 4];
             try scene.draw(indices, frame);
             self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
-            try p.present(.{ .width = size.width, .height = size.height, .stride = size.width * 4, .pixels = frame });
+            try p.present(.{
+                .width = size.width,
+                .height = size.height,
+                .stride = size.width * 4,
+                .pixels = frame,
+            });
             self.frames_presented += 1;
             return;
         }
@@ -573,8 +721,16 @@ pub const Game = struct {
             }
         }
         // A loaded record is trusted no further than the page: the ball is drawn inside it.
-        const bx: u32 = @intCast(std.math.clamp(self.state.x >> 16, 0, @as(i32, page_width - ball_size)));
-        const by: u32 = @intCast(std.math.clamp(self.state.y >> 16, 0, @as(i32, page_height - ball_size)));
+        const bx: u32 = @intCast(std.math.clamp(
+            self.state.x >> 16,
+            0,
+            @as(i32, page_width - ball_size),
+        ));
+        const by: u32 = @intCast(std.math.clamp(
+            self.state.y >> 16,
+            0,
+            @as(i32, page_height - ball_size),
+        ));
         for (by..by + ball_size) |y| {
             @memset(self.page[y * page_width + bx ..][0..ball_size], colour_ball);
         }
@@ -606,8 +762,14 @@ test "the ball stays inside the walls" {
     var s: State = .{ .dx = max_speed, .dy = -max_speed };
     for (0..5000) |_| {
         _ = s.step();
-        try testing.expect(s.x >= @as(i32, wall) * one and s.x <= @as(i32, page_width - wall - ball_size) * one);
-        try testing.expect(s.y >= @as(i32, wall) * one and s.y <= @as(i32, page_height - wall - ball_size) * one);
+        try testing.expect(s.x >= @as(i32, wall) * one and s.x <= @as(
+            i32,
+            page_width - wall - ball_size,
+        ) * one);
+        try testing.expect(s.y >= @as(i32, wall) * one and s.y <= @as(
+            i32,
+            page_height - wall - ball_size,
+        ) * one);
     }
 }
 

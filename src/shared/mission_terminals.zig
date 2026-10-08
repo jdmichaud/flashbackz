@@ -41,7 +41,15 @@ const Requests = struct {
         }
     }
 };
-pub const Instance = struct { pose: motion.Pose, phase: Phase, playback: motion.Playback = .{}, active: bool, ready: Requests = .{}, pending: Requests = .{}, sound: ?motion.SoundId = null };
+pub const Instance = struct {
+    pose: motion.Pose,
+    phase: Phase,
+    playback: motion.Playback = .{},
+    active: bool,
+    ready: Requests = .{},
+    pending: Requests = .{},
+    sound: ?motion.SoundId = null,
+};
 pub const World = struct {
     allocator: std.mem.Allocator,
     instances: []Instance,
@@ -57,15 +65,35 @@ pub const World = struct {
                 .frame => |f| f.visual,
                 .hold => return error.MissingMissionTerminalVisual,
             };
-            instance.* = .{ .phase = definition.initial_phase, .active = definition.initially_active, .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } } };
+            instance.* = .{
+                .phase = definition.initial_phase,
+                .active = definition.initially_active,
+                .pose = .{
+                    .position = definition.footprint.position,
+                    .facing = definition.facing,
+                    .visual = .{
+                        .id = visual.id,
+                        .mirrored = visual.mirrored != (definition.facing == .left),
+                    },
+                },
+            };
         }
-        return .{ .allocator = allocator, .instances = instances, .pulses = try allocator.alloc(Circuit, definitions.len) };
+        return .{
+            .allocator = allocator,
+            .instances = instances,
+            .pulses = try allocator.alloc(Circuit, definitions.len),
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.instances);
         self.allocator.free(self.pulses);
     }
-    pub fn prepare(self: *World, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint) !void {
+    pub fn prepare(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        player: contacts.Footprint,
+    ) !void {
         self.candidate = null;
         self.movie = null;
         self.pulse_count = 0;
@@ -74,7 +102,12 @@ pub const World = struct {
             instance.ready = instance.pending;
             instance.pending = .{};
             instance.sound = null;
-            const near = try @import("activation.zig").around(map, player.room, definition.footprint.room, instance.pose.position.y);
+            const near = try @import("activation.zig").around(
+                map,
+                player.room,
+                definition.footprint.room,
+                instance.pose.position.y,
+            );
             if (definition.wake_nearby and near.wake) instance.active = true;
             if (try layout.overlaps(map, player, definition.footprint)) self.candidate = index;
         }
@@ -90,16 +123,31 @@ pub const World = struct {
         self.pulse_count += 1;
         self.route(bindings, &.{circuit});
     }
-    pub fn advance(self: *World, definitions: []const Definition, bindings: []const Binding, map: geometry.Map, room: geometry.RoomId, operate: bool, items: *equipment.Loadout) !void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        bindings: []const Binding,
+        map: geometry.Map,
+        room: geometry.RoomId,
+        operate: bool,
+        items: *equipment.Loadout,
+    ) !void {
         for (self.instances, definitions, 0..) |*instance, definition, index| {
-            const requested = instance.ready.unlock or instance.ready.accept or instance.ready.complete;
+            const requested = instance.ready.unlock or
+                instance.ready.accept or
+                instance.ready.complete;
             const reading = operate and self.candidate == index;
             if ((requested or reading) and definition.accepts_signals) instance.active = true;
             if (!instance.active) continue;
             var clip = definition.clips[@backingInt(instance.phase)];
             if (requested or reading) instance.playback.completeDisplacement(clip, &instance.pose);
             if (instance.playback.exhausted(clip)) {
-                const near = try @import("activation.zig").around(map, room, definition.footprint.room, instance.pose.position.y);
+                const near = try @import("activation.zig").around(
+                    map,
+                    room,
+                    definition.footprint.room,
+                    instance.pose.position.y,
+                );
                 switch (instance.phase) {
                     .locked => if (instance.ready.unlock) {
                         instance.phase = .available;
@@ -139,6 +187,16 @@ pub const World = struct {
         }
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
-        for (self.instances) |instance| for ([_]u64{ @backingInt(instance.phase), instance.playback.next_step, @intFromBool(instance.active), @intFromBool(instance.ready.unlock), @intFromBool(instance.ready.accept), @intFromBool(instance.ready.complete), @intFromBool(instance.pending.unlock), @intFromBool(instance.pending.accept), @intFromBool(instance.pending.complete) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        for (self.instances) |instance| for ([_]u64{
+            @backingInt(instance.phase),
+            instance.playback.next_step,
+            @intFromBool(instance.active),
+            @intFromBool(instance.ready.unlock),
+            @intFromBool(instance.ready.accept),
+            @intFromBool(instance.ready.complete),
+            @intFromBool(instance.pending.unlock),
+            @intFromBool(instance.pending.accept),
+            @intFromBool(instance.pending.complete),
+        }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
     }
 };

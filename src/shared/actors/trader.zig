@@ -57,7 +57,11 @@ pub const World = struct {
     movie: ?@import("../story_cue.zig").Cue = null,
     pulses: []Circuit,
     pulse_count: usize = 0,
-    pub fn init(allocator: std.mem.Allocator, definitions: []const Definition, profiles: []const Profile) !World {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        definitions: []const Definition,
+        profiles: []const Profile,
+    ) !World {
         const actors = try allocator.alloc(Actor, definitions.len);
         errdefer allocator.free(actors);
         var outputs: usize = 0;
@@ -68,16 +72,36 @@ pub const World = struct {
                 .frame => |frame| frame.visual,
                 .hold => return error.MissingTraderVisual,
             };
-            actor.* = .{ .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } }, .contact = definition.footprint, .active = definition.initially_active };
+            actor.* = .{
+                .pose = .{
+                    .position = definition.footprint.position,
+                    .facing = definition.facing,
+                    .visual = .{
+                        .id = visual.id,
+                        .mirrored = visual.mirrored != (definition.facing == .left),
+                    },
+                },
+                .contact = definition.footprint,
+                .active = definition.initially_active,
+            };
             outputs += definition.outputs.len;
         }
-        return .{ .allocator = allocator, .actors = actors, .pulses = try allocator.alloc(Circuit, outputs) };
+        return .{
+            .allocator = allocator,
+            .actors = actors,
+            .pulses = try allocator.alloc(Circuit, outputs),
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.actors);
         self.allocator.free(self.pulses);
     }
-    pub fn prepare(self: *World, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint) !void {
+    pub fn prepare(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        player: contacts.Footprint,
+    ) !void {
         self.candidate = null;
         self.notice = null;
         self.movie = null;
@@ -89,12 +113,23 @@ pub const World = struct {
             actor.sound = null;
             actor.contact = definition.footprint;
             actor.contact.position = actor.pose.position;
-            const near = try @import("../activation.zig").around(map, player.room, definition.footprint.room, actor.pose.position.y);
+            const near = try @import("../activation.zig").around(
+                map,
+                player.room,
+                definition.footprint.room,
+                actor.pose.position.y,
+            );
             if (definition.wake_nearby and near.wake) actor.active = true;
             if (try layout.overlaps(map, player, actor.contact)) self.candidate = index;
         }
     }
-    pub fn offerPayment(self: *World, definitions: []const Definition, bindings: []const Binding, item: equipment.ItemHandle, amount: i16) bool {
+    pub fn offerPayment(
+        self: *World,
+        definitions: []const Definition,
+        bindings: []const Binding,
+        item: equipment.ItemHandle,
+        amount: i16,
+    ) bool {
         const index = self.candidate orelse return false;
         if (amount < definitions[index].price) return false;
         const binding = for (bindings) |entry| {
@@ -108,42 +143,117 @@ pub const World = struct {
     fn chance(random: anytype, denominator: i16) bool {
         return denominator != 0 and @rem(@as(i16, @bitCast(random.next())), denominator) == 0;
     }
-    fn accept(self: *World, actor: *Actor, definition: Definition, profile: Profile, items: *equipment.Loadout) !void {
+    fn accept(
+        self: *World,
+        actor: *Actor,
+        definition: Definition,
+        profile: Profile,
+        items: *equipment.Loadout,
+    ) !void {
         try items.debit(definition.purse, definition.debit);
         self.movie = profile.payment_movie;
         actor.phase = .selling;
     }
-    pub fn advance(self: *World, definitions: []const Definition, profiles: []const Profile, map: geometry.Map, player: contacts.Footprint, talk: bool, items: *equipment.Loadout, random: anytype) !void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        profiles: []const Profile,
+        map: geometry.Map,
+        player: contacts.Footprint,
+        talk: bool,
+        items: *equipment.Loadout,
+        random: anytype,
+    ) !void {
         for (self.actors, definitions, 0..) |*actor, definition, index| {
-            const near = try @import("../activation.zig").around(map, player.room, definition.footprint.room, actor.pose.position.y);
-            if (definition.wake_nearby and near.wake or actor.ready and definition.accepts_signals) actor.active = true;
+            const near = try @import("../activation.zig").around(
+                map,
+                player.room,
+                definition.footprint.room,
+                actor.pose.position.y,
+            );
+            if (definition.wake_nearby and
+                near.wake or
+                actor.ready and
+                    definition.accepts_signals) actor.active = true;
             if (!actor.active) continue;
             const profile = profiles[definition.profile];
             var clip = profile.clips[@backingInt(actor.phase)];
             const speaking = talk and self.candidate == index;
-            if (actor.phase != .selling and (actor.ready or speaking and actor.phase != .talking)) actor.playback.completeDisplacement(clip, &actor.pose);
+            if (actor.phase != .selling and
+                (actor.ready or
+                    speaking and
+                        actor.phase != .talking)) actor.playback.completeDisplacement(
+                clip,
+                &actor.pose,
+            );
             if (actor.playback.exhausted(clip)) {
-                const observer: @import("perception.zig").Observer = .{ .room = definition.footprint.room, .pose = actor.pose };
-                const front = if (try @import("perception.zig").scanObjects(map, player.room, observer, &.{player}, false)) |distance| distance <= profile.sight_cells else false;
-                const back = if (try @import("perception.zig").scanObjects(map, player.room, observer, &.{player}, true)) |distance| distance <= profile.sight_cells else false;
+                const observer: @import("perception.zig").Observer = .{
+                    .room = definition.footprint.room,
+                    .pose = actor.pose,
+                };
+                const front = if (try @import("perception.zig").scanObjects(
+                    map,
+                    player.room,
+                    observer,
+                    &.{player},
+                    false,
+                )) |distance| distance <= profile.sight_cells else false;
+                const back = if (try @import("perception.zig").scanObjects(
+                    map,
+                    player.room,
+                    observer,
+                    &.{player},
+                    true,
+                )) |distance| distance <= profile.sight_cells else false;
                 switch (actor.phase) {
                     .watching => {
                         if (!near.same) {
                             actor.phase = .idle;
                             if (!(definition.wake_nearby and near.near)) actor.active = false;
-                        } else if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(actor, definition, profile, items) else if (!front) actor.phase = .idle;
+                        } else if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(
+                            actor,
+                            definition,
+                            profile,
+                            items,
+                        ) else if (!front) actor.phase = .idle;
                     },
                     .idle => {
-                        if (!near.same) actor.phase = .watching else if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(actor, definition, profile, items) else if (chance(random, profile.look_chance)) actor.phase = .looking else if (chance(random, profile.fidget_chance)) actor.phase = .fidgeting else if (back) actor.phase = .looking_back;
+                        if (!near.same) actor.phase = .watching else if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(
+                            actor,
+                            definition,
+                            profile,
+                            items,
+                        ) else if (chance(
+                            random,
+                            profile.look_chance,
+                        )) actor.phase = .looking else if (chance(
+                            random,
+                            profile.fidget_chance,
+                        )) actor.phase = .fidgeting else if (back) actor.phase = .looking_back;
                     },
                     .looking_back => {
-                        if (!near.same) actor.phase = .idle else if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(actor, definition, profile, items) else if (front) actor.phase = .idle;
+                        if (!near.same) actor.phase = .idle else if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(
+                            actor,
+                            definition,
+                            profile,
+                            items,
+                        ) else if (front) actor.phase = .idle;
                     },
                     .looking => {
-                        if (actor.ready) try self.accept(actor, definition, profile, items) else if (speaking) actor.phase = .talking else actor.phase = .idle;
+                        if (actor.ready) try self.accept(
+                            actor,
+                            definition,
+                            profile,
+                            items,
+                        ) else if (speaking) actor.phase = .talking else actor.phase = .idle;
                     },
                     .fidgeting => {
-                        if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(actor, definition, profile, items) else actor.phase = .idle;
+                        if (speaking) actor.phase = .talking else if (actor.ready) try self.accept(
+                            actor,
+                            definition,
+                            profile,
+                            items,
+                        ) else actor.phase = .idle;
                     },
                     .talking => {
                         if (actor.ready) try self.accept(actor, definition, profile, items) else {
@@ -171,6 +281,12 @@ pub const World = struct {
         }
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
-        for (self.actors) |actor| for ([_]u64{ @backingInt(actor.phase), actor.playback.next_step, @intFromBool(actor.active), @intFromBool(actor.ready), @intFromBool(actor.pending) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        for (self.actors) |actor| for ([_]u64{
+            @backingInt(actor.phase),
+            actor.playback.next_step,
+            @intFromBool(actor.active),
+            @intFromBool(actor.ready),
+            @intFromBool(actor.pending),
+        }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
     }
 };

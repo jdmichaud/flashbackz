@@ -47,7 +47,11 @@ pub extern "c" fn SDL_GetVersion(ver: *Version) void;
 pub extern "c" fn SDL_GetError() [*:0]const u8;
 pub extern "c" fn SDL_ClearError() void;
 pub extern "c" fn SDL_SetHint(name: [*:0]const u8, value: [*:0]const u8) Bool;
-pub extern "c" fn SDL_SetHintWithPriority(name: [*:0]const u8, value: [*:0]const u8, priority: c_int) Bool;
+pub extern "c" fn SDL_SetHintWithPriority(
+    name: [*:0]const u8,
+    value: [*:0]const u8,
+    priority: c_int,
+) Bool;
 
 /// `SDL_HINT_OVERRIDE`: the hint wins over the environment variable of the same name.
 pub const HINT_OVERRIDE: c_int = 2;
@@ -75,7 +79,14 @@ pub const WINDOW_SHOWN: u32 = 0x00000004;
 pub const WINDOW_RESIZABLE: u32 = 0x00000020;
 pub const WINDOW_ALLOW_HIGHDPI: u32 = 0x00002000;
 
-pub extern "c" fn SDL_CreateWindow(title: [*:0]const u8, x: c_int, y: c_int, w: c_int, h: c_int, flags: u32) ?*Window;
+pub extern "c" fn SDL_CreateWindow(
+    title: [*:0]const u8,
+    x: c_int,
+    y: c_int,
+    w: c_int,
+    h: c_int,
+    flags: u32,
+) ?*Window;
 pub extern "c" fn SDL_DestroyWindow(window: *Window) void;
 pub extern "c" fn SDL_SetWindowSize(window: *Window, w: c_int, h: c_int) void;
 pub extern "c" fn SDL_GetWindowSize(window: *Window, w: *c_int, h: *c_int) void;
@@ -109,14 +120,36 @@ pub extern "c" fn SDL_CreateRenderer(window: *Window, index: c_int, flags: u32) 
 pub extern "c" fn SDL_DestroyRenderer(renderer: *Renderer) void;
 pub extern "c" fn SDL_GetRendererInfo(renderer: *Renderer, info: *RendererInfo) c_int;
 pub extern "c" fn SDL_GetRendererOutputSize(renderer: *Renderer, w: *c_int, h: *c_int) c_int;
-pub extern "c" fn SDL_CreateTexture(renderer: *Renderer, format: u32, access: c_int, w: c_int, h: c_int) ?*Texture;
+pub extern "c" fn SDL_CreateTexture(
+    renderer: *Renderer,
+    format: u32,
+    access: c_int,
+    w: c_int,
+    h: c_int,
+) ?*Texture;
 pub extern "c" fn SDL_DestroyTexture(texture: *Texture) void;
-pub extern "c" fn SDL_UpdateTexture(texture: *Texture, rect: ?*const Rect, pixels: *const anyopaque, pitch: c_int) c_int;
+pub extern "c" fn SDL_UpdateTexture(
+    texture: *Texture,
+    rect: ?*const Rect,
+    pixels: *const anyopaque,
+    pitch: c_int,
+) c_int;
 pub extern "c" fn SDL_SetRenderDrawColor(renderer: *Renderer, r: u8, g: u8, b: u8, a: u8) c_int;
 pub extern "c" fn SDL_RenderClear(renderer: *Renderer) c_int;
-pub extern "c" fn SDL_RenderCopy(renderer: *Renderer, texture: *Texture, src: ?*const Rect, dst: ?*const Rect) c_int;
+pub extern "c" fn SDL_RenderCopy(
+    renderer: *Renderer,
+    texture: *Texture,
+    src: ?*const Rect,
+    dst: ?*const Rect,
+) c_int;
 pub extern "c" fn SDL_RenderPresent(renderer: *Renderer) void;
-pub extern "c" fn SDL_RenderReadPixels(renderer: *Renderer, rect: ?*const Rect, format: u32, pixels: *anyopaque, pitch: c_int) c_int;
+pub extern "c" fn SDL_RenderReadPixels(
+    renderer: *Renderer,
+    rect: ?*const Rect,
+    format: u32,
+    pixels: *anyopaque,
+    pitch: c_int,
+) c_int;
 
 // --- events ----------------------------------------------------------------------------------
 
@@ -321,7 +354,11 @@ pub const AUDIO_STOPPED: c_int = 0;
 pub const AUDIO_PLAYING: c_int = 1;
 pub const AUDIO_PAUSED: c_int = 2;
 
-pub const AudioCallback = *const fn (userdata: ?*anyopaque, stream: [*]u8, len: c_int) callconv(.c) void;
+pub const AudioCallback = *const fn (
+    userdata: ?*anyopaque,
+    stream: [*]u8,
+    len: c_int,
+) callconv(.c) void;
 
 pub const AudioSpec = extern struct {
     freq: c_int,
@@ -335,7 +372,13 @@ pub const AudioSpec = extern struct {
     userdata: ?*anyopaque,
 };
 
-pub extern "c" fn SDL_OpenAudioDevice(device: ?[*:0]const u8, iscapture: c_int, desired: *const AudioSpec, obtained: ?*AudioSpec, allowed_changes: c_int) AudioDeviceID;
+pub extern "c" fn SDL_OpenAudioDevice(
+    device: ?[*:0]const u8,
+    iscapture: c_int,
+    desired: *const AudioSpec,
+    obtained: ?*AudioSpec,
+    allowed_changes: c_int,
+) AudioDeviceID;
 pub extern "c" fn SDL_CloseAudioDevice(dev: AudioDeviceID) void;
 pub extern "c" fn SDL_PauseAudioDevice(dev: AudioDeviceID, pause_on: c_int) void;
 pub extern "c" fn SDL_GetAudioDeviceStatus(dev: AudioDeviceID) c_int;

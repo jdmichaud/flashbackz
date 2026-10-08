@@ -22,7 +22,15 @@ pub const Definition = struct {
     reply: Circuit,
 };
 pub const Binding = struct { circuit: Circuit, target: usize, next_step: bool };
-pub const Instance = struct { phase: Phase, pose: motion.Pose, playback: motion.Playback = .{}, active: bool, ready: bool = false, pending: bool = false, sound: ?motion.SoundId = null };
+pub const Instance = struct {
+    phase: Phase,
+    pose: motion.Pose,
+    playback: motion.Playback = .{},
+    active: bool,
+    ready: bool = false,
+    pending: bool = false,
+    sound: ?motion.SoundId = null,
+};
 pub const World = struct {
     allocator: std.mem.Allocator,
     instances: []Instance,
@@ -38,15 +46,35 @@ pub const World = struct {
                 .frame => |frame| frame.visual,
                 .hold => return error.MissingStationVisual,
             };
-            instance.* = .{ .phase = if (definition.initially_available) .ready else .dormant, .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = first.id, .mirrored = first.mirrored != (definition.facing == .left) } }, .active = definition.initially_active };
+            instance.* = .{
+                .phase = if (definition.initially_available) .ready else .dormant,
+                .pose = .{
+                    .position = definition.footprint.position,
+                    .facing = definition.facing,
+                    .visual = .{
+                        .id = first.id,
+                        .mirrored = first.mirrored != (definition.facing == .left),
+                    },
+                },
+                .active = definition.initially_active,
+            };
         }
-        return .{ .allocator = allocator, .instances = instances, .pulses = try allocator.alloc(Circuit, definitions.len) };
+        return .{
+            .allocator = allocator,
+            .instances = instances,
+            .pulses = try allocator.alloc(Circuit, definitions.len),
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.instances);
         self.allocator.free(self.pulses);
     }
-    pub fn prepare(self: *World, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint) !void {
+    pub fn prepare(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        player: contacts.Footprint,
+    ) !void {
         self.candidate = null;
         self.movie = null;
         self.pulse_count = 0;
@@ -55,7 +83,11 @@ pub const World = struct {
             instance.ready = instance.pending;
             instance.pending = false;
             instance.sound = null;
-            if (instance.phase == .ready and try layout.overlaps(map, player, definition.footprint)) self.candidate = index;
+            if (instance.phase == .ready and try layout.overlaps(
+                map,
+                player,
+                definition.footprint,
+            )) self.candidate = index;
         }
     }
     pub fn route(self: *World, bindings: []const Binding, pulses: []const Circuit) void {
@@ -71,7 +103,11 @@ pub const World = struct {
             if ((instance.ready or use) and definition.accepts_signals) instance.active = true;
             if (!instance.active) continue;
             var clip = if (instance.phase == .using) definition.use else definition.idle;
-            if ((instance.phase == .dormant and instance.ready) or (instance.phase == .ready and use)) instance.playback.completeDisplacement(clip, &instance.pose);
+            if ((instance.phase == .dormant and instance.ready) or
+                (instance.phase == .ready and use)) instance.playback.completeDisplacement(
+                clip,
+                &instance.pose,
+            );
             if (instance.playback.exhausted(clip)) {
                 switch (instance.phase) {
                     .dormant => if (instance.ready) {
@@ -103,7 +139,12 @@ pub const World = struct {
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
         for (self.instances) |instance| {
-            hash.update(&.{ @backingInt(instance.phase), @intFromBool(instance.active), @intFromBool(instance.ready), @intFromBool(instance.pending) });
+            hash.update(&.{
+                @backingInt(instance.phase),
+                @intFromBool(instance.active),
+                @intFromBool(instance.ready),
+                @intFromBool(instance.pending),
+            });
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, instance.playback.next_step)));
         }
     }

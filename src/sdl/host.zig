@@ -63,7 +63,12 @@ pub const Options = struct {
     }
 };
 
-pub fn run(gpa: std.mem.Allocator, io: std.Io, environ: *const std.process.Environ.Map, options: Options) !u8 {
+pub fn run(
+    gpa: std.mem.Allocator,
+    io: std.Io,
+    environ: *const std.process.Environ.Map,
+    options: Options,
+) !u8 {
     var err_buf: [1024]u8 = undefined;
     var err_writer = std.Io.File.stderr().writerStreaming(io, &err_buf);
     const err = &err_writer.interface;
@@ -82,7 +87,10 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, environ: *const std.process.Envir
         std.log.err("cannot open the providers: {s}", .{@errorName(e)});
         return 1;
     };
-    try err.print("{s}: assets: {s}, saves: {s}\n", .{ name, @tagName(providers.kind), providers.saves_path });
+    try err.print(
+        "{s}: assets: {s}, saves: {s}\n",
+        .{ name, @tagName(providers.kind), providers.saves_path },
+    );
     try err.flush();
 
     // The backend is made before the game and released after it.
@@ -101,9 +109,17 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, environ: *const std.process.Envir
     defer out.flush() catch {};
     if (options.event_log_ns != null) backend.event_log = out;
 
-    var game = flashbackz.Game.initWithEntry(gpa, providers.assetSource(), providers.storage(), options.providers.entry) catch |e| {
+    var game = flashbackz.Game.initWithEntry(
+        gpa,
+        providers.assetSource(),
+        providers.storage(),
+        options.providers.entry,
+    ) catch |e| {
         if (e == error.NotFound) {
-            std.log.err("a required game resource is missing; supply both disk1.img and disk2.img, or a complete extracted directory", .{});
+            std.log.err(
+                "a required game resource is missing; supply both disk1.img and disk2.img, or a complete extracted directory",
+                .{},
+            );
         } else std.log.err("cannot load game: {s}", .{@errorName(e)});
         return 1;
     };
@@ -126,7 +142,10 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, environ: *const std.process.Envir
         // display. The renderer's name and the first frame tell them apart.
         if (!announced_first_frame and game.frames_presented > 0) {
             if (game.sceneKind() == .menu) c.SDL_SetWindowTitle(backend.window.?, "flashbackz");
-            if (game.sceneKind() == .jungle) c.SDL_SetWindowTitle(backend.window.?, "flashbackz — jungle development");
+            if (game.sceneKind() == .jungle) c.SDL_SetWindowTitle(
+                backend.window.?,
+                "flashbackz — jungle development",
+            );
             announced_first_frame = true;
             const size = backend.window_size;
             try err.print("{s}: first frame after {d}ms in a {d}x{d} window, renderer {s}{s}\n", .{
@@ -160,7 +179,15 @@ pub fn run(gpa: std.mem.Allocator, io: std.Io, environ: *const std.process.Envir
         game.events_consumed,
         if (backend.vsync) "the display" else "the fallback clock",
     });
-    try err.print("{s}: audio {s}, {d} frames played, {d} still queued\n", .{ name, if (audio.running) "open" else "closed", audio.played_frames, audio.queued_frames });
+    try err.print(
+        "{s}: audio {s}, {d} frames played, {d} still queued\n",
+        .{
+            name,
+            if (audio.running) "open" else "closed",
+            audio.played_frames,
+            audio.queued_frames,
+        },
+    );
     try err.flush();
     try out.flush();
     return 0;
@@ -222,7 +249,9 @@ pub fn parseArgs(iter: anytype) ArgError!Options {
             return error.BadArguments;
         }
     }
-    if ((assets_required or options.providers.entry == .jungle_development) and !options.help and options.providers.assets == null) return error.MissingAssets;
+    if ((assets_required or options.providers.entry == .jungle_development) and
+        !options.help and
+        options.providers.assets == null) return error.MissingAssets;
     return options;
 }
 
@@ -259,7 +288,20 @@ test "the host options are parsed, bounded and defaulted" {
     try std.testing.expectEqual(@as(?bool, null), defaults.vsync);
     try std.testing.expectEqual(@as(?u64, null), defaults.deadlineNs());
 
-    const all = try parseArgs(SliceArgs{ .items = &.{ "flashbackz-sdl", "--scale", "2", "--no-vsync", "--software", "--event-log", "1.5", "--run-for", "1", "game", "--saves", "saves" } });
+    const all = try parseArgs(SliceArgs{ .items = &.{
+        "flashbackz-sdl",
+        "--scale",
+        "2",
+        "--no-vsync",
+        "--software",
+        "--event-log",
+        "1.5",
+        "--run-for",
+        "1",
+        "game",
+        "--saves",
+        "saves",
+    } });
     try std.testing.expectEqual(@as(?u32, 2), all.scale);
     try std.testing.expectEqual(@as(?bool, false), all.vsync);
     try std.testing.expect(all.software);
@@ -281,12 +323,24 @@ test "the host options are parsed, bounded and defaulted" {
             try std.testing.expectError(error.MissingAssets, result);
         } else try std.testing.expectError(error.BadArguments, result);
     }
-    const disks = try parseArgs(SliceArgs{ .items = &.{ "flashbackz-sdl", "disk1.img", "disk2.img" } });
+    const disks = try parseArgs(SliceArgs{ .items = &.{
+        "flashbackz-sdl",
+        "disk1.img",
+        "disk2.img",
+    } });
     try std.testing.expectEqualStrings("disk1.img", disks.providers.assets.?);
     try std.testing.expectEqual(@as(usize, 1), disks.providers.additional_count);
     try std.testing.expectEqualStrings("disk2.img", disks.providers.additional_assets[0]);
-    const jungle_options = try parseArgs(SliceArgs{ .items = &.{ "flashbackz-sdl", "--scene", "jungle", "game.ima" } });
-    try std.testing.expectEqual(flashbackz.game.Entry.jungle_development, jungle_options.providers.entry);
+    const jungle_options = try parseArgs(SliceArgs{ .items = &.{
+        "flashbackz-sdl",
+        "--scene",
+        "jungle",
+        "game.ima",
+    } });
+    try std.testing.expectEqual(
+        flashbackz.game.Entry.jungle_development,
+        jungle_options.providers.entry,
+    );
 }
 
 test "the fallback pacer holds its period without accumulating debt" {

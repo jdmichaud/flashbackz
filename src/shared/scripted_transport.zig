@@ -7,7 +7,11 @@ const contacts = @import("contacts.zig");
 const Circuit = @import("world_props.zig").CircuitId;
 pub const Phase = enum { dormant, awaiting_player, departing, finished };
 pub const EffectPhase = enum { hidden, departure, arrival };
-pub const Destination = struct { room: geometry.RoomId, position: motion.Position, facing: motion.Facing };
+pub const Destination = struct {
+    room: geometry.RoomId,
+    position: motion.Position,
+    facing: motion.Facing,
+};
 pub const Definition = struct {
     destination: Destination,
     cadence: [3]motion.Clip,
@@ -18,7 +22,11 @@ pub const Definition = struct {
     completion: ?Circuit = null,
     accepts_signals: bool,
 };
-pub const EffectDefinition = struct { clips: [2]motion.Clip, palette_bank: u4, behind_player: bool };
+pub const EffectDefinition = struct {
+    clips: [2]motion.Clip,
+    palette_bank: u4,
+    behind_player: bool,
+};
 pub const Binding = struct { circuit: Circuit, target: usize, next_step: bool };
 pub const Instance = struct {
     phase: Phase = .dormant,
@@ -34,7 +42,10 @@ pub const Effect = struct {
     pending: bool = false,
     effect: EffectPhase = .hidden,
     effect_playback: motion.Playback = .{},
-    effect_pose: motion.Pose = .{ .position = .{ .x = 0, .y = 0 }, .visual = .{ .id = @fromBackingInt(0) } },
+    effect_pose: motion.Pose = .{
+        .position = .{ .x = 0, .y = 0 },
+        .visual = .{ .id = @fromBackingInt(0) },
+    },
     effect_room: ?geometry.RoomId = null,
     sound: ?motion.SoundId = null,
 };
@@ -51,7 +62,12 @@ pub const World = struct {
         const effects = try allocator.alloc(Effect, effect_count);
         errdefer allocator.free(effects);
         @memset(effects, .{});
-        return .{ .allocator = allocator, .instances = instances, .effects = effects, .pulses = try allocator.alloc(Circuit, count) };
+        return .{
+            .allocator = allocator,
+            .instances = instances,
+            .effects = effects,
+            .pulses = try allocator.alloc(Circuit, count),
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.instances);
@@ -78,19 +94,38 @@ pub const World = struct {
         };
     }
     pub fn requesting(self: World) ?usize {
-        for (self.instances, 0..) |instance, index| if (instance.request_ready and instance.phase == .awaiting_player) return index;
+        for (
+            self.instances,
+            0..,
+        ) |instance, index| if (instance.request_ready and
+            instance.phase == .awaiting_player) return index;
         return null;
     }
-    pub fn advance(self: *World, definitions: []const Definition, acknowledged: ?usize, player: contacts.Footprint, map: geometry.Map) !?Destination {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        acknowledged: ?usize,
+        player: contacts.Footprint,
+        map: geometry.Map,
+    ) !?Destination {
         var destination: ?Destination = null;
         const layout: contacts.Layout = .{};
         for (self.instances, definitions, 0..) |*instance, definition, index| {
             if (instance.phase == .finished) continue;
-            const touching = if (definition.contact) |body| try layout.overlaps(map, body, player) else true;
-            if (instance.ready and definition.accepts_signals or definition.wake_on_contact and touching) instance.active = true;
+            const touching = if (definition.contact) |body| try layout.overlaps(
+                map,
+                body,
+                player,
+            ) else true;
+            if (instance.ready and
+                definition.accepts_signals or
+                definition.wake_on_contact and
+                    touching) instance.active = true;
             if (!instance.active) continue;
             const clip = definition.cadence[@backingInt(instance.phase)];
-            if ((instance.phase == .dormant and instance.ready) or (instance.phase == .awaiting_player and acknowledged == index)) instance.playback.next_step = clip.steps.len;
+            if ((instance.phase == .dormant and instance.ready) or
+                (instance.phase == .awaiting_player and
+                    acknowledged == index)) instance.playback.next_step = clip.steps.len;
             if (instance.playback.exhausted(clip)) {
                 switch (instance.phase) {
                     .dormant => if (instance.ready) {
@@ -102,7 +137,9 @@ pub const World = struct {
                     .awaiting_player => if (acknowledged == index) {
                         instance.phase = .departing;
                         if (definition.effect_next_step) self.effects[definition.effect].pending = true else self.effects[definition.effect].ready = true;
-                    } else if (definition.contact != null and definition.contact.?.room != player.room) {
+                    } else if (definition.contact != null and
+                        definition.contact.?.room != player.room)
+                    {
                         instance.active = false;
                     } else if (touching) {
                         instance.request_pending = true;
@@ -125,7 +162,12 @@ pub const World = struct {
         }
         return destination;
     }
-    pub fn advanceEffects(self: *World, definitions: []const EffectDefinition, player: motion.Pose, room: geometry.RoomId) void {
+    pub fn advanceEffects(
+        self: *World,
+        definitions: []const EffectDefinition,
+        player: motion.Pose,
+        room: geometry.RoomId,
+    ) void {
         for (self.effects, definitions) |*instance, definition| {
             if (instance.ready and instance.effect == .hidden) {
                 instance.effect = .departure;
@@ -152,8 +194,27 @@ pub const World = struct {
         }
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
-        for (self.instances) |instance| for ([_]u64{ @backingInt(instance.phase), instance.playback.next_step, @intFromBool(instance.active), @intFromBool(instance.ready), @intFromBool(instance.pending), @intFromBool(instance.request_ready), @intFromBool(instance.request_pending) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
-        for (self.effects) |instance| for ([_]u64{ @intFromBool(instance.ready), @intFromBool(instance.pending), @backingInt(instance.effect), instance.effect_playback.next_step, if (instance.effect_room) |room| @backingInt(room) else 0, @as(u16, @bitCast(instance.effect_pose.position.x)), @as(u16, @bitCast(instance.effect_pose.position.y)), @backingInt(instance.effect_pose.facing), @backingInt(instance.effect_pose.visual.id), @intFromBool(instance.effect_pose.visual.mirrored) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        for (self.instances) |instance| for ([_]u64{
+            @backingInt(instance.phase),
+            instance.playback.next_step,
+            @intFromBool(instance.active),
+            @intFromBool(instance.ready),
+            @intFromBool(instance.pending),
+            @intFromBool(instance.request_ready),
+            @intFromBool(instance.request_pending),
+        }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        for (self.effects) |instance| for ([_]u64{
+            @intFromBool(instance.ready),
+            @intFromBool(instance.pending),
+            @backingInt(instance.effect),
+            instance.effect_playback.next_step,
+            if (instance.effect_room) |room| @backingInt(room) else 0,
+            @as(u16, @bitCast(instance.effect_pose.position.x)),
+            @as(u16, @bitCast(instance.effect_pose.position.y)),
+            @backingInt(instance.effect_pose.facing),
+            @backingInt(instance.effect_pose.visual.id),
+            @intFromBool(instance.effect_pose.visual.mirrored),
+        }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
     }
 };
 
@@ -161,17 +222,28 @@ test "transport waits for acknowledgement and repeated starts cannot shorten dep
     const hold = [_]motion.Step{.hold};
     const departing = [_]motion.Step{ .hold, .hold, .hold };
     const definition: Definition = .{
-        .destination = .{ .room = @fromBackingInt(18), .position = .{ .x = 160, .y = 72 }, .facing = .left },
+        .destination = .{
+            .room = @fromBackingInt(18),
+            .position = .{ .x = 160, .y = 72 },
+            .facing = .left,
+        },
         .cadence = .{ .{ .steps = &hold }, .{ .steps = &hold }, .{ .steps = &departing } },
         .effect = 0,
         .accepts_signals = true,
     };
     var world = try World.init(std.testing.allocator, 1, 1);
     defer world.deinit();
-    const player: motion.Pose = .{ .position = .{ .x = 80, .y = 144 }, .visual = .{ .id = @fromBackingInt(1) } };
+    const player: motion.Pose = .{
+        .position = .{ .x = 80, .y = 144 },
+        .visual = .{ .id = @fromBackingInt(1) },
+    };
     const room: geometry.RoomId = @fromBackingInt(7);
     const definitions = [_]Definition{definition};
-    const effects = [_]EffectDefinition{.{ .clips = .{ .{ .steps = &departing }, .{ .steps = &departing } }, .palette_bank = 0, .behind_player = false }};
+    const effects = [_]EffectDefinition{.{
+        .clips = .{ .{ .steps = &departing }, .{ .steps = &departing } },
+        .palette_bank = 0,
+        .behind_player = false,
+    }};
     const contact: contacts.Footprint = .{ .room = room, .position = player.position };
     const map: geometry.Map = .{ .rooms = &.{} };
     world.instances[0].ready = true;
@@ -193,12 +265,18 @@ test "transport waits for acknowledgement and repeated starts cannot shorten dep
         world.advanceEffects(&effects, player, room);
     }
     world.beginStep();
-    try std.testing.expectEqualDeep(@as(?Destination, definition.destination), try world.advance(&definitions, null, contact, map));
+    try std.testing.expectEqualDeep(
+        @as(?Destination, definition.destination),
+        try world.advance(&definitions, null, contact, map),
+    );
     var arrived = player;
     arrived.position = definition.destination.position;
     arrived.facing = definition.destination.facing;
     world.advanceEffects(&effects, arrived, definition.destination.room);
     try std.testing.expectEqual(EffectPhase.arrival, world.effects[0].effect);
     try std.testing.expectEqualDeep(arrived, world.effects[0].effect_pose);
-    try std.testing.expectEqual(@as(?geometry.RoomId, definition.destination.room), world.effects[0].effect_room);
+    try std.testing.expectEqual(
+        @as(?geometry.RoomId, definition.destination.room),
+        world.effects[0].effect_room,
+    );
 }

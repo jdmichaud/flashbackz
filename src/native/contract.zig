@@ -265,6 +265,14 @@ fn memoryStorageUnderAllocator(allocator: std.mem.Allocator) !void {
 }
 
 test "in-memory providers survive every allocation failure without leaking" {
-    try std.testing.checkAllAllocationFailures(std.testing.allocator, memoryAssetsUnderAllocator, .{});
-    try std.testing.checkAllAllocationFailures(std.testing.allocator, memoryStorageUnderAllocator, .{});
+    try std.testing.checkAllAllocationFailures(
+        std.testing.allocator,
+        memoryAssetsUnderAllocator,
+        .{},
+    );
+    try std.testing.checkAllAllocationFailures(
+        std.testing.allocator,
+        memoryStorageUnderAllocator,
+        .{},
+    );
 }

@@ -79,7 +79,10 @@ pub const Map = struct {
             .unresolved => return error.UnresolvedBoundary,
         };
         try target.validate();
-        if (x < 0 or y < 0 or x >= target.columns or y >= target.rows) return error.QueryOutsideConnectedGrid;
+        if (x < 0 or
+            y < 0 or
+            x >= target.columns or
+            y >= target.rows) return error.QueryOutsideConnectedGrid;
         const index = @as(usize, @intCast(y)) * target.columns + @as(usize, @intCast(x));
         if (index >= target.blocking.len) return error.InvalidGeometry;
         return .{ .room = target.id, .column = @intCast(x), .row = @intCast(y) };
@@ -122,8 +125,34 @@ test "room seams retain boundary rows and handoff uses its explicit overlap" {
     const empty = [_]bool{ false, false, false, false, false, false };
     const occupied = [_]bool{ true, false, false, false, false, true };
     const rooms = [_]Room{
-        .{ .id = first, .columns = 2, .rows = 3, .blocking = &empty, .width = 32, .height = 72, .edges = .{ .left = .{ .room = second }, .right = .unresolved, .up = .blocked, .down = .blocked } },
-        .{ .id = second, .columns = 2, .rows = 3, .blocking = &occupied, .width = 32, .height = 72, .edges = .{ .left = .blocked, .right = .{ .room = first }, .up = .blocked, .down = .blocked } },
+        .{
+            .id = first,
+            .columns = 2,
+            .rows = 3,
+            .blocking = &empty,
+            .width = 32,
+            .height = 72,
+            .edges = .{
+                .left = .{ .room = second },
+                .right = .unresolved,
+                .up = .blocked,
+                .down = .blocked,
+            },
+        },
+        .{
+            .id = second,
+            .columns = 2,
+            .rows = 3,
+            .blocking = &occupied,
+            .width = 32,
+            .height = 72,
+            .edges = .{
+                .left = .blocked,
+                .right = .{ .room = first },
+                .up = .blocked,
+                .down = .blocked,
+            },
+        },
     };
     const map: Map = .{ .rooms = &rooms };
     try std.testing.expect(try map.blocked(first, -2, 0));

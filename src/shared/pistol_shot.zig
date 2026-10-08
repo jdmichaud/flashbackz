@@ -49,8 +49,14 @@ pub fn traceWall(view: terrain.View, room: geometry.RoomId, pose: motion.Pose, r
     const row = (@divTrunc(pose.position.y, 36) & ~@as(i16, 1)) + 1;
     const step: i16 = if (pose.facing == .right) 1 else -1;
     for (0..@as(usize, range) + 1) |_| {
-        const address = try view.geometry.locate(current_room, column, row) orelse return .{ .room = current_room, .x = column *% 16 };
-        if (try view.sample(current_room, column, row) != .empty) return .{ .room = address.room, .x = @as(i16, @intCast(address.column)) *% 16 };
+        const address = try view.geometry.locate(current_room, column, row) orelse return .{
+            .room = current_room,
+            .x = column *% 16,
+        };
+        if (try view.sample(current_room, column, row) != .empty) return .{
+            .room = address.room,
+            .x = @as(i16, @intCast(address.column)) *% 16,
+        };
         current_room = address.room;
         column = @as(i16, @intCast(address.column)) +% step;
     }
@@ -62,20 +68,51 @@ pub const State = struct {
     shots_fired: u64 = 0,
     sound_requested: ?motion.SoundId = null,
     hit_requested: ?combat.Hit = null,
-    pub fn advance(self: *State, definition: Definition, shot: ?Height, pose: motion.Pose, room: geometry.RoomId, materials: terrain.View) !void {
+    pub fn advance(
+        self: *State,
+        definition: Definition,
+        shot: ?Height,
+        pose: motion.Pose,
+        room: geometry.RoomId,
+        materials: terrain.View,
+    ) !void {
         return self.advanceWithTargets(definition, shot, pose, room, materials, &.{});
     }
-    pub fn advanceWithTargets(self: *State, definition: Definition, shot: ?Height, pose: motion.Pose, room: geometry.RoomId, materials: terrain.View, targets: []const combat.Target) !void {
+    pub fn advanceWithTargets(
+        self: *State,
+        definition: Definition,
+        shot: ?Height,
+        pose: motion.Pose,
+        room: geometry.RoomId,
+        materials: terrain.View,
+        targets: []const combat.Target,
+    ) !void {
         return self.advanceWithVariant(definition, shot, false, pose, room, materials, targets);
     }
-    pub fn advanceWithVariant(self: *State, definition: Definition, shot: ?Height, airborne: bool, pose: motion.Pose, room: geometry.RoomId, materials: terrain.View, targets: []const combat.Target) !void {
+    pub fn advanceWithVariant(
+        self: *State,
+        definition: Definition,
+        shot: ?Height,
+        airborne: bool,
+        pose: motion.Pose,
+        room: geometry.RoomId,
+        materials: terrain.View,
+        targets: []const combat.Target,
+    ) !void {
         self.sound_requested = null;
         self.hit_requested = null;
-        const accepts = if (self.effect) |effect| effect.phase == .impact and definition.retrigger_impact else true;
+        const accepts = if (self.effect) |effect| effect.phase == .impact and
+            definition.retrigger_impact else true;
         if (shot != null and accepts) {
             const height = shot.?;
             self.shots_fired +%= 1;
-            self.effect = .{ .pose = pose, .room = room, .height = height, .airborne = airborne, .phase = definition.initial_phase };
+            self.effect = .{
+                .pose = pose,
+                .room = room,
+                .height = height,
+                .airborne = airborne,
+                .phase = definition.initial_phase,
+            };
         }
         if (self.effect) |*effect| {
             if (effect.playback.exhausted(effect.clip(definition))) {
@@ -83,23 +120,42 @@ pub const State = struct {
                     self.effect = null;
                     return;
                 }
-                const environment: Environment = .{ .map = materials.geometry, .room = effect.room, .materials = materials };
+                const environment: Environment = .{
+                    .map = materials.geometry,
+                    .room = effect.room,
+                    .materials = materials,
+                };
                 if (effect.phase == .ignition and !try environment.at(effect.pose, .torso, 1)) {
                     effect.phase = .flash;
                 } else {
-                    if (try combat.trace(materials, effect.room, effect.pose, effect.height, definition.range_cells, targets)) |impact| {
+                    if (try combat.trace(
+                        materials,
+                        effect.room,
+                        effect.pose,
+                        effect.height,
+                        definition.range_cells,
+                        targets,
+                    )) |impact| {
                         self.hit_requested = impact;
                         self.effect = null;
                         return;
                     }
-                    const hit = try traceWall(materials, effect.room, effect.pose, definition.range_cells) orelse {
+                    const hit = try traceWall(
+                        materials,
+                        effect.room,
+                        effect.pose,
+                        definition.range_cells,
+                    ) orelse {
                         self.effect = null;
                         return;
                     };
                     effect.room = hit.room;
                     effect.pose.position.x = hit.x;
                     shift(&effect.pose, definition.impact_forward[@backingInt(effect.height)]);
-                    effect.pose.position.y -%= if (effect.phase == .ignition) (if (effect.height == .standing) @as(i16, 35) else 22) else definition.impact_down[@backingInt(effect.height)];
+                    effect.pose.position.y -%= if (effect.phase == .ignition) (if (effect.height == .standing) @as(
+                        i16,
+                        35,
+                    ) else 22) else definition.impact_down[@backingInt(effect.height)];
                     effect.phase = .impact;
                 }
                 effect.playback = .{};
@@ -113,7 +169,18 @@ pub const State = struct {
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, self.shots_fired)));
         hash.update(&.{@intFromBool(self.effect != null)});
         if (self.effect) |effect| {
-            for ([_]u32{ @backingInt(effect.room), @as(u16, @bitCast(effect.pose.position.x)), @as(u16, @bitCast(effect.pose.position.y)), @backingInt(effect.pose.facing), @backingInt(effect.pose.visual.id), @intFromBool(effect.pose.visual.mirrored), @backingInt(effect.height), @intFromBool(effect.airborne), @backingInt(effect.phase), @intCast(effect.playback.next_step) }) |value|
+            for ([_]u32{
+                @backingInt(effect.room),
+                @as(u16, @bitCast(effect.pose.position.x)),
+                @as(u16, @bitCast(effect.pose.position.y)),
+                @backingInt(effect.pose.facing),
+                @backingInt(effect.pose.visual.id),
+                @intFromBool(effect.pose.visual.mirrored),
+                @backingInt(effect.height),
+                @intFromBool(effect.airborne),
+                @backingInt(effect.phase),
+                @intCast(effect.playback.next_step),
+            }) |value|
                 hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
         }
     }
@@ -124,27 +191,83 @@ test "shot wall search is inclusive, bounded and resolves a neighboring room" {
     const neighbor: geometry.RoomId = @fromBackingInt(2);
     const empty: [48]bool = @splat(false);
     const rooms = [_]geometry.Room{
-        .{ .id = id, .columns = 16, .rows = 3, .width = 256, .height = 72, .blocking = &empty, .edges = .{ .left = .blocked, .right = .{ .room = neighbor }, .up = .blocked, .down = .blocked } },
-        .{ .id = neighbor, .columns = 16, .rows = 3, .width = 256, .height = 72, .blocking = &empty, .edges = .{ .left = .{ .room = id }, .right = .blocked, .up = .blocked, .down = .blocked } },
+        .{
+            .id = id,
+            .columns = 16,
+            .rows = 3,
+            .width = 256,
+            .height = 72,
+            .blocking = &empty,
+            .edges = .{
+                .left = .blocked,
+                .right = .{ .room = neighbor },
+                .up = .blocked,
+                .down = .blocked,
+            },
+        },
+        .{
+            .id = neighbor,
+            .columns = 16,
+            .rows = 3,
+            .width = 256,
+            .height = 72,
+            .blocking = &empty,
+            .edges = .{
+                .left = .{ .room = id },
+                .right = .blocked,
+                .up = .blocked,
+                .down = .blocked,
+            },
+        },
     };
     var materials: [96]terrain.Material = @splat(.empty);
     materials[48 + 16 + 2] = .solid;
     const view: terrain.View = .{ .geometry = .{ .rooms = &rooms }, .materials = &materials };
-    const pose: motion.Pose = .{ .position = .{ .x = 240, .y = 70 }, .facing = .right, .visual = .{ .id = @fromBackingInt(0) } };
+    const pose: motion.Pose = .{
+        .position = .{ .x = 240, .y = 70 },
+        .facing = .right,
+        .visual = .{ .id = @fromBackingInt(0) },
+    };
     try std.testing.expect((try traceWall(view, id, pose, 2)) == null);
-    try std.testing.expectEqualDeep(@as(?Hit, .{ .room = neighbor, .x = 32 }), try traceWall(view, id, pose, 3));
+    try std.testing.expectEqualDeep(
+        @as(?Hit, .{ .room = neighbor, .x = 32 }),
+        try traceWall(view, id, pose, 3),
+    );
 }
 
 test "a shared emitter ignores new requests during an unfinished flash" {
     const id: geometry.RoomId = @fromBackingInt(1);
     const empty: [48]bool = @splat(false);
-    const rooms = [_]geometry.Room{.{ .id = id, .columns = 16, .rows = 3, .width = 256, .height = 72, .blocking = &empty, .edges = .{ .left = .blocked, .right = .blocked, .up = .blocked, .down = .blocked } }};
+    const rooms = [_]geometry.Room{.{
+        .id = id,
+        .columns = 16,
+        .rows = 3,
+        .width = 256,
+        .height = 72,
+        .blocking = &empty,
+        .edges = .{ .left = .blocked, .right = .blocked, .up = .blocked, .down = .blocked },
+    }};
     const materials: [48]terrain.Material = @splat(.empty);
     const view: terrain.View = .{ .geometry = .{ .rooms = &rooms }, .materials = &materials };
     const frames = [_]motion.Step{ .hold, .hold, .hold };
     const clip: motion.Clip = .{ .steps = &frames };
-    var definition: Definition = .{ .initial_phase = .flash, .retrigger_impact = false, .ignition = clip, .standing_flash = clip, .crouched_flash = clip, .standing_impact = clip, .crouched_impact = clip, .range_cells = 1, .palette_bank = 0, .behind_player = false };
-    const first: motion.Pose = .{ .position = .{ .x = 64, .y = 70 }, .facing = .right, .visual = .{ .id = @fromBackingInt(0) } };
+    var definition: Definition = .{
+        .initial_phase = .flash,
+        .retrigger_impact = false,
+        .ignition = clip,
+        .standing_flash = clip,
+        .crouched_flash = clip,
+        .standing_impact = clip,
+        .crouched_impact = clip,
+        .range_cells = 1,
+        .palette_bank = 0,
+        .behind_player = false,
+    };
+    const first: motion.Pose = .{
+        .position = .{ .x = 64, .y = 70 },
+        .facing = .right,
+        .visual = .{ .id = @fromBackingInt(0) },
+    };
     var second = first;
     second.position.x = 160;
     var state: State = .{};

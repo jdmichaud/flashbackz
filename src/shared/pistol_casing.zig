@@ -25,11 +25,22 @@ pub const Flight = struct {
 pub const State = struct {
     first_ejection: bool = true,
     flight: ?Flight = null,
-    pub fn advance(self: *State, definition: Definition, shot: ?Height, pose: motion.Pose, room: geometry.RoomId, random: anytype) void {
+    pub fn advance(
+        self: *State,
+        definition: Definition,
+        shot: ?Height,
+        pose: motion.Pose,
+        room: geometry.RoomId,
+        random: anytype,
+    ) void {
         const accepts = if (self.flight) |flight| flight.path == .standing_a else true;
         if (shot != null and accepts) {
             if (self.first_ejection) {
-                self.flight = .{ .pose = definition.initial_pose, .room = definition.initial_room, .path = definition.initial_path };
+                self.flight = .{
+                    .pose = definition.initial_pose,
+                    .room = definition.initial_room,
+                    .path = definition.initial_path,
+                };
                 self.first_ejection = false;
             } else {
                 const alternate = random.next() & 1 != 0;
@@ -47,7 +58,16 @@ pub const State = struct {
     pub fn hashInto(self: State, hash: *std.hash.Wyhash) void {
         hash.update(&.{ @intFromBool(self.first_ejection), @intFromBool(self.flight != null) });
         if (self.flight) |flight| {
-            for ([_]u32{ if (flight.room) |room| @backingInt(room) else std.math.maxInt(u32), @as(u16, @bitCast(flight.pose.position.x)), @as(u16, @bitCast(flight.pose.position.y)), @backingInt(flight.pose.facing), @backingInt(flight.pose.visual.id), @intFromBool(flight.pose.visual.mirrored), @backingInt(flight.path), @intCast(flight.playback.next_step) }) |value|
+            for ([_]u32{
+                if (flight.room) |room| @backingInt(room) else std.math.maxInt(u32),
+                @as(u16, @bitCast(flight.pose.position.x)),
+                @as(u16, @bitCast(flight.pose.position.y)),
+                @backingInt(flight.pose.facing),
+                @backingInt(flight.pose.visual.id),
+                @intFromBool(flight.pose.visual.mirrored),
+                @backingInt(flight.path),
+                @intCast(flight.playback.next_step),
+            }) |value|
                 hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
         }
     }
@@ -56,8 +76,19 @@ pub const State = struct {
 test "a busy casing suppresses both another ejection and its random draw" {
     const hold = [_]motion.Step{ .hold, .hold };
     const clip: motion.Clip = .{ .steps = &hold };
-    const pose: motion.Pose = .{ .position = .{ .x = 10, .y = 70 }, .facing = .right, .visual = .{ .id = @fromBackingInt(0) } };
-    const definition: Definition = .{ .trajectories = .{ clip, clip, clip, clip }, .initial_pose = pose, .initial_room = null, .initial_path = .standing_b, .palette_bank = 2, .behind_player = false };
+    const pose: motion.Pose = .{
+        .position = .{ .x = 10, .y = 70 },
+        .facing = .right,
+        .visual = .{ .id = @fromBackingInt(0) },
+    };
+    const definition: Definition = .{
+        .trajectories = .{ clip, clip, clip, clip },
+        .initial_pose = pose,
+        .initial_room = null,
+        .initial_path = .standing_b,
+        .palette_bank = 2,
+        .behind_player = false,
+    };
     const CountingRandom = struct {
         calls: usize = 0,
         pub fn next(self: *@This()) u16 {

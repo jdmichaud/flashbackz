@@ -4,7 +4,35 @@ const std = @import("std");
 const runtime = @import("../actors/conrad_lift.zig");
 const animation = @import("animation.zig");
 const rules = @import("rule_table.zig");
-const sources = [_]u16{ 169, 130, 234, 235, 236, 238, 237, 239, 240, 243, 244, 241, 242, 259, 256, 245, 247, 246, 248, 249, 250, 260, 254, 251, 258, 253, 252 };
+const sources = [_]u16{
+    169,
+    130,
+    234,
+    235,
+    236,
+    238,
+    237,
+    239,
+    240,
+    243,
+    244,
+    241,
+    242,
+    259,
+    256,
+    245,
+    247,
+    246,
+    248,
+    249,
+    250,
+    260,
+    254,
+    251,
+    258,
+    253,
+    252,
+};
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     clips: []animation.OwnedClip,
@@ -14,7 +42,13 @@ pub const Assets = struct {
         self.allocator.free(self.clips);
     }
 };
-pub fn load(allocator: std.mem.Allocator, rule_bytes: []const u8, group_id: u16, animations: []const u8, resolver: anytype) !Assets {
+pub fn load(
+    allocator: std.mem.Allocator,
+    rule_bytes: []const u8,
+    group_id: u16,
+    animations: []const u8,
+    resolver: anytype,
+) !Assets {
     const group = try rules.group(rule_bytes, group_id);
     const clips = try allocator.alloc(animation.OwnedClip, sources.len);
     var loaded: usize = 0;

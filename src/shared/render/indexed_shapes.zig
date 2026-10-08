@@ -11,7 +11,13 @@ pub const Canvas = struct {
     clip: Rect,
 
     fn plot(self: Canvas, x: i32, y: i32, ink: Ink) void {
-        if (x < self.clip.x or y < self.clip.y or x >= @as(i32, self.clip.x) + self.clip.width or y >= @as(i32, self.clip.y) + self.clip.height or x < 0 or y < 0 or x >= self.width or y >= self.height) return;
+        if (x < self.clip.x or y < self.clip.y or x >= @as(
+            i32,
+            self.clip.x,
+        ) + self.clip.width or y >= @as(
+            i32,
+            self.clip.y,
+        ) + self.clip.height or x < 0 or y < 0 or x >= self.width or y >= self.height) return;
         const pixel = &self.pixels[@as(usize, @intCast(y)) * self.width + @as(usize, @intCast(x))];
         switch (ink) {
             .color => |color| pixel.* = color,
@@ -52,7 +58,10 @@ pub const Canvas = struct {
         const upper = @as(i32, center.y) - row;
         if ((lower < top or lower >= bottom) and (upper < top or upper >= bottom)) return;
         const left = @max(@as(i32, center.x) - radius, self.clip.x);
-        const right = @min(@as(i32, center.x) + radius, @as(i32, self.clip.x) + self.clip.width - 1);
+        const right = @min(
+            @as(i32, center.x) + radius,
+            @as(i32, self.clip.x) + self.clip.width - 1,
+        );
         var x = left;
         while (x <= right) : (x += 1) {
             self.plot(x, @as(i32, center.y) + row, ink);
@@ -63,15 +72,22 @@ pub const Canvas = struct {
     /// Integer boundary traversal with explicit tie rules. Scanline spans are emitted once,
     /// then clipped by the canvas, so indexed tinting cannot accumulate through overdraw.
     pub fn ellipse(self: Canvas, center: Point, radius_x: u16, radius_y: u16, ink: Ink) !void {
-        if (self.pixels.len != @as(usize, self.width) * self.height) return error.InvalidVectorShape;
-        if (radius_x > std.math.maxInt(i16) or radius_y > std.math.maxInt(i16)) return error.UnsupportedVectorExtent;
+        if (self.pixels.len != @as(
+            usize,
+            self.width,
+        ) * self.height) return error.InvalidVectorShape;
+        if (radius_x > std.math.maxInt(i16) or
+            radius_y > std.math.maxInt(i16)) return error.UnsupportedVectorExtent;
         const xx: i32 = @as(i32, radius_x) * radius_x;
         const yy: i32 = @as(i32, radius_y) * radius_y;
         var x: i32 = radius_x;
         var y: i32 = 0;
         // Preserve the original cross-word multiply: only the high word of its
         // upper partial product contributes. Error accumulators then wrap at 32 bits.
-        const initial = @as(i32, radius_x) * (2 * yy & 65535) + ((@as(i32, radius_x) * (2 * yy >> 16)) >> 16);
+        const initial = @as(
+            i32,
+            radius_x,
+        ) * (2 * yy & 65535) + ((@as(i32, radius_x) * (2 * yy >> 16)) >> 16);
         var horizontal_slope = 2 *% initial;
         var vertical_slope: i32 = 0;
         var horizontal_error = 2 * xx -% initial +% yy;
@@ -111,7 +127,10 @@ pub const Canvas = struct {
     /// Clockwise illustrations with one filled span per row. The picture importer rejects unsupported
     /// curves and unsupported extents instead of substituting a different rasterization.
     pub fn draw(self: Canvas, points: []const Point, ink: Ink) !void {
-        if (self.pixels.len != @as(usize, self.width) * self.height or points.len == 0 or points.len > 64) return error.InvalidVectorShape;
+        if (self.pixels.len != @as(
+            usize,
+            self.width,
+        ) * self.height or points.len == 0 or points.len > 64) return error.InvalidVectorShape;
         if (points.len == 1) {
             self.plot(points[0].x, points[0].y, ink);
             return;
@@ -126,7 +145,10 @@ pub const Canvas = struct {
         var min_x: i32 = points[0].x;
         var max_x = min_x;
         for (points, 0..) |point, i| {
-            if (point.x < -4096 or point.x > 4096 or point.y < -4096 or point.y > 4096) return error.UnsupportedVectorExtent;
+            if (point.x < -4096 or
+                point.x > 4096 or
+                point.y < -4096 or
+                point.y > 4096) return error.UnsupportedVectorExtent;
             if (point.y < top) {
                 top = point.y;
                 top_index = i;
@@ -137,7 +159,10 @@ pub const Canvas = struct {
         }
         if (top == bottom) {
             var x = @max(min_x, self.clip.x);
-            while (x <= @min(max_x, @as(i32, self.clip.x) + self.clip.width - 1)) : (x += 1) self.plot(x, top, ink);
+            while (x <= @min(
+                max_x,
+                @as(i32, self.clip.x) + self.clip.width - 1,
+            )) : (x += 1) self.plot(x, top, ink);
             return;
         }
         var left_storage: [64]Edge = undefined;
@@ -148,8 +173,10 @@ pub const Canvas = struct {
         var right_index: usize = 0;
         var y = @max(top, self.clip.y);
         while (y <= @min(bottom, @as(i32, self.clip.y) + self.clip.height - 1)) : (y += 1) {
-            while (left_index + 1 < left_edges.len and y >= left_edges[left_index].end.y) left_index += 1;
-            while (right_index + 1 < right_edges.len and y >= right_edges[right_index].end.y) right_index += 1;
+            while (left_index + 1 < left_edges.len and
+                y >= left_edges[left_index].end.y) left_index += 1;
+            while (right_index + 1 < right_edges.len and
+                y >= right_edges[right_index].end.y) right_index += 1;
             const left = left_edges[left_index];
             const right = right_edges[right_index];
             var first = left.at(y, self.clip.y, true);
@@ -192,9 +219,15 @@ const Edge = struct {
         var x = @as(i32, self.start.x) * 65536;
         const half = if (step >= -65536 and step < 0) @as(i32, 32768) else @divTrunc(step, 2);
         if (self.start.y < clip_top) {
-            x = (@as(i32, self.start.x) - @divTrunc((@as(i32, self.start.y) - clip_top) * (@as(i32, self.end.x) - self.start.x), @as(i32, self.end.y) - self.start.y)) * 65536;
+            x = (@as(i32, self.start.x) - @divTrunc(
+                (@as(i32, self.start.y) - clip_top) * (@as(i32, self.end.x) - self.start.x),
+                @as(i32, self.end.y) - self.start.y,
+            )) * 65536;
             const magnitude: i32 = @intCast(@abs(step));
-            x += if (left) -@divTrunc(if (magnitude < 65536) @as(i32, -65536) else magnitude, 2) else @divTrunc(@max(magnitude, 65536), 2);
+            x += if (left) -@divTrunc(
+                if (magnitude < 65536) @as(i32, -65536) else magnitude,
+                2,
+            ) else @divTrunc(@max(magnitude, 65536), 2);
             return x + step * (y - clip_top);
         }
         if (left) {
@@ -206,7 +239,13 @@ const Edge = struct {
     }
 };
 
-fn edges(points: []const Point, first: usize, bottom: i32, reverse: bool, buffer: []Edge) ![]const Edge {
+fn edges(
+    points: []const Point,
+    first: usize,
+    bottom: i32,
+    reverse: bool,
+    buffer: []Edge,
+) ![]const Edge {
     var index = first;
     var used: usize = 0;
     var traversed: usize = 0;
@@ -218,7 +257,10 @@ fn edges(points: []const Point, first: usize, bottom: i32, reverse: bool, buffer
             if (traversed > points.len or used == buffer.len) return error.InvalidVectorShape;
             const end = points[index];
             if (end.y > start.y) {
-                const step = @divTrunc((@as(i32, end.x) - start.x) * 256, @as(i32, end.y) - start.y) * 256;
+                const step = @divTrunc(
+                    (@as(i32, end.x) - start.x) * 256,
+                    @as(i32, end.y) - start.y,
+                ) * 256;
                 buffer[used] = .{ .start = start, .end = end, .step = step, .end_index = index };
                 used += 1;
                 break;
@@ -232,15 +274,35 @@ fn edges(points: []const Point, first: usize, bottom: i32, reverse: bool, buffer
 
 test "indexed shading preserves underlying inks and clips each edge" {
     var pixels: [16]u8 = @splat(2);
-    const canvas: Canvas = .{ .pixels = &pixels, .width = 4, .height = 4, .clip = .{ .x = 1, .y = 1, .width = 2, .height = 2 } };
-    try canvas.draw(&.{ .{ .x = 0, .y = 1 }, .{ .x = 3, .y = 1 }, .{ .x = 3, .y = 3 }, .{ .x = 0, .y = 3 } }, .{ .mask = 8 });
-    try std.testing.expectEqualSlices(u8, &.{ 2, 2, 2, 2, 2, 10, 10, 2, 2, 10, 10, 2, 2, 2, 2, 2 }, &pixels);
+    const canvas: Canvas = .{
+        .pixels = &pixels,
+        .width = 4,
+        .height = 4,
+        .clip = .{ .x = 1, .y = 1, .width = 2, .height = 2 },
+    };
+    try canvas.draw(
+        &.{ .{ .x = 0, .y = 1 }, .{ .x = 3, .y = 1 }, .{ .x = 3, .y = 3 }, .{ .x = 0, .y = 3 } },
+        .{ .mask = 8 },
+    );
+    try std.testing.expectEqualSlices(
+        u8,
+        &.{ 2, 2, 2, 2, 2, 10, 10, 2, 2, 10, 10, 2, 2, 2, 2, 2 },
+        &pixels,
+    );
 }
 
 test "closing edge caps retain the covered corner of a one-row sloped trapezoid" {
     var pixels: [30]u8 = @splat(0);
-    const canvas: Canvas = .{ .pixels = &pixels, .width = 10, .height = 3, .clip = .{ .x = 0, .y = 0, .width = 10, .height = 3 } };
-    try canvas.draw(&.{ .{ .x = 0, .y = 0 }, .{ .x = 8, .y = 0 }, .{ .x = 8, .y = 1 }, .{ .x = 1, .y = 1 } }, .{ .color = 3 });
+    const canvas: Canvas = .{
+        .pixels = &pixels,
+        .width = 10,
+        .height = 3,
+        .clip = .{ .x = 0, .y = 0, .width = 10, .height = 3 },
+    };
+    try canvas.draw(
+        &.{ .{ .x = 0, .y = 0 }, .{ .x = 8, .y = 0 }, .{ .x = 8, .y = 1 }, .{ .x = 1, .y = 1 } },
+        .{ .color = 3 },
+    );
     for (0..2) |y| {
         for (pixels[y * 10 ..][0..9]) |pixel| try std.testing.expectEqual(@as(u8, 3), pixel);
         try std.testing.expectEqual(@as(u8, 0), pixels[y * 10 + 9]);
@@ -250,7 +312,12 @@ test "closing edge caps retain the covered corner of a one-row sloped trapezoid"
 
 test "ellipse clipping and indexed tint preserve the surrounding page" {
     var pixels: [81]u8 = @splat(2);
-    const canvas: Canvas = .{ .pixels = &pixels, .width = 9, .height = 9, .clip = .{ .x = 2, .y = 2, .width = 5, .height = 5 } };
+    const canvas: Canvas = .{
+        .pixels = &pixels,
+        .width = 9,
+        .height = 9,
+        .clip = .{ .x = 2, .y = 2, .width = 5, .height = 5 },
+    };
     try canvas.ellipse(.{ .x = 4, .y = 4 }, 2, 2, .{ .mask = 8 });
     try std.testing.expectEqual(@as(u8, 10), pixels[4 * 9 + 4]);
     try std.testing.expectEqual(@as(u8, 2), pixels[0]);
@@ -262,7 +329,12 @@ test "ellipse clipping and indexed tint preserve the surrounding page" {
 
 test "large ellipse radii retain bounded canvas writes" {
     var pixels: [81]u8 = @splat(2);
-    const canvas: Canvas = .{ .pixels = &pixels, .width = 9, .height = 9, .clip = .{ .x = 2, .y = 2, .width = 5, .height = 5 } };
+    const canvas: Canvas = .{
+        .pixels = &pixels,
+        .width = 9,
+        .height = 9,
+        .clip = .{ .x = 2, .y = 2, .width = 5, .height = 5 },
+    };
     for ([_]u16{ 196, 264, 1109, 1315 }) |radius| {
         @memset(&pixels, 2);
         try canvas.ellipse(.{ .x = 4, .y = 4 }, radius, radius, .{ .color = 7 });

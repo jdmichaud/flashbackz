@@ -5,7 +5,12 @@ const motion = @import("motion.zig");
 const geometry = @import("geometry.zig");
 const combat = @import("combat.zig");
 const pistol = @import("pistol_shot.zig");
-pub const Request = struct { pose: motion.Pose, room: geometry.RoomId, height: combat.Height, airborne: bool = false };
+pub const Request = struct {
+    pose: motion.Pose,
+    room: geometry.RoomId,
+    height: combat.Height,
+    airborne: bool = false,
+};
 pub const Channel = struct {
     state: pistol.State = .{},
     ready: ?Request = null,
@@ -39,13 +44,36 @@ pub const World = struct {
         }
     }
     pub fn fire(self: *World, channel: usize, request: Request, next_step: bool) void {
-        Channel.merge(if (next_step) &self.channels[channel].pending else &self.channels[channel].ready, request);
+        Channel.merge(
+            if (next_step) &self.channels[channel].pending else &self.channels[channel].ready,
+            request,
+        );
     }
-    pub fn advance(self: *World, definitions: []const pistol.Definition, terrain: @import("terrain.zig").View, targets: []const combat.Target) !void {
+    pub fn advance(
+        self: *World,
+        definitions: []const pistol.Definition,
+        terrain: @import("terrain.zig").View,
+        targets: []const combat.Target,
+    ) !void {
         for (self.channels, definitions) |*channel, definition| {
             const request = channel.ready;
             channel.ready = null;
-            if (request) |shot| try channel.state.advanceWithVariant(definition, shot.height, shot.airborne, shot.pose, shot.room, terrain, targets) else if (channel.state.effect) |effect| try channel.state.advanceWithTargets(definition, null, effect.pose, effect.room, terrain, targets) else {
+            if (request) |shot| try channel.state.advanceWithVariant(
+                definition,
+                shot.height,
+                shot.airborne,
+                shot.pose,
+                shot.room,
+                terrain,
+                targets,
+            ) else if (channel.state.effect) |effect| try channel.state.advanceWithTargets(
+                definition,
+                null,
+                effect.pose,
+                effect.room,
+                terrain,
+                targets,
+            ) else {
                 channel.state.hit_requested = null;
                 channel.state.sound_requested = null;
             }
@@ -56,7 +84,14 @@ pub const World = struct {
             channel.state.hashInto(hash);
             for ([_]?Request{ channel.ready, channel.pending }) |request| {
                 hash.update(&.{@intFromBool(request != null)});
-                if (request) |shot| for ([_]u16{ @bitCast(shot.pose.position.x), @bitCast(shot.pose.position.y), @backingInt(shot.pose.facing), @backingInt(shot.room), @backingInt(shot.height), @intFromBool(shot.airborne) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u16, value)));
+                if (request) |shot| for ([_]u16{
+                    @bitCast(shot.pose.position.x),
+                    @bitCast(shot.pose.position.y),
+                    @backingInt(shot.pose.facing),
+                    @backingInt(shot.room),
+                    @backingInt(shot.height),
+                    @intFromBool(shot.airborne),
+                }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u16, value)));
             }
         }
     }

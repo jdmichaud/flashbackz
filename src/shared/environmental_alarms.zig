@@ -3,7 +3,15 @@ const std = @import("std");
 const motion = @import("motion.zig");
 const Circuit = @import("world_props.zig").CircuitId;
 pub const Phase = enum { dormant, waiting, burst };
-pub const Definition = struct { room: ?@import("geometry.zig").RoomId, clips: [3]motion.Clip, chance_denominator: i16, burst_cycles: i16, burst_sound: motion.SoundId, initially_active: bool, accepts_signals: bool };
+pub const Definition = struct {
+    room: ?@import("geometry.zig").RoomId,
+    clips: [3]motion.Clip,
+    chance_denominator: i16,
+    burst_cycles: i16,
+    burst_sound: motion.SoundId,
+    initially_active: bool,
+    accepts_signals: bool,
+};
 pub const Action = enum { start, stop };
 pub const Binding = struct { circuit: Circuit, target: usize, action: Action, next_step: bool };
 const Requests = struct {
@@ -16,14 +24,26 @@ const Requests = struct {
         }
     }
 };
-pub const Instance = struct { phase: Phase = .dormant, playback: motion.Playback = .{}, remaining: i16 = 0, active: bool, ready: Requests = .{}, pending: Requests = .{}, sound: ?motion.SoundId = null, animation_sound: ?motion.SoundId = null };
+pub const Instance = struct {
+    phase: Phase = .dormant,
+    playback: motion.Playback = .{},
+    remaining: i16 = 0,
+    active: bool,
+    ready: Requests = .{},
+    pending: Requests = .{},
+    sound: ?motion.SoundId = null,
+    animation_sound: ?motion.SoundId = null,
+};
 pub const World = struct {
     allocator: std.mem.Allocator,
     instances: []Instance,
     shake_rows: u2 = 0,
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
-        for (instances, definitions) |*instance, definition| instance.* = .{ .active = definition.initially_active };
+        for (
+            instances,
+            definitions,
+        ) |*instance, definition| instance.* = .{ .active = definition.initially_active };
         return .{ .allocator = allocator, .instances = instances };
     }
     pub fn deinit(self: *World) void {
@@ -42,12 +62,19 @@ pub const World = struct {
             if (binding.next_step) self.instances[binding.target].pending.add(binding.action) else self.instances[binding.target].ready.add(binding.action);
         };
     }
-    pub fn advance(self: *World, definitions: []const Definition, random: *@import("random.zig").Stream) void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        random: *@import("random.zig").Stream,
+    ) void {
         for (self.instances, definitions) |*instance, definition| {
-            if ((instance.ready.start or instance.ready.stop) and definition.accepts_signals) instance.active = true;
+            if ((instance.ready.start or instance.ready.stop) and
+                definition.accepts_signals) instance.active = true;
             if (!instance.active) continue;
             var clip = definition.clips[@backingInt(instance.phase)];
-            if ((instance.phase == .dormant and instance.ready.start) or (instance.phase != .dormant and instance.ready.stop)) instance.playback.next_step = clip.steps.len;
+            if ((instance.phase == .dormant and instance.ready.start) or
+                (instance.phase != .dormant and
+                    instance.ready.stop)) instance.playback.next_step = clip.steps.len;
             if (instance.playback.exhausted(clip)) {
                 switch (instance.phase) {
                     .dormant => if (instance.ready.start) {
@@ -58,7 +85,10 @@ pub const World = struct {
                     .waiting => if (instance.ready.stop) {
                         instance.phase = .dormant;
                         instance.active = false;
-                    } else if (@rem(@as(i16, @bitCast(random.next())), definition.chance_denominator) == 0) {
+                    } else if (@rem(
+                        @as(i16, @bitCast(random.next())),
+                        definition.chance_denominator,
+                    ) == 0) {
                         instance.phase = .burst;
                         instance.remaining = definition.burst_cycles;
                     },
@@ -82,6 +112,15 @@ pub const World = struct {
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
         hash.update(&.{self.shake_rows});
-        for (self.instances) |instance| for ([_]u64{ @backingInt(instance.phase), instance.playback.next_step, @as(u16, @bitCast(instance.remaining)), @intFromBool(instance.active), @intFromBool(instance.ready.start), @intFromBool(instance.ready.stop), @intFromBool(instance.pending.start), @intFromBool(instance.pending.stop) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        for (self.instances) |instance| for ([_]u64{
+            @backingInt(instance.phase),
+            instance.playback.next_step,
+            @as(u16, @bitCast(instance.remaining)),
+            @intFromBool(instance.active),
+            @intFromBool(instance.ready.start),
+            @intFromBool(instance.ready.stop),
+            @intFromBool(instance.pending.start),
+            @intFromBool(instance.pending.stop),
+        }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
     }
 };

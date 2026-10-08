@@ -37,7 +37,10 @@ pub const Menu = struct {
         if (indices.len != background.pixels.len) return error.InvalidFrameLength;
         @memcpy(indices, background.pixels);
         for (artwork.labels, 0..) |label, row| {
-            try text.draw(indices, background.width, background.height, artwork.font, label, layout.left, layout.top + @as(i32, @intCast(row)) * layout.row_height, .{
+            try text.draw(indices, background.width, background.height, artwork.font, label, layout.left, layout.top + @as(
+                i32,
+                @intCast(row),
+            ) * layout.row_height, .{
                 .foreground = if (row == @backingInt(self.selected)) layout.selected_color else layout.normal_color,
                 .shadow = layout.shadow_color,
             });
@@ -59,7 +62,12 @@ test "menu composes supplied content and selected-item styling" {
     var indices: [4]u8 = undefined;
     var rgba: [16]u8 = undefined;
     const menu: Menu = .{};
-    try menu.draw(.{ .background = &image, .colors = &colors, .font = &font, .labels = @splat(" ") }, .{ .left = 0, .top = 0, .row_height = 8 }, &indices, &rgba);
+    try menu.draw(
+        .{ .background = &image, .colors = &colors, .font = &font, .labels = @splat(" ") },
+        .{ .left = 0, .top = 0, .row_height = 8 },
+        &indices,
+        &rgba,
+    );
     try std.testing.expectEqualSlices(u8, &.{ 1, 7, 7, 7 }, &indices);
     try std.testing.expectEqualSlices(u8, &.{ 255, 0, 0, 255 }, rgba[0..4]);
 }

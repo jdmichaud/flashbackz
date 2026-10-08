@@ -4,7 +4,27 @@ const std = @import("std");
 const runtime = @import("../visibility.zig");
 const placement = @import("placement.zig");
 const geometry = @import("../geometry.zig");
-pub const Owner = union(enum) { player, prop: usize, guard: usize, door: usize, item_aid: usize, trader: usize, guide: usize, station: usize, force_field: usize, service_counter: usize, mission_terminal: usize, quest_contact: usize, attentive_contact: usize, escort: usize, ambient_person: usize, rescue_contact: usize, enemy_barrier: usize, gunman: usize, unbound };
+pub const Owner = union(enum) {
+    player,
+    prop: usize,
+    guard: usize,
+    door: usize,
+    item_aid: usize,
+    trader: usize,
+    guide: usize,
+    station: usize,
+    force_field: usize,
+    service_counter: usize,
+    mission_terminal: usize,
+    quest_contact: usize,
+    attentive_contact: usize,
+    escort: usize,
+    ambient_person: usize,
+    rescue_contact: usize,
+    enemy_barrier: usize,
+    gunman: usize,
+    unbound,
+};
 pub const Binding = struct { entity: runtime.Entity, owner: Owner };
 pub const Assets = struct {
     allocator: std.mem.Allocator,
@@ -24,19 +44,35 @@ pub const Assets = struct {
 fn group(value: u8) ?runtime.Group {
     return if (value < 128) @fromBackingInt(@as(u7, @intCast(value))) else null;
 }
-fn continuation(table: placement.Table, identities: []const ?runtime.Entity, source: usize, distance: usize) runtime.Pick {
+fn continuation(
+    table: placement.Table,
+    identities: []const ?runtime.Entity,
+    source: usize,
+    distance: usize,
+) runtime.Pick {
     const at: isize = @as(isize, @intCast(source * 32)) - @as(isize, @intCast(distance));
     if (at >= 0) return .{ .group = group(table.bytes[@intCast(at)]) };
     // Before the first placement, the original scan reaches activation references.
     // Resolve their two possible byte values here into an entity-dependent choice.
     const activation_byte: usize = @intCast(512 + at);
     const actor = activation_byte / 2;
-    if (actor >= identities.len or identities[actor] == null) return .{ .group = @fromBackingInt(0) };
+    if (actor >= identities.len or
+        identities[actor] == null) return .{ .group = @fromBackingInt(0) };
     const reference: u16 = @intCast(0x6ad0 + actor * 26);
     const active: u8 = @truncate(if (activation_byte % 2 == 0) reference else reference >> 8);
-    return .{ .when_active = .{ .entity = identities[actor].?, .active = group(active), .inactive = @fromBackingInt(0) } };
+    return .{ .when_active = .{
+        .entity = identities[actor].?,
+        .active = group(active),
+        .inactive = @fromBackingInt(0),
+    } };
 }
-pub fn load(allocator: std.mem.Allocator, table: placement.Table, rooms: *const [64]geometry.RoomId, difficulty: @import("../settings.zig").Difficulty, owners: anytype) !Assets {
+pub fn load(
+    allocator: std.mem.Allocator,
+    table: placement.Table,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: @import("../settings.zig").Difficulty,
+    owners: anytype,
+) !Assets {
     const identities = try allocator.alloc(?runtime.Entity, table.count);
     defer allocator.free(identities);
     @memset(identities, null);
@@ -64,8 +100,18 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rooms: *const 
             3 => .interactive,
             10 => .enemy,
             else => .other,
-        }, .priority = @intCast(index), .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .initial_body = if (record.room < rooms.len and record.collision_width != 0) .{ .room = rooms[record.room], .position = record.position, .width = record.collision_width } else null, .continuation = undefined };
-        for (&definition.continuation, 1..) |*choice, distance| choice.* = continuation(table, identities, index, distance);
+        }, .priority = @intCast(index), .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .initial_body = if (record.room < rooms.len and
+            record.collision_width != 0) .{
+            .room = rooms[record.room],
+            .position = record.position,
+            .width = record.collision_width,
+        } else null, .continuation = undefined };
+        for (&definition.continuation, 1..) |*choice, distance| choice.* = continuation(
+            table,
+            identities,
+            index,
+            distance,
+        );
         var owner: Owner = if (index == 0) .player else .unbound;
         for (owners.props.definitions, 0..) |prop, i| if (prop.interaction_priority == index) {
             owner = .{ .prop = i };
@@ -140,5 +186,13 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rooms: *const 
         if (owner == .unbound) unbound += 1;
         bindings[@backingInt(identity)] = .{ .entity = identity, .owner = owner };
     }
-    return .{ .allocator = allocator, .definitions = definitions, .bindings = bindings, .guard_entities = guard_entities, .gunman_entities = gunman_entities, .player_entity = identities[0] orelse return error.MissingPlayerVisibility, .unbound_count = unbound };
+    return .{
+        .allocator = allocator,
+        .definitions = definitions,
+        .bindings = bindings,
+        .guard_entities = guard_entities,
+        .gunman_entities = gunman_entities,
+        .player_entity = identities[0] orelse return error.MissingPlayerVisibility,
+        .unbound_count = unbound,
+    };
 }

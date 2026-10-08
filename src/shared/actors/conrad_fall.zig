@@ -19,9 +19,20 @@ pub const State = struct {
     pub fn clip(self: State, clips: Clips) motion.Clip {
         return if (self.phase == .initial) clips.initial else clips.continuing;
     }
-    pub fn finishPhase(self: *State, clips: Clips, intent: controls.Intent, pose: *motion.Pose, environment: anytype) !Boundary {
+    pub fn finishPhase(
+        self: *State,
+        clips: Clips,
+        intent: controls.Intent,
+        pose: *motion.Pose,
+        environment: anytype,
+    ) !Boundary {
         if (self.already_dead) {
-            if (!try environment.ledge(pose.*, .support, 0, .behind) and try environment.at(pose.*, .support, 0)) {
+            if (!try environment.ledge(
+                pose.*,
+                .support,
+                0,
+                .behind,
+            ) and try environment.at(pose.*, .support, 0)) {
                 pose.facing = if (pose.facing == .right) .left else .right;
                 pose.position.y +%= clips.landing_down;
                 return .fatal_landing;

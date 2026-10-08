@@ -33,7 +33,18 @@ pub const Options = struct {
     pub fn take(self: *Options, arg: []const u8, args: anytype) TakeError!bool {
         if (std.mem.eql(u8, arg, "--scene")) {
             const value = args.next() orelse return error.MissingValue;
-            self.entry = if (std.mem.eql(u8, value, "jungle")) .jungle_development else if (std.mem.eql(u8, value, "menu")) .menu_development else if (std.meta.stringToEnum(flashbackz.content.level.Id, value)) |level| .{ .level_development = level } else return error.UnknownScene;
+            self.entry = if (std.mem.eql(
+                u8,
+                value,
+                "jungle",
+            )) .jungle_development else if (std.mem.eql(
+                u8,
+                value,
+                "menu",
+            )) .menu_development else if (std.meta.stringToEnum(
+                flashbackz.content.level.Id,
+                value,
+            )) |level| .{ .level_development = level } else return error.UnknownScene;
             return true;
         }
         if (std.mem.eql(u8, arg, "--saves")) {
@@ -111,13 +122,20 @@ pub const Providers = struct {
         if (options.additional_count > options.additional_assets.len) return error.InvalidImage;
         self.content = Pack.init(allocator);
         try self.importPath(io, path);
-        for (options.additional_assets[0..options.additional_count]) |additional| try self.importPath(io, additional);
+        for (options.additional_assets[0..options.additional_count]) |additional| try self.importPath(
+            io,
+            additional,
+        );
         flashbackz.content.archive.expandAll(&self.content.?) catch |err| return mapImportError(err);
     }
 
     fn importPath(self: *Providers, io: std.Io, path: []const u8) OpenError!void {
         const allocator = self.allocator;
-        const kind: AssetKind = if (DirectoryAssetSource.open(allocator, io, path)) |opened| directory: {
+        const kind: AssetKind = if (DirectoryAssetSource.open(
+            allocator,
+            io,
+            path,
+        )) |opened| directory: {
             var directory = opened;
             defer directory.deinit();
             const source = directory.assetSource();
@@ -126,16 +144,27 @@ pub const Providers = struct {
             for (listing.names) |name| {
                 // Refuse the superseded edition before reading large movies.
                 if (platform.assetNameEql(name, "GAME_E.OVL")) return error.InvalidImage;
-                var data = source.readAll(name, Pack.limit - self.content.?.total) catch return error.InvalidImage;
+                var data = source.readAll(
+                    name,
+                    Pack.limit - self.content.?.total,
+                ) catch return error.InvalidImage;
                 defer data.deinit();
                 self.content.?.add(name, data.bytes) catch |err| return mapImportError(err);
             }
             break :directory .directory;
         } else |err| image: {
             if (err != error.NotADirectory) return err;
-            const image_bytes = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(4 * 1024 * 1024)) catch return error.InvalidImage;
+            const image_bytes = std.Io.Dir.cwd().readFileAlloc(
+                io,
+                path,
+                allocator,
+                .limited(4 * 1024 * 1024),
+            ) catch return error.InvalidImage;
             defer allocator.free(image_bytes);
-            var imported = flashbackz.floppy.load(allocator, image_bytes) catch |failure| return mapImportError(failure);
+            var imported = flashbackz.floppy.load(
+                allocator,
+                image_bytes,
+            ) catch |failure| return mapImportError(failure);
             defer imported.deinit();
             self.content.?.merge(&imported) catch |failure| return mapImportError(failure);
             break :image .floppy;
@@ -182,25 +211,43 @@ pub const Providers = struct {
 /// The per-user application data directory for the flashbackz saves:
 /// `$XDG_DATA_HOME/flashbackz/saves`, else `$HOME/.local/share/flashbackz/saves`, and
 /// `%APPDATA%\flashbackz\saves` on Windows. The caller owns the result.
-pub fn defaultSaveDirectory(allocator: std.mem.Allocator, environ: *const std.process.Environ.Map) OpenError![]u8 {
+pub fn defaultSaveDirectory(
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+) OpenError![]u8 {
     if (builtin.os.tag == .windows) {
         const appdata = environ.get("APPDATA") orelse return error.NoApplicationDirectory;
         if (appdata.len == 0) return error.NoApplicationDirectory;
-        return std.fmt.allocPrint(allocator, "{s}\\flashbackz\\saves", .{appdata}) catch return error.OutOfMemory;
+        return std.fmt.allocPrint(
+            allocator,
+            "{s}\\flashbackz\\saves",
+            .{appdata},
+        ) catch return error.OutOfMemory;
     }
     if (environ.get("XDG_DATA_HOME")) |data_home| {
         if (data_home.len != 0) {
-            return std.fmt.allocPrint(allocator, "{s}/flashbackz/saves", .{data_home}) catch return error.OutOfMemory;
+            return std.fmt.allocPrint(
+                allocator,
+                "{s}/flashbackz/saves",
+                .{data_home},
+            ) catch return error.OutOfMemory;
         }
     }
     const home = environ.get("HOME") orelse return error.NoApplicationDirectory;
     if (home.len == 0) return error.NoApplicationDirectory;
-    return std.fmt.allocPrint(allocator, "{s}/.local/share/flashbackz/saves", .{home}) catch return error.OutOfMemory;
+    return std.fmt.allocPrint(
+        allocator,
+        "{s}/.local/share/flashbackz/saves",
+        .{home},
+    ) catch return error.OutOfMemory;
 }
 
 const contract = @import("contract.zig");
 
-fn testEnviron(allocator: std.mem.Allocator, pairs: []const [2][]const u8) !std.process.Environ.Map {
+fn testEnviron(
+    allocator: std.mem.Allocator,
+    pairs: []const [2][]const u8,
+) !std.process.Environ.Map {
     var map = std.process.Environ.Map.init(allocator);
     for (pairs) |pair| try map.put(pair[0], pair[1]);
     return map;
@@ -213,7 +260,10 @@ test "the save directory follows the platform's application data convention" {
         defer env.deinit();
         if (builtin.os.tag == .windows) {
             // Windows reads %APPDATA% only.
-            try std.testing.expectError(error.NoApplicationDirectory, defaultSaveDirectory(allocator, &env));
+            try std.testing.expectError(
+                error.NoApplicationDirectory,
+                defaultSaveDirectory(allocator, &env),
+            );
         } else {
             const path = try defaultSaveDirectory(allocator, &env);
             defer allocator.free(path);
@@ -221,7 +271,13 @@ test "the save directory follows the platform's application data convention" {
         }
     }
     {
-        var env = try testEnviron(allocator, &.{ .{ "HOME", "/home/player" }, .{ "APPDATA", "C:\\Users\\player\\AppData\\Roaming" } });
+        var env = try testEnviron(
+            allocator,
+            &.{
+                .{ "HOME", "/home/player" },
+                .{ "APPDATA", "C:\\Users\\player\\AppData\\Roaming" },
+            },
+        );
         defer env.deinit();
         const path = try defaultSaveDirectory(allocator, &env);
         defer allocator.free(path);
@@ -234,7 +290,10 @@ test "the save directory follows the platform's application data convention" {
     {
         var env = try testEnviron(allocator, &.{});
         defer env.deinit();
-        try std.testing.expectError(error.NoApplicationDirectory, defaultSaveDirectory(allocator, &env));
+        try std.testing.expectError(
+            error.NoApplicationDirectory,
+            defaultSaveDirectory(allocator, &env),
+        );
     }
 }
 
@@ -291,10 +350,16 @@ test "the options open a game directory, or none" {
         var providers: Providers = .empty;
         const missing = try std.fmt.allocPrint(allocator, "{s}/absent", .{base});
         defer allocator.free(missing);
-        try std.testing.expectError(error.NotFound, providers.open(allocator, io, &env, .{ .assets = missing, .saves = paths[1] }));
+        try std.testing.expectError(
+            error.NotFound,
+            providers.open(allocator, io, &env, .{ .assets = missing, .saves = paths[1] }),
+        );
         const not_a_directory = try std.fmt.allocPrint(allocator, "{s}/game/game.cfg", .{base});
         defer allocator.free(not_a_directory);
-        try std.testing.expectError(error.InvalidImage, providers.open(allocator, io, &env, .{ .assets = not_a_directory, .saves = paths[1] }));
+        try std.testing.expectError(
+            error.InvalidImage,
+            providers.open(allocator, io, &env, .{ .assets = not_a_directory, .saves = paths[1] }),
+        );
     }
 }
 

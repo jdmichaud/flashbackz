@@ -42,7 +42,11 @@ fn parse(allocator: std.mem.Allocator, bytes: []const u8) !runtime.Message {
             cursor += 3;
         }
         const start = cursor;
-        while (cursor < bytes.len and bytes[cursor] != 0 and bytes[cursor] != 10 and bytes[cursor] != 11) : (cursor += 1) {}
+        while (cursor < bytes.len and
+            bytes[cursor] != 0 and
+            bytes[cursor] != 10 and
+            bytes[cursor] != 11) : (cursor += 1)
+        {}
         if (cursor >= bytes.len) return error.UnterminatedWorldMessage;
         if (lines.items.len >= 32 or cursor - start > 256) return error.MessageTooLarge;
         const text = try allocator.dupe(u8, bytes[start..cursor]);
@@ -66,7 +70,10 @@ fn parse(allocator: std.mem.Allocator, bytes: []const u8) !runtime.Message {
 pub fn decode(allocator: std.mem.Allocator, table: []const u8) !Assets {
     if (table.len < 2) return error.TruncatedMessageDirectory;
     const first = std.mem.readInt(u16, table[0..2], .little);
-    if (first < 2 or first % 2 != 0 or first > table.len or first / 2 > 256) return error.InvalidMessageDirectory;
+    if (first < 2 or
+        first % 2 != 0 or
+        first > table.len or
+        first / 2 > 256) return error.InvalidMessageDirectory;
     var messages: std.ArrayList(runtime.Message) = .empty;
     errdefer {
         for (messages.items) |message| releaseMessage(allocator, message);

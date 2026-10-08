@@ -13,7 +13,12 @@ pub const Soundtrack = struct {
     pending_start: usize = 0,
     pending_end: usize = 0,
 
-    pub fn open(allocator: std.mem.Allocator, source: platform.AssetSource, name: []const u8, rate: u32) !Soundtrack {
+    pub fn open(
+        allocator: std.mem.Allocator,
+        source: platform.AssetSource,
+        name: []const u8,
+        rate: u32,
+    ) !Soundtrack {
         const owned = try content.load(allocator, source, name);
         return .{ .owned = owned, .player = music.Player.init(owned.score, rate, null) };
     }
@@ -27,12 +32,19 @@ pub const Soundtrack = struct {
             const status = p.audioStatus();
             if (!status.running or status.suspended or status.queued_frames >= ahead) return;
             if (self.pending_start == self.pending_end) {
-                const frames: usize = @intCast(@min(self.pending.len / 2, ahead - status.queued_frames));
+                const frames: usize = @intCast(@min(
+                    self.pending.len / 2,
+                    ahead - status.queued_frames,
+                ));
                 self.pending_start = 0;
                 self.pending_end = frames * 2;
                 self.player.render(self.pending[0..self.pending_end]);
             }
-            const accepted = try @import("output_gain.zig").queue(p, self.pending[self.pending_start..self.pending_end], self.volume);
+            const accepted = try @import("output_gain.zig").queue(
+                p,
+                self.pending[self.pending_start..self.pending_end],
+                self.volume,
+            );
             self.pending_start += accepted * 2;
             if (accepted == 0) return;
         }

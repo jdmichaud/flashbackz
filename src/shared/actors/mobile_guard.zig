@@ -12,21 +12,51 @@ const Environment = @import("conrad_environment.zig").Environment;
 const shift = @import("conrad_roll.zig").shiftForward;
 const Circuit = @import("../world_props.zig").CircuitId;
 pub const Posture = enum { standing, crouched, airborne };
-pub const Firing = struct { posture: Posture, phase: enum { windup, discharge, recovery } = .windup };
-pub const Activity = union(enum) { standing, walking: u1, turning, checking_takeoff, crouching, crouched, rising, firing: Firing, flying: flight.State, wounded: wound.State, dormant, defeated, removed };
-pub const HitResponse = struct { direction: wound.Direction, forward: i16 = 0, down: i16 = 0, turn: bool = false, health_delta: i8 = 0 };
+pub const Firing = struct {
+    posture: Posture,
+    phase: enum { windup, discharge, recovery } = .windup,
+};
+pub const Activity = union(enum) {
+    standing,
+    walking: u1,
+    turning,
+    checking_takeoff,
+    crouching,
+    crouched,
+    rising,
+    firing: Firing,
+    flying: flight.State,
+    wounded: wound.State,
+    dormant,
+    defeated,
+    removed,
+};
+pub const HitResponse = struct {
+    direction: wound.Direction,
+    forward: i16 = 0,
+    down: i16 = 0,
+    turn: bool = false,
+    health_delta: i8 = 0,
+};
 pub const HitPolicy = struct {
     priority: [4]combat.Impact = .{ .rear_high, .rear_low, .front_high, .front_low },
     responses: [4]?HitResponse = @splat(null),
     pub fn vulnerability(self: HitPolicy) combat.Vulnerability {
         var result: combat.Vulnerability = .{};
-        for (std.enums.values(combat.Impact), self.responses) |impact, response| if (response != null) {
+        for (
+            std.enums.values(combat.Impact),
+            self.responses,
+        ) |impact, response| if (response != null) {
             result.set(impact);
         };
         return result;
     }
 };
-pub const WeaponMotion = struct { windup: motion.Clip, discharge: motion.Clip, recovery: motion.Clip };
+pub const WeaponMotion = struct {
+    windup: motion.Clip,
+    discharge: motion.Clip,
+    recovery: motion.Clip,
+};
 pub const Profile = struct {
     standing: motion.Clip,
     walks: [2]motion.Clip,
@@ -110,10 +140,28 @@ pub const Actor = struct {
     fn turn(self: *Actor) void {
         self.pose.facing = if (self.pose.facing == .left) .right else .left;
     }
-    fn chooseGround(self: *Actor, profile: Profile, environment: Environment, awareness: perception.Awareness, player: contacts.Footprint, above: bool, below: bool, duck: bool, ally_ahead: bool) !void {
+    fn chooseGround(
+        self: *Actor,
+        profile: Profile,
+        environment: Environment,
+        awareness: perception.Awareness,
+        player: contacts.Footprint,
+        above: bool,
+        below: bool,
+        duck: bool,
+        ally_ahead: bool,
+    ) !void {
         const layout: contacts.Layout = .{};
-        const contact = if (self.contact) |body| try layout.overlaps(environment.map, body, player) else false;
-        if (contact and !try environment.at(self.pose, .torso, 0) and try environment.at(self.pose, .support, 1)) {
+        const contact = if (self.contact) |body| try layout.overlaps(
+            environment.map,
+            body,
+            player,
+        ) else false;
+        if (contact and !try environment.at(self.pose, .torso, 0) and try environment.at(
+            self.pose,
+            .support,
+            1,
+        )) {
             self.activity = .{ .walking = 0 };
             return;
         }
@@ -135,7 +183,12 @@ pub const Actor = struct {
             self.activity = .{ .walking = 0 };
             return;
         }
-        if (above and (try environment.ledge(self.pose, .head, 0, .ahead) or try environment.ledge(self.pose, .head, 1, .behind))) {
+        if (above and (try environment.ledge(self.pose, .head, 0, .ahead) or try environment.ledge(
+            self.pose,
+            .head,
+            1,
+            .behind,
+        ))) {
             self.activity = .{ .flying = .{ .kind = .ascend } };
             return;
         }
@@ -147,7 +200,21 @@ pub const Actor = struct {
             self.activity = .{ .flying = .{ .kind = .descend, .phase = .aligning } };
             return;
         }
-        if ((above and try environment.ledge(self.pose, .head, 0, .behind)) or (below and try environment.ledge(self.pose, .support, 0, .behind)) or ((above or below) and try environment.at(self.pose, .torso, 1)) or awareness.player(true, 0)) {
+        if ((above and try environment.ledge(
+            self.pose,
+            .head,
+            0,
+            .behind,
+        )) or (below and try environment.ledge(
+            self.pose,
+            .support,
+            0,
+            .behind,
+        )) or ((above or below) and try environment.at(
+            self.pose,
+            .torso,
+            1,
+        )) or awareness.player(true, 0)) {
             self.activity = .turning;
             return;
         }
@@ -158,19 +225,41 @@ pub const Actor = struct {
         }
         if (above) self.activity = .turning;
     }
-    fn finishFiring(self: *Actor, state: Firing, profile: Profile, environment: Environment, awareness: perception.Awareness, random: anytype) !void {
+    fn finishFiring(
+        self: *Actor,
+        state: Firing,
+        profile: Profile,
+        environment: Environment,
+        awareness: perception.Awareness,
+        random: anytype,
+    ) !void {
         switch (state.posture) {
             .standing => switch (state.phase) {
                 .windup => {
-                    if (!try environment.at(self.pose, .support, 0)) self.activity = .{ .flying = .{ .kind = .descend, .phase = .aligning } } else if (!try environment.at(self.pose, .torso, 1)) {
+                    if (!try environment.at(self.pose, .support, 0)) self.activity = .{ .flying = .{
+                        .kind = .descend,
+                        .phase = .aligning,
+                    } } else if (!try environment.at(self.pose, .torso, 1)) {
                         self.shot = .standing;
-                        self.activity = .{ .firing = .{ .posture = .standing, .phase = .discharge } };
-                    } else self.activity = .{ .firing = .{ .posture = .standing, .phase = .recovery } };
+                        self.activity = .{ .firing = .{
+                            .posture = .standing,
+                            .phase = .discharge,
+                        } };
+                    } else self.activity = .{ .firing = .{
+                        .posture = .standing,
+                        .phase = .recovery,
+                    } };
                 },
                 .discharge => {
                     const unsupported = !try environment.at(self.pose, .support, 0);
                     shift(&self.pose, profile.recoil_compensation);
-                    self.activity = if (unsupported) .{ .flying = .{ .kind = .descend, .phase = .aligning } } else .{ .firing = .{ .posture = .standing, .phase = .recovery } };
+                    self.activity = if (unsupported) .{ .flying = .{
+                        .kind = .descend,
+                        .phase = .aligning,
+                    } } else .{ .firing = .{
+                        .posture = .standing,
+                        .phase = .recovery,
+                    } };
                 },
                 .recovery => self.activity = .standing,
             },
@@ -182,13 +271,29 @@ pub const Actor = struct {
             },
             .airborne => switch (state.phase) {
                 .windup => {
-                    const leave = profile.flight_fire_exit_chance != 0 and @rem(@as(i16, @bitCast(random.next())), profile.flight_fire_exit_chance) == 0;
-                    if (!leave and !try environment.at(self.pose, .torso, 1) and awareness.player(false, 0)) {
+                    const leave = profile.flight_fire_exit_chance != 0 and @rem(
+                        @as(i16, @bitCast(random.next())),
+                        profile.flight_fire_exit_chance,
+                    ) == 0;
+                    if (!leave and !try environment.at(
+                        self.pose,
+                        .torso,
+                        1,
+                    ) and awareness.player(false, 0)) {
                         self.shot = .airborne;
-                        self.activity = .{ .firing = .{ .posture = .airborne, .phase = .discharge } };
-                    } else self.activity = .{ .firing = .{ .posture = .airborne, .phase = .recovery } };
+                        self.activity = .{ .firing = .{
+                            .posture = .airborne,
+                            .phase = .discharge,
+                        } };
+                    } else self.activity = .{ .firing = .{
+                        .posture = .airborne,
+                        .phase = .recovery,
+                    } };
                 },
-                .discharge => self.activity = .{ .firing = .{ .posture = .airborne, .phase = .recovery } },
+                .discharge => self.activity = .{ .firing = .{
+                    .posture = .airborne,
+                    .phase = .recovery,
+                } },
                 .recovery => {
                     if (try environment.at(self.pose, .support, 1)) {
                         shift(&self.pose, profile.flight.landing_advance);
@@ -206,7 +311,11 @@ pub const World = struct {
     pulses: []Circuit,
     pulse_count: usize = 0,
     score_requested: u32 = 0,
-    pub fn init(allocator: std.mem.Allocator, definitions: []const Definition, profiles: []const Profile) !World {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        definitions: []const Definition,
+        profiles: []const Profile,
+    ) !World {
         const actors = try allocator.alloc(Actor, definitions.len);
         errdefer allocator.free(actors);
         for (actors, definitions) |*actor, definition| {
@@ -216,26 +325,57 @@ pub const World = struct {
                 .frame => |frame| frame.visual,
                 .hold => return error.MissingGuardVisual,
             };
-            actor.* = .{ .room = definition.room, .pose = .{ .position = definition.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } }, .activity = activity, .active = definition.initially_active, .health = definition.health };
+            actor.* = .{
+                .room = definition.room,
+                .pose = .{
+                    .position = definition.position,
+                    .facing = definition.facing,
+                    .visual = .{
+                        .id = visual.id,
+                        .mirrored = visual.mirrored != (definition.facing == .left),
+                    },
+                },
+                .activity = activity,
+                .active = definition.initially_active,
+                .health = definition.health,
+            };
         }
-        return .{ .allocator = allocator, .actors = actors, .pulses = try allocator.alloc(Circuit, definitions.len) };
+        return .{
+            .allocator = allocator,
+            .actors = actors,
+            .pulses = try allocator.alloc(Circuit, definitions.len),
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.actors);
         self.allocator.free(self.pulses);
     }
-    pub fn prepare(self: *World, definitions: []const Definition, map: geometry.Map, player_room: geometry.RoomId) !void {
+    pub fn prepare(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        player_room: geometry.RoomId,
+    ) !void {
         self.pulse_count = 0;
         self.score_requested = 0;
         for (self.actors, definitions) |*actor, definition| {
             if (actor.activity != .removed and definition.wake_nearby) if (actor.room) |room| {
-                if ((try @import("../activation.zig").around(map, player_room, room, actor.pose.position.y)).wake) actor.active = true;
+                if ((try @import("../activation.zig").around(
+                    map,
+                    player_room,
+                    room,
+                    actor.pose.position.y,
+                )).wake) actor.active = true;
             };
             actor.ready = actor.pending;
             actor.pending = false;
             actor.shot = null;
             actor.sound = null;
-            actor.contact = if (actor.room) |room| .{ .room = room, .position = actor.pose.position, .width = definition.contact_width } else null;
+            actor.contact = if (actor.room) |room| .{
+                .room = room,
+                .position = actor.pose.position,
+                .width = definition.contact_width,
+            } else null;
         }
     }
     pub fn route(self: *World, bindings: []const Binding, pulses: []const Circuit) void {
@@ -244,20 +384,90 @@ pub const World = struct {
             if (binding.next_step) self.actors[binding.actor].pending = true else self.actors[binding.actor].ready = true;
         };
     }
-    pub fn advance(self: *World, definitions: []const Definition, profiles: []const Profile, map: geometry.Map, player: contacts.Footprint, player_down: bool, targets: []combat.Target, first_target: usize, visibility: *@import("../visibility.zig").World, visibility_entities: []const @import("../visibility.zig").Entity, random: anytype) !void {
-        return self.advanceRange(definitions, profiles, map, player, player_down, targets, first_target, visibility, visibility_entities, random, 0, self.actors.len);
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        profiles: []const Profile,
+        map: geometry.Map,
+        player: contacts.Footprint,
+        player_down: bool,
+        targets: []combat.Target,
+        first_target: usize,
+        visibility: *@import("../visibility.zig").World,
+        visibility_entities: []const @import("../visibility.zig").Entity,
+        random: anytype,
+    ) !void {
+        return self.advanceRange(
+            definitions,
+            profiles,
+            map,
+            player,
+            player_down,
+            targets,
+            first_target,
+            visibility,
+            visibility_entities,
+            random,
+            0,
+            self.actors.len,
+        );
     }
-    pub fn advanceOne(self: *World, index: usize, definitions: []const Definition, profiles: []const Profile, map: geometry.Map, player: contacts.Footprint, player_down: bool, targets: []combat.Target, first_target: usize, visibility: *@import("../visibility.zig").World, visibility_entities: []const @import("../visibility.zig").Entity, random: anytype) !void {
-        return self.advanceRange(definitions, profiles, map, player, player_down, targets, first_target, visibility, visibility_entities, random, index, index + 1);
+    pub fn advanceOne(
+        self: *World,
+        index: usize,
+        definitions: []const Definition,
+        profiles: []const Profile,
+        map: geometry.Map,
+        player: contacts.Footprint,
+        player_down: bool,
+        targets: []combat.Target,
+        first_target: usize,
+        visibility: *@import("../visibility.zig").World,
+        visibility_entities: []const @import("../visibility.zig").Entity,
+        random: anytype,
+    ) !void {
+        return self.advanceRange(
+            definitions,
+            profiles,
+            map,
+            player,
+            player_down,
+            targets,
+            first_target,
+            visibility,
+            visibility_entities,
+            random,
+            index,
+            index + 1,
+        );
     }
-    fn advanceRange(self: *World, definitions: []const Definition, profiles: []const Profile, map: geometry.Map, player: contacts.Footprint, player_down: bool, targets: []combat.Target, first_target: usize, visibility: *@import("../visibility.zig").World, visibility_entities: []const @import("../visibility.zig").Entity, random: anytype, range_start: usize, range_end: usize) !void {
+    fn advanceRange(
+        self: *World,
+        definitions: []const Definition,
+        profiles: []const Profile,
+        map: geometry.Map,
+        player: contacts.Footprint,
+        player_down: bool,
+        targets: []combat.Target,
+        first_target: usize,
+        visibility: *@import("../visibility.zig").World,
+        visibility_entities: []const @import("../visibility.zig").Entity,
+        random: anytype,
+        range_start: usize,
+        range_end: usize,
+    ) !void {
         for (range_start..range_end) |index| {
             const actor = &self.actors[index];
             const definition = definitions[index];
             if (actor.activity == .removed) continue;
             if (actor.ready and definition.accepts_signals) actor.active = true;
             if (actor.room) |room| {
-                const neighborhood = try @import("../activation.zig").around(map, player.room, room, actor.pose.position.y);
+                const neighborhood = try @import("../activation.zig").around(
+                    map,
+                    player.room,
+                    room,
+                    actor.pose.position.y,
+                );
                 if (definition.wake_nearby and neighborhood.wake) actor.active = true;
             }
             if (!actor.active) continue;
@@ -281,7 +491,10 @@ pub const World = struct {
                     break;
                 }
             }
-            if (actor.activity == .dormant and actor.ready) actor.playback.completeDisplacement(clip, &actor.pose);
+            if (actor.activity == .dormant and actor.ready) actor.playback.completeDisplacement(
+                clip,
+                &actor.pose,
+            );
             if (actor.playback.exhausted(clip)) {
                 if (actor.activity == .dormant) {
                     if (actor.ready) {
@@ -294,22 +507,96 @@ pub const World = struct {
                     const awareness = try perception.observe(map, observer, player, &.{});
                     const origin = try map.room(room);
                     const same = room == player.room;
-                    const above = if (same) @divTrunc(player.position.y -% 8, 72) < @divTrunc(actor.pose.position.y, 72) else origin.edges.up == .room and origin.edges.up.room == player.room;
-                    const below = if (same) @divTrunc(player.position.y -% 8, 72) > @divTrunc(actor.pose.position.y, 72) else origin.edges.down == .room and origin.edges.down.room == player.room;
+                    const above = if (same) @divTrunc(
+                        player.position.y -% 8,
+                        72,
+                    ) < @divTrunc(
+                        actor.pose.position.y,
+                        72,
+                    ) else origin.edges.up == .room and origin.edges.up.room == player.room;
+                    const below = if (same) @divTrunc(
+                        player.position.y -% 8,
+                        72,
+                    ) > @divTrunc(
+                        actor.pose.position.y,
+                        72,
+                    ) else origin.edges.down == .room and origin.edges.down.room == player.room;
                     switch (actor.activity) {
                         .standing => {
-                            const id: combat.Id = @fromBackingInt(@as(u16, @intCast(first_target + index)));
-                            const duck = try perception.unhittableTarget(map, observer, id, definition.posture_range, targets, &profile.crouch_senses);
-                            const ally = awareness.player(false, profile.ally_wait_distance) and (try visibility.scan(map, player.room, visibility_entities[index], actor.pose, room, .enemy, profile.ally_scan_cells, false)) != null;
-                            try actor.chooseGround(profile, environment, awareness, player, above, below, duck, ally);
+                            const id: combat.Id = @fromBackingInt(@as(
+                                u16,
+                                @intCast(first_target + index),
+                            ));
+                            const duck = try perception.unhittableTarget(
+                                map,
+                                observer,
+                                id,
+                                definition.posture_range,
+                                targets,
+                                &profile.crouch_senses,
+                            );
+                            const ally = awareness.player(
+                                false,
+                                profile.ally_wait_distance,
+                            ) and (try visibility.scan(
+                                map,
+                                player.room,
+                                visibility_entities[index],
+                                actor.pose,
+                                room,
+                                .enemy,
+                                profile.ally_scan_cells,
+                                false,
+                            )) != null;
+                            try actor.chooseGround(
+                                profile,
+                                environment,
+                                awareness,
+                                player,
+                                above,
+                                below,
+                                duck,
+                                ally,
+                            );
                             if (actor.activity == .standing and !same) {
-                                const neighborhood = try @import("../activation.zig").around(map, player.room, room, actor.pose.position.y);
-                                if (!(definition.wake_nearby and neighborhood.near)) actor.active = false;
+                                const neighborhood = try @import("../activation.zig").around(
+                                    map,
+                                    player.room,
+                                    room,
+                                    actor.pose.position.y,
+                                );
+                                if (!(definition.wake_nearby and
+                                    neighborhood.near)) actor.active = false;
                             }
                         },
                         .walking => |stride| {
-                            const stop = (same and awareness.player(false, profile.shoot_distance)) or try environment.at(actor.pose, .torso, 1) or try environment.ledge(actor.pose, .support, 0, .ahead) or (above and (try environment.ledge(actor.pose, .head, 0, .ahead) or try environment.ledge(actor.pose, .head, 0, .behind)));
-                            actor.activity = if (stop) .standing else if (below or awareness.player(false, 0) or (stride == 1 and above)) .{ .walking = stride ^ 1 } else .standing;
+                            const stop = (same and awareness.player(
+                                false,
+                                profile.shoot_distance,
+                            )) or try environment.at(
+                                actor.pose,
+                                .torso,
+                                1,
+                            ) or try environment.ledge(
+                                actor.pose,
+                                .support,
+                                0,
+                                .ahead,
+                            ) or (above and (try environment.ledge(
+                                actor.pose,
+                                .head,
+                                0,
+                                .ahead,
+                            ) or try environment.ledge(
+                                actor.pose,
+                                .head,
+                                0,
+                                .behind,
+                            )));
+                            actor.activity = if (stop) .standing else if (below or awareness.player(
+                                false,
+                                0,
+                            ) or (stride == 1 and above)) .{ .walking = stride ^ 1 } else .standing;
                         },
                         .turning => {
                             actor.turn();
@@ -317,7 +604,12 @@ pub const World = struct {
                         },
                         .checking_takeoff => {
                             actor.activity = .standing;
-                            for (profile.takeoff_ledges) |distance| if (try environment.ledge(actor.pose, .support, distance, .behind)) {
+                            for (profile.takeoff_ledges) |distance| if (try environment.ledge(
+                                actor.pose,
+                                .support,
+                                distance,
+                                .behind,
+                            )) {
                                 actor.activity = .{ .flying = .{} };
                                 break;
                             };
@@ -329,9 +621,21 @@ pub const World = struct {
                             actor.activity = .rising;
                         },
                         .rising => actor.activity = .standing,
-                        .firing => |state| try actor.finishFiring(state, profile, environment, awareness, random),
+                        .firing => |state| try actor.finishFiring(
+                            state,
+                            profile,
+                            environment,
+                            awareness,
+                            random,
+                        ),
                         .flying => |*state| {
-                            const outcome = try state.finish(profile.flight, &actor.pose, environment, awareness.player(true, 0), awareness.player(true, 16));
+                            const outcome = try state.finish(
+                                profile.flight,
+                                &actor.pose,
+                                environment,
+                                awareness.player(true, 0),
+                                awareness.player(true, 16),
+                            );
                             switch (outcome) {
                                 .continued => {},
                                 .grounded => actor.activity = .standing,
@@ -339,7 +643,12 @@ pub const World = struct {
                             }
                         },
                         .wounded => |*state| {
-                            const outcome = try state.finish(profile.wound, actor.health, &actor.pose, environment);
+                            const outcome = try state.finish(
+                                profile.wound,
+                                actor.health,
+                                &actor.pose,
+                                environment,
+                            );
                             if (outcome.damage) actor.health -%= 1;
                             self.score_requested +%= outcome.score;
                             switch (outcome.next) {
@@ -363,7 +672,10 @@ pub const World = struct {
                 }
                 actor.playback = .{};
                 clip = profile.clip(actor.activity);
-                if (actor.room) |*room| _ = map.handoff(room, &actor.pose.position) catch |err| switch (err) {
+                if (actor.room) |*room| _ = map.handoff(
+                    room,
+                    &actor.pose.position,
+                ) catch |err| switch (err) {
                     error.ExitWithoutDestination => {
                         actor.activity = .removed;
                         actor.active = false;
@@ -375,7 +687,10 @@ pub const World = struct {
             actor.sound = actor.playback.soundOnEntry(clip);
             _ = actor.playback.advance(clip, &actor.pose);
             actor.ready = false;
-            visibility.setActive(visibility_entities[index], actor.active and actor.activity != .removed);
+            visibility.setActive(
+                visibility_entities[index],
+                actor.active and actor.activity != .removed,
+            );
             const target = &targets[first_target + index];
             target.facing = actor.pose.facing;
             target.vulnerable = actor.vulnerability(profile);
@@ -384,14 +699,38 @@ pub const World = struct {
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
         for (self.actors) |actor| {
-            for ([_]u32{ if (actor.room) |room| @backingInt(room) else 0, @as(u16, @bitCast(actor.pose.position.x)), @as(u16, @bitCast(actor.pose.position.y)), @backingInt(actor.pose.facing), @backingInt(actor.pose.visual.id), @intFromBool(actor.pose.visual.mirrored), @as(u16, @bitCast(actor.health)), @intCast(actor.playback.next_step) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
-            hash.update(&.{ @intFromBool(actor.active), @intFromBool(actor.ready), @intFromBool(actor.pending) });
+            for ([_]u32{
+                if (actor.room) |room| @backingInt(room) else 0,
+                @as(u16, @bitCast(actor.pose.position.x)),
+                @as(u16, @bitCast(actor.pose.position.y)),
+                @backingInt(actor.pose.facing),
+                @backingInt(actor.pose.visual.id),
+                @intFromBool(actor.pose.visual.mirrored),
+                @as(u16, @bitCast(actor.health)),
+                @intCast(actor.playback.next_step),
+            }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
+            hash.update(&.{
+                @intFromBool(actor.active),
+                @intFromBool(actor.ready),
+                @intFromBool(actor.pending),
+            });
             hash.update(@tagName(actor.activity));
             switch (actor.activity) {
                 .walking => |stride| hash.update(&.{stride}),
-                .firing => |state| hash.update(&.{ @backingInt(state.posture), @backingInt(state.phase) }),
-                .flying => |state| hash.update(&.{ @backingInt(state.kind), @backingInt(state.phase) }),
-                .wounded => |state| hash.update(&.{ @backingInt(state.direction), @backingInt(state.phase), state.clearance, @intFromBool(state.dropped) }),
+                .firing => |state| hash.update(&.{
+                    @backingInt(state.posture),
+                    @backingInt(state.phase),
+                }),
+                .flying => |state| hash.update(&.{
+                    @backingInt(state.kind),
+                    @backingInt(state.phase),
+                }),
+                .wounded => |state| hash.update(&.{
+                    @backingInt(state.direction),
+                    @backingInt(state.phase),
+                    state.clearance,
+                    @intFromBool(state.dropped),
+                }),
                 else => {},
             }
             for (std.enums.values(combat.Impact)) |impact| hash.update(&.{@intFromBool(actor.pending_hits.accepts(impact))});

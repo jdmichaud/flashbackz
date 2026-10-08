@@ -60,7 +60,12 @@ pub const Definition = struct {
     outputs: []const Output = &.{},
 };
 pub const Action = enum { go_up, go_down, restart_return_delay, enable, wake };
-pub const Binding = struct { circuit: props.CircuitId, target: usize, action: Action, next_step: bool };
+pub const Binding = struct {
+    circuit: props.CircuitId,
+    target: usize,
+    action: Action,
+    next_step: bool,
+};
 pub const Occupancy = struct { contacts: bool = false, unboarded_items: bool = false };
 const Requests = struct {
     up: bool = false,
@@ -116,8 +121,16 @@ pub const Instance = struct {
     fn floor(self: Instance, definition: Definition) terrain.Span {
         var column = @divFloor(@as(i32, self.pose.position.x) + 8, 16);
         if (self.pose.facing == .right) column -= definition.width - 1;
-        const row = (@divTrunc(@as(i32, self.pose.position.y), 36) & ~@as(i32, 1)) + definition.floor_row_offset;
-        return .{ .origin = .{ .room = self.room, .column = @intCast(column), .row = @intCast(row) }, .length = definition.width, .history_weight = definition.history_weight, .reuse = definition.history_reuse };
+        const row = (@divTrunc(
+            @as(i32, self.pose.position.y),
+            36,
+        ) & ~@as(i32, 1)) + definition.floor_row_offset;
+        return .{
+            .origin = .{ .room = self.room, .column = @intCast(column), .row = @intCast(row) },
+            .length = definition.width,
+            .history_weight = definition.history_weight,
+            .reuse = definition.history_reuse,
+        };
     }
     fn support(self: Instance, definition: Definition, world: *terrain.State) !void {
         _ = try world.replace(self.floor(definition), .solid);
@@ -126,7 +139,12 @@ pub const Instance = struct {
         self.pose.position.y +%= speed;
         self.displacement +%= speed;
     }
-    fn arrive(self: *Instance, definition: Definition, profile: Profile, world: *terrain.State) !void {
+    fn arrive(
+        self: *Instance,
+        definition: Definition,
+        profile: Profile,
+        world: *terrain.State,
+    ) !void {
         const trip = profile.trips[@backingInt(self.destination)];
         self.stop = self.destination;
         if (profile.stops[@backingInt(self.stop)].has_floor) try self.support(definition, world);
@@ -135,7 +153,14 @@ pub const Instance = struct {
         self.sound = trip.arrival_sound;
         self.event = if (self.stop == .top) .arrive_up else .arrive_down;
     }
-    fn finish(self: *Instance, definition: Definition, profile: Profile, world: *terrain.State, occupancy: Occupancy, player_room: geometry.RoomId) !void {
+    fn finish(
+        self: *Instance,
+        definition: Definition,
+        profile: Profile,
+        world: *terrain.State,
+        occupancy: Occupancy,
+        player_room: geometry.RoomId,
+    ) !void {
         switch (self.phase) {
             .disabled => {
                 if (self.requests.enable) {
@@ -152,7 +177,8 @@ pub const Instance = struct {
                 if (policy.pause_return_outside_room and self.room != player_room) return;
                 const target: Stop = if (self.stop == .top) .bottom else .top;
                 var requested = if (target == .top) self.requests.up else self.requests.down;
-                const rider = policy.accepts_player and (if (target == .top) self.requests.rider_up else self.requests.rider_down);
+                const rider = policy.accepts_player and
+                    (if (target == .top) self.requests.rider_up else self.requests.rider_down);
                 requested = requested or rider;
                 var renewed = false;
                 if (policy.return_delay != null) {
@@ -173,9 +199,18 @@ pub const Instance = struct {
                     self.event = if (target == .top) .depart_up else .depart_down;
                 } else {
                     if (requested) self.invite_items = occupancy.unboarded_items;
-                    self.release_passengers = !requested and !renewed and policy.release_passengers and occupancy.contacts;
-                    if (policy.has_floor and (!requested or policy.floor_on_blocked_request)) try self.support(definition, world);
-                    if (policy.sleep_when_empty and (!occupancy.contacts or policy.sleep_with_contacts) and !requested) self.active = false;
+                    self.release_passengers = !requested and
+                        !renewed and
+                        policy.release_passengers and
+                        occupancy.contacts;
+                    if (policy.has_floor and
+                        (!requested or policy.floor_on_blocked_request)) try self.support(
+                        definition,
+                        world,
+                    );
+                    if (policy.sleep_when_empty and
+                        (!occupancy.contacts or policy.sleep_with_contacts) and
+                        !requested) self.active = false;
                 }
             },
             .departing => {
@@ -187,7 +222,11 @@ pub const Instance = struct {
             },
             .travelling => {
                 self.remaining -%= 1;
-                if (self.remaining == 0) try self.arrive(definition, profile, world) else self.move(profile.trips[@backingInt(self.destination)].speed);
+                if (self.remaining == 0) try self.arrive(
+                    definition,
+                    profile,
+                    world,
+                ) else self.move(profile.trips[@backingInt(self.destination)].speed);
             },
             .arriving => {
                 if (profile.trips[@backingInt(self.destination)].transfer) |transfer| {
@@ -204,22 +243,44 @@ pub const World = struct {
     instances: []Instance,
     pulses: []props.CircuitId,
     pulse_count: usize = 0,
-    pub fn init(allocator: std.mem.Allocator, definitions: []const Definition, profiles: []const Profile) !World {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        definitions: []const Definition,
+        profiles: []const Profile,
+    ) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);
         var output_count: usize = 0;
         for (instances, definitions) |*instance, definition| {
-            instance.* = .{ .pose = .{ .position = definition.position, .facing = definition.facing, .visual = undefined }, .room = definition.room, .phase = if (definition.initially_disabled) .disabled else .parked, .stop = definition.initial_stop, .destination = definition.initial_stop, .active = definition.initially_active };
+            instance.* = .{
+                .pose = .{
+                    .position = definition.position,
+                    .facing = definition.facing,
+                    .visual = undefined,
+                },
+                .room = definition.room,
+                .phase = if (definition.initially_disabled) .disabled else .parked,
+                .stop = definition.initial_stop,
+                .destination = definition.initial_stop,
+                .active = definition.initially_active,
+            };
             const clip = instance.clip(profiles[definition.profile]);
             if (clip.steps.len == 0) return error.MissingLiftAnimation;
             const visual = switch (clip.steps[0]) {
                 .frame => |frame| frame.visual,
                 .hold => return error.MissingLiftVisual,
             };
-            instance.pose.visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) };
+            instance.pose.visual = .{
+                .id = visual.id,
+                .mirrored = visual.mirrored != (definition.facing == .left),
+            };
             output_count += definition.outputs.len;
         }
-        return .{ .allocator = allocator, .instances = instances, .pulses = try allocator.alloc(props.CircuitId, output_count) };
+        return .{
+            .allocator = allocator,
+            .instances = instances,
+            .pulses = try allocator.alloc(props.CircuitId, output_count),
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.instances);
@@ -250,18 +311,47 @@ pub const World = struct {
             requests.add(binding.action);
         };
     }
-    pub fn advance(self: *World, definitions: []const Definition, profiles: []const Profile, world: *terrain.State, occupancy: []const Occupancy, player_room: geometry.RoomId) !void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        profiles: []const Profile,
+        world: *terrain.State,
+        occupancy: []const Occupancy,
+        player_room: geometry.RoomId,
+    ) !void {
         for (self.instances, definitions, occupancy) |*instance, definition, contact| {
-            const near = try @import("activation.zig").around(world.map(), player_room, instance.room, instance.pose.position.y);
-            if (definition.wake_nearby and near.wake or definition.wake_on_contact and contact.contacts or instance.requests.wake and definition.accepts_signals) instance.active = true;
+            const near = try @import("activation.zig").around(
+                world.map(),
+                player_room,
+                instance.room,
+                instance.pose.position.y,
+            );
+            if (definition.wake_nearby and
+                near.wake or
+                definition.wake_on_contact and
+                    contact.contacts or
+                instance.requests.wake and
+                    definition.accepts_signals) instance.active = true;
             if (!instance.active) continue;
             const profile = profiles[definition.profile];
             var clip = instance.clip(profile);
-            const requested = instance.requests.up or instance.requests.down or instance.requests.rider_up or instance.requests.rider_down or instance.requests.reset or instance.requests.enable;
-            if (requested and (instance.phase == .parked or instance.phase == .disabled)) instance.playback.completeDisplacement(clip, &instance.pose);
+            const requested = instance.requests.up or
+                instance.requests.down or
+                instance.requests.rider_up or
+                instance.requests.rider_down or
+                instance.requests.reset or
+                instance.requests.enable;
+            if (requested and
+                (instance.phase == .parked or
+                    instance.phase == .disabled)) instance.playback.completeDisplacement(
+                clip,
+                &instance.pose,
+            );
             if (instance.playback.exhausted(clip)) {
                 try instance.finish(definition, profile, world, contact, player_room);
-                if (!instance.active and definition.wake_nearby and near.near) instance.active = true;
+                if (!instance.active and
+                    definition.wake_nearby and
+                    near.near) instance.active = true;
                 _ = try world.map().handoff(&instance.room, &instance.pose.position);
                 instance.playback = .{};
                 clip = instance.clip(profile);
@@ -277,8 +367,26 @@ pub const World = struct {
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
         for (self.instances) |instance| {
-            for ([_]u64{ @backingInt(instance.room), @as(u16, @bitCast(instance.pose.position.x)), @as(u16, @bitCast(instance.pose.position.y)), @backingInt(instance.phase), @backingInt(instance.stop), @backingInt(instance.destination), instance.playback.next_step, @as(u16, @bitCast(instance.remaining)), @intFromBool(instance.active) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
-            for ([_]Requests{ instance.requests, instance.pending }) |requests| hash.update(&.{ @intFromBool(requests.up), @intFromBool(requests.down), @intFromBool(requests.rider_up), @intFromBool(requests.rider_down), @intFromBool(requests.reset), @intFromBool(requests.enable), @intFromBool(requests.wake) });
+            for ([_]u64{
+                @backingInt(instance.room),
+                @as(u16, @bitCast(instance.pose.position.x)),
+                @as(u16, @bitCast(instance.pose.position.y)),
+                @backingInt(instance.phase),
+                @backingInt(instance.stop),
+                @backingInt(instance.destination),
+                instance.playback.next_step,
+                @as(u16, @bitCast(instance.remaining)),
+                @intFromBool(instance.active),
+            }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+            for ([_]Requests{ instance.requests, instance.pending }) |requests| hash.update(&.{
+                @intFromBool(requests.up),
+                @intFromBool(requests.down),
+                @intFromBool(requests.rider_up),
+                @intFromBool(requests.rider_down),
+                @intFromBool(requests.reset),
+                @intFromBool(requests.enable),
+                @intFromBool(requests.wake),
+            });
         }
     }
 };

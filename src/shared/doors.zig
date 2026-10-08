@@ -11,7 +11,11 @@ pub const CircuitId = @import("world_props.zig").CircuitId;
 pub const Phase = enum { closed, opening, open, closing };
 pub const Pass = enum { before_fire, after_fire };
 pub const Reverse = struct { segment: usize, clearance: ?terrain.Material = null };
-pub const Segment = struct { clip: motion.Clip, clearance_after: ?terrain.Material = null, reverse: ?Reverse = null };
+pub const Segment = struct {
+    clip: motion.Clip,
+    clearance_after: ?terrain.Material = null,
+    reverse: ?Reverse = null,
+};
 pub const Profile = struct {
     closed: motion.Clip,
     open: motion.Clip,
@@ -79,13 +83,24 @@ pub const Instance = struct {
         };
     }
     pub fn vulnerability(self: Instance, profile: Profile) combat.Vulnerability {
-        return if (profile.shoot_to_open and self.phase == .closed) .{ .rear_high = true, .rear_low = true, .front_high = true, .front_low = true } else .{};
+        return if (profile.shoot_to_open and self.phase == .closed) .{
+            .rear_high = true,
+            .rear_low = true,
+            .front_high = true,
+            .front_low = true,
+        } else .{};
     }
     fn accepts(self: Instance, profile: Profile) bool {
         if (self.requests.snap and profile.snap_closed[@backingInt(self.phase)]) return true;
         return switch (self.phase) {
-            .closed => self.requests.open and !profile.automatic_open or self.requests.close and profile.automatic_open,
-            .open => self.requests.open and profile.keep_open_request or self.requests.close and profile.closing.len != 0,
+            .closed => self.requests.open and
+                !profile.automatic_open or
+                self.requests.close and
+                    profile.automatic_open,
+            .open => self.requests.open and
+                profile.keep_open_request or
+                self.requests.close and
+                    profile.closing.len != 0,
             .opening => self.requests.close and profile.opening[self.segment].reverse != null,
             .closing => self.requests.open and profile.closing[self.segment].reverse != null,
         };
@@ -101,21 +116,49 @@ pub const Instance = struct {
         try write(definition, world, .solid);
         self.set(.closed, 0);
     }
-    fn occupied(definition: Definition, profile: Profile, map: geometry.Map, participants: []const contacts.Participant) !bool {
+    fn occupied(
+        definition: Definition,
+        profile: Profile,
+        map: geometry.Map,
+        participants: []const contacts.Participant,
+    ) !bool {
         const layout: contacts.Layout = .{};
         for (participants) |participant| {
             if (!participant.active) continue;
-            if ((participant.kind == .player and profile.hold_player or participant.kind == .enemy and profile.hold_enemies) and try layout.overlaps(map, definition.footprint, participant.footprint)) return true;
+            if ((participant.kind == .player and
+                profile.hold_player or
+                participant.kind == .enemy and
+                    profile.hold_enemies) and
+                try layout.overlaps(
+                    map,
+                    definition.footprint,
+                    participant.footprint,
+                )) return true;
         }
         return false;
     }
-    fn finish(self: *Instance, definition: Definition, profile: Profile, world: *terrain.State, participants: []const contacts.Participant) !bool {
+    fn finish(
+        self: *Instance,
+        definition: Definition,
+        profile: Profile,
+        world: *terrain.State,
+        participants: []const contacts.Participant,
+    ) !bool {
         const snap = self.requests.snap and profile.snap_closed[@backingInt(self.phase)];
         switch (self.phase) {
             .closed => {
-                if (profile.automatic_open and self.requests.close or snap) try self.close(definition, world) else if (self.requests.open and !profile.automatic_open) self.set(.opening, 0) else {
+                if (profile.automatic_open and self.requests.close or snap) try self.close(
+                    definition,
+                    world,
+                ) else if (self.requests.open and !profile.automatic_open) self.set(
+                    .opening,
+                    0,
+                ) else {
                     try write(definition, world, .solid);
-                    if (profile.automatic_open) self.set(.opening, 0) else return !profile.sleep_closed;
+                    if (profile.automatic_open) self.set(
+                        .opening,
+                        0,
+                    ) else return !profile.sleep_closed;
                 }
             },
             .opening => {
@@ -136,9 +179,17 @@ pub const Instance = struct {
                 if (profile.automatic_open and self.requests.close) {
                     try write(definition, world, profile.start_closing_clearance);
                     self.set(.closing, 0);
-                } else if (snap) try self.close(definition, world) else if (profile.keep_open_request and self.requests.open) {
+                } else if (snap) try self.close(
+                    definition,
+                    world,
+                ) else if (profile.keep_open_request and self.requests.open) {
                     if (definition.hold_steps) |steps| self.timer = steps;
-                } else if (definition.hold_steps != null and try occupied(definition, profile, world.map(), participants)) self.timer = definition.hold_steps.? else {
+                } else if (definition.hold_steps != null and try occupied(
+                    definition,
+                    profile,
+                    world.map(),
+                    participants,
+                )) self.timer = definition.hold_steps.? else {
                     var closing = self.requests.close and profile.closing.len != 0;
                     if (!closing and definition.hold_steps != null) {
                         self.timer -%= 1;
@@ -155,13 +206,19 @@ pub const Instance = struct {
             },
             .closing => {
                 const segment = profile.closing[self.segment];
-                if (snap) try self.close(definition, world) else if (self.requests.open and segment.reverse != null) {
+                if (snap) try self.close(
+                    definition,
+                    world,
+                ) else if (self.requests.open and segment.reverse != null) {
                     const reverse = segment.reverse.?;
                     try write(definition, world, reverse.clearance);
                     self.set(.opening, reverse.segment);
                 } else {
                     try write(definition, world, segment.clearance_after);
-                    if (self.segment + 1 < profile.closing.len) self.segment += 1 else self.set(.closed, 0);
+                    if (self.segment + 1 < profile.closing.len) self.segment += 1 else self.set(
+                        .closed,
+                        0,
+                    );
                 }
             },
         }
@@ -172,7 +229,11 @@ pub const World = struct {
     allocator: std.mem.Allocator,
     instances: []Instance,
     late_done: bool = false,
-    pub fn init(allocator: std.mem.Allocator, definitions: []const Definition, profiles: []const Profile) !World {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        definitions: []const Definition,
+        profiles: []const Profile,
+    ) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);
         for (instances, definitions) |*instance, definition| {
@@ -187,7 +248,19 @@ pub const World = struct {
                 .frame => |f| f.visual,
                 .hold => return error.MissingDoorVisual,
             };
-            instance.* = .{ .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } }, .phase = definition.initial_phase, .segment = definition.initial_segment, .active = definition.initially_active };
+            instance.* = .{
+                .pose = .{
+                    .position = definition.footprint.position,
+                    .facing = definition.facing,
+                    .visual = .{
+                        .id = visual.id,
+                        .mirrored = visual.mirrored != (definition.facing == .left),
+                    },
+                },
+                .phase = definition.initial_phase,
+                .segment = definition.initial_segment,
+                .active = definition.initially_active,
+            };
         }
         return .{ .allocator = allocator, .instances = instances };
     }
@@ -209,19 +282,38 @@ pub const World = struct {
         };
     }
     pub fn hit(self: *World, definitions: []const Definition, index: usize) void {
-        if (definitions[index].pass == .after_fire and !self.late_done) self.instances[index].requests.add(.open) else self.instances[index].pending.add(.open);
+        if (definitions[index].pass == .after_fire and
+            !self.late_done) self.instances[index].requests.add(.open) else self.instances[index].pending.add(.open);
     }
-    pub fn advance(self: *World, definitions: []const Definition, profiles: []const Profile, world: *terrain.State, player_room: geometry.RoomId, participants: []const contacts.Participant, pass: Pass) !void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        profiles: []const Profile,
+        world: *terrain.State,
+        player_room: geometry.RoomId,
+        participants: []const contacts.Participant,
+        pass: Pass,
+    ) !void {
         if (pass == .after_fire) self.late_done = true;
         for (self.instances, definitions) |*instance, definition| {
             if (definition.pass != pass) continue;
-            const near = try activation.around(world.map(), player_room, definition.footprint.room, instance.pose.position.y);
+            const near = try activation.around(
+                world.map(),
+                player_room,
+                definition.footprint.room,
+                instance.pose.position.y,
+            );
             if (definition.wake_nearby and near.wake) instance.active = true;
-            if (instance.requests.wake and (instance.active or definition.accepts_signals)) instance.active = true else instance.requests = .{};
+            if (instance.requests.wake and
+                (instance.active or
+                    definition.accepts_signals)) instance.active = true else instance.requests = .{};
             if (!instance.active) continue;
             const profile = profiles[definition.profile];
             var clip = instance.clip(profile);
-            if (instance.accepts(profile)) instance.playback.completeDisplacement(clip, &instance.pose);
+            if (instance.accepts(profile)) instance.playback.completeDisplacement(
+                clip,
+                &instance.pose,
+            );
             if (instance.playback.exhausted(clip)) {
                 const audible = try instance.finish(definition, profile, world, participants);
                 if (!audible and (!definition.wake_nearby or !near.near)) instance.active = false;
@@ -235,8 +327,17 @@ pub const World = struct {
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
         for (self.instances) |instance| {
             hash.update(&.{ @backingInt(instance.phase), @intFromBool(instance.active) });
-            for ([_]u64{ instance.segment, instance.playback.next_step, @as(u16, @bitCast(instance.timer)) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
-            for ([_]Requests{ instance.requests, instance.pending }) |r| hash.update(&.{ @intFromBool(r.wake), @intFromBool(r.open), @intFromBool(r.close), @intFromBool(r.snap) });
+            for ([_]u64{
+                instance.segment,
+                instance.playback.next_step,
+                @as(u16, @bitCast(instance.timer)),
+            }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+            for ([_]Requests{ instance.requests, instance.pending }) |r| hash.update(&.{
+                @intFromBool(r.wake),
+                @intFromBool(r.open),
+                @intFromBool(r.close),
+                @intFromBool(r.snap),
+            });
         }
     }
 };

@@ -5,7 +5,15 @@ const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
 const Circuit = @import("world_props.zig").CircuitId;
 pub const Pose = enum { resting, fidgeting, leaning, recovering };
-pub const Stage = enum { hidden, available, conversation_finished, speaking, speech_recovery, departing, removed };
+pub const Stage = enum {
+    hidden,
+    available,
+    conversation_finished,
+    speaking,
+    speech_recovery,
+    departing,
+    removed,
+};
 pub const Action = enum { reveal, deliver };
 pub const Role = enum { giver, recipient, conversation, introducer, seller };
 pub const Speech = struct { introduction: motion.Clip, reply: motion.Clip, recovery: motion.Clip };
@@ -43,7 +51,11 @@ pub const Definition = struct {
     wake_nearby: bool,
     accepts_signals: bool,
 };
-pub const Payment = struct { item: @import("equipment.zig").ItemHandle, contact: usize, next_step: bool };
+pub const Payment = struct {
+    item: @import("equipment.zig").ItemHandle,
+    contact: usize,
+    next_step: bool,
+};
 pub const Binding = struct { circuit: Circuit, target: usize, action: Action, next_step: bool };
 pub const Instance = struct {
     pose: motion.Pose,
@@ -71,7 +83,8 @@ pub const Instance = struct {
             return if (self.spoken_once) speech.reply else speech.introduction;
         }
         if (self.stage == .speech_recovery) return definition.speech.?.recovery;
-        return if (self.stage == .hidden) definition.hidden_clip else if (self.stage == .conversation_finished or self.stage == .departing) definition.after[@backingInt(self.idle_pose)] else definition.idle[@backingInt(self.idle_pose)];
+        return if (self.stage == .hidden) definition.hidden_clip else if (self.stage == .conversation_finished or
+            self.stage == .departing) definition.after[@backingInt(self.idle_pose)] else definition.idle[@backingInt(self.idle_pose)];
     }
 };
 pub const World = struct {
@@ -90,16 +103,36 @@ pub const World = struct {
                 .frame => |f| f.visual,
                 .hold => return error.MissingQuestContactVisual,
             };
-            instance.* = .{ .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } }, .stage = if (definition.hidden) .hidden else .available, .active = definition.initially_active };
+            instance.* = .{
+                .pose = .{
+                    .position = definition.footprint.position,
+                    .facing = definition.facing,
+                    .visual = .{
+                        .id = visual.id,
+                        .mirrored = visual.mirrored != (definition.facing == .left),
+                    },
+                },
+                .stage = if (definition.hidden) .hidden else .available,
+                .active = definition.initially_active,
+            };
             capacity += definition.outputs.len + definition.departure_outputs.len + definition.reveal_outputs.len;
         }
-        return .{ .allocator = allocator, .instances = instances, .pulses = try allocator.alloc(Circuit, capacity) };
+        return .{
+            .allocator = allocator,
+            .instances = instances,
+            .pulses = try allocator.alloc(Circuit, capacity),
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.instances);
         self.allocator.free(self.pulses);
     }
-    pub fn prepare(self: *World, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint) !void {
+    pub fn prepare(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        player: contacts.Footprint,
+    ) !void {
         self.pulse_count = 0;
         self.candidate = null;
         self.notice = null;
@@ -113,7 +146,12 @@ pub const World = struct {
             instance.payment = instance.pending_payment;
             instance.pending_payment = false;
             if (instance.body(definition)) |body| {
-                const near = try @import("activation.zig").around(map, player.room, body.room, body.position.y);
+                const near = try @import("activation.zig").around(
+                    map,
+                    player.room,
+                    body.room,
+                    body.position.y,
+                );
                 if (definition.wake_nearby and near.wake) instance.active = true;
                 if (try layout.overlaps(map, player, body)) self.candidate = index;
             }
@@ -132,7 +170,13 @@ pub const World = struct {
             }
         };
     }
-    pub fn offerPayment(self: *World, definitions: []const Definition, payments: []const Payment, item: @import("equipment.zig").ItemHandle, amount: i16) bool {
+    pub fn offerPayment(
+        self: *World,
+        definitions: []const Definition,
+        payments: []const Payment,
+        item: @import("equipment.zig").ItemHandle,
+        amount: i16,
+    ) bool {
         const index = self.candidate orelse return false;
         const sale = definitions[index].sale orelse return false;
         if (self.instances[index].stage != .available or amount < sale.price) return false;
@@ -172,27 +216,96 @@ pub const World = struct {
             self.route(bindings, &.{output});
         }
     }
-    pub fn advance(self: *World, definitions: []const Definition, bindings: []const Binding, map: geometry.Map, room: geometry.RoomId, talk: bool, items: *@import("equipment.zig").Loadout, random: anytype) !void {
-        return self.advanceRange(definitions, bindings, map, room, talk, items, random, 0, self.instances.len);
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        bindings: []const Binding,
+        map: geometry.Map,
+        room: geometry.RoomId,
+        talk: bool,
+        items: *@import("equipment.zig").Loadout,
+        random: anytype,
+    ) !void {
+        return self.advanceRange(
+            definitions,
+            bindings,
+            map,
+            room,
+            talk,
+            items,
+            random,
+            0,
+            self.instances.len,
+        );
     }
-    pub fn advanceOne(self: *World, index: usize, definitions: []const Definition, bindings: []const Binding, map: geometry.Map, room: geometry.RoomId, talk: bool, items: *@import("equipment.zig").Loadout, random: anytype) !void {
-        return self.advanceRange(definitions, bindings, map, room, talk, items, random, index, index + 1);
+    pub fn advanceOne(
+        self: *World,
+        index: usize,
+        definitions: []const Definition,
+        bindings: []const Binding,
+        map: geometry.Map,
+        room: geometry.RoomId,
+        talk: bool,
+        items: *@import("equipment.zig").Loadout,
+        random: anytype,
+    ) !void {
+        return self.advanceRange(
+            definitions,
+            bindings,
+            map,
+            room,
+            talk,
+            items,
+            random,
+            index,
+            index + 1,
+        );
     }
-    fn advanceRange(self: *World, definitions: []const Definition, bindings: []const Binding, map: geometry.Map, room: geometry.RoomId, talk: bool, items: *@import("equipment.zig").Loadout, random: anytype, range_start: usize, range_end: usize) !void {
+    fn advanceRange(
+        self: *World,
+        definitions: []const Definition,
+        bindings: []const Binding,
+        map: geometry.Map,
+        room: geometry.RoomId,
+        talk: bool,
+        items: *@import("equipment.zig").Loadout,
+        random: anytype,
+        range_start: usize,
+        range_end: usize,
+    ) !void {
         for (range_start..range_end) |index| {
             const instance = &self.instances[index];
             const definition = definitions[index];
             if (instance.stage == .removed) continue;
-            const speaking = talk and self.candidate == index and (instance.stage == .available or (instance.stage == .conversation_finished and definition.reply_notice != null));
-            const acknowledging = instance.delivery and instance.stage == .conversation_finished and definition.dismiss_when_acknowledged;
-            const receiving = instance.stage == .available and ((instance.delivery and definition.role == .recipient) or (instance.payment and definition.role == .seller));
+            const speaking = talk and
+                self.candidate == index and
+                (instance.stage == .available or
+                    (instance.stage == .conversation_finished and definition.reply_notice != null));
+            const acknowledging = instance.delivery and
+                instance.stage == .conversation_finished and
+                definition.dismiss_when_acknowledged;
+            const receiving = instance.stage == .available and
+                ((instance.delivery and definition.role == .recipient) or
+                    (instance.payment and definition.role == .seller));
             const revealing = instance.reveal and instance.stage == .hidden;
-            if ((speaking or receiving or revealing or acknowledging) and definition.accepts_signals) instance.active = true;
+            if ((speaking or receiving or revealing or acknowledging) and
+                definition.accepts_signals) instance.active = true;
             if (!instance.active) continue;
             var clip = instance.clip(definition);
-            if (speaking or receiving or revealing or acknowledging) instance.playback.completeDisplacement(clip, &instance.pose);
+            if (speaking or
+                receiving or
+                revealing or
+                acknowledging) instance.playback.completeDisplacement(
+                clip,
+                &instance.pose,
+            );
             if (instance.playback.exhausted(clip)) {
-                const near = try @import("activation.zig").around(map, room, definition.footprint.room, instance.pose.position.y);
+                const near = try @import("activation.zig").around(
+                    map,
+                    room,
+                    definition.footprint.room,
+                    instance.pose.position.y,
+                );
                 if (revealing) {
                     instance.stage = .available;
                     self.emit(bindings, definition.reveal_outputs);
@@ -203,13 +316,21 @@ pub const World = struct {
                     instance.stage = .removed;
                     instance.active = false;
                 } else if (instance.stage == .speaking) {
-                    self.notice = .{ .message = if (instance.spoken_once) definition.reply_notice.? else definition.notice, .icon = definition.hint, .priority = definition.priority };
+                    self.notice = .{
+                        .message = if (instance.spoken_once) definition.reply_notice.? else definition.notice,
+                        .icon = definition.hint,
+                        .priority = definition.priority,
+                    };
                     instance.spoken_once = true;
                     instance.stage = .speech_recovery;
                 } else if (instance.stage == .speech_recovery) {
                     instance.stage = .conversation_finished;
                     instance.idle_pose = .resting;
-                } else if (instance.stage == .conversation_finished and definition.disappear_after_leaving and instance.idle_pose == .resting and !near.same) {
+                } else if (instance.stage == .conversation_finished and
+                    definition.disappear_after_leaving and
+                    instance.idle_pose == .resting and
+                    !near.same)
+                {
                     instance.stage = .removed;
                     instance.active = false;
                 } else if (instance.stage == .departing) {
@@ -217,7 +338,10 @@ pub const World = struct {
                     instance.stage = .removed;
                     instance.active = false;
                 } else if (receiving) {
-                    if (definition.sale) |sale| try items.debit(sale.purse, sale.debit) else instance.stage = .departing;
+                    if (definition.sale) |sale| try items.debit(
+                        sale.purse,
+                        sale.debit,
+                    ) else instance.stage = .departing;
                     self.emit(bindings, definition.outputs);
                 } else if (speaking) {
                     const adjustment = definition.talking_forward[@backingInt(instance.idle_pose)];
@@ -226,15 +350,32 @@ pub const World = struct {
                     if (definition.speech != null) {
                         instance.stage = .speaking;
                     } else {
-                        self.notice = .{ .message = if (first) definition.notice else definition.reply_notice orelse definition.notice, .icon = definition.hint, .priority = definition.priority };
+                        self.notice = .{
+                            .message = if (first) definition.notice else definition.reply_notice orelse definition.notice,
+                            .icon = definition.hint,
+                            .priority = definition.priority,
+                        };
                         instance.spoken_once = true;
-                        if (first and (definition.role == .giver or definition.role == .introducer)) instance.stage = if (definition.role == .introducer) .departing else .conversation_finished;
+                        if (first and
+                            (definition.role == .giver or
+                                definition.role == .introducer)) instance.stage = if (definition.role == .introducer) .departing else .conversation_finished;
                     }
-                    if (first and (definition.role == .giver or definition.role == .introducer)) self.emit(bindings, definition.outputs);
-                } else if (!near.same and !(definition.finish_gestures_offscreen and instance.idle_pose != .resting)) {
+                    if (first and
+                        (definition.role == .giver or definition.role == .introducer)) self.emit(
+                        bindings,
+                        definition.outputs,
+                    );
+                } else if (!near.same and
+                    !(definition.finish_gestures_offscreen and instance.idle_pose != .resting))
+                {
                     const before = instance.idle_pose;
-                    if (definition.offscreen_choice_first[@backingInt(before)]) choosePose(instance, definition, random);
-                    if (instance.idle_pose == before and !(definition.wake_nearby and near.near)) instance.active = false;
+                    if (definition.offscreen_choice_first[@backingInt(before)]) choosePose(
+                        instance,
+                        definition,
+                        random,
+                    );
+                    if (instance.idle_pose == before and
+                        !(definition.wake_nearby and near.near)) instance.active = false;
                 } else choosePose(instance, definition, random);
                 instance.playback = .{};
                 clip = instance.clip(definition);
@@ -249,6 +390,20 @@ pub const World = struct {
         }
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
-        for (self.instances) |instance| for ([_]u64{ @backingInt(instance.stage), @intFromBool(instance.spoken_once), @backingInt(instance.idle_pose), instance.playback.next_step, @intFromBool(instance.active), @intFromBool(instance.reveal), @intFromBool(instance.delivery), @intFromBool(instance.pending_reveal), @intFromBool(instance.pending_delivery), @intFromBool(instance.payment), @intFromBool(instance.pending_payment), @as(u16, @bitCast(instance.pose.position.x)), @as(u16, @bitCast(instance.pose.position.y)) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        for (self.instances) |instance| for ([_]u64{
+            @backingInt(instance.stage),
+            @intFromBool(instance.spoken_once),
+            @backingInt(instance.idle_pose),
+            instance.playback.next_step,
+            @intFromBool(instance.active),
+            @intFromBool(instance.reveal),
+            @intFromBool(instance.delivery),
+            @intFromBool(instance.pending_reveal),
+            @intFromBool(instance.pending_delivery),
+            @intFromBool(instance.payment),
+            @intFromBool(instance.pending_payment),
+            @as(u16, @bitCast(instance.pose.position.x)),
+            @as(u16, @bitCast(instance.pose.position.y)),
+        }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
     }
 };

@@ -4,7 +4,15 @@ const std = @import("std");
 const motion = @import("../motion.zig");
 const controls = @import("controls.zig");
 const shift = @import("conrad_roll.zig").shiftForward;
-pub const Phase = enum { takeoff, ascending, crest, descending, landing, standing_recovery, running_recovery };
+pub const Phase = enum {
+    takeoff,
+    ascending,
+    crest,
+    descending,
+    landing,
+    standing_recovery,
+    running_recovery,
+};
 pub const Clips = struct {
     takeoff: motion.Clip,
     ascending: motion.Clip,
@@ -15,7 +23,20 @@ pub const Clips = struct {
     running_recovery: motion.Clip,
     alignment: i16 = 16,
 };
-pub const Boundary = enum { continued, standing, resume_running, reverse_run, brake, wall_stop, settle_running, catch_ledge, wall_collision, gliding_drop, vertical_drop, unbalanced_drop };
+pub const Boundary = enum {
+    continued,
+    standing,
+    resume_running,
+    reverse_run,
+    brake,
+    wall_stop,
+    settle_running,
+    catch_ledge,
+    wall_collision,
+    gliding_drop,
+    vertical_drop,
+    unbalanced_drop,
+};
 pub const State = struct {
     phase: Phase = .takeoff,
     pub fn clip(self: State, clips: Clips) motion.Clip {
@@ -30,9 +51,19 @@ pub const State = struct {
         };
     }
     fn wall(environment: anytype, pose: motion.Pose, ahead: i16) !bool {
-        return try environment.at(pose, .torso, ahead) and !try environment.at(pose, .torso, ahead - 1);
+        return try environment.at(pose, .torso, ahead) and !try environment.at(
+            pose,
+            .torso,
+            ahead - 1,
+        );
     }
-    pub fn finishPhase(self: *State, clips: Clips, intent: controls.Intent, pose: *motion.Pose, environment: anytype) !Boundary {
+    pub fn finishPhase(
+        self: *State,
+        clips: Clips,
+        intent: controls.Intent,
+        pose: *motion.Pose,
+        environment: anytype,
+    ) !Boundary {
         switch (self.phase) {
             .takeoff => {
                 shift(pose, clips.alignment);
@@ -65,7 +96,11 @@ pub const State = struct {
                 self.phase = .descending;
             },
             .descending => {
-                const collided = try wall(environment, pose.*, 1) or try wall(environment, pose.*, 2);
+                const collided = try wall(
+                    environment,
+                    pose.*,
+                    1,
+                ) or try wall(environment, pose.*, 2);
                 shift(pose, clips.alignment);
                 if (collided) return .wall_collision;
                 self.phase = .landing;
@@ -92,7 +127,9 @@ pub const State = struct {
                     return .settle_running;
                 } else {
                     shift(pose, clips.alignment);
-                    self.phase = if (intent.action and !intent.directions_conflict and intent.vertical != .down) .running_recovery else .standing_recovery;
+                    self.phase = if (intent.action and
+                        !intent.directions_conflict and
+                        intent.vertical != .down) .running_recovery else .standing_recovery;
                 }
             },
             .standing_recovery => {
@@ -101,9 +138,14 @@ pub const State = struct {
             },
             .running_recovery => {
                 if (try wall(environment, pose.*, 1)) return .wall_stop;
-                if (try wall(environment, pose.*, 2) or try wall(environment, pose.*, 3)) return .brake;
+                if (try wall(
+                    environment,
+                    pose.*,
+                    2,
+                ) or try wall(environment, pose.*, 3)) return .brake;
                 if (intent.action and !intent.directions_conflict and intent.vertical != .down) {
-                    if (intent.direction != null and intent.direction != pose.facing) return .reverse_run;
+                    if (intent.direction != null and
+                        intent.direction != pose.facing) return .reverse_run;
                     return .resume_running;
                 }
                 return .brake;
@@ -116,7 +158,15 @@ pub const State = struct {
 test "running jump commits its arc after release and aligns the landing once" {
     const steps = [_]motion.Step{.hold};
     const clip: motion.Clip = .{ .steps = &steps };
-    const clips: Clips = .{ .takeoff = clip, .ascending = clip, .crest = clip, .descending = clip, .landing = clip, .standing_recovery = clip, .running_recovery = clip };
+    const clips: Clips = .{
+        .takeoff = clip,
+        .ascending = clip,
+        .crest = clip,
+        .descending = clip,
+        .landing = clip,
+        .standing_recovery = clip,
+        .running_recovery = clip,
+    };
     const Ground = struct {
         pub fn at(_: @This(), _: motion.Pose, height: anytype, _: i16) !bool {
             return height == .support;
@@ -126,8 +176,15 @@ test "running jump commits its arc after release and aligns the landing once" {
         }
     };
     var state: State = .{};
-    var pose: motion.Pose = .{ .position = .{ .x = 40, .y = 54 }, .facing = .right, .visual = .{ .id = @fromBackingInt(1) } };
-    for (0..5) |_| try std.testing.expectEqual(.continued, try state.finishPhase(clips, .{}, &pose, Ground{}));
+    var pose: motion.Pose = .{
+        .position = .{ .x = 40, .y = 54 },
+        .facing = .right,
+        .visual = .{ .id = @fromBackingInt(1) },
+    };
+    for (0..5) |_| try std.testing.expectEqual(
+        .continued,
+        try state.finishPhase(clips, .{}, &pose, Ground{}),
+    );
     try std.testing.expectEqual(Phase.standing_recovery, state.phase);
     try std.testing.expectEqual(@as(i16, 72), pose.position.x);
     try std.testing.expectEqual(.standing, try state.finishPhase(clips, .{}, &pose, Ground{}));

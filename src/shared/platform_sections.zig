@@ -4,9 +4,32 @@ const std = @import("std");
 const geometry = @import("geometry.zig");
 const motion = @import("motion.zig");
 const terrain = @import("terrain.zig");
-pub const Definition = struct { footprint: @import("contacts.zig").Footprint, facing: motion.Facing, span: terrain.Span, idle: motion.Clip, initially_present: bool, initially_active: bool, wake_nearby: bool, accepts_signals: bool, palette_bank: u4, behind_player: bool };
-pub const Binding = struct { circuit: @import("world_props.zig").CircuitId, target: usize, next_step: bool };
-pub const Instance = struct { pose: motion.Pose, playback: motion.Playback = .{}, present: bool, active: bool, ready: bool = false, pending: bool = false, sound: ?motion.SoundId = null };
+pub const Definition = struct {
+    footprint: @import("contacts.zig").Footprint,
+    facing: motion.Facing,
+    span: terrain.Span,
+    idle: motion.Clip,
+    initially_present: bool,
+    initially_active: bool,
+    wake_nearby: bool,
+    accepts_signals: bool,
+    palette_bank: u4,
+    behind_player: bool,
+};
+pub const Binding = struct {
+    circuit: @import("world_props.zig").CircuitId,
+    target: usize,
+    next_step: bool,
+};
+pub const Instance = struct {
+    pose: motion.Pose,
+    playback: motion.Playback = .{},
+    present: bool,
+    active: bool,
+    ready: bool = false,
+    pending: bool = false,
+    sound: ?motion.SoundId = null,
+};
 pub const World = struct {
     allocator: std.mem.Allocator,
     instances: []Instance,
@@ -19,7 +42,18 @@ pub const World = struct {
                 .frame => |frame| frame.visual,
                 .hold => return error.MissingPlatformSectionVisual,
             };
-            instance.* = .{ .present = definition.initially_present, .active = definition.initially_active, .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } } };
+            instance.* = .{
+                .present = definition.initially_present,
+                .active = definition.initially_active,
+                .pose = .{
+                    .position = definition.footprint.position,
+                    .facing = definition.facing,
+                    .visual = .{
+                        .id = visual.id,
+                        .mirrored = visual.mirrored != (definition.facing == .left),
+                    },
+                },
+            };
         }
         return .{ .allocator = allocator, .instances = instances };
     }
@@ -33,15 +67,29 @@ pub const World = struct {
             instance.sound = null;
         }
     }
-    pub fn route(self: *World, bindings: []const Binding, pulses: []const @import("world_props.zig").CircuitId) void {
+    pub fn route(
+        self: *World,
+        bindings: []const Binding,
+        pulses: []const @import("world_props.zig").CircuitId,
+    ) void {
         for (pulses) |pulse| for (bindings) |binding| {
             if (binding.circuit != pulse) continue;
             if (binding.next_step) self.instances[binding.target].pending = true else self.instances[binding.target].ready = true;
         };
     }
-    pub fn advance(self: *World, definitions: []const Definition, world: *terrain.State, room: geometry.RoomId) !void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        world: *terrain.State,
+        room: geometry.RoomId,
+    ) !void {
         for (self.instances, definitions) |*instance, definition| {
-            const near = try @import("activation.zig").around(world.map(), room, definition.footprint.room, definition.footprint.position.y);
+            const near = try @import("activation.zig").around(
+                world.map(),
+                room,
+                definition.footprint.room,
+                definition.footprint.position.y,
+            );
             if (instance.present and definition.wake_nearby and near.wake) instance.active = true;
             var appeared = false;
             if (instance.ready and (instance.active or definition.accepts_signals)) {
@@ -64,7 +112,12 @@ pub const World = struct {
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
         for (self.instances) |instance| {
-            hash.update(&.{ @intFromBool(instance.present), @intFromBool(instance.active), @intFromBool(instance.ready), @intFromBool(instance.pending) });
+            hash.update(&.{
+                @intFromBool(instance.present),
+                @intFromBool(instance.active),
+                @intFromBool(instance.ready),
+                @intFromBool(instance.pending),
+            });
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, instance.playback.next_step)));
         }
     }

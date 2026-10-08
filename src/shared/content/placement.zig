@@ -36,7 +36,10 @@ pub const Table = struct {
     pub fn init(bytes: []const u8) !Table {
         if (bytes.len < 2) return error.InvalidPlacementTable;
         const count = word(bytes, 0);
-        if (count > 256 or bytes.len != 2 + @as(usize, count) * 32) return error.InvalidPlacementTable;
+        if (count > 256 or bytes.len != 2 + @as(
+            usize,
+            count,
+        ) * 32) return error.InvalidPlacementTable;
         return .{ .bytes = bytes[2..], .count = count };
     }
 
@@ -48,7 +51,12 @@ pub const Table = struct {
             .position = .{ .x = @bitCast(word(bytes, 2)), .y = @bitCast(word(bytes, 4)) },
             .rule_group = word(bytes, 6),
             .life = @bitCast(word(bytes, 8)),
-            .parameters = .{ @bitCast(word(bytes, 10)), @bitCast(word(bytes, 12)), @bitCast(word(bytes, 14)), @bitCast(word(bytes, 16)) },
+            .parameters = .{
+                @bitCast(word(bytes, 10)),
+                @bitCast(word(bytes, 12)),
+                @bitCast(word(bytes, 14)),
+                @bitCast(word(bytes, 16)),
+            },
             .kind = bytes[18],
             .room = bytes[19],
             .initially_active = bytes[20],

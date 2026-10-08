@@ -5,7 +5,14 @@ pub const Camera = struct {
     active: bool = false,
     origin: motion.Position = .{ .x = 0, .y = 0 },
     fn target(pose: motion.Pose) motion.Position {
-        return .{ .x = std.math.clamp(pose.position.x + (if (pose.facing == .right) @as(i16, -12) else -106), 0, 128), .y = std.math.clamp(pose.position.y - 64, 0, 144) };
+        return .{
+            .x = std.math.clamp(
+                pose.position.x + (if (pose.facing == .right) @as(i16, -12) else -106),
+                0,
+                128,
+            ),
+            .y = std.math.clamp(pose.position.y - 64, 0, 144),
+        };
     }
     pub fn setActive(self: *Camera, active: bool, pose: motion.Pose) void {
         if (active and !self.active) self.origin = target(pose);

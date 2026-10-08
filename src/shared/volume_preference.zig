@@ -8,7 +8,11 @@ pub fn load(storage: ?platform.Storage) u8 {
     const source = storage orelse return default;
     var record = source.load(key) catch return default;
     defer record.deinit();
-    const value = std.fmt.parseInt(u8, std.mem.trim(u8, record.bytes, " \t\r\n"), 10) catch return default;
+    const value = std.fmt.parseInt(
+        u8,
+        std.mem.trim(u8, record.bytes, " \t\r\n"),
+        10,
+    ) catch return default;
     return if (value <= 100) value else default;
 }
 

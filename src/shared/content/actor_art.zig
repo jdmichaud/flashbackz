@@ -31,13 +31,24 @@ pub const Catalog = struct {
             if (self.loaded[i] == null) {
                 const name = std.mem.sliceTo(&library.name, 0);
                 var path: [64]u8 = undefined;
-                var sprites = try self.source.readAll(try std.fmt.bufPrint(&path, "DATA/{s}.SPR", .{name}), 1024 * 1024);
+                var sprites = try self.source.readAll(
+                    try std.fmt.bufPrint(&path, "DATA/{s}.SPR", .{name}),
+                    1024 * 1024,
+                );
                 errdefer sprites.deinit();
-                const offsets = try self.source.readAll(try std.fmt.bufPrint(&path, "DATA/{s}.OFF", .{name}), 32768);
+                const offsets = try self.source.readAll(
+                    try std.fmt.bufPrint(&path, "DATA/{s}.OFF", .{name}),
+                    32768,
+                );
                 self.loaded[i] = .{ .sprites = sprites, .offsets = offsets };
             }
             const archive = self.loaded[i].?;
-            return sprite.fromArchive(allocator, archive.sprites.bytes, archive.offsets.bytes, index) catch |err| switch (err) {
+            return sprite.fromArchive(
+                allocator,
+                archive.sprites.bytes,
+                archive.offsets.bytes,
+                index,
+            ) catch |err| switch (err) {
                 error.MissingSprite => continue,
                 else => return err,
             };

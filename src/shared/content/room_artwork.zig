@@ -27,7 +27,12 @@ pub const Artwork = struct {
 
 /// Decode one room using its four background palette banks. Actor and interface palettes
 /// are separate content. Absent rooms, invalid banks and unbound pixel indices are errors.
-pub fn decode(allocator: std.mem.Allocator, map: []const u8, color_file: []const u8, room: u8) !Artwork {
+pub fn decode(
+    allocator: std.mem.Allocator,
+    map: []const u8,
+    color_file: []const u8,
+    room: u8,
+) !Artwork {
     if (room >= room_count) return error.InvalidRoom;
     if (map.len < directory_size) return error.TruncatedRoomDirectory;
     const entry = map[@as(usize, room) * 6 ..][0..6];
@@ -35,7 +40,9 @@ pub fn decode(allocator: std.mem.Allocator, map: []const u8, color_file: []const
     if (offset == 0) return error.AbsentRoom;
     const start: usize = @abs(offset);
     const size = std.mem.readInt(u16, entry[4..6], .little);
-    if (start < directory_size or start > map.len or size > map.len - start) return error.InvalidRoomRange;
+    if (start < directory_size or
+        start > map.len or
+        size > map.len - start) return error.InvalidRoomRange;
     if (size < 4) return error.TruncatedRoomPalette;
     const payload = map[start..][0..size];
 
@@ -58,7 +65,10 @@ pub fn decode(allocator: std.mem.Allocator, map: []const u8, color_file: []const
             const size_compressed = std.mem.readInt(u16, payload[cursor..][0..2], .little);
             cursor += 2;
             if (size_compressed > payload.len - cursor) return error.TruncatedStrip;
-            try decodeRuns(payload[cursor..][0..size_compressed], pixels[strip * strip_size ..][0..strip_size]);
+            try decodeRuns(
+                payload[cursor..][0..size_compressed],
+                pixels[strip * strip_size ..][0..strip_size],
+            );
             cursor += size_compressed;
         }
         if (cursor != payload.len) return error.TrailingRoomData;
@@ -66,16 +76,27 @@ pub fn decode(allocator: std.mem.Allocator, map: []const u8, color_file: []const
     }
     errdefer image.deinit();
     for (image.pixels) |index| {
-        if (!(index < 0x40 or (index >= 0x80 and index < 0xc0))) return error.UnboundBackgroundColor;
+        if (!(index < 0x40 or
+            (index >= 0x80 and index < 0xc0))) return error.UnboundBackgroundColor;
     }
     const foreground = try allocator.alloc(bool, pixel_count);
     for (image.pixels, foreground) |index, *covered| covered.* = index & 0x80 != 0;
-    return .{ .image = image, .palette_banks = payload[0..4].*, .colors = colors, .foreground = foreground };
+    return .{
+        .image = image,
+        .palette_banks = payload[0..4].*,
+        .colors = colors,
+        .foreground = foreground,
+    };
 }
 
 /// Takes ownership of row-major pixels on success. Both installed and compact resources
 /// produce this same immutable artwork; no source layout reaches the renderer.
-pub fn fromPixels(allocator: std.mem.Allocator, pixels: []u8, color_file: []const u8, selectors: [4]u8) !Artwork {
+pub fn fromPixels(
+    allocator: std.mem.Allocator,
+    pixels: []u8,
+    color_file: []const u8,
+    selectors: [4]u8,
+) !Artwork {
     if (pixels.len != pixel_count) return error.InvalidRoomSize;
     var colors: palette.Palette = @splat(.{ .r = 0, .g = 0, .b = 0 });
     for (selectors, 0..) |bank, slot| {
@@ -85,7 +106,12 @@ pub fn fromPixels(allocator: std.mem.Allocator, pixels: []u8, color_file: []cons
     }
     const foreground = try allocator.alloc(bool, pixel_count);
     for (pixels, foreground) |index, *covered| covered.* = index & 0x80 != 0;
-    return .{ .image = .{ .allocator = allocator, .width = width, .height = height, .pixels = pixels }, .palette_banks = selectors, .colors = colors, .foreground = foreground };
+    return .{
+        .image = .{ .allocator = allocator, .width = width, .height = height, .pixels = pixels },
+        .palette_banks = selectors,
+        .colors = colors,
+        .foreground = foreground,
+    };
 }
 
 /// Nonnegative codes copy 1..128 literals; negative codes repeat the following byte
@@ -101,7 +127,10 @@ fn decodeRuns(encoded: []const u8, output: []u8) !void {
         const input_count = if (repeated) 1 else count;
         if (input_count > encoded.len - read) return error.TruncatedRun;
         if (count > output.len - written) return error.StripOverflow;
-        if (repeated) @memset(output[written..][0..count], encoded[read]) else @memcpy(output[written..][0..count], encoded[read..][0..count]);
+        if (repeated) @memset(output[written..][0..count], encoded[read]) else @memcpy(
+            output[written..][0..count],
+            encoded[read..][0..count],
+        );
         written += count;
         read += input_count;
     }
@@ -133,10 +162,17 @@ test "compressed strips cover consecutive rows while raw planes interleave colum
     std.mem.writeInt(i32, raw[0..4], -directory_size, .little);
     std.mem.writeInt(u16, raw[4..6], 4 + pixel_count, .little);
     @memcpy(raw[directory_size..][0..4], &[_]u8{ 3, 2, 1, 0 });
-    for (0..4) |plane| @memset(raw[directory_size + 4 + plane * strip_size ..][0..strip_size], @intCast(plane * 16));
+    for (0..4) |plane| @memset(
+        raw[directory_size + 4 + plane * strip_size ..][0..strip_size],
+        @intCast(plane * 16),
+    );
     var planar = try decode(allocator, &raw, &colors, 0);
     defer planar.deinit();
-    try std.testing.expectEqualSlices(u8, &.{ 0, 16, 32, 48, 0, 16, 32, 48 }, planar.image.pixels[0..8]);
+    try std.testing.expectEqualSlices(
+        u8,
+        &.{ 0, 16, 32, 48, 0, 16, 32, 48 },
+        planar.image.pixels[0..8],
+    );
     try std.testing.expectEqual(palette.Rgb{ .r = 77, .g = 12, .b = 12 }, planar.colors[0]);
     try std.testing.expectEqual(planar.colors[0], planar.colors[128]);
     const strip_encoded_size = (strip_size / 128) * 2;
@@ -155,16 +191,28 @@ test "compressed strips cover consecutive rows while raw planes interleave colum
     var linear = try decode(allocator, &compressed, &colors, 0);
     defer linear.deinit();
     for (0..4) |strip| {
-        for (linear.image.pixels[strip * strip_size ..][0..strip_size]) |value| try std.testing.expectEqual(@as(u8, @intCast(strip * 16)), value);
+        for (linear.image.pixels[strip * strip_size ..][0..strip_size]) |value| try std.testing.expectEqual(
+            @as(u8, @intCast(strip * 16)),
+            value,
+        );
     }
     try std.testing.expectError(error.AbsentRoom, decode(allocator, &compressed, &colors, 1));
     try std.testing.expectError(error.InvalidRoom, decode(allocator, &compressed, &colors, 64));
-    try std.testing.expectError(error.InvalidRoomRange, decode(allocator, compressed[0 .. compressed.len - 1], &colors, 0));
+    try std.testing.expectError(
+        error.InvalidRoomRange,
+        decode(allocator, compressed[0 .. compressed.len - 1], &colors, 0),
+    );
     compressed[directory_size] = 4;
-    try std.testing.expectError(error.InvalidPaletteBank, decode(allocator, &compressed, &colors, 0));
+    try std.testing.expectError(
+        error.InvalidPaletteBank,
+        decode(allocator, &compressed, &colors, 0),
+    );
     compressed[directory_size] = 0;
     compressed[directory_size + 7] = 0x40;
-    try std.testing.expectError(error.UnboundBackgroundColor, decode(allocator, &compressed, &colors, 0));
+    try std.testing.expectError(
+        error.UnboundBackgroundColor,
+        decode(allocator, &compressed, &colors, 0),
+    );
     std.mem.writeInt(i32, compressed[0..4], std.math.minInt(i32), .little);
     try std.testing.expectError(error.InvalidRoomRange, decode(allocator, &compressed, &colors, 0));
     try std.testing.expectError(error.TruncatedRoomDirectory, decode(allocator, &.{}, &colors, 0));

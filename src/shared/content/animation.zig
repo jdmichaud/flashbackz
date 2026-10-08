@@ -34,14 +34,26 @@ pub const SourceClip = struct {
                     .frame = .{
                         // Original unreflected actor art faces left. Modern clips describe
                         // a right-facing actor; playback reflects both motion and art for left.
-                        .visual = .{ .id = try resolver.resolve(self.kind, frame.index), .mirrored = !frame.mirrored },
+                        .visual = .{
+                            .id = try resolver.resolve(self.kind, frame.index),
+                            .mirrored = !frame.mirrored,
+                        },
                         .forward = -@as(i16, frame.dx),
                         .down = frame.dy,
                     },
                 },
             };
         }
-        return .{ .allocator = allocator, .steps = steps, .sound = if (self.sound) |id| @fromBackingInt(id) else null, .disturbs_surface = self.header_metadata == 1 or self.header_metadata == 4, .ordinary_contact = self.header_metadata == 0 or self.header_metadata == 1, .presses_floor_switches = self.header_metadata == 0 or self.header_metadata == 1 or self.header_metadata == 5 };
+        return .{
+            .allocator = allocator,
+            .steps = steps,
+            .sound = if (self.sound) |id| @fromBackingInt(id) else null,
+            .disturbs_surface = self.header_metadata == 1 or self.header_metadata == 4,
+            .ordinary_contact = self.header_metadata == 0 or self.header_metadata == 1,
+            .presses_floor_switches = self.header_metadata == 0 or
+                self.header_metadata == 1 or
+                self.header_metadata == 5,
+        };
     }
 };
 
@@ -60,7 +72,14 @@ pub const OwnedClip = struct {
     }
 
     pub fn clip(self: *const OwnedClip) motion.Clip {
-        return .{ .hit_profile = self.hit_profile, .steps = self.steps, .presses_floor_switches = self.presses_floor_switches, .ordinary_contact = self.ordinary_contact, .sound = self.sound, .disturbs_surface = self.disturbs_surface };
+        return .{
+            .hit_profile = self.hit_profile,
+            .steps = self.steps,
+            .presses_floor_switches = self.presses_floor_switches,
+            .ordinary_contact = self.ordinary_contact,
+            .sound = self.sound,
+            .disturbs_surface = self.disturbs_surface,
+        };
     }
 };
 
@@ -70,10 +89,15 @@ pub fn decode(allocator: std.mem.Allocator, bytes: []const u8, index: u16) !Sour
     const directory_end = 2 + @as(usize, count) * 2;
     if (directory_end > bytes.len) return error.TruncatedAnimationDirectory;
     if (index >= count) return error.MissingAnimation;
-    const offset = 2 + @as(usize, std.mem.readInt(u16, bytes[2 + @as(usize, index) * 2 ..][0..2], .little));
+    const offset = 2 + @as(
+        usize,
+        std.mem.readInt(u16, bytes[2 + @as(usize, index) * 2 ..][0..2], .little),
+    );
     // Trailing unused entries point exactly one byte past the file, not to an empty clip.
     if (offset == bytes.len) return error.MissingAnimation;
-    if (offset < directory_end or offset > bytes.len or bytes.len - offset < 6) return error.InvalidAnimationOffset;
+    if (offset < directory_end or
+        offset > bytes.len or
+        bytes.len - offset < 6) return error.InvalidAnimationOffset;
     const frame_count = std.mem.readInt(u16, bytes[offset..][0..2], .little);
     if (frame_count == 0 or frame_count > 255) return error.InvalidAnimationLength;
     if (@as(usize, frame_count) * 4 > bytes.len - offset - 6) return error.TruncatedAnimation;
@@ -115,7 +139,11 @@ test "binary animation resolves to an independent clip and sentinel frames hold"
     };
     var owned = try source.resolve(std.testing.allocator, Resolver{});
     defer owned.deinit();
-    var pose: motion.Pose = .{ .position = .{ .x = 10, .y = 20 }, .facing = .left, .visual = .{ .id = @fromBackingInt(0) } };
+    var pose: motion.Pose = .{
+        .position = .{ .x = 10, .y = 20 },
+        .facing = .left,
+        .visual = .{ .id = @fromBackingInt(0) },
+    };
     var playback: motion.Playback = .{};
     _ = playback.advance(owned.clip(), &pose);
     try std.testing.expectEqual(motion.Position{ .x = 9, .y = 22 }, pose.position);
@@ -131,6 +159,12 @@ test "missing and malformed animations are distinguished before allocating frame
     try std.testing.expectError(error.TruncatedAnimationDirectory, decode(a, &.{ 1, 0 }, 0));
     try std.testing.expectError(error.MissingAnimation, decode(a, &.{ 1, 0, 2, 0 }, 0));
     try std.testing.expectError(error.InvalidAnimationOffset, decode(a, &.{ 1, 0, 0, 0 }, 0));
-    try std.testing.expectError(error.InvalidAnimationLength, decode(a, &.{ 1, 0, 2, 0, 0, 0, 0, 0, 0, 0 }, 0));
-    try std.testing.expectError(error.TruncatedAnimation, decode(a, &.{ 1, 0, 2, 0, 1, 0, 0, 0, 0, 0 }, 0));
+    try std.testing.expectError(
+        error.InvalidAnimationLength,
+        decode(a, &.{ 1, 0, 2, 0, 0, 0, 0, 0, 0, 0 }, 0),
+    );
+    try std.testing.expectError(
+        error.TruncatedAnimation,
+        decode(a, &.{ 1, 0, 2, 0, 1, 0, 0, 0, 0, 0 }, 0),
+    );
 }

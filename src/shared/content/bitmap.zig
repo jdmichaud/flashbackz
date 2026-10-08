@@ -14,7 +14,12 @@ pub const IndexedImage = struct {
     }
 };
 
-pub fn decodePlanar(allocator: std.mem.Allocator, bytes: []const u8, width: u16, height: u16) !IndexedImage {
+pub fn decodePlanar(
+    allocator: std.mem.Allocator,
+    bytes: []const u8,
+    width: u16,
+    height: u16,
+) !IndexedImage {
     if (width == 0 or height == 0 or width % 4 != 0) return error.InvalidDimensions;
     const count: usize = @as(usize, width) * height;
     if (count > 16 * 1024 * 1024) return error.ImageTooLarge;
@@ -36,14 +41,24 @@ test "planes become consecutive pixels across rows and groups of four" {
     defer image.deinit();
     try std.testing.expectEqual(@as(u16, 8), image.width);
     try std.testing.expectEqual(@as(u16, 2), image.height);
-    try std.testing.expectEqualSlices(u8, &.{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 }, image.pixels);
+    try std.testing.expectEqualSlices(
+        u8,
+        &.{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 },
+        image.pixels,
+    );
 }
 
 test "invalid sizes fail before allocation or indexing" {
     const allocator = std.testing.allocator;
     try std.testing.expectError(error.InvalidDimensions, decodePlanar(allocator, &.{}, 0, 2));
     try std.testing.expectError(error.InvalidDimensions, decodePlanar(allocator, &.{}, 6, 2));
-    try std.testing.expectError(error.InvalidBitmapLength, decodePlanar(allocator, &.{ 1, 2, 3 }, 4, 1));
-    try std.testing.expectError(error.InvalidBitmapLength, decodePlanar(allocator, &.{ 1, 2, 3, 4, 5 }, 4, 1));
+    try std.testing.expectError(
+        error.InvalidBitmapLength,
+        decodePlanar(allocator, &.{ 1, 2, 3 }, 4, 1),
+    );
+    try std.testing.expectError(
+        error.InvalidBitmapLength,
+        decodePlanar(allocator, &.{ 1, 2, 3, 4, 5 }, 4, 1),
+    );
     try std.testing.expectError(error.ImageTooLarge, decodePlanar(allocator, &.{}, 32768, 32768));
 }

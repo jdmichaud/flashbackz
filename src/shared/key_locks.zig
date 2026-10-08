@@ -11,7 +11,13 @@ pub const Receiver = struct {
     credential: i16,
     target: union(enum) { lock: usize, ignores_credential, signal_only },
 };
-pub const Binding = struct { item: equipment.ItemHandle, receiver: usize, activates: bool, next_step: bool, circuit: ?props.CircuitId = null };
+pub const Binding = struct {
+    item: equipment.ItemHandle,
+    receiver: usize,
+    activates: bool,
+    next_step: bool,
+    circuit: ?props.CircuitId = null,
+};
 pub const Definition = struct {
     footprint: contacts.Footprint,
     facing: motion.Facing,
@@ -57,7 +63,11 @@ pub const World = struct {
     pub fn setReceiverBody(self: *World, index: usize, body: ?contacts.Footprint) void {
         self.receiver_bodies[index] = body;
     }
-    pub fn init(allocator: std.mem.Allocator, definitions: []const Definition, receivers: []const Receiver) !World {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        definitions: []const Definition,
+        receivers: []const Receiver,
+    ) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);
         for (instances, definitions) |*instance, definition| {
@@ -67,7 +77,18 @@ pub const World = struct {
                 .frame => |frame| frame.visual,
                 .hold => return error.MissingLockVisual,
             };
-            instance.* = .{ .used = definition.initially_used, .active = definition.initially_active, .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } } };
+            instance.* = .{
+                .used = definition.initially_used,
+                .active = definition.initially_active,
+                .pose = .{
+                    .position = definition.footprint.position,
+                    .facing = definition.facing,
+                    .visual = .{
+                        .id = visual.id,
+                        .mirrored = visual.mirrored != (definition.facing == .left),
+                    },
+                },
+            };
         }
         var capacity: usize = 0;
         for (definitions) |definition| capacity += definition.circuits.len + @intFromBool(definition.repaired_operation != null);
@@ -76,7 +97,13 @@ pub const World = struct {
         for (receiver_bodies, receivers) |*body, receiver| body.* = receiver.footprint;
         const pulses = try allocator.alloc(props.CircuitId, capacity + receivers.len);
         errdefer allocator.free(pulses);
-        return .{ .allocator = allocator, .instances = instances, .pulses = pulses, .credential_pulses = try allocator.alloc(props.CircuitId, receivers.len), .receiver_bodies = receiver_bodies };
+        return .{
+            .allocator = allocator,
+            .instances = instances,
+            .pulses = pulses,
+            .credential_pulses = try allocator.alloc(props.CircuitId, receivers.len),
+            .receiver_bodies = receiver_bodies,
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.instances);
@@ -84,7 +111,13 @@ pub const World = struct {
         self.allocator.free(self.credential_pulses);
         self.allocator.free(self.receiver_bodies);
     }
-    pub fn prepare(self: *World, definitions: []const Definition, receivers: []const Receiver, map: geometry.Map, player: contacts.Footprint) !void {
+    pub fn prepare(
+        self: *World,
+        definitions: []const Definition,
+        receivers: []const Receiver,
+        map: geometry.Map,
+        player: contacts.Footprint,
+    ) !void {
         self.candidate = null;
         self.use_candidate = null;
         for (self.instances) |*instance| {
@@ -97,8 +130,14 @@ pub const World = struct {
             if (receiver.target == .lock) {
                 const lock = receiver.target.lock;
                 footprint.position = self.instances[lock].pose.position;
-                const near = try @import("activation.zig").around(map, player.room, footprint.room, footprint.position.y);
-                if (definitions[lock].wake_when_near and near.wake) self.instances[lock].active = true;
+                const near = try @import("activation.zig").around(
+                    map,
+                    player.room,
+                    footprint.room,
+                    footprint.position.y,
+                );
+                if (definitions[lock].wake_when_near and
+                    near.wake) self.instances[lock].active = true;
             }
             if (try layout.overlaps(map, player, footprint)) self.use_candidate = index;
         }
@@ -106,11 +145,22 @@ pub const World = struct {
             self.candidate = receivers[index].target.lock;
         };
     }
-    pub fn useKey(self: *World, definitions: []const Definition, receivers: []const Receiver, bindings: []const Binding, loadout: *equipment.Loadout, handle: equipment.ItemHandle, map: geometry.Map, room: geometry.RoomId) !bool {
+    pub fn useKey(
+        self: *World,
+        definitions: []const Definition,
+        receivers: []const Receiver,
+        bindings: []const Binding,
+        loadout: *equipment.Loadout,
+        handle: equipment.ItemHandle,
+        map: geometry.Map,
+        room: geometry.RoomId,
+    ) !bool {
         const index = self.use_candidate orelse return false;
         const receiver = receivers[index];
         const item = try loadout.item(handle);
-        if (item.state != .carried or item.consume_in != null or item.recharge_in != null) return false;
+        if (item.state != .carried or
+            item.consume_in != null or
+            item.recharge_in != null) return false;
         const action = item.definition.use_action orelse return false;
         if (action != .unlock) return false;
         const credential = switch (action.unlock.credential) {
@@ -129,7 +179,12 @@ pub const World = struct {
         } else if (binding.activates) {
             const lock = receiver.target.lock;
             const definition = definitions[lock];
-            const near = try @import("activation.zig").around(map, room, definition.footprint.room, self.instances[lock].pose.position.y);
+            const near = try @import("activation.zig").around(
+                map,
+                room,
+                definition.footprint.room,
+                self.instances[lock].pose.position.y,
+            );
             if (definition.wake_when_near and near.wake) self.instances[lock].active = true;
             if (self.instances[lock].active or definition.accepts_signals) {
                 if (binding.next_step) self.instances[lock].pending = true else self.instances[lock].ready = true;
@@ -138,16 +193,35 @@ pub const World = struct {
         if (action.unlock.consume_after_steps) |steps| try loadout.consumeAfter(handle, steps);
         return true;
     }
-    pub fn advance(self: *World, definitions: []const Definition, map: geometry.Map, room: geometry.RoomId, operate: bool) !void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        room: geometry.RoomId,
+        operate: bool,
+    ) !void {
         self.pulse_count = self.credential_count;
-        @memcpy(self.pulses[0..self.credential_count], self.credential_pulses[0..self.credential_count]);
+        @memcpy(
+            self.pulses[0..self.credential_count],
+            self.credential_pulses[0..self.credential_count],
+        );
         self.credential_count = 0;
         self.notice = null;
         for (self.instances, definitions, 0..) |*instance, definition, index| {
             instance.sound = null;
-            const near = try @import("activation.zig").around(map, room, definition.footprint.room, instance.pose.position.y);
+            const near = try @import("activation.zig").around(
+                map,
+                room,
+                definition.footprint.room,
+                instance.pose.position.y,
+            );
             if (definition.wake_when_near and near.wake) instance.active = true;
-            if (operate and self.candidate == index and instance.used and definition.repaired_operation != null and (instance.active or definition.accepts_signals)) {
+            if (operate and
+                self.candidate == index and
+                instance.used and
+                definition.repaired_operation != null and
+                (instance.active or definition.accepts_signals))
+            {
                 const operation = definition.repaired_operation.?;
                 instance.active = true;
                 instance.playback.completeDisplacement(definition.used, &instance.pose);
@@ -155,11 +229,20 @@ pub const World = struct {
                 instance.sound = operation.sound;
                 self.pulses[self.pulse_count] = operation.circuit;
                 self.pulse_count += 1;
-            } else if (operate and self.candidate == index and !instance.used and definition.notice != null and (instance.active or definition.accepts_signals)) {
+            } else if (operate and
+                self.candidate == index and
+                !instance.used and
+                definition.notice != null and
+                (instance.active or definition.accepts_signals))
+            {
                 instance.active = true;
                 instance.playback.completeDisplacement(definition.idle, &instance.pose);
                 instance.playback = .{};
-                self.notice = .{ .message = definition.notice.?, .icon = definition.hint, .priority = definition.interaction_priority };
+                self.notice = .{
+                    .message = definition.notice.?,
+                    .icon = definition.hint,
+                    .priority = definition.interaction_priority,
+                };
             } else if (instance.ready) {
                 instance.active = true;
                 if (!instance.used) {
@@ -178,7 +261,8 @@ pub const World = struct {
             if (!instance.active) continue;
             const clip = if (instance.used) definition.used else definition.idle;
             if (instance.playback.exhausted(clip)) {
-                if (room != definition.footprint.room and !(definition.wake_when_near and near.near)) instance.active = false;
+                if (room != definition.footprint.room and
+                    !(definition.wake_when_near and near.near)) instance.active = false;
                 instance.playback = .{};
             }
             if (instance.sound == null) instance.sound = instance.playback.soundOnEntry(clip);
@@ -188,6 +272,16 @@ pub const World = struct {
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
         const receiver: u64 = if (self.use_candidate) |index| index + 1 else 0;
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, receiver)));
-        for (self.instances) |instance| for ([_]u64{ @as(u16, @bitCast(instance.pose.position.x)), @as(u16, @bitCast(instance.pose.position.y)), @intFromBool(instance.active), @intFromBool(instance.used), @intFromBool(instance.ready), @intFromBool(instance.pending), instance.playback.next_step, @backingInt(instance.pose.visual.id), @intFromBool(instance.pose.visual.mirrored) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        for (self.instances) |instance| for ([_]u64{
+            @as(u16, @bitCast(instance.pose.position.x)),
+            @as(u16, @bitCast(instance.pose.position.y)),
+            @intFromBool(instance.active),
+            @intFromBool(instance.used),
+            @intFromBool(instance.ready),
+            @intFromBool(instance.pending),
+            instance.playback.next_step,
+            @backingInt(instance.pose.visual.id),
+            @intFromBool(instance.pose.visual.mirrored),
+        }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
     }
 };

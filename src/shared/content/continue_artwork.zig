@@ -39,5 +39,16 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Assets 
     var colors = film.frames[frame].colors;
     @memcpy(colors[0xe0..0xf0], &interface.text_colors);
     const labels = try allocator.dupe(u8, std.mem.asBytes(&interface.continue_labels));
-    return .{ .allocator = allocator, .pixels = pixels, .colors = colors, .font = font, .labels = labels, .title = std.mem.sliceTo(labels[0..48], 0), .time = std.mem.sliceTo(labels[48..96], 0), .retry = std.mem.sliceTo(labels[96..144], 0), .abort = std.mem.sliceTo(labels[144..192], 0), .score = std.mem.sliceTo(labels[192..240], 0) };
+    return .{
+        .allocator = allocator,
+        .pixels = pixels,
+        .colors = colors,
+        .font = font,
+        .labels = labels,
+        .title = std.mem.sliceTo(labels[0..48], 0),
+        .time = std.mem.sliceTo(labels[48..96], 0),
+        .retry = std.mem.sliceTo(labels[96..144], 0),
+        .abort = std.mem.sliceTo(labels[144..192], 0),
+        .score = std.mem.sliceTo(labels[192..240], 0),
+    };
 }

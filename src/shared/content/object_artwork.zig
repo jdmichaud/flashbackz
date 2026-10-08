@@ -18,7 +18,13 @@ pub fn recordAt(archive: []const u8, index: u16) ![]const u8 {
     return archive[offset..][0..length];
 }
 
-pub fn fromArchive(allocator: std.mem.Allocator, archive: []const u8, bindings: []const u8, banks: art_bank.Archive, index: u16) !sprite.Frame {
+pub fn fromArchive(
+    allocator: std.mem.Allocator,
+    archive: []const u8,
+    bindings: []const u8,
+    banks: art_bank.Archive,
+    index: u16,
+) !sprite.Frame {
     const record = try recordAt(archive, index);
     if (record[0] >= bindings.len) return error.MissingObjectArtBankBinding;
     const bank = try banks.decode(allocator, bindings[record[0]]);
@@ -27,7 +33,10 @@ pub fn fromArchive(allocator: std.mem.Allocator, archive: []const u8, bindings: 
 }
 
 pub fn decode(allocator: std.mem.Allocator, record: []const u8, bank: []const u8) !sprite.Frame {
-    if (record.len < 6 or record.len != 6 + @as(usize, record[5]) * 4) return error.TruncatedObjectArt;
+    if (record.len < 6 or record.len != 6 + @as(
+        usize,
+        record[5],
+    ) * 4) return error.TruncatedObjectArt;
     if (record[5] == 0) return error.EmptyObjectArt;
     var width: u16 = 0;
     var height: u16 = 0;
@@ -66,7 +75,10 @@ pub fn decode(allocator: std.mem.Allocator, record: []const u8, bank: []const u8
 }
 
 fn dimensions(flags: u8) struct { width: u16, height: u16 } {
-    return .{ .width = (@as(u16, (flags >> 2) & 3) + 1) * 8, .height = (@as(u16, flags & 3) + 1) * 8 };
+    return .{
+        .width = (@as(u16, (flags >> 2) & 3) + 1) * 8,
+        .height = (@as(u16, flags & 3) + 1) * 8,
+    };
 }
 
 test "parts compose in order with local reflection, transparency and signed origins" {
@@ -80,8 +92,16 @@ test "parts compose in order with local reflection, transparency and signed orig
     try std.testing.expectEqual(@as(i16, 2), frame.origin_y);
     try std.testing.expectEqual(@as(u16, 10), frame.image.width);
     try std.testing.expectEqual(@as(u16, 9), frame.image.height);
-    try std.testing.expectEqualSlices(u8, &.{ 1, 1, 1, 1, 1, 1, 1, 1, 3, 2 }, frame.image.pixels[10..20]);
-    try std.testing.expectEqualSlices(u8, &.{ 1, 1, 1, 1, 1, 1, 1, 1, 0, 0 }, frame.image.pixels[20..30]);
+    try std.testing.expectEqualSlices(
+        u8,
+        &.{ 1, 1, 1, 1, 1, 1, 1, 1, 3, 2 },
+        frame.image.pixels[10..20],
+    );
+    try std.testing.expectEqualSlices(
+        u8,
+        &.{ 1, 1, 1, 1, 1, 1, 1, 1, 0, 0 },
+        frame.image.pixels[20..30],
+    );
 }
 
 test "object art aliases and truncated directories, records and tiles" {
@@ -91,6 +111,12 @@ test "object art aliases and truncated directories, records and tiles" {
     try std.testing.expectError(error.MissingObjectArt, recordAt(&archive, 2));
     try std.testing.expectError(error.TruncatedObjectArt, recordAt(archive[0..13], 0));
     try std.testing.expectError(error.InvalidObjectArtDirectory, recordAt(&.{ 0, 3, 0 }, 0));
-    try std.testing.expectError(error.TruncatedObjectArtTile, decode(allocator, archive[4..], &.{}));
-    try std.testing.expectError(error.EmptyObjectArt, decode(allocator, &.{ 0, 0, 0, 0, 0, 0 }, &.{}));
+    try std.testing.expectError(
+        error.TruncatedObjectArtTile,
+        decode(allocator, archive[4..], &.{}),
+    );
+    try std.testing.expectError(
+        error.EmptyObjectArt,
+        decode(allocator, &.{ 0, 0, 0, 0, 0, 0 }, &.{}),
+    );
 }

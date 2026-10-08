@@ -19,21 +19,39 @@ pub const World = struct {
     requested: ?Destination = null,
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {
         const gates = try allocator.alloc(State, definitions.len);
-        for (gates, definitions) |*gate, definition| gate.* = .{ .active = definition.initially_active };
+        for (
+            gates,
+            definitions,
+        ) |*gate, definition| gate.* = .{ .active = definition.initially_active };
         return .{ .allocator = allocator, .gates = gates };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.gates);
     }
-    pub fn advance(self: *World, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint, items: *const equipment.Loadout) !void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        player: contacts.Footprint,
+        items: *const equipment.Loadout,
+    ) !void {
         const layout: contacts.Layout = .{};
         for (self.gates, definitions) |*gate, definition| {
-            const near = try @import("activation.zig").around(map, player.room, definition.footprint.room, definition.footprint.position.y);
+            const near = try @import("activation.zig").around(
+                map,
+                player.room,
+                definition.footprint.room,
+                definition.footprint.position.y,
+            );
             if (definition.wake_nearby and near.wake) gate.active = true;
             if (!gate.active) continue;
             if (gate.elapsed >= definition.cadence) {
                 gate.elapsed = 0;
-                if (items.carries(definition.required_item) and try layout.overlaps(map, definition.footprint, player)) self.requested = definition.destination;
+                if (items.carries(definition.required_item) and try layout.overlaps(
+                    map,
+                    definition.footprint,
+                    player,
+                )) self.requested = definition.destination;
                 if (!near.same and !(definition.wake_nearby and near.near)) gate.active = false;
             }
             gate.elapsed += 1;
@@ -44,6 +62,9 @@ pub const World = struct {
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u16, gate.elapsed)));
             hash.update(&.{@intFromBool(gate.active)});
         }
-        hash.update(&.{if (self.requested) |destination| @as(u8, @intCast(@backingInt(destination))) + 1 else 0});
+        hash.update(&.{if (self.requested) |destination| @as(
+            u8,
+            @intCast(@backingInt(destination)),
+        ) + 1 else 0});
     }
 };

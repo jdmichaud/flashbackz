@@ -3,7 +3,41 @@
 const motion = @import("../motion.zig");
 const controls = @import("controls.zig");
 const rolling = @import("conrad_roll.zig");
-pub const Phase = enum { clearing_draw, roll_recovery, drawing_after_climb, firing, firing_crouched, drawing_crouched, draw_crouched_release, draw_start, drawing, draw_release, aiming, lowering_aim, standing, walking, turning, holstering, holstering_aim, raising_aim, crouching, crouched, turning_crouched, rising, holstering_crouched, lowering_aim_crouched, raising_aim_crouched, aim_crouch_release, aiming_crouched, crouching_aim, rising_aim, turning_aim, turning_aim_crouched, stepping_down, landing };
+pub const Phase = enum {
+    clearing_draw,
+    roll_recovery,
+    drawing_after_climb,
+    firing,
+    firing_crouched,
+    drawing_crouched,
+    draw_crouched_release,
+    draw_start,
+    drawing,
+    draw_release,
+    aiming,
+    lowering_aim,
+    standing,
+    walking,
+    turning,
+    holstering,
+    holstering_aim,
+    raising_aim,
+    crouching,
+    crouched,
+    turning_crouched,
+    rising,
+    holstering_crouched,
+    lowering_aim_crouched,
+    raising_aim_crouched,
+    aim_crouch_release,
+    aiming_crouched,
+    crouching_aim,
+    rising_aim,
+    turning_aim,
+    turning_aim_crouched,
+    stepping_down,
+    landing,
+};
 pub const Clips = struct {
     clearing_draw: motion.Clip,
     roll_recovery: motion.Clip,
@@ -60,7 +94,17 @@ pub const Toggle = struct {
         }
     }
 };
-pub const Boundary = enum { continued, unarmed_standing, unarmed_crouched, unarmed_rising, roll, roll_drop, long_fall, fire_standing, fire_crouched };
+pub const Boundary = enum {
+    continued,
+    unarmed_standing,
+    unarmed_crouched,
+    unarmed_rising,
+    roll,
+    roll_drop,
+    long_fall,
+    fire_standing,
+    fire_crouched,
+};
 pub const State = struct {
     phase: Phase = .draw_start,
     pub fn clip(self: State, clips: Clips) motion.Clip {
@@ -71,13 +115,25 @@ pub const State = struct {
     fn reverse(pose: *motion.Pose) void {
         pose.facing = if (pose.facing == .left) .right else .left;
     }
-    pub fn finishPhase(self: *State, intent: controls.Intent, desired: bool, pose: *motion.Pose, environment: anytype) !Boundary {
+    pub fn finishPhase(
+        self: *State,
+        intent: controls.Intent,
+        desired: bool,
+        pose: *motion.Pose,
+        environment: anytype,
+    ) !Boundary {
         const direction_allowed = !intent.weapon and !intent.use_item;
         const forward = direction_allowed and intent.direction == pose.facing;
-        const backward = direction_allowed and intent.direction != null and intent.direction != pose.facing;
+        const backward = direction_allowed and
+            intent.direction != null and
+            intent.direction != pose.facing;
         const up = direction_allowed and intent.vertical == .up;
         const down = direction_allowed and intent.vertical == .down;
-        const turn_obstructed = if (backward) try environment.at(pose.*, .torso, 0) and !try environment.at(pose.*, .torso, 1) else false;
+        const turn_obstructed = if (backward) try environment.at(
+            pose.*,
+            .torso,
+            0,
+        ) and !try environment.at(pose.*, .torso, 1) else false;
         switch (self.phase) {
             .firing => self.phase = .aiming,
             .firing_crouched => self.phase = .aiming_crouched,
@@ -87,7 +143,11 @@ pub const State = struct {
             },
             .clearing_draw => return .unarmed_standing,
             .draw_start => {
-                if (try environment.at(pose.*, .torso, 1) and try environment.at(pose.*, .torso, 0)) {
+                if (try environment.at(
+                    pose.*,
+                    .torso,
+                    1,
+                ) and try environment.at(pose.*, .torso, 0)) {
                     self.phase = .clearing_draw;
                     return .continued;
                 }
@@ -95,7 +155,11 @@ pub const State = struct {
                 self.phase = .drawing;
             },
             .drawing, .drawing_after_climb => self.phase = .draw_release,
-            .draw_release => if (!(intent.weapon and !intent.action and !intent.use_item and intent.neutralDirections())) {
+            .draw_release => if (!(intent.weapon and
+                !intent.action and
+                !intent.use_item and
+                intent.neutralDirections()))
+            {
                 self.phase = .aiming;
             },
             .holstering, .holstering_aim => return .unarmed_standing,
@@ -123,7 +187,11 @@ pub const State = struct {
             .standing => {
                 if (!try environment.at(pose.*, .support, 0)) {
                     self.phase = .stepping_down;
-                } else if (intent.use_item or (backward and !intent.action and turn_obstructed)) {} else if (forward and !intent.action) {
+                } else if (intent.use_item or
+                    (backward and !intent.action and turn_obstructed))
+                {} else if (forward and
+                    !intent.action)
+                {
                     if (!try environment.at(pose.*, .support, 1)) {
                         self.phase = .stepping_down;
                     } else if (!try environment.at(pose.*, .torso, 1)) {
@@ -142,7 +210,11 @@ pub const State = struct {
                 }
             },
             .walking => {
-                if (!try environment.at(pose.*, .support, 1) or !forward or intent.action or try environment.at(pose.*, .torso, 1)) {
+                if (!try environment.at(
+                    pose.*,
+                    .support,
+                    1,
+                ) or !forward or intent.action or try environment.at(pose.*, .torso, 1)) {
                     self.phase = .standing;
                 }
             },
@@ -170,7 +242,11 @@ pub const State = struct {
                     self.phase = .rising;
                 } else if (forward and !intent.action) {
                     if (!try environment.at(pose.*, .support, 1)) return .roll_drop;
-                    if (try environment.rollPassage(pose.*, 1) or !try environment.at(pose.*, .torso, 1)) {
+                    if (try environment.rollPassage(pose.*, 1) or !try environment.at(
+                        pose.*,
+                        .torso,
+                        1,
+                    )) {
                         rolling.shiftForward(pose, 16);
                         return .roll;
                     }
@@ -236,10 +312,19 @@ test "an occupied wall edge blocks an aimed turn before the fire request" {
         }
     };
     for ([_]motion.Facing{ .left, .right }) |facing| {
-        var pose: motion.Pose = .{ .position = .{ .x = 96, .y = 70 }, .facing = facing, .visual = .{ .id = @fromBackingInt(0) } };
+        var pose: motion.Pose = .{
+            .position = .{ .x = 96, .y = 70 },
+            .facing = facing,
+            .visual = .{ .id = @fromBackingInt(0) },
+        };
         for ([_]Phase{ .aiming, .aiming_crouched, .crouched }) |phase| {
             var state: State = .{ .phase = phase };
-            const result = try state.finishPhase(.{ .direction = if (facing == .left) .right else .left, .action = true }, true, &pose, Wall{});
+            const result = try state.finishPhase(
+                .{ .direction = if (facing == .left) .right else .left, .action = true },
+                true,
+                &pose,
+                Wall{},
+            );
             try std.testing.expectEqual(.continued, result);
             try std.testing.expectEqual(phase, state.phase);
             try std.testing.expectEqual(facing, pose.facing);

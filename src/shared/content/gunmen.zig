@@ -33,8 +33,21 @@ pub const Assets = struct {
     pub fn bind(self: Assets, connections: []const routes.Connection) ![]actor.Binding {
         var result: std.ArrayList(actor.Binding) = .empty;
         errdefer result.deinit(self.allocator);
-        for (self.sources, self.activation_signals, 0..) |source, signal, index| if (signal) |value| for (connections) |connection| if (connection.recipient == source and connection.message == value) {
-            try result.append(self.allocator, .{ .circuit = connection.circuit, .actor = index, .next_step = connection.sender >= source });
+        for (
+            self.sources,
+            self.activation_signals,
+            0..,
+        ) |source, signal, index| if (signal) |value| for (connections) |connection| if (connection.recipient == source and
+            connection.message == value)
+        {
+            try result.append(
+                self.allocator,
+                .{
+                    .circuit = connection.circuit,
+                    .actor = index,
+                    .next_step = connection.sender >= source,
+                },
+            );
         };
         return result.toOwnedSlice(self.allocator);
     }
@@ -45,7 +58,9 @@ fn find(group: rules.Group, state: u16, code: u8, ordinal: usize) ?rules.Rule {
     for (0..group.count()) |i| {
         const rule = group.at(i);
         if (rule.source != state) continue;
-        const matches = if (code == 0) rule.conditions[0].code == 0 and rule.conditions[1].code == 0 else rule.conditions[0].code == code or rule.conditions[1].code == code;
+        const matches = if (code == 0) rule.conditions[0].code == 0 and
+            rule.conditions[1].code == 0 else rule.conditions[0].code == code or
+            rule.conditions[1].code == code;
         if (!matches) continue;
         if (seen == ordinal) return rule;
         seen += 1;
@@ -68,7 +83,8 @@ fn objectRange(group: rules.Group, state: u16, behind: bool) !?u8 {
     for (0..group.count()) |i| {
         const rule = group.at(i);
         if (rule.source != state or rule.conditions[1].code != 64) continue;
-        if (rule.conditions[0].code != 0 or rule.conditions[0].argument != 3) return error.UnsupportedEnemyDistraction;
+        if (rule.conditions[0].code != 0 or
+            rule.conditions[0].argument != 3) return error.UnsupportedEnemyDistraction;
         const value = rule.conditions[1].argument;
         if ((value < 0) != behind) continue;
         // The range is counted in visited contact cells, capped to one room width.
@@ -77,7 +93,10 @@ fn objectRange(group: rules.Group, state: u16, behind: bool) !?u8 {
     return null;
 }
 fn interest(group: rules.Group, state: u16, behind: bool) !actor.Interest {
-    return .{ .player = try distance(group, state, if (behind) 121 else 120, 0), .object = try objectRange(group, state, behind) };
+    return .{
+        .player = try distance(group, state, if (behind) 121 else 120, 0),
+        .object = try objectRange(group, state, behind),
+    };
 }
 fn put(sources: *Sources, action: Action, state: u16) void {
     sources[@backingInt(action)] = state;
@@ -88,7 +107,11 @@ fn get(sources: Sources, action: Action) u16 {
 
 fn opportunistic(group: rules.Group) bool {
     if (group.count() != 191) return false;
-    if (group.at(189).conditions[0].code != 34 or group.at(189).effect.code != 87 or group.at(189).target != group.at(52).source or group.at(189).next != 52 or group.at(190).effect.code != 67) return false;
+    if (group.at(189).conditions[0].code != 34 or
+        group.at(189).effect.code != 87 or
+        group.at(189).target != group.at(52).source or
+        group.at(189).next != 52 or
+        group.at(190).effect.code != 67) return false;
     for (0..group.count()) |i| {
         const row = group.at(i);
         if (row.next >= group.count() or row.target != group.at(row.next).source) return false;
@@ -100,14 +123,57 @@ fn opportunistic(group: rules.Group) bool {
             0, 36, 37, 38, 62, 67, 75, 87 => {},
             else => return false,
         }
-        if (row.conditions[0].code == 97 and row.conditions[0].argument <= 0 or row.conditions[1].code == 97 and row.conditions[1].argument <= 0) return false;
+        if (row.conditions[0].code == 97 and
+            row.conditions[0].argument <= 0 or
+            row.conditions[1].code == 97 and
+                row.conditions[1].argument <= 0) return false;
     }
-    return group.at(77).conditions[0].code == 62 and group.at(77).conditions[1].code == 97 and group.at(78).conditions[0].argument == group.at(77).conditions[0].argument and group.at(87).effect.code == 36 and group.at(87).effect.argument == 40 and group.at(99).effect.code == 36 and group.at(99).effect.argument == 41 and group.at(83).conditions[0].argument == 1 and group.at(83).conditions[1].code == 64 and group.at(50).conditions[0].code == 76;
+    return group.at(77).conditions[0].code == 62 and
+        group.at(77).conditions[1].code == 97 and
+        group.at(78).conditions[0].argument == group.at(77).conditions[0].argument and
+        group.at(87).effect.code == 36 and
+        group.at(87).effect.argument == 40 and
+        group.at(99).effect.code == 36 and
+        group.at(99).effect.argument == 41 and
+        group.at(83).conditions[0].argument == 1 and
+        group.at(83).conditions[1].code == 64 and
+        group.at(50).conditions[0].code == 76;
 }
 fn discover(group: rules.Group) !?Sources {
     if (opportunistic(group)) {
         var sources: Sources = undefined;
-        for ([_]usize{ 0, 31, 34, 12, 15, 28, 9, 20, 25, 52, 62, 65, 72, 37, 45, 75, 79, 85, 110, 88, 185, 91, 100, 97, 107, 179, 94 }, &sources) |row, *state| state.* = group.at(row).source;
+        for (
+            [_]usize{
+                0,
+                31,
+                34,
+                12,
+                15,
+                28,
+                9,
+                20,
+                25,
+                52,
+                62,
+                65,
+                72,
+                37,
+                45,
+                75,
+                79,
+                85,
+                110,
+                88,
+                185,
+                91,
+                100,
+                97,
+                107,
+                179,
+                94,
+            },
+            &sources,
+        ) |row, *state| state.* = group.at(row).source;
         return sources;
     }
     if (group.count() == 0) return null;
@@ -128,12 +194,21 @@ fn discover(group: rules.Group) !?Sources {
     put(&sources, .ready, (try required(group, wake.target, 0, 0)).target);
     const ready = get(sources, .ready);
     put(&sources, .lowering_weapon, (try required(group, ready, 97, 0)).target);
-    if ((try required(group, get(sources, .lowering_weapon), 0, 0)).target != relaxed) return error.UnsupportedGunmanBehavior;
+    if ((try required(
+        group,
+        get(sources, .lowering_weapon),
+        0,
+        0,
+    )).target != relaxed) return error.UnsupportedGunmanBehavior;
     put(&sources, .shifting_weight, shift.target);
     put(&sources, .leaning, lean.target);
     put(&sources, .weight_shifted, (try required(group, shift.target, 0, 0)).target);
     put(&sources, .leaned, (try required(group, lean.target, 0, 0)).target);
-    put(&sources, .settling_weight, (try required(group, get(sources, .weight_shifted), 0, 0)).target);
+    put(
+        &sources,
+        .settling_weight,
+        (try required(group, get(sources, .weight_shifted), 0, 0)).target,
+    );
     put(&sources, .straightening, (try required(group, get(sources, .leaned), 0, 0)).target);
     put(&sources, .blocked, (try required(group, ready, 26, 0)).target);
     put(&sources, .assessing, (try required(group, ready, 120, 0)).target);
@@ -151,24 +226,39 @@ fn discover(group: rules.Group) !?Sources {
     put(&sources, .ducking, (try required(group, get(sources, .assessing), 98, 0)).target);
     put(&sources, .crouched_aim, (try required(group, get(sources, .ducking), 68, 0)).target);
     put(&sources, .rising, (try required(group, get(sources, .crouched_aim), 0, 0)).target);
-    put(&sources, .crouched_windup, (try required(group, get(sources, .crouched_aim), 63, 0)).target);
+    put(
+        &sources,
+        .crouched_windup,
+        (try required(group, get(sources, .crouched_aim), 63, 0)).target,
+    );
     const low_fire = try required(group, get(sources, .crouched_windup), 0, 0);
-    if (low_fire.effect.code != 36 or low_fire.effect.argument != 41) return error.UnsupportedEnemyWeapon;
+    if (low_fire.effect.code != 36 or
+        low_fire.effect.argument != 41) return error.UnsupportedEnemyWeapon;
     put(&sources, .crouched_fire, low_fire.target);
     put(&sources, .crouched_recovery, (try required(group, low_fire.target, 68, 0)).target);
     // Every imported action must be a distinct clip role in this family. The runtime
     // chooses intent; these source relationships are only used to identify its artwork.
-    for (sources, 0..) |state, i| for (sources[0..i]) |previous| if (state == previous) return error.UnsupportedGunmanMotionGraph;
+    for (
+        sources,
+        0..,
+    ) |state, i| for (sources[0..i]) |previous| if (state == previous) return error.UnsupportedGunmanMotionGraph;
     return sources;
 }
 
-fn postureSenses(group: rules.Group, state: u16) ![4]?@import("../actors/perception.zig").PostureSense {
+fn postureSenses(
+    group: rules.Group,
+    state: u16,
+) ![4]?@import("../actors/perception.zig").PostureSense {
     var result: [4]?@import("../actors/perception.zig").PostureSense = @splat(null);
     var count: usize = 0;
     for (0..group.count()) |i| {
         const rule = group.at(i);
-        if (rule.source != state or (rule.conditions[1].code != 98 and rule.conditions[1].code != 99)) continue;
-        if (count == result.len or rule.conditions[0].code != 0 or rule.conditions[1].argument < 1 or rule.conditions[1].argument > 4) return error.UnsupportedEnemyPostureSense;
+        if (rule.source != state or
+            (rule.conditions[1].code != 98 and rule.conditions[1].code != 99)) continue;
+        if (count == result.len or
+            rule.conditions[0].code != 0 or
+            rule.conditions[1].argument < 1 or
+            rule.conditions[1].argument > 4) return error.UnsupportedEnemyPostureSense;
         result[count] = .{
             .category = switch (rule.conditions[0].argument) {
                 1 => .player,
@@ -183,9 +273,55 @@ fn postureSenses(group: rules.Group, state: u16) ![4]?@import("../actors/percept
     return result;
 }
 
-fn profile(group: rules.Group, sources: Sources, clips: actor.Clips, hit_priority: [actor.action_count][4]@import("../combat.zig").Impact, reactions: [actor.action_count][4]?actor.Reaction, defeat: @import("../actors/gunman_defeat.zig").Definition) !actor.Profile {
+fn profile(
+    group: rules.Group,
+    sources: Sources,
+    clips: actor.Clips,
+    hit_priority: [actor.action_count][4]@import("../combat.zig").Impact,
+    reactions: [actor.action_count][4]?actor.Reaction,
+    defeat: @import("../actors/gunman_defeat.zig").Definition,
+) !actor.Profile {
     if (opportunistic(group)) {
-        return .{ .opportunism = .{ .approach_chance = group.at(49).conditions[0].argument, .close_distance = group.at(50).conditions[1].argument * 16, .aim_cover_chance = group.at(77).conditions[1].argument, .fire_chance = group.at(81).conditions[0].argument, .low_fire_chance = group.at(102).conditions[0].argument, .low_rise_chance = group.at(104).conditions[0].argument, .recovery_fire_chance = group.at(182).conditions[0].argument, .recovery_cover_chance = group.at(183).conditions[1].argument, .visible_player_cells = @intCast(group.at(83).conditions[1].argument) }, .clips = clips, .reactions = reactions, .hit_priority = hit_priority, .defeat = defeat, .crouch_senses = try postureSenses(group, get(sources, .assessing)), .stay_low_senses = @splat(null), .relaxed_front = try interest(group, get(sources, .relaxed), false), .relaxed_behind = try interest(group, get(sources, .relaxed), true), .fidget_front = try interest(group, get(sources, .leaned), false), .ready_front = try interest(group, get(sources, .ready), false), .ready_behind = try interest(group, get(sources, .ready), true), .stopping_front = .{ .player = group.at(69).conditions[0].argument * 16 }, .following_front = .{ .player = group.at(70).conditions[0].argument * 16 }, .obstacle_object = null, .shoot_distance = group.at(49).conditions[1].argument * 16, .obstacle_shoot_distance = group.at(39).conditions[0].argument * 16, .obstacle_wait_distance = group.at(40).conditions[0].argument * 16, .immediate_fire_distance = null, .crouched_fire_distance = null, .aiming_distance = group.at(105).conditions[0].argument * 16, .lean_chance = group.at(7).conditions[0].argument, .shift_chance = group.at(6).conditions[0].argument, .fidget_hold_chance = group.at(18).conditions[0].argument, .relax_chance = group.at(60).conditions[0].argument, .shifted_forward = -@as(i16, group.at(11).dx), .settled_forward = -@as(i16, group.at(24).dx), .repeat_crouched_fire = true };
+        return .{
+            .opportunism = .{
+                .approach_chance = group.at(49).conditions[0].argument,
+                .close_distance = group.at(50).conditions[1].argument * 16,
+                .aim_cover_chance = group.at(77).conditions[1].argument,
+                .fire_chance = group.at(81).conditions[0].argument,
+                .low_fire_chance = group.at(102).conditions[0].argument,
+                .low_rise_chance = group.at(104).conditions[0].argument,
+                .recovery_fire_chance = group.at(182).conditions[0].argument,
+                .recovery_cover_chance = group.at(183).conditions[1].argument,
+                .visible_player_cells = @intCast(group.at(83).conditions[1].argument),
+            },
+            .clips = clips,
+            .reactions = reactions,
+            .hit_priority = hit_priority,
+            .defeat = defeat,
+            .crouch_senses = try postureSenses(group, get(sources, .assessing)),
+            .stay_low_senses = @splat(null),
+            .relaxed_front = try interest(group, get(sources, .relaxed), false),
+            .relaxed_behind = try interest(group, get(sources, .relaxed), true),
+            .fidget_front = try interest(group, get(sources, .leaned), false),
+            .ready_front = try interest(group, get(sources, .ready), false),
+            .ready_behind = try interest(group, get(sources, .ready), true),
+            .stopping_front = .{ .player = group.at(69).conditions[0].argument * 16 },
+            .following_front = .{ .player = group.at(70).conditions[0].argument * 16 },
+            .obstacle_object = null,
+            .shoot_distance = group.at(49).conditions[1].argument * 16,
+            .obstacle_shoot_distance = group.at(39).conditions[0].argument * 16,
+            .obstacle_wait_distance = group.at(40).conditions[0].argument * 16,
+            .immediate_fire_distance = null,
+            .crouched_fire_distance = null,
+            .aiming_distance = group.at(105).conditions[0].argument * 16,
+            .lean_chance = group.at(7).conditions[0].argument,
+            .shift_chance = group.at(6).conditions[0].argument,
+            .fidget_hold_chance = group.at(18).conditions[0].argument,
+            .relax_chance = group.at(60).conditions[0].argument,
+            .shifted_forward = -@as(i16, group.at(11).dx),
+            .settled_forward = -@as(i16, group.at(24).dx),
+            .repeat_crouched_fire = true,
+        };
     }
     const ready = get(sources, .ready);
     const relaxed = get(sources, .relaxed);
@@ -195,10 +331,18 @@ fn profile(group: rules.Group, sources: Sources, clips: actor.Clips, hit_priorit
     for (0..group.count()) |i| {
         const rule = group.at(i);
         if (rule.source != aiming or rule.conditions[1].code != 120) continue;
-        if (rule.target == aiming) aim_hold = try distance(group, aiming, 120, if (aim_immediate == null) 0 else 1) else aim_immediate = try distance(group, aiming, 120, 0);
+        if (rule.target == aiming) aim_hold = try distance(
+            group,
+            aiming,
+            120,
+            if (aim_immediate == null) 0 else 1,
+        ) else aim_immediate = try distance(group, aiming, 120, 0);
     }
     const recovery_target = (try required(group, get(sources, .crouched_recovery), 63, 0)).target;
-    if (recovery_target != get(sources, .crouched_aim) and recovery_target != get(sources, .rising)) return error.UnsupportedEnemyRecovery;
+    if (recovery_target != get(
+        sources,
+        .crouched_aim,
+    ) and recovery_target != get(sources, .rising)) return error.UnsupportedEnemyRecovery;
     return .{
         .clips = clips,
         .crouch_senses = try postureSenses(group, get(sources, .assessing)),
@@ -212,7 +356,12 @@ fn profile(group: rules.Group, sources: Sources, clips: actor.Clips, hit_priorit
         .ready_front = try interest(group, ready, false),
         .ready_behind = try interest(group, ready, true),
         .stopping_front = try interest(group, get(sources, .walk_finish), false),
-        .following_front = .{ .player = try distance(group, get(sources, .walk_finish), 120, 1), .object = following: {
+        .following_front = .{ .player = try distance(
+            group,
+            get(sources, .walk_finish),
+            120,
+            1,
+        ), .object = following: {
             const state = get(sources, .walk_finish);
             const rule = find(group, state, 64, 1) orelse break :following null;
             break :following @intCast(@max(1, @min(@abs(argument(rule, 64)), 16)));
@@ -228,13 +377,26 @@ fn profile(group: rules.Group, sources: Sources, clips: actor.Clips, hit_priorit
         .shift_chance = argument(try required(group, relaxed, 97, 0), 97),
         .fidget_hold_chance = argument(try required(group, get(sources, .leaned), 97, 0), 97),
         .relax_chance = argument(try required(group, ready, 97, 0), 97),
-        .shifted_forward = -@as(i16, (try required(group, get(sources, .shifting_weight), 0, 0)).dx),
+        .shifted_forward = -@as(
+            i16,
+            (try required(group, get(sources, .shifting_weight), 0, 0)).dx,
+        ),
         .settled_forward = -@as(i16, (try required(group, get(sources, .weight_shifted), 0, 0)).dx),
         .repeat_crouched_fire = recovery_target == get(sources, .crouched_aim),
     };
 }
 
-pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []const u8, animations: []const u8, room_ids: *const [64]geometry.RoomId, difficulty: @import("../settings.zig").Difficulty, score_awards: [16]u16, connections: *std.ArrayList(routes.Connection), resolver: anytype) !Assets {
+pub fn load(
+    allocator: std.mem.Allocator,
+    table: placement.Table,
+    rule_bytes: []const u8,
+    animations: []const u8,
+    room_ids: *const [64]geometry.RoomId,
+    difficulty: @import("../settings.zig").Difficulty,
+    score_awards: [16]u16,
+    connections: *std.ArrayList(routes.Connection),
+    resolver: anytype,
+) !Assets {
     var activation_signals: std.ArrayList(?i16) = .empty;
     errdefer activation_signals.deinit(allocator);
     var source_indices: std.ArrayList(u16) = .empty;
@@ -284,27 +446,62 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
                         const rule = group.at(j);
                         if (rule.source != state) continue;
                         const op = rule.conditions[0];
-                        const accepts = (op.code == 34 and op.argument == message) or (op.code == 107 and (if (op.argument == 0) message <= 2 else message >= 3));
+                        const accepts = (op.code == 34 and op.argument == message) or
+                            (op.code == 107 and
+                                (if (op.argument == 0) message <= 2 else message >= 3));
                         if (!accepts) continue;
-                        if (rule.conditions[1].code != 0 or rule.effect.code != 0 or rule.flags & 12 != 0) return error.UnsupportedEnemyHit;
+                        if (rule.conditions[1].code != 0 or
+                            rule.effect.code != 0 or
+                            rule.flags & 12 != 0) return error.UnsupportedEnemyHit;
                         const side: usize = if (slot < 2) 0 else 1;
-                        if (impacts[side] != null and impacts[side].? != rule.target) return error.UnsupportedEnemyHit;
+                        if (impacts[side] != null and
+                            impacts[side].? != rule.target) return error.UnsupportedEnemyHit;
                         impacts[side] = rule.target;
                         first_rule[slot] = j;
-                        responses[slot] = .{ .forward = -@as(i16, rule.dx), .down = rule.dy, .turn = rule.flags & 1 != 0, .damage = @intFromBool(rule.flags & 2 != 0), .score = score_awards[rule.flags >> 4] + @as(u16, if (rule.flags & 2 != 0) 100 else 0) };
+                        responses[slot] = .{
+                            .forward = -@as(i16, rule.dx),
+                            .down = rule.dy,
+                            .turn = rule.flags & 1 != 0,
+                            .damage = @intFromBool(rule.flags & 2 != 0),
+                            .score = score_awards[rule.flags >> 4] + @as(
+                                u16,
+                                if (rule.flags & 2 != 0) 100 else 0,
+                            ),
+                        };
                         break;
                     }
                 }
                 priority.* = .{ .rear_high, .rear_low, .front_high, .front_low };
                 for (1..4) |slot| {
                     var position = slot;
-                    while (position > 0 and first_rule[@backingInt(priority[position])] < first_rule[@backingInt(priority[position - 1])]) : (position -= 1) std.mem.swap(@import("../combat.zig").Impact, &priority[position], &priority[position - 1]);
+                    while (position > 0 and
+                        first_rule[@backingInt(priority[position])] < first_rule[@backingInt(priority[position - 1])]) : (position -= 1) std.mem.swap(
+                        @import("../combat.zig").Impact,
+                        &priority[position],
+                        &priority[position - 1],
+                    );
                 }
             }
             const defeat_import = @import("gunman_defeat.zig");
             const defeat: @import("../actors/gunman_defeat.zig").Definition = .{
-                .forward = try defeat_import.track(allocator, group, animations, impacts[0] orelse return error.MissingEnemyHit, false, &clips, resolver),
-                .backward = try defeat_import.track(allocator, group, animations, impacts[1] orelse return error.MissingEnemyHit, true, &clips, resolver),
+                .forward = try defeat_import.track(
+                    allocator,
+                    group,
+                    animations,
+                    impacts[0] orelse return error.MissingEnemyHit,
+                    false,
+                    &clips,
+                    resolver,
+                ),
+                .backward = try defeat_import.track(
+                    allocator,
+                    group,
+                    animations,
+                    impacts[1] orelse return error.MissingEnemyHit,
+                    true,
+                    &clips,
+                    resolver,
+                ),
             };
             var recovered = try profile(group, sources, resolved, hit_priority, reactions, defeat);
             if (opportunistic(group)) {
@@ -326,7 +523,10 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         const initial: Action = if (dormant) .ready else for (family.sources, 0..) |state, index| {
             if (record.initial_state == state) break std.enums.values(Action)[index];
         } else return error.UnsupportedEnemyStart;
-        const room = if (dormant) record.parameters[@intCast(group.at(189).effect.argument)] else @as(i16, record.room);
+        const room = if (dormant) record.parameters[@intCast(group.at(189).effect.argument)] else @as(
+            i16,
+            record.room,
+        );
         if (room < 0 or room >= room_ids.len) return error.InvalidEnemyRoom;
         var aim_delay: i16 = undefined;
         var recovery_delay: i16 = undefined;
@@ -334,34 +534,93 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
             aim_delay = group.at(77).conditions[0].argument;
             recovery_delay = group.at(112).conditions[0].argument;
         } else {
-            const aim_param = argument(try required(group, get(family.sources, .raising_aim), 68, 0), 68);
-            const recovery_param = argument(try required(group, get(family.sources, .firing), 68, 0), 68);
-            if (aim_param < 0 or aim_param > 3 or recovery_param < 0 or recovery_param > 3) return error.InvalidEnemyTimer;
+            const aim_param = argument(
+                try required(group, get(family.sources, .raising_aim), 68, 0),
+                68,
+            );
+            const recovery_param = argument(
+                try required(group, get(family.sources, .firing), 68, 0),
+                68,
+            );
+            if (aim_param < 0 or
+                aim_param > 3 or
+                recovery_param < 0 or
+                recovery_param > 3) return error.InvalidEnemyTimer;
             aim_delay = record.parameters[@intCast(aim_param)];
             recovery_delay = record.parameters[@intCast(recovery_param)];
         }
         var cover_output: ?@import("../world_props.zig").CircuitId = null;
         var defeat_output: ?@import("../world_props.zig").CircuitId = null;
         if (reactive) {
-            if (record.parameters[2] < 0 or record.parameters[2] >= table.count or record.parameters[3] < 0 or record.parameters[3] >= table.count) return error.InvalidGunmanOutput;
-            cover_output = try routes.internConnection(allocator, connections, @intCast(i), @intCast(record.parameters[2]), group.at(49).effect.argument);
-            defeat_output = try routes.internConnection(allocator, connections, @intCast(i), @intCast(record.parameters[3]), group.at(157).effect.argument);
+            if (record.parameters[2] < 0 or
+                record.parameters[2] >= table.count or
+                record.parameters[3] < 0 or
+                record.parameters[3] >= table.count) return error.InvalidGunmanOutput;
+            cover_output = try routes.internConnection(
+                allocator,
+                connections,
+                @intCast(i),
+                @intCast(record.parameters[2]),
+                group.at(49).effect.argument,
+            );
+            defeat_output = try routes.internConnection(
+                allocator,
+                connections,
+                @intCast(i),
+                @intCast(record.parameters[3]),
+                group.at(157).effect.argument,
+            );
         }
-        if (record.parameters[0] < -64 or record.parameters[0] > 64) return error.InvalidEnemyPostureRange;
+        if (record.parameters[0] < -64 or
+            record.parameters[0] > 64) return error.InvalidEnemyPostureRange;
         const endpoint = record.parameters[1];
         if (endpoint < 0 or endpoint >= table.count) return error.InvalidEnemyWeaponBinding;
         const endpoint_index: usize = @intCast(endpoint);
         if (weapon_ids[endpoint_index] == null) {
-            const weapon = try @import("weapon_effects.zig").load(allocator, try table.record(@intCast(endpoint)), rule_bytes, animations, &clips, resolver);
+            const weapon = try @import("weapon_effects.zig").load(
+                allocator,
+                try table.record(@intCast(endpoint)),
+                rule_bytes,
+                animations,
+                &clips,
+                resolver,
+            );
             const id = weapons.items.len;
             try weapons.append(allocator, weapon);
             weapon_ids[endpoint_index] = id;
         }
         try source_indices.append(allocator, @intCast(i));
-        try activation_signals.append(allocator, if (reactive) group.at(189).conditions[0].argument else null);
+        try activation_signals.append(
+            allocator,
+            if (reactive) group.at(189).conditions[0].argument else null,
+        );
         table.register(@intCast(i), .gunmen);
         table.register(@intCast(endpoint_index), .weapon_effects);
-        try definitions.append(allocator, .{ .dormant = dormant, .accepts_signals = record.flags & 1 != 0, .cover_output = cover_output, .defeat_output = defeat_output, .crouched_recovery_delay = if (reactive) group.at(109).conditions[0].argument else null, .weapon = weapon_ids[endpoint_index].?, .shot_next_step = i > endpoint_index, .profile = family.index, .room = room_ids[@intCast(room)], .position = record.position, .facing = if (record.facing_right == 0) .left else .right, .initial_action = initial, .contact_width = record.collision_width, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .behind_player = record.visual_flags & 8 != 0, .health = record.life, .aim_delay = aim_delay, .posture_range = record.parameters[0], .recovery_delay = recovery_delay });
+        try definitions.append(
+            allocator,
+            .{
+                .dormant = dormant,
+                .accepts_signals = record.flags & 1 != 0,
+                .cover_output = cover_output,
+                .defeat_output = defeat_output,
+                .crouched_recovery_delay = if (reactive) group.at(109).conditions[0].argument else null,
+                .weapon = weapon_ids[endpoint_index].?,
+                .shot_next_step = i > endpoint_index,
+                .profile = family.index,
+                .room = room_ids[@intCast(room)],
+                .position = record.position,
+                .facing = if (record.facing_right == 0) .left else .right,
+                .initial_action = initial,
+                .contact_width = record.collision_width,
+                .initially_active = record.initially_active != 0,
+                .wake_nearby = record.flags & 4 != 0,
+                .behind_player = record.visual_flags & 8 != 0,
+                .health = record.life,
+                .aim_delay = aim_delay,
+                .posture_range = record.parameters[0],
+                .recovery_delay = recovery_delay,
+            },
+        );
     }
     const owned_definitions = try definitions.toOwnedSlice(allocator);
     errdefer allocator.free(owned_definitions);
@@ -373,5 +632,14 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
     errdefer allocator.free(owned_sources);
     const owned_activation = try activation_signals.toOwnedSlice(allocator);
     errdefer allocator.free(owned_activation);
-    return .{ .activation_signals = owned_activation, .sources = owned_sources, .allocator = allocator, .definitions = owned_definitions, .profiles = owned_profiles, .weapons = owned_weapons, .clips = try clips.toOwnedSlice(allocator), .unclassified = unclassified };
+    return .{
+        .activation_signals = owned_activation,
+        .sources = owned_sources,
+        .allocator = allocator,
+        .definitions = owned_definitions,
+        .profiles = owned_profiles,
+        .weapons = owned_weapons,
+        .clips = try clips.toOwnedSlice(allocator),
+        .unclassified = unclassified,
+    };
 }

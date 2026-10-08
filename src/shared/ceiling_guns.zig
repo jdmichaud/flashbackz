@@ -66,7 +66,11 @@ pub const Instance = struct {
 pub const World = struct {
     allocator: std.mem.Allocator,
     instances: []Instance,
-    pub fn init(allocator: std.mem.Allocator, definitions: []const Definition, profiles: []const Profile) !World {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        definitions: []const Definition,
+        profiles: []const Profile,
+    ) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);
         for (instances, definitions) |*instance, definition| {
@@ -74,7 +78,17 @@ pub const World = struct {
                 .frame => |frame| frame.visual,
                 .hold => return error.MissingCeilingGunVisual,
             };
-            instance.* = .{ .pose = .{ .position = definition.position, .facing = definition.facing, .visual = .{ .id = first.id, .mirrored = first.mirrored != (definition.facing == .left) } }, .active = definition.initially_active };
+            instance.* = .{
+                .pose = .{
+                    .position = definition.position,
+                    .facing = definition.facing,
+                    .visual = .{
+                        .id = first.id,
+                        .mirrored = first.mirrored != (definition.facing == .left),
+                    },
+                },
+                .active = definition.initially_active,
+            };
         }
         return .{ .allocator = allocator, .instances = instances };
     }
@@ -95,18 +109,32 @@ pub const World = struct {
             if (binding.next_step) instance.pending.add(binding.action) else instance.requests.add(binding.action);
         };
     }
-    pub fn advance(self: *World, definitions: []const Definition, profiles: []const Profile, map: geometry.Map, player_room: geometry.RoomId) !void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        profiles: []const Profile,
+        map: geometry.Map,
+        player_room: geometry.RoomId,
+    ) !void {
         for (self.instances, definitions) |*instance, definition| {
-            const near = try activation.around(map, player_room, definition.room, instance.pose.position.y);
+            const near = try activation.around(
+                map,
+                player_room,
+                definition.room,
+                instance.pose.position.y,
+            );
             if (definition.wake_nearby and near.wake) instance.active = true;
-            if (instance.requests.wake and (instance.active or definition.accepts_signals)) instance.active = true else instance.requests = .{};
+            if (instance.requests.wake and
+                (instance.active or
+                    definition.accepts_signals)) instance.active = true else instance.requests = .{};
             if (!instance.active) continue;
             const profile = profiles[definition.profile];
             var clip = profile.clip(instance.phase);
             const trigger = instance.requests.trigger or instance.requests.rearm;
             const interrupted = switch (instance.phase) {
                 .closed => trigger,
-                .waiting => if (profile.cycle == .per_signal) trigger else profile.cycle == .retract_after_shot and instance.requests.stop,
+                .waiting => if (profile.cycle == .per_signal) trigger else profile.cycle == .retract_after_shot and
+                    instance.requests.stop,
                 .cooling => profile.cycle == .retract_after_shot and instance.requests.rearm,
                 else => false,
             };
@@ -132,7 +160,9 @@ pub const World = struct {
                             instance.phase = .retracting;
                         },
                         .repeating, .retract_after_shot => {
-                            if (profile.cycle == .retract_after_shot and instance.requests.stop) instance.phase = .retracting else if (instance.countdown()) {
+                            if (profile.cycle == .retract_after_shot and
+                                instance.requests.stop) instance.phase = .retracting else if (instance.countdown())
+                            {
                                 instance.timer = definition.charge_wait;
                                 instance.phase = .charging;
                             } else if (profile.cycle == .repeating and !near.same) {
@@ -166,10 +196,19 @@ pub const World = struct {
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
         for (self.instances) |instance| {
-            hash.update(&.{ @backingInt(instance.phase), @intFromBool(instance.active), @intFromBool(instance.fire) });
+            hash.update(&.{
+                @backingInt(instance.phase),
+                @intFromBool(instance.active),
+                @intFromBool(instance.fire),
+            });
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(i16, instance.timer)));
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, instance.playback.next_step)));
-            for ([_]Requests{ instance.requests, instance.pending }) |r| hash.update(&.{ @intFromBool(r.wake), @intFromBool(r.trigger), @intFromBool(r.rearm), @intFromBool(r.stop) });
+            for ([_]Requests{ instance.requests, instance.pending }) |r| hash.update(&.{
+                @intFromBool(r.wake),
+                @intFromBool(r.trigger),
+                @intFromBool(r.rearm),
+                @intFromBool(r.stop),
+            });
         }
     }
 };

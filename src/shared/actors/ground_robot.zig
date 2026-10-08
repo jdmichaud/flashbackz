@@ -8,7 +8,22 @@ const combat = @import("../combat.zig");
 const perception = @import("perception.zig");
 const Environment = @import("conrad_environment.zig").Environment;
 const shift = @import("conrad_roll.zig").shiftForward;
-pub const Phase = enum { closed_idle, closed_walk, closed_turn, deploying, open_idle_a, open_idle_b, open_walk_a, open_walk_b, open_turn, retracting, collapsing_front, collapsing_rear, overloading, exploding };
+pub const Phase = enum {
+    closed_idle,
+    closed_walk,
+    closed_turn,
+    deploying,
+    open_idle_a,
+    open_idle_b,
+    open_walk_a,
+    open_walk_b,
+    open_turn,
+    retracting,
+    collapsing_front,
+    collapsing_rear,
+    overloading,
+    exploding,
+};
 pub const phase_count = @typeInfo(Phase).@"enum".field_names.len;
 pub const Profile = struct {
     clips: [phase_count]motion.Clip,
@@ -49,7 +64,10 @@ pub const Actor = struct {
 
     pub fn vulnerability(self: Actor) combat.Vulnerability {
         return switch (self.phase) {
-            .open_idle_a, .open_idle_b, .open_walk_a, .open_walk_b, .open_turn => .{ .rear_low = true, .front_low = true },
+            .open_idle_a, .open_idle_b, .open_walk_a, .open_walk_b, .open_turn => .{
+                .rear_low = true,
+                .front_low = true,
+            },
             else => .{},
         };
     }
@@ -62,7 +80,11 @@ pub const World = struct {
     actors: []Actor,
     outgoing: []combat.Hit,
     outgoing_count: usize = 0,
-    pub fn init(allocator: std.mem.Allocator, definitions: []const Definition, profiles: []const Profile) !World {
+    pub fn init(
+        allocator: std.mem.Allocator,
+        definitions: []const Definition,
+        profiles: []const Profile,
+    ) !World {
         const actors = try allocator.alloc(Actor, definitions.len);
         errdefer allocator.free(actors);
         for (actors, definitions) |*actor, definition| {
@@ -70,9 +92,25 @@ pub const World = struct {
                 .frame => |frame| frame.visual,
                 .hold => return error.MissingRobotVisual,
             };
-            actor.* = .{ .room = definition.footprint.room, .contact = definition.footprint, .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } }, .active = definition.initially_active };
+            actor.* = .{
+                .room = definition.footprint.room,
+                .contact = definition.footprint,
+                .pose = .{
+                    .position = definition.footprint.position,
+                    .facing = definition.facing,
+                    .visual = .{
+                        .id = visual.id,
+                        .mirrored = visual.mirrored != (definition.facing == .left),
+                    },
+                },
+                .active = definition.initially_active,
+            };
         }
-        return .{ .allocator = allocator, .actors = actors, .outgoing = try allocator.alloc(combat.Hit, definitions.len) };
+        return .{
+            .allocator = allocator,
+            .actors = actors,
+            .outgoing = try allocator.alloc(combat.Hit, definitions.len),
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.actors);
@@ -84,8 +122,22 @@ pub const World = struct {
             actor.contact.position = actor.pose.position;
         }
     }
-    fn strike(self: *World, actor: *const Actor, definition: Definition, terrain: @import("../terrain.zig").View, targets: []const combat.Target, first_target: usize) !bool {
-        const hit = try combat.trace(terrain, actor.room, actor.pose, .crouched, definition.strike_cells, targets) orelse return false;
+    fn strike(
+        self: *World,
+        actor: *const Actor,
+        definition: Definition,
+        terrain: @import("../terrain.zig").View,
+        targets: []const combat.Target,
+        first_target: usize,
+    ) !bool {
+        const hit = try combat.trace(
+            terrain,
+            actor.room,
+            actor.pose,
+            .crouched,
+            definition.strike_cells,
+            targets,
+        ) orelse return false;
         const index = @backingInt(hit.target);
         if (index >= first_target and index < first_target + self.actors.len) {
             const other = &self.actors[index - first_target];
@@ -96,7 +148,15 @@ pub const World = struct {
         }
         return true;
     }
-    pub fn advance(self: *World, definitions: []const Definition, profiles: []const Profile, terrain: @import("../terrain.zig").View, player: contacts.Footprint, targets: []combat.Target, first_target: usize) !void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        profiles: []const Profile,
+        terrain: @import("../terrain.zig").View,
+        player: contacts.Footprint,
+        targets: []combat.Target,
+        first_target: usize,
+    ) !void {
         self.outgoing_count = 0;
         const current = try terrain.geometry.room(player.room);
         for (self.actors, definitions, 0..) |*actor, definition, index| {
@@ -104,12 +164,21 @@ pub const World = struct {
             if (actor.removed) continue;
             const same_room = actor.room == player.room;
             var adjacent = same_room;
-            for ([_]geometry.Edge{ current.edges.left, current.edges.right, current.edges.up, current.edges.down }) |edge| if (edge == .room and edge.room == actor.room) {
+            for ([_]geometry.Edge{
+                current.edges.left,
+                current.edges.right,
+                current.edges.up,
+                current.edges.down,
+            }) |edge| if (edge == .room and edge.room == actor.room) {
                 adjacent = true;
             };
             if (definition.wake_nearby) {
-                const above = current.edges.up == .room and current.edges.up.room == actor.room and actor.pose.position.y >= 48;
-                const below = current.edges.down == .room and current.edges.down.room == actor.room and actor.pose.position.y >= 176;
+                const above = current.edges.up == .room and
+                    current.edges.up.room == actor.room and
+                    actor.pose.position.y >= 48;
+                const below = current.edges.down == .room and
+                    current.edges.down.room == actor.room and
+                    actor.pose.position.y >= 176;
                 if (same_room or above or below) actor.active = true;
             }
             if (!actor.active) continue;
@@ -118,18 +187,45 @@ pub const World = struct {
             const hits = actor.pending_hits;
             actor.pending_hits = .{};
             const vulnerable = actor.vulnerability();
-            const impact: ?combat.Impact = if (hits.front_low and vulnerable.front_low) .front_low else if (hits.rear_low and vulnerable.rear_low) .rear_low else null;
+            const impact: ?combat.Impact = if (hits.front_low and
+                vulnerable.front_low) .front_low else if (hits.rear_low and
+                vulnerable.rear_low) .rear_low else null;
             if (impact != null) actor.playback.completeDisplacement(clip, &actor.pose);
             if (actor.playback.exhausted(clip)) {
                 const previous = actor.phase;
                 var audible = true;
                 const environment: Environment = .{ .map = terrain.geometry, .room = actor.room };
-                const awareness = try perception.observe(terrain.geometry, .{ .room = actor.room, .pose = actor.pose }, player, &.{});
+                const awareness = try perception.observe(
+                    terrain.geometry,
+                    .{ .room = actor.room, .pose = actor.pose },
+                    player,
+                    &.{},
+                );
                 if (impact) |hit| {
                     actor.phase = if (hit == .front_low) .collapsing_front else .collapsing_rear;
                 } else switch (actor.phase) {
                     .closed_idle, .closed_walk => {
-                        if (awareness.player(false, profile.deployment_distance)) actor.phase = if (previous == .closed_idle) .deploying else .closed_idle else if (awareness.player(false, 0) and try environment.at(actor.pose, .torso, profile.wall_ahead)) actor.phase = .closed_idle else if (awareness.player(false, 0) and try environment.at(actor.pose, .support, profile.floor_ahead)) actor.phase = .closed_walk else if (awareness.player(true, 0)) actor.phase = .closed_turn else {
+                        if (awareness.player(
+                            false,
+                            profile.deployment_distance,
+                        )) actor.phase = if (previous == .closed_idle) .deploying else .closed_idle else if (awareness.player(
+                            false,
+                            0,
+                        ) and try environment.at(
+                            actor.pose,
+                            .torso,
+                            profile.wall_ahead,
+                        )) actor.phase = .closed_idle else if (awareness.player(
+                            false,
+                            0,
+                        ) and try environment.at(
+                            actor.pose,
+                            .support,
+                            profile.floor_ahead,
+                        )) actor.phase = .closed_walk else if (awareness.player(
+                            true,
+                            0,
+                        )) actor.phase = .closed_turn else {
                             actor.phase = .closed_idle;
                             if (previous == .closed_idle) {
                                 audible = false;
@@ -141,22 +237,86 @@ pub const World = struct {
                     .deploying, .open_turn => actor.phase = .open_idle_a,
                     .open_idle_a, .open_idle_b => {
                         const alternate: Phase = if (previous == .open_idle_a) .open_idle_b else .open_idle_a;
-                        if (awareness.player(false, profile.strike_distance) and try self.strike(actor, definition, terrain, targets, first_target)) actor.phase = alternate else if (awareness.player(true, 0)) actor.phase = .open_turn else if (awareness.player(false, profile.obstacle_distance) and try environment.at(actor.pose, .torso, profile.wall_ahead)) actor.phase = alternate else if (awareness.player(false, profile.pursuit_distance[@intFromBool(previous == .open_idle_b)]) and try environment.at(actor.pose, .support, profile.floor_ahead)) actor.phase = .open_walk_a else actor.phase = .retracting;
+                        if (awareness.player(false, profile.strike_distance) and try self.strike(
+                            actor,
+                            definition,
+                            terrain,
+                            targets,
+                            first_target,
+                        )) actor.phase = alternate else if (awareness.player(
+                            true,
+                            0,
+                        )) actor.phase = .open_turn else if (awareness.player(
+                            false,
+                            profile.obstacle_distance,
+                        ) and try environment.at(
+                            actor.pose,
+                            .torso,
+                            profile.wall_ahead,
+                        )) actor.phase = alternate else if (awareness.player(
+                            false,
+                            profile.pursuit_distance[@intFromBool(previous == .open_idle_b)],
+                        ) and try environment.at(
+                            actor.pose,
+                            .support,
+                            profile.floor_ahead,
+                        )) actor.phase = .open_walk_a else actor.phase = .retracting;
                     },
                     .open_walk_a => {
-                        if (awareness.player(false, profile.strike_distance)) _ = try self.strike(actor, definition, terrain, targets, first_target);
+                        if (awareness.player(false, profile.strike_distance)) _ = try self.strike(
+                            actor,
+                            definition,
+                            terrain,
+                            targets,
+                            first_target,
+                        );
                         actor.phase = .open_walk_b;
                     },
                     .open_walk_b => {
-                        if (awareness.player(false, profile.strike_distance) and try self.strike(actor, definition, terrain, targets, first_target)) actor.phase = .open_idle_a else if (awareness.player(false, profile.obstacle_distance) and try environment.at(actor.pose, .torso, profile.wall_ahead)) actor.phase = .open_idle_a else if (awareness.player(false, profile.walking_pursuit_distance) and try environment.at(actor.pose, .support, profile.floor_ahead)) actor.phase = .open_walk_a else actor.phase = .open_idle_a;
+                        if (awareness.player(false, profile.strike_distance) and try self.strike(
+                            actor,
+                            definition,
+                            terrain,
+                            targets,
+                            first_target,
+                        )) actor.phase = .open_idle_a else if (awareness.player(
+                            false,
+                            profile.obstacle_distance,
+                        ) and try environment.at(
+                            actor.pose,
+                            .torso,
+                            profile.wall_ahead,
+                        )) actor.phase = .open_idle_a else if (awareness.player(
+                            false,
+                            profile.walking_pursuit_distance,
+                        ) and try environment.at(
+                            actor.pose,
+                            .support,
+                            profile.floor_ahead,
+                        )) actor.phase = .open_walk_a else actor.phase = .open_idle_a;
                     },
                     .collapsing_front, .collapsing_rear => actor.phase = .overloading,
                     .overloading => {
                         // The backward condition still uses the current forward strike ray;
                         // only a successful hit then turns the body before its explosion.
                         if (awareness.player(true, profile.explosion_distance)) {
-                            if (try self.strike(actor, definition, terrain, targets, first_target)) actor.reverse();
-                        } else if (awareness.player(false, profile.explosion_distance)) _ = try self.strike(actor, definition, terrain, targets, first_target);
+                            if (try self.strike(
+                                actor,
+                                definition,
+                                terrain,
+                                targets,
+                                first_target,
+                            )) actor.reverse();
+                        } else if (awareness.player(
+                            false,
+                            profile.explosion_distance,
+                        )) _ = try self.strike(
+                            actor,
+                            definition,
+                            terrain,
+                            targets,
+                            first_target,
+                        );
                         actor.phase = .exploding;
                     },
                     .exploding => {
@@ -167,7 +327,10 @@ pub const World = struct {
                 }
                 if (previous == .closed_turn or previous == .open_turn) actor.reverse();
                 if (previous == .closed_walk) shift(&actor.pose, profile.closed_step);
-                if (previous == .open_walk_a or previous == .open_walk_b) shift(&actor.pose, profile.open_step);
+                if (previous == .open_walk_a or previous == .open_walk_b) shift(
+                    &actor.pose,
+                    profile.open_step,
+                );
                 actor.playback = .{};
                 _ = try terrain.geometry.handoff(&actor.room, &actor.pose.position);
                 clip = profile.clip(actor.phase);
@@ -181,8 +344,22 @@ pub const World = struct {
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
         for (self.actors) |actor| {
-            for ([_]u32{ @backingInt(actor.room), @as(u16, @bitCast(actor.pose.position.x)), @as(u16, @bitCast(actor.pose.position.y)), @backingInt(actor.pose.visual.id), @intCast(actor.playback.next_step) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
-            hash.update(&.{ @backingInt(actor.phase), @backingInt(actor.pose.facing), @intFromBool(actor.pose.visual.mirrored), @intFromBool(actor.active), @intFromBool(actor.removed), @intFromBool(actor.pending_hits.front_low), @intFromBool(actor.pending_hits.rear_low) });
+            for ([_]u32{
+                @backingInt(actor.room),
+                @as(u16, @bitCast(actor.pose.position.x)),
+                @as(u16, @bitCast(actor.pose.position.y)),
+                @backingInt(actor.pose.visual.id),
+                @intCast(actor.playback.next_step),
+            }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, value)));
+            hash.update(&.{
+                @backingInt(actor.phase),
+                @backingInt(actor.pose.facing),
+                @intFromBool(actor.pose.visual.mirrored),
+                @intFromBool(actor.active),
+                @intFromBool(actor.removed),
+                @intFromBool(actor.pending_hits.front_low),
+                @intFromBool(actor.pending_hits.rear_low),
+            });
         }
     }
 };

@@ -8,7 +8,13 @@ const geometry = @import("../geometry.zig");
 const motion = @import("../motion.zig");
 const connections = @import("first_world_props.zig");
 const Route = struct { parameter: u2, message: i16 };
-const Spec = struct { states: [5]u16, enable: i16, disable: i16, outputs: [2]?Route, disable_after_pulse: bool };
+const Spec = struct {
+    states: [5]u16,
+    enable: i16,
+    disable: i16,
+    outputs: [2]?Route,
+    disable_after_pulse: bool,
+};
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
@@ -31,16 +37,25 @@ pub const Assets = struct {
 fn find(group: rules.Group, state: u16, code: u8) ?rules.Rule {
     for (0..group.count()) |i| {
         const r = group.at(i);
-        if (r.source == state and r.conditions[0].code == code and r.conditions[1].code == 0) return r;
+        if (r.source == state and
+            r.conditions[0].code == code and
+            r.conditions[1].code == 0) return r;
     }
     return null;
 }
 fn outputs(rule: rules.Rule) ![2]?Route {
     var result: [2]?Route = @splat(null);
     var count: usize = 0;
-    for ([_]rules.Operation{ rule.conditions[0], rule.conditions[1], rule.effect }) |operation| if (operation.code >= 35 and operation.code <= 38) {
+    for ([_]rules.Operation{
+        rule.conditions[0],
+        rule.conditions[1],
+        rule.effect,
+    }) |operation| if (operation.code >= 35 and operation.code <= 38) {
         if (count == result.len) return error.UnsupportedDetectorOutputs;
-        result[count] = .{ .parameter = @intCast(operation.code - 35), .message = operation.argument };
+        result[count] = .{
+            .parameter = @intCast(operation.code - 35),
+            .message = operation.argument,
+        };
         count += 1;
     };
     return result;
@@ -48,7 +63,9 @@ fn outputs(rule: rules.Rule) ![2]?Route {
 fn discover(group: rules.Group) !?Spec {
     if (group.count() != 10 and group.count() != 12 and group.count() != 20) return null;
     const enable = group.at(0);
-    if (enable.conditions[0].code != 34 or enable.conditions[1].code != 0 or enable.source == enable.target) return null;
+    if (enable.conditions[0].code != 34 or
+        enable.conditions[1].code != 0 or
+        enable.source == enable.target) return null;
     const enabled = find(group, enable.target, 0) orelse return null;
     if (enabled.effect.code != 0) return null;
     const disable = find(group, enabled.target, 34) orelse return null;
@@ -62,15 +79,27 @@ fn discover(group: rules.Group) !?Spec {
         if (r.source != enabled.target) continue;
         const out = try outputs(r);
         if (out[0] == null) continue;
-        if (r.conditions[0].code != 120 and r.conditions[0].code != 121 and !(r.conditions[0].code == 0 and r.conditions[1].code == 64)) return null;
-        if (detecting != null and (r.target != detecting.? or !std.meta.eql(route, out))) return error.UnsupportedDetectorPulse;
+        if (r.conditions[0].code != 120 and
+            r.conditions[0].code != 121 and
+            !(r.conditions[0].code == 0 and r.conditions[1].code == 64)) return null;
+        if (detecting != null and (r.target != detecting.? or !std.meta.eql(
+            route,
+            out,
+        ))) return error.UnsupportedDetectorPulse;
         detecting = r.target;
         route = out;
     }
     const active = detecting orelse return null;
     const complete = find(group, active, 0) orelse return error.UnsupportedDetectorRecovery;
-    if (complete.target != enabled.target and complete.target != disable.target) return error.UnsupportedDetectorRecovery;
-    return .{ .states = .{ enable.source, enable.target, enabled.target, active, disable.target }, .enable = enable.conditions[0].argument, .disable = disable.conditions[0].argument, .outputs = route, .disable_after_pulse = complete.target == disable.target };
+    if (complete.target != enabled.target and
+        complete.target != disable.target) return error.UnsupportedDetectorRecovery;
+    return .{
+        .states = .{ enable.source, enable.target, enabled.target, active, disable.target },
+        .enable = enable.conditions[0].argument,
+        .disable = disable.conditions[0].argument,
+        .outputs = route,
+        .disable_after_pulse = complete.target == disable.target,
+    };
 }
 fn senses(allocator: std.mem.Allocator, group: rules.Group, state: u16) ![]runtime.Sense {
     var result: std.ArrayList(runtime.Sense) = .empty;
@@ -99,7 +128,13 @@ fn senses(allocator: std.mem.Allocator, group: rules.Group, state: u16) ![]runti
     }
     return result.toOwnedSlice(allocator);
 }
-fn resolve(allocator: std.mem.Allocator, animations: []const u8, state: u16, clips: *std.ArrayList(animation.OwnedClip), resolver: anytype) !motion.Clip {
+fn resolve(
+    allocator: std.mem.Allocator,
+    animations: []const u8,
+    state: u16,
+    clips: *std.ArrayList(animation.OwnedClip),
+    resolver: anytype,
+) !motion.Clip {
     var source = try animation.decode(allocator, animations, state);
     defer source.deinit();
     for (source.frames) |frame| switch (frame) {
@@ -111,7 +146,16 @@ fn resolve(allocator: std.mem.Allocator, animations: []const u8, state: u16, cli
     try clips.append(allocator, owned);
     return owned.clip();
 }
-pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []const u8, animations: []const u8, rooms: *const [64]geometry.RoomId, difficulty: @import("../settings.zig").Difficulty, routes: *std.ArrayList(connections.Connection), resolver: anytype) !Assets {
+pub fn load(
+    allocator: std.mem.Allocator,
+    table: placement.Table,
+    rule_bytes: []const u8,
+    animations: []const u8,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: @import("../settings.zig").Difficulty,
+    routes: *std.ArrayList(connections.Connection),
+    resolver: anytype,
+) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
     errdefer {
         for (definitions.items) |definition| allocator.free(definition.outputs);
@@ -142,13 +186,38 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
             const group = try rules.group(rule_bytes, record.rule_group);
             const spec = try discover(group) orelse continue;
             var resolved: [5]motion.Clip = undefined;
-            for (spec.states, &resolved) |state, *clip| clip.* = try resolve(allocator, animations, state, &clips, resolver);
-            const acquire = try senses(allocator, group, spec.states[@backingInt(runtime.Phase.monitoring)]);
+            for (spec.states, &resolved) |state, *clip| clip.* = try resolve(
+                allocator,
+                animations,
+                state,
+                &clips,
+                resolver,
+            );
+            const acquire = try senses(
+                allocator,
+                group,
+                spec.states[@backingInt(runtime.Phase.monitoring)],
+            );
             errdefer allocator.free(acquire);
-            const sustain = if (spec.disable_after_pulse) try allocator.alloc(runtime.Sense, 0) else try senses(allocator, group, spec.states[@backingInt(runtime.Phase.detecting)]);
+            const sustain = if (spec.disable_after_pulse) try allocator.alloc(
+                runtime.Sense,
+                0,
+            ) else try senses(
+                allocator,
+                group,
+                spec.states[@backingInt(runtime.Phase.detecting)],
+            );
             errdefer allocator.free(sustain);
             const index = profiles.items.len;
-            try profiles.append(allocator, .{ .clips = resolved, .acquire = acquire, .sustain = sustain, .disable_after_pulse = spec.disable_after_pulse });
+            try profiles.append(
+                allocator,
+                .{
+                    .clips = resolved,
+                    .acquire = acquire,
+                    .sustain = sustain,
+                    .disable_after_pulse = spec.disable_after_pulse,
+                },
+            );
             families[record.rule_group] = .{ .profile = index, .spec = spec };
         }
         const family = families[record.rule_group].?;
@@ -161,16 +230,48 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
         for (family.spec.outputs) |optional| if (optional) |route| {
             const target = record.parameters[route.parameter];
             if (target < 0 or target >= table.count) return error.InvalidDetectorTarget;
-            try out.append(allocator, try connections.internConnection(allocator, routes, @intCast(i), @intCast(target), route.message));
+            try out.append(
+                allocator,
+                try connections.internConnection(
+                    allocator,
+                    routes,
+                    @intCast(i),
+                    @intCast(target),
+                    route.message,
+                ),
+            );
         };
         const owned_outputs = try out.toOwnedSlice(allocator);
         errdefer allocator.free(owned_outputs);
         instances[i] = .{ .index = definitions.items.len, .spec = family.spec };
         table.register(@intCast(i), .detectors);
-        try definitions.append(allocator, .{ .profile = family.profile, .room = rooms[record.room], .position = record.position, .facing = if (record.facing_right == 0) .left else .right, .initial_phase = phase, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .outputs = owned_outputs });
+        try definitions.append(
+            allocator,
+            .{
+                .profile = family.profile,
+                .room = rooms[record.room],
+                .position = record.position,
+                .facing = if (record.facing_right == 0) .left else .right,
+                .initial_phase = phase,
+                .initially_active = record.initially_active != 0,
+                .wake_nearby = record.flags & 4 != 0,
+                .accepts_signals = record.flags & 1 != 0,
+                .palette_bank = @intCast(record.visual_flags & 3),
+                .behind_player = record.visual_flags & 8 != 0,
+                .outputs = owned_outputs,
+            },
+        );
     }
     for (routes.items) |route| if (instances[route.recipient]) |instance| {
-        try bindings.append(allocator, .{ .circuit = route.circuit, .target = instance.index, .action = if (route.message == instance.spec.enable) .enable else if (route.message == instance.spec.disable) .disable else .wake, .next_step = route.sender >= route.recipient });
+        try bindings.append(
+            allocator,
+            .{
+                .circuit = route.circuit,
+                .target = instance.index,
+                .action = if (route.message == instance.spec.enable) .enable else if (route.message == instance.spec.disable) .disable else .wake,
+                .next_step = route.sender >= route.recipient,
+            },
+        );
     };
     const owned_definitions = try definitions.toOwnedSlice(allocator);
     errdefer {
@@ -187,5 +288,11 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
     }
     const owned_bindings = try bindings.toOwnedSlice(allocator);
     errdefer allocator.free(owned_bindings);
-    return .{ .allocator = allocator, .definitions = owned_definitions, .profiles = owned_profiles, .bindings = owned_bindings, .clips = try clips.toOwnedSlice(allocator) };
+    return .{
+        .allocator = allocator,
+        .definitions = owned_definitions,
+        .profiles = owned_profiles,
+        .bindings = owned_bindings,
+        .clips = try clips.toOwnedSlice(allocator),
+    };
 }

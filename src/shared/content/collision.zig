@@ -41,18 +41,30 @@ pub const Layout = struct {
 };
 
 /// The caller allocates room IDs in its content namespace, independently of source indices.
-pub fn decode(allocator: std.mem.Allocator, bytes: []const u8, room_ids: *const [64]geometry.RoomId) !Layout {
+pub fn decode(
+    allocator: std.mem.Allocator,
+    bytes: []const u8,
+    room_ids: *const [64]geometry.RoomId,
+) !Layout {
     const source = try backward.decode(allocator, bytes, 7424);
     return importOwned(allocator, source, room_ids);
 }
 
 /// Research and synthetic content can supply the decompressed layout directly. Ownership
 /// still belongs to the returned layout, independently of the caller's input buffer.
-pub fn fromDecoded(allocator: std.mem.Allocator, bytes: []const u8, room_ids: *const [64]geometry.RoomId) !Layout {
+pub fn fromDecoded(
+    allocator: std.mem.Allocator,
+    bytes: []const u8,
+    room_ids: *const [64]geometry.RoomId,
+) !Layout {
     return importOwned(allocator, try allocator.dupe(u8, bytes), room_ids);
 }
 
-fn importOwned(allocator: std.mem.Allocator, source: []u8, room_ids: *const [64]geometry.RoomId) !Layout {
+fn importOwned(
+    allocator: std.mem.Allocator,
+    source: []u8,
+    room_ids: *const [64]geometry.RoomId,
+) !Layout {
     errdefer allocator.free(source);
     if (source.len != 7424) return error.InvalidCollisionLayout;
     for (room_ids, 0..) |id, i| {
@@ -90,7 +102,13 @@ fn importOwned(allocator: std.mem.Allocator, source: []u8, room_ids: *const [64]
             },
         };
     }
-    return .{ .allocator = allocator, .source = source, .occupancy = occupancy, .materials = materials, .rooms = rooms };
+    return .{
+        .allocator = allocator,
+        .source = source,
+        .occupancy = occupancy,
+        .materials = materials,
+        .rooms = rooms,
+    };
 }
 
 fn edge(index: u8, ids: *const [64]geometry.RoomId, missing_right: bool) !geometry.Edge {
@@ -113,10 +131,19 @@ test "source room links resolve independently of occupancy and material metadata
     try std.testing.expectEqual(@as(u8, 2), layout.source[256 + 16]);
     try std.testing.expect(!try layout.map().blocked(ids[1], -1, 1));
     try std.testing.expectError(error.UnresolvedBoundary, layout.map().blocked(ids[1], 16, 1));
-    try std.testing.expectError(error.InvalidCollisionLayout, fromDecoded(std.testing.allocator, source[0..7423], &ids));
+    try std.testing.expectError(
+        error.InvalidCollisionLayout,
+        fromDecoded(std.testing.allocator, source[0..7423], &ids),
+    );
     source[0] = 64;
-    try std.testing.expectError(error.InvalidRoomLink, fromDecoded(std.testing.allocator, &source, &ids));
+    try std.testing.expectError(
+        error.InvalidRoomLink,
+        fromDecoded(std.testing.allocator, &source, &ids),
+    );
     source[0] = 255;
     source[256] = 3;
-    try std.testing.expectError(error.UnknownCollisionMaterial, fromDecoded(std.testing.allocator, &source, &ids));
+    try std.testing.expectError(
+        error.UnknownCollisionMaterial,
+        fromDecoded(std.testing.allocator, &source, &ids),
+    );
 }

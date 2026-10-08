@@ -16,8 +16,16 @@ test "floppy menu preview rejects missing introduction and wake-up resources" {
     try source.add("DATA/MENU3.MAP", pixels);
     try source.add("DATA/MENU3.PAL", &palette);
     try source.add("DATA/FB_TXT.FNT", &font);
-    try std.testing.expectError(error.NotFound, game.Game.init(allocator, source.assetSource(), null));
-    var preview = try game.Game.initWithEntry(allocator, source.assetSource(), null, .menu_development);
+    try std.testing.expectError(
+        error.NotFound,
+        game.Game.init(allocator, source.assetSource(), null),
+    );
+    var preview = try game.Game.initWithEntry(
+        allocator,
+        source.assetSource(),
+        null,
+        .menu_development,
+    );
     defer preview.deinit();
     const front = &preview.scene.menu;
     try front.event(.{ .time_ns = 0, .payload = .{ .key_down = .{ .key = .down } } });
@@ -54,7 +62,34 @@ test "normal startup completes three vector chapters and skipping introduction r
     profile[544] = 7;
     profile[549] = 12;
     @memcpy(profile[550..558], "TEST.MID");
-    const midi = [_]u8{ 'M', 'T', 'h', 'd', 0, 0, 0, 6, 0, 0, 0, 1, 0, 96, 'M', 'T', 'r', 'k', 0, 0, 0, 4, 0, 255, 47, 0 };
+    const midi = [_]u8{
+        'M',
+        'T',
+        'h',
+        'd',
+        0,
+        0,
+        0,
+        6,
+        0,
+        0,
+        0,
+        1,
+        0,
+        96,
+        'M',
+        'T',
+        'r',
+        'k',
+        0,
+        0,
+        0,
+        4,
+        0,
+        255,
+        47,
+        0,
+    };
     try source.add("DATA/TEST.MID", &midi);
     try source.add("DATA/PRESENT3.PRF", &profile);
     try source.add("DATA/INTROL3.PRF", &profile);
@@ -79,14 +114,26 @@ test "normal startup completes three vector chapters and skipping introduction r
     try std.testing.expectEqual(game.front_end.Stage.menu, app.scene.menu.stage);
     try app.scene.menu.intro();
     _ = try app.update(&platform);
-    try backend.inject(.{ .time_ns = backend.clock_ns, .payload = .{ .key_down = .{ .key = .tab } } });
+    try backend.inject(.{
+        .time_ns = backend.clock_ns,
+        .payload = .{ .key_down = .{ .key = .tab } },
+    });
     _ = try app.update(&platform);
     try std.testing.expectEqual(game.front_end.Stage.introduction, app.scene.menu.stage);
-    try backend.inject(.{ .time_ns = backend.clock_ns, .payload = .{ .key_down = .{ .key = .tab, .repeat = true } } });
+    try backend.inject(.{
+        .time_ns = backend.clock_ns,
+        .payload = .{ .key_down = .{ .key = .tab, .repeat = true } },
+    });
     _ = try app.update(&platform);
     try std.testing.expectEqual(game.front_end.Stage.introduction, app.scene.menu.stage);
-    try backend.inject(.{ .time_ns = backend.clock_ns, .payload = .{ .key_up = .{ .key = .tab } } });
-    try backend.inject(.{ .time_ns = backend.clock_ns, .payload = .{ .key_down = .{ .key = .tab } } });
+    try backend.inject(.{
+        .time_ns = backend.clock_ns,
+        .payload = .{ .key_up = .{ .key = .tab } },
+    });
+    try backend.inject(.{
+        .time_ns = backend.clock_ns,
+        .payload = .{ .key_down = .{ .key = .tab } },
+    });
     _ = try app.update(&platform);
     try std.testing.expectEqual(game.front_end.Stage.menu, app.scene.menu.stage);
 }

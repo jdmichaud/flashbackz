@@ -3,7 +3,10 @@ const std = @import("std");
 const platform = @import("../platform.zig");
 const input = @import("../input_recording.zig");
 const level = @import("level.zig");
-pub const Start = struct { room: @import("../geometry.zig").RoomId, position: @import("../motion.zig").Position };
+pub const Start = struct {
+    room: @import("../geometry.zig").RoomId,
+    position: @import("../motion.zig").Position,
+};
 pub const Descriptor = struct { filename: [12]u8, level: level.Id, start: ?Start };
 pub const Recording = struct { controls: []input.Sample, descriptor: Descriptor };
 
@@ -12,7 +15,10 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource, index: u
     const metadata = try @import("floppy_interface.zig").load(allocator, source);
     const descriptor = metadata.demos[index];
     var path: [64]u8 = undefined;
-    var data = try source.readAll(try std.fmt.bufPrint(&path, "DATA/{s}", .{std.mem.sliceTo(&descriptor.filename, 0)}), 2048);
+    var data = try source.readAll(
+        try std.fmt.bufPrint(&path, "DATA/{s}", .{std.mem.sliceTo(&descriptor.filename, 0)}),
+        2048,
+    );
     defer data.deinit();
     return .{ .descriptor = descriptor, .controls = try decode(allocator, data.bytes) };
 }
@@ -43,5 +49,8 @@ test "demo import decodes combinations and excludes the terminal byte" {
     defer std.testing.allocator.free(samples);
     try std.testing.expectEqual(@as(usize, 2047), samples.len);
     try std.testing.expect(samples[0].right and samples[0].action and !samples[0].left);
-    try std.testing.expectError(error.InvalidDemoLength, decode(std.testing.allocator, data[0..2047]));
+    try std.testing.expectError(
+        error.InvalidDemoLength,
+        decode(std.testing.allocator, data[0..2047]),
+    );
 }

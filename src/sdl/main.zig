@@ -8,7 +8,10 @@ pub fn main(init: std.process.Init) !void {
     // `iterateAllocator` is the form that Windows needs; the arena keeps the arguments for the
     // whole run.
     const options = sdl.host.parseArgs(try init.minimal.args.iterateAllocator(init.arena.allocator())) catch |err| {
-        try showUsage(init.io, if (err == error.MissingAssets) "an asset path is required" else "invalid arguments");
+        try showUsage(
+            init.io,
+            if (err == error.MissingAssets) "an asset path is required" else "invalid arguments",
+        );
         std.process.exit(2);
     };
     if (options.help) return showUsage(init.io, null);

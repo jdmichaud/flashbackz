@@ -26,7 +26,8 @@ fn find(group: rules.Group, state: u16, code: u8, argument: ?i16) !rules.Rule {
         if (r.source != state) continue;
         if (code == 0) {
             if (r.conditions[0].code == 0 and r.conditions[1].code == 0) return r;
-        } else for (r.conditions) |condition| if (condition.code == code and (argument == null or argument.? == condition.argument)) return r;
+        } else for (r.conditions) |condition| if (condition.code == code and
+            (argument == null or argument.? == condition.argument)) return r;
     }
     return error.UnsupportedRobotBehavior;
 }
@@ -37,7 +38,8 @@ fn put(sources: *Sources, phase: Phase, value: u16) void {
     sources[@backingInt(phase)] = value;
 }
 fn distance(rule: rules.Rule) !i16 {
-    if (rule.conditions[0].code != 120 and rule.conditions[0].code != 121) return error.UnsupportedRobotPerception;
+    if (rule.conditions[0].code != 120 and
+        rule.conditions[0].code != 121) return error.UnsupportedRobotPerception;
     const cells = rule.conditions[0].argument;
     if (cells < 0 or cells > 64) return error.InvalidRobotRange;
     return cells * 16;
@@ -45,7 +47,9 @@ fn distance(rule: rules.Rule) !i16 {
 fn discover(group: rules.Group) !?Sources {
     if (group.count() != 48) return null;
     const first = group.at(0);
-    if (first.conditions[0].code != 120 or first.conditions[1].code != 0 or first.source == first.target) return null;
+    if (first.conditions[0].code != 120 or
+        first.conditions[1].code != 0 or
+        first.source == first.target) return null;
     for (0..group.count()) |i| {
         const rule = group.at(i);
         for (rule.conditions) |op| switch (op.code) {
@@ -68,14 +72,25 @@ fn discover(group: rules.Group) !?Sources {
     put(&sources, .retracting, (try find(group, open, 0, null)).target);
     put(&sources, .collapsing_front, (try find(group, open, 34, 4)).target);
     put(&sources, .collapsing_rear, (try find(group, open, 34, 2)).target);
-    put(&sources, .overloading, (try find(group, source(sources, .collapsing_front), 0, null)).target);
+    put(
+        &sources,
+        .overloading,
+        (try find(group, source(sources, .collapsing_front), 0, null)).target,
+    );
     put(&sources, .exploding, (try find(group, source(sources, .overloading), 0, null)).target);
     const removal = try find(group, source(sources, .exploding), 75, null);
     if (removal.target != removal.source) return error.UnsupportedRobotRemoval;
-    for (sources, 0..) |state, i| for (sources[0..i]) |previous| if (state == previous) return error.AmbiguousRobotMotion;
+    for (
+        sources,
+        0..,
+    ) |state, i| for (sources[0..i]) |previous| if (state == previous) return error.AmbiguousRobotMotion;
     return sources;
 }
-fn profile(group: rules.Group, sources: Sources, clips: [runtime.phase_count]@import("../motion.zig").Clip) !runtime.Profile {
+fn profile(
+    group: rules.Group,
+    sources: Sources,
+    clips: [runtime.phase_count]@import("../motion.zig").Clip,
+) !runtime.Profile {
     const closed = source(sources, .closed_idle);
     const idle = source(sources, .open_idle_a);
     const alternate = source(sources, .open_idle_b);
@@ -85,8 +100,17 @@ fn profile(group: rules.Group, sources: Sources, clips: [runtime.phase_count]@im
     const open_step = (try find(group, source(sources, .open_walk_a), 0, null)).dx;
     for (0..group.count()) |i| {
         const rule = group.at(i);
-        const expected_dx: i8 = if (rule.source == source(sources, .closed_walk)) closed_step else if (rule.source == source(sources, .open_walk_a) or rule.source == walking) open_step else 0;
-        if (rule.dx != expected_dx or rule.dy != 0 or rule.flags & ~@as(u8, 1) != 0) return error.UnsupportedRobotMotionEntry;
+        const expected_dx: i8 = if (rule.source == source(
+            sources,
+            .closed_walk,
+        )) closed_step else if (rule.source == source(
+            sources,
+            .open_walk_a,
+        ) or rule.source == walking) open_step else 0;
+        if (rule.dx != expected_dx or rule.dy != 0 or rule.flags & ~@as(
+            u8,
+            1,
+        ) != 0) return error.UnsupportedRobotMotionEntry;
     }
     const wall = try find(group, closed, 14, null);
     const floor = try find(group, closed, 17, null);
@@ -95,7 +119,10 @@ fn profile(group: rules.Group, sources: Sources, clips: [runtime.phase_count]@im
         .deployment_distance = try distance(group.at(0)),
         .strike_distance = try distance(try find(group, idle, 100, null)),
         .obstacle_distance = try distance(try find(group, idle, 14, null)),
-        .pursuit_distance = .{ try distance(try find(group, idle, 17, null)), try distance(try find(group, alternate, 17, null)) },
+        .pursuit_distance = .{
+            try distance(try find(group, idle, 17, null)),
+            try distance(try find(group, alternate, 17, null)),
+        },
         .walking_pursuit_distance = try distance(try find(group, walking, 17, null)),
         .explosion_distance = try distance(try find(group, blast, 120, null)),
         .closed_step = -@as(i16, closed_step),
@@ -104,7 +131,15 @@ fn profile(group: rules.Group, sources: Sources, clips: [runtime.phase_count]@im
         .floor_ahead = floor.conditions[1].argument,
     };
 }
-pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []const u8, animations: []const u8, rooms: *const [64]geometry.RoomId, difficulty: @import("../settings.zig").Difficulty, resolver: anytype) !Assets {
+pub fn load(
+    allocator: std.mem.Allocator,
+    table: placement.Table,
+    rule_bytes: []const u8,
+    animations: []const u8,
+    rooms: *const [64]geometry.RoomId,
+    difficulty: @import("../settings.zig").Difficulty,
+    resolver: anytype,
+) !Assets {
     var definitions: std.ArrayList(runtime.Definition) = .empty;
     errdefer definitions.deinit(allocator);
     var profiles: std.ArrayList(runtime.Profile) = .empty;
@@ -134,16 +169,43 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rule_bytes: []
             }
             const index = profiles.items.len;
             try profiles.append(allocator, try profile(group, sources, resolved));
-            imported[record.rule_group] = .{ .index = index, .initial = source(sources, .closed_idle) };
+            imported[record.rule_group] = .{
+                .index = index,
+                .initial = source(sources, .closed_idle),
+            };
         }
         const family = imported[record.rule_group].?;
-        if (record.initial_state != family.initial or record.room >= rooms.len or record.parameters[0] < 1 or record.parameters[0] > 64) return error.UnsupportedRobotPlacement;
+        if (record.initial_state != family.initial or
+            record.room >= rooms.len or
+            record.parameters[0] < 1 or
+            record.parameters[0] > 64) return error.UnsupportedRobotPlacement;
         table.register(@intCast(i), .ground_robots);
-        try definitions.append(allocator, .{ .profile = family.index, .footprint = .{ .room = rooms[record.room], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .strike_cells = @intCast(record.parameters[0]) });
+        try definitions.append(
+            allocator,
+            .{
+                .profile = family.index,
+                .footprint = .{
+                    .room = rooms[record.room],
+                    .position = record.position,
+                    .width = record.collision_width,
+                },
+                .facing = if (record.facing_right == 0) .left else .right,
+                .initially_active = record.initially_active != 0,
+                .wake_nearby = record.flags & 4 != 0,
+                .palette_bank = @intCast(record.visual_flags & 3),
+                .behind_player = record.visual_flags & 8 != 0,
+                .strike_cells = @intCast(record.parameters[0]),
+            },
+        );
     }
     const owned_definitions = try definitions.toOwnedSlice(allocator);
     errdefer allocator.free(owned_definitions);
     const owned_profiles = try profiles.toOwnedSlice(allocator);
     errdefer allocator.free(owned_profiles);
-    return .{ .allocator = allocator, .definitions = owned_definitions, .profiles = owned_profiles, .clips = try clips.toOwnedSlice(allocator) };
+    return .{
+        .allocator = allocator,
+        .definitions = owned_definitions,
+        .profiles = owned_profiles,
+        .clips = try clips.toOwnedSlice(allocator),
+    };
 }

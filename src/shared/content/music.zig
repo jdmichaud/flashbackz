@@ -8,11 +8,23 @@ fn word(bytes: []const u8, at: usize) u16 {
     return std.mem.readInt(u16, bytes[at..][0..2], .little);
 }
 fn terminated(bytes: []const u8) ![]const u8 {
-    return bytes[0 .. std.mem.indexOfScalar(u8, bytes, 0) orelse return error.UnterminatedMusicName];
+    return bytes[0 .. std.mem.indexOfScalar(
+        u8,
+        bytes,
+        0,
+    ) orelse return error.UnterminatedMusicName];
 }
-fn read(source: platform.AssetSource, name: []const u8, extension: []const u8, maximum: usize) !platform.OwnedBytes {
+fn read(
+    source: platform.AssetSource,
+    name: []const u8,
+    extension: []const u8,
+    maximum: usize,
+) !platform.OwnedBytes {
     if (name.len == 0) return error.EmptyMusicName;
-    for (name) |c| if (!std.ascii.isAlphanumeric(c) and c != '_' and c != '.' and c != '-') return error.InvalidMusicName;
+    for (name) |c| if (!std.ascii.isAlphanumeric(c) and
+        c != '_' and
+        c != '.' and
+        c != '-') return error.InvalidMusicName;
     var path: [64]u8 = undefined;
     const filename = try std.fmt.bufPrint(&path, "DATA/{s}{s}", .{ name, extension });
     for (filename) |*c| c.* = std.ascii.toUpper(c.*);
@@ -36,12 +48,18 @@ fn operator(bytes: []const u8, waveform: u16) music.Operator {
 }
 pub fn instrument(bytes: []const u8) !music.Instrument {
     if (bytes.len != 80) return error.InvalidInstrumentSize;
-    const percussion: ?music.Percussion = if (bytes[0] == 0) null else std.enums.fromInt(music.Percussion, bytes[1]) orelse return error.InvalidPercussionInstrument;
+    const percussion: ?music.Percussion = if (bytes[0] == 0) null else std.enums.fromInt(
+        music.Percussion,
+        bytes[1],
+    ) orelse return error.InvalidPercussionInstrument;
     return .{
         .percussion = percussion,
         .modulator = operator(bytes[2..28], word(bytes, 74)),
         .carrier = operator(bytes[28..54], word(bytes, 76)),
-        .feedback_connection = @truncate((word(bytes, 6) << 1) | @as(u16, if (word(bytes, 26) == 0) 1 else 0)),
+        .feedback_connection = @truncate((word(bytes, 6) << 1) | @as(
+            u16,
+            if (word(bytes, 26) == 0) 1 else 0,
+        )),
         .scale_modulator = bytes[26] == 0,
     };
 }
@@ -83,12 +101,20 @@ pub const Profile = struct {
         const interval = word(bytes, 544);
         const bar_ticks = word(bytes, 548);
         const limit = std.mem.readInt(i32, bytes[748..752], .little);
-        if (interval == 0 or interval > 1000 or bar_ticks == 0 or limit == std.math.minInt(i32)) return error.InvalidMusicTiming;
+        if (interval == 0 or
+            interval > 1000 or
+            bar_ticks == 0 or
+            limit == std.math.minInt(i32)) return error.InvalidMusicTiming;
         return .{ .bytes = bytes, .interval = interval, .bar_ticks = bar_ticks, .limit = limit };
     }
 };
 
-fn importPart(allocator: std.mem.Allocator, bytes: []const u8, profile: Profile, part: usize) !music.Part {
+fn importPart(
+    allocator: std.mem.Allocator,
+    bytes: []const u8,
+    profile: Profile,
+    part: usize,
+) !music.Part {
     var events: std.ArrayList(music.Event) = .empty;
     var reader: Reader = .{ .bytes = bytes };
     var tick: u32 = 1; // The first callback advances the score clock before handling tracks.
@@ -125,10 +151,17 @@ fn importPart(allocator: std.mem.Allocator, bytes: []const u8, profile: Profile,
         if (first >= 128 or second >= 128) return error.InvalidMidiData;
         const adjustment = if (word(profile.bytes, 570) == 0) part else binding;
         const pitch = first +% @as(u8, @truncate(word(profile.bytes, 480 + adjustment * 2)));
-        const velocity = @min(127, second +% @as(u8, @truncate(word(profile.bytes, 512 + adjustment * 2))));
+        const velocity = @min(
+            127,
+            second +% @as(u8, @truncate(word(profile.bytes, 512 + adjustment * 2))),
+        );
         const action: ?music.Action = switch (kind) {
             0x8 => .{ .release = pitch },
-            0x9 => if (second == 0) .{ .release = pitch } else .{ .play = .{ .instrument = @intCast(binding), .pitch = pitch, .velocity = @intCast(velocity) } },
+            0x9 => if (second == 0) .{ .release = pitch } else .{ .play = .{
+                .instrument = @intCast(binding),
+                .pitch = pitch,
+                .velocity = @intCast(velocity),
+            } },
             0xe => .{ .bend = @as(u14, second) << 7 | first },
             0xc => change: {
                 if (word(profile.bytes, 570) != 0) for (0..16) |i| {
@@ -149,10 +182,19 @@ fn importPart(allocator: std.mem.Allocator, bytes: []const u8, profile: Profile,
     return .{ .events = try events.toOwnedSlice(allocator), .repeat_ticks = repeat_ticks };
 }
 
-pub fn decode(allocator: std.mem.Allocator, midi: []const u8, profile: Profile, instruments: [16]?music.Instrument) !music.Score {
+pub fn decode(
+    allocator: std.mem.Allocator,
+    midi: []const u8,
+    profile: Profile,
+    instruments: [16]?music.Instrument,
+) !music.Score {
     var reader: Reader = .{ .bytes = midi };
     const header = try reader.chunk("MThd");
-    if (header.len != 6 or std.mem.readInt(u16, header[0..2], .big) > 1) return error.InvalidMidiHeader;
+    if (header.len != 6 or std.mem.readInt(
+        u16,
+        header[0..2],
+        .big,
+    ) > 1) return error.InvalidMidiHeader;
     const count = std.mem.readInt(u16, header[2..4], .big);
     if (count == 0 or count > 16) return error.TooManyMusicParts;
     const parts = try allocator.alloc(music.Part, count);
@@ -166,10 +208,20 @@ pub fn decode(allocator: std.mem.Allocator, midi: []const u8, profile: Profile, 
         done += 1;
     }
     if (reader.at != midi.len) return error.TrailingMidiData;
-    return .{ .instruments = instruments, .parts = parts, .tick_pit_cycles = 532 * @as(u32, profile.interval), .stop_after_ticks = if (profile.limit > 0) @intCast(profile.limit + 1) else null, .restart_after_ticks = if (profile.limit < 0) @intCast(-profile.limit + 2) else null };
+    return .{
+        .instruments = instruments,
+        .parts = parts,
+        .tick_pit_cycles = 532 * @as(u32, profile.interval),
+        .stop_after_ticks = if (profile.limit > 0) @intCast(profile.limit + 1) else null,
+        .restart_after_ticks = if (profile.limit < 0) @intCast(-profile.limit + 2) else null,
+    };
 }
 
-pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource, name: []const u8) !music.Owned {
+pub fn load(
+    allocator: std.mem.Allocator,
+    source: platform.AssetSource,
+    name: []const u8,
+) !music.Owned {
     const arena = try allocator.create(std.heap.ArenaAllocator);
     arena.* = std.heap.ArenaAllocator.init(allocator);
     errdefer {
@@ -189,7 +241,10 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource, name: []
         defer ins.deinit();
         destination.* = try instrument(ins.bytes);
     }
-    return .{ .arena = arena, .score = try decode(arena.allocator(), midi.bytes, profile, instruments) };
+    return .{
+        .arena = arena,
+        .score = try decode(arena.allocator(), midi.bytes, profile, instruments),
+    };
 }
 
 test "music profile rejects truncated and impossible timing; instruments require valid drums" {
@@ -214,7 +269,12 @@ test "track import preserves adjustment wrap, zero-velocity release, order and l
     bytes[548] = 16;
     bytes[480] = 244;
     bytes[512] = 128;
-    const part = try importPart(std.testing.allocator, &.{ 0, 0x90, 60, 100, 4, 0x90, 60, 0, 0, 0xff, 0x2f, 0 }, try Profile.parse(&bytes), 0);
+    const part = try importPart(
+        std.testing.allocator,
+        &.{ 0, 0x90, 60, 100, 4, 0x90, 60, 0, 0, 0xff, 0x2f, 0 },
+        try Profile.parse(&bytes),
+        0,
+    );
     defer std.testing.allocator.free(part.events);
     try std.testing.expectEqual(@as(u32, 1), part.events[0].tick);
     try std.testing.expectEqual(@as(u8, 48), part.events[0].action.play.pitch);

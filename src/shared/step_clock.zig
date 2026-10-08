@@ -10,10 +10,20 @@ pub const Cadence = struct {
     regular_gap_ticks: u32,
 };
 
-pub const jungle: Cadence = .{ .units_per_second = 1193182, .units_per_tick = 17024, .initial_gap_ticks = 3, .regular_gap_ticks = 2 };
+pub const jungle: Cadence = .{
+    .units_per_second = 1193182,
+    .units_per_tick = 17024,
+    .initial_gap_ticks = 3,
+    .regular_gap_ticks = 2,
+};
 // Inventory polls follow the VGA refresh rather than the gameplay interrupt cadence.
 // Entry/exit work and its phase relative to gameplay remain part of scheduler acceptance.
-pub const inventory: Cadence = .{ .units_per_second = 25175000, .units_per_tick = 420000, .initial_gap_ticks = 1, .regular_gap_ticks = 1 };
+pub const inventory: Cadence = .{
+    .units_per_second = 25175000,
+    .units_per_tick = 420000,
+    .initial_gap_ticks = 1,
+    .regular_gap_ticks = 1,
+};
 
 pub const Clock = struct {
     cadence: Cadence,
@@ -24,9 +34,18 @@ pub const Clock = struct {
     remainder: u64 = 0,
 
     pub fn init(cadence: Cadence, origin_ns: u64) !Clock {
-        const largest_gap = @as(u64, cadence.units_per_tick) * @max(cadence.initial_gap_ticks, cadence.regular_gap_ticks);
-        if (cadence.units_per_second == 0 or cadence.units_per_tick == 0 or cadence.initial_gap_ticks == 0 or cadence.regular_gap_ticks == 0 or
-            largest_gap > (std.math.maxInt(u64) - @as(u64, cadence.units_per_second)) / std.time.ns_per_s) return error.InvalidCadence;
+        const largest_gap = @as(u64, cadence.units_per_tick) * @max(
+            cadence.initial_gap_ticks,
+            cadence.regular_gap_ticks,
+        );
+        if (cadence.units_per_second == 0 or
+            cadence.units_per_tick == 0 or
+            cadence.initial_gap_ticks == 0 or
+            cadence.regular_gap_ticks == 0 or
+            largest_gap > (std.math.maxInt(u64) - @as(
+                u64,
+                cadence.units_per_second,
+            )) / std.time.ns_per_s) return error.InvalidCadence;
         return .{ .cadence = cadence, .origin_ns = origin_ns };
     }
 
@@ -40,7 +59,10 @@ pub const Clock = struct {
 
     pub fn consume(self: *Clock) void {
         const gap = if (self.emitted == 0) self.cadence.initial_gap_ticks else self.cadence.regular_gap_ticks;
-        const numerator = @as(u64, gap) * self.cadence.units_per_tick * std.time.ns_per_s + self.remainder;
+        const numerator = @as(
+            u64,
+            gap,
+        ) * self.cadence.units_per_tick * std.time.ns_per_s + self.remainder;
         self.elapsed_ns +|= numerator / self.cadence.units_per_second;
         self.remainder = numerator % self.cadence.units_per_second;
         self.next_tick += gap;
@@ -84,7 +106,10 @@ test "deadlines preserve rational phase and first-step spacing without accumulat
     try std.testing.expect(clock.due(deadline));
     for (0..10000) |_| clock.consume();
     try std.testing.expectEqual(@as(u64, 20003), clock.next_tick);
-    const expected: u64 = 50 + @as(u64, @intCast((@as(u128, 20003) * 17024 * std.time.ns_per_s + 1193181) / 1193182));
+    const expected: u64 = 50 + @as(
+        u64,
+        @intCast((@as(u128, 20003) * 17024 * std.time.ns_per_s + 1193181) / 1193182),
+    );
     try std.testing.expectEqual(expected, clock.deadline());
     var invalid = jungle;
     invalid.units_per_second = 0;

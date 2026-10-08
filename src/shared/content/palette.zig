@@ -65,7 +65,8 @@ pub fn decodeRgb8(bytes: []const u8) !Palette {
 }
 
 pub fn writeRgba(indices: []const u8, colors: *const Palette, destination: []u8) !void {
-    if (destination.len % 4 != 0 or destination.len / 4 != indices.len) return error.InvalidFrameLength;
+    if (destination.len % 4 != 0 or
+        destination.len / 4 != indices.len) return error.InvalidFrameLength;
     for (indices, 0..) |index, i| {
         const color = colors[index];
         @memcpy(destination[i * 4 ..][0..4], &[_]u8{ color.r, color.g, color.b, 255 });

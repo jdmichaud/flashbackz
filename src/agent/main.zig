@@ -24,7 +24,11 @@ const usage =
 ;
 
 const frame_ns: u64 = std.time.ns_per_s / 60;
-const Press = struct { frame: u64, key: flashbackz.platform.Key, mode: enum { tap, down, up } = .tap };
+const Press = struct {
+    frame: u64,
+    key: flashbackz.platform.Key,
+    mode: enum { tap, down, up } = .tap,
+};
 
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
@@ -40,9 +44,16 @@ pub fn main(init: std.process.Init) !void {
     while (args.next()) |arg| {
         if (options.take(arg, &args) catch return fail(io)) continue;
         if (std.mem.eql(u8, arg, "--frames")) {
-            frames = std.fmt.parseInt(u64, args.next() orelse return fail(io), 10) catch return fail(io);
+            frames = std.fmt.parseInt(
+                u64,
+                args.next() orelse return fail(io),
+                10,
+            ) catch return fail(io);
         } else if (std.mem.eql(u8, arg, "--key")) {
-            try presses.append(gpa, parsePress(args.next() orelse return fail(io)) orelse return fail(io));
+            try presses.append(
+                gpa,
+                parsePress(args.next() orelse return fail(io)) orelse return fail(io),
+            );
         } else if (std.mem.eql(u8, arg, "--key-down") or std.mem.eql(u8, arg, "--key-up")) {
             var press = parsePress(args.next() orelse return fail(io)) orelse return fail(io);
             press.mode = if (std.mem.eql(u8, arg, "--key-down")) .down else .up;
@@ -51,7 +62,8 @@ pub fn main(init: std.process.Init) !void {
             return fail(io);
         }
     }
-    if ((options.entry == .jungle_development or options.entry == .level_development) and options.assets == null) return fail(io);
+    if ((options.entry == .jungle_development or options.entry == .level_development) and
+        options.assets == null) return fail(io);
 
     // Real providers when the options name them, else in-memory ones. They outlive the game.
     var providers: native.cli.Providers = .empty;
@@ -79,8 +91,14 @@ pub fn main(init: std.process.Init) !void {
     var frame: u64 = 0;
     while (frame < frames) : (frame += 1) {
         for (presses.items) |press| if (press.frame == frame) {
-            if (press.mode != .up) try backend.inject(.{ .time_ns = backend.clock_ns, .payload = .{ .key_down = .{ .key = press.key } } });
-            if (press.mode != .down) try backend.inject(.{ .time_ns = backend.clock_ns, .payload = .{ .key_up = .{ .key = press.key } } });
+            if (press.mode != .up) try backend.inject(.{
+                .time_ns = backend.clock_ns,
+                .payload = .{ .key_down = .{ .key = press.key } },
+            });
+            if (press.mode != .down) try backend.inject(.{
+                .time_ns = backend.clock_ns,
+                .payload = .{ .key_up = .{ .key = press.key } },
+            });
         };
         if (try game.update(&p) == .finished) break;
         backend.advance(frame_ns);
@@ -92,7 +110,15 @@ pub fn main(init: std.process.Init) !void {
         game.update_count, game.frames_presented, game.events_consumed, game.saves_written, game.loads_done, game.stateHash(), game.last_frame_hash,
     });
     if (game.jungle()) |scene| {
-        try w.interface.print("{{\"scene\":\"jungle_development\",\"simulation_steps\":{d},\"x\":{d},\"y\":{d},\"facing\":\"{s}\"}}\n", .{ scene.simulation_steps, scene.pose.position.x, scene.pose.position.y, @tagName(scene.pose.facing) });
+        try w.interface.print(
+            "{{\"scene\":\"jungle_development\",\"simulation_steps\":{d},\"x\":{d},\"y\":{d},\"facing\":\"{s}\"}}\n",
+            .{
+                scene.simulation_steps,
+                scene.pose.position.x,
+                scene.pose.position.y,
+                @tagName(scene.pose.facing),
+            },
+        );
     }
     try w.interface.flush();
 }
@@ -101,7 +127,10 @@ pub fn main(init: std.process.Init) !void {
 fn parsePress(text: []const u8) ?Press {
     const colon = std.mem.indexOfScalar(u8, text, ':') orelse return null;
     const frame = std.fmt.parseInt(u64, text[0..colon], 10) catch return null;
-    const key = std.meta.stringToEnum(flashbackz.platform.Key, text[colon + 1 ..]) orelse return null;
+    const key = std.meta.stringToEnum(
+        flashbackz.platform.Key,
+        text[colon + 1 ..],
+    ) orelse return null;
     return .{ .frame = frame, .key = key };
 }
 

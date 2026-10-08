@@ -38,9 +38,17 @@ pub const RgbaFrame = struct {
     /// pixel. All arithmetic is checked.
     pub fn validate(f: RgbaFrame) ValidateError!void {
         if (f.width == 0 or f.height == 0) return error.InvalidFrame;
-        const row_bytes = std.math.mul(usize, f.width, bytes_per_pixel) catch return error.InvalidFrame;
+        const row_bytes = std.math.mul(
+            usize,
+            f.width,
+            bytes_per_pixel,
+        ) catch return error.InvalidFrame;
         if (f.stride < row_bytes) return error.InvalidFrame;
-        const padded_rows = std.math.mul(usize, f.stride, f.height - 1) catch return error.InvalidFrame;
+        const padded_rows = std.math.mul(
+            usize,
+            f.stride,
+            f.height - 1,
+        ) catch return error.InvalidFrame;
         const needed = std.math.add(usize, padded_rows, row_bytes) catch return error.InvalidFrame;
         if (f.pixels.len < needed) return error.InvalidFrame;
     }
@@ -172,7 +180,15 @@ pub const ControllerButton = enum(u8) {
     dpad_right,
     _,
 };
-pub const ControllerAxis = enum(u8) { left_x, left_y, right_x, right_y, trigger_left, trigger_right, _ };
+pub const ControllerAxis = enum(u8) {
+    left_x,
+    left_y,
+    right_x,
+    right_y,
+    trigger_left,
+    trigger_right,
+    _,
+};
 
 pub const Size = struct { width: u32, height: u32 };
 
@@ -194,7 +210,11 @@ pub const Event = struct {
     pub const MouseButtonEvent = struct { button: MouseButton, x: i32, y: i32 };
     pub const MouseWheel = struct { dx: i32, dy: i32 };
     pub const ControllerButtonEvent = struct { controller: ControllerId, button: ControllerButton };
-    pub const ControllerAxisEvent = struct { controller: ControllerId, axis: ControllerAxis, value: i16 };
+    pub const ControllerAxisEvent = struct {
+        controller: ControllerId,
+        axis: ControllerAxis,
+        value: i16,
+    };
 
     pub const Payload = union(enum) {
         key_down: KeyEvent,
@@ -371,7 +391,8 @@ pub const AssetSource = struct {
     pub fn readAll(a: AssetSource, path: []const u8, max_bytes: usize) AssetError!OwnedBytes {
         const opened = try a.open(path);
         defer a.close(opened.handle);
-        if (opened.length > max_bytes or opened.length > std.math.maxInt(usize)) return error.TooLarge;
+        if (opened.length > max_bytes or
+            opened.length > std.math.maxInt(usize)) return error.TooLarge;
         const len: usize = @intCast(opened.length);
         const buf = a.allocator.alloc(u8, len) catch return error.OutOfMemory;
         errdefer a.allocator.free(buf);
@@ -485,10 +506,27 @@ pub fn assetNameLessThan(_: void, a: []const u8, b: []const u8) bool {
 test "frame validation uses checked arithmetic" {
     const pixels: [48]u8 = @splat(0);
     try (RgbaFrame{ .width = 4, .height = 3, .stride = 16, .pixels = &pixels }).validate();
-    try std.testing.expectError(error.InvalidFrame, (RgbaFrame{ .width = 0, .height = 3, .stride = 16, .pixels = &pixels }).validate());
-    try std.testing.expectError(error.InvalidFrame, (RgbaFrame{ .width = 4, .height = 3, .stride = 15, .pixels = &pixels }).validate());
-    try std.testing.expectError(error.InvalidFrame, (RgbaFrame{ .width = 4, .height = 4, .stride = 16, .pixels = &pixels }).validate());
-    try std.testing.expectError(error.InvalidFrame, (RgbaFrame{ .width = std.math.maxInt(u32), .height = 2, .stride = std.math.maxInt(usize), .pixels = &pixels }).validate());
+    try std.testing.expectError(
+        error.InvalidFrame,
+        (RgbaFrame{ .width = 0, .height = 3, .stride = 16, .pixels = &pixels }).validate(),
+    );
+    try std.testing.expectError(
+        error.InvalidFrame,
+        (RgbaFrame{ .width = 4, .height = 3, .stride = 15, .pixels = &pixels }).validate(),
+    );
+    try std.testing.expectError(
+        error.InvalidFrame,
+        (RgbaFrame{ .width = 4, .height = 4, .stride = 16, .pixels = &pixels }).validate(),
+    );
+    try std.testing.expectError(
+        error.InvalidFrame,
+        (RgbaFrame{
+            .width = std.math.maxInt(u32),
+            .height = 2,
+            .stride = std.math.maxInt(usize),
+            .pixels = &pixels,
+        }).validate(),
+    );
     // Padded rows: the last row needs only its active bytes.
     const padded: [56]u8 = @splat(0);
     try (RgbaFrame{ .width = 4, .height = 3, .stride = 20, .pixels = &padded }).validate();

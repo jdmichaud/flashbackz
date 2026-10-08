@@ -33,8 +33,16 @@ pub const DirectoryAssetSource = struct {
     pub const OpenError = error{ NotFound, NotADirectory, AccessDenied, Io, Canceled };
 
     /// Opens the directory at `path`, which is absolute or relative to the working directory.
-    pub fn open(allocator: std.mem.Allocator, io: std.Io, path: []const u8) OpenError!DirectoryAssetSource {
-        const dir = std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true }) catch |err| return switch (err) {
+    pub fn open(
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        path: []const u8,
+    ) OpenError!DirectoryAssetSource {
+        const dir = std.Io.Dir.cwd().openDir(
+            io,
+            path,
+            .{ .iterate = true },
+        ) catch |err| return switch (err) {
             error.FileNotFound => error.NotFound,
             error.NotDir => error.NotADirectory,
             error.AccessDenied, error.PermissionDenied => error.AccessDenied,
@@ -92,7 +100,10 @@ pub const DirectoryAssetSource = struct {
         if (st.kind == .directory) return error.NotFound;
         const slot = try self.allocateSlot();
         self.handles.items[slot] = .{ .file = file, .length = st.size };
-        return .{ .handle = @fromBackingInt(@intCast(@as(u32, @intCast(slot + 1)))), .length = st.size };
+        return .{
+            .handle = @fromBackingInt(@intCast(@as(u32, @intCast(slot + 1)))),
+            .length = st.size,
+        };
     }
 
     fn allocateSlot(self: *DirectoryAssetSource) platform.AssetError!usize {
@@ -113,11 +124,20 @@ pub const DirectoryAssetSource = struct {
         while (it.next()) |component| {
             const last = it.peek() == null;
             var name_buf: [platform.max_name_len]u8 = undefined;
-            const host_name = try self.matchEntry(dir, component, if (last) .file else .directory, &name_buf);
+            const host_name = try self.matchEntry(
+                dir,
+                component,
+                if (last) .file else .directory,
+                &name_buf,
+            );
             if (last) {
                 return dir.openFile(io, host_name, .{}) catch |err| return mapError(err);
             }
-            const next = dir.openDir(io, host_name, .{ .iterate = true }) catch |err| return mapError(err);
+            const next = dir.openDir(
+                io,
+                host_name,
+                .{ .iterate = true },
+            ) catch |err| return mapError(err);
             if (owned_dir) dir.close(io);
             dir = next;
             owned_dir = true;
@@ -129,7 +149,13 @@ pub const DirectoryAssetSource = struct {
 
     /// Finds the host entry that `component` names: the exact spelling first, else the first
     /// case-insensitive match in byte order. Returns the host name (copied into `buf`).
-    fn matchEntry(self: *DirectoryAssetSource, dir: std.Io.Dir, component: []const u8, want: Want, buf: *[platform.max_name_len]u8) platform.AssetError![]const u8 {
+    fn matchEntry(
+        self: *DirectoryAssetSource,
+        dir: std.Io.Dir,
+        component: []const u8,
+        want: Want,
+        buf: *[platform.max_name_len]u8,
+    ) platform.AssetError![]const u8 {
         const io = self.io;
         if (dir.statFile(io, component, .{})) |st| {
             const ok = switch (want) {
@@ -173,7 +199,11 @@ pub const DirectoryAssetSource = struct {
     }
 
     /// The kind of the entry, after symbolic links. Null when the kind is not known.
-    fn entryKind(self: *DirectoryAssetSource, dir: std.Io.Dir, entry: std.Io.Dir.Entry) ?std.Io.File.Kind {
+    fn entryKind(
+        self: *DirectoryAssetSource,
+        dir: std.Io.Dir,
+        entry: std.Io.Dir.Entry,
+    ) ?std.Io.File.Kind {
         switch (entry.kind) {
             .file, .directory => return entry.kind,
             else => {
@@ -183,7 +213,12 @@ pub const DirectoryAssetSource = struct {
         }
     }
 
-    fn readAt(ctx: *anyopaque, file: platform.AssetHandle, offset: u64, dst: []u8) platform.AssetError!usize {
+    fn readAt(
+        ctx: *anyopaque,
+        file: platform.AssetHandle,
+        offset: u64,
+        dst: []u8,
+    ) platform.AssetError!usize {
         const self = cast(ctx);
         const h = self.lookup(file) orelse return error.InvalidHandle;
         if (dst.len == 0) return 0;
@@ -192,7 +227,11 @@ pub const DirectoryAssetSource = struct {
         if (self.max_read != 0) n = @min(n, self.max_read);
         const remaining = h.length - offset;
         if (remaining < n) n = @intCast(remaining);
-        return h.file.readPositional(self.io, &.{dst[0..n]}, offset) catch |err| return mapError(err);
+        return h.file.readPositional(
+            self.io,
+            &.{dst[0..n]},
+            offset,
+        ) catch |err| return mapError(err);
     }
 
     fn lookup(self: *DirectoryAssetSource, file: platform.AssetHandle) ?Handle {
@@ -225,7 +264,15 @@ pub const DirectoryAssetSource = struct {
 
     /// Appends the canonical logical names under `dir` that match `prefix`. The logical prefix
     /// of `dir` is `logical[0..used]`.
-    fn walk(self: *DirectoryAssetSource, dir: std.Io.Dir, logical: *[platform.max_asset_name_len]u8, used: usize, depth: usize, prefix: []const u8, names: *std.ArrayList([]const u8)) platform.AssetError!void {
+    fn walk(
+        self: *DirectoryAssetSource,
+        dir: std.Io.Dir,
+        logical: *[platform.max_asset_name_len]u8,
+        used: usize,
+        depth: usize,
+        prefix: []const u8,
+        names: *std.ArrayList([]const u8),
+    ) platform.AssetError!void {
         const io = self.io;
         var scan = try iterable(io, dir);
         defer scan.close(io);
@@ -239,7 +286,11 @@ pub const DirectoryAssetSource = struct {
             switch (kind) {
                 .directory => {
                     if (depth >= platform.max_asset_depth or full.len + 1 >= logical.len) continue;
-                    var sub = dir.openDir(io, entry.name, .{ .iterate = true }) catch |err| switch (err) {
+                    var sub = dir.openDir(
+                        io,
+                        entry.name,
+                        .{ .iterate = true },
+                    ) catch |err| switch (err) {
                         error.Canceled => return error.Canceled,
                         else => continue,
                     };
@@ -276,12 +327,18 @@ const contract = @import("contract.zig");
 
 /// Writes the contract fixture into `dir`, with mixed host case and an invisible entry.
 pub fn writeFixture(io: std.Io, dir: std.Io.Dir) !void {
-    try dir.writeFile(io, .{ .sub_path = contract.fixture.blob_name, .data = contract.fixture.blob });
+    try dir.writeFile(
+        io,
+        .{ .sub_path = contract.fixture.blob_name, .data = contract.fixture.blob },
+    );
     try dir.writeFile(io, .{ .sub_path = contract.fixture.empty_name, .data = "" });
     try dir.writeFile(io, .{ .sub_path = "game.cfg", .data = contract.fixture.config });
     try dir.createDirPath(io, "sub");
     var pattern: [contract.fixture.nested_len]u8 = undefined;
-    try dir.writeFile(io, .{ .sub_path = "sub/nested.dat", .data = contract.fixture.nested(&pattern) });
+    try dir.writeFile(
+        io,
+        .{ .sub_path = "sub/nested.dat", .data = contract.fixture.nested(&pattern) },
+    );
     // Not a logical name: it is never listed and never opened.
     try dir.writeFile(io, .{ .sub_path = ".hidden", .data = "x" });
 }
@@ -314,7 +371,10 @@ test "directory asset source opens a path and closes leaked handles on deinit" {
     _ = try a.open("GAME.CFG");
     _ = try a.open("game.CFG");
     try std.testing.expectEqual(@as(usize, 2), source.openHandles());
-    try std.testing.expectError(error.NotFound, DirectoryAssetSource.open(std.testing.allocator, io, "/nonexistent/flashbackz/assets"));
+    try std.testing.expectError(
+        error.NotFound,
+        DirectoryAssetSource.open(std.testing.allocator, io, "/nonexistent/flashbackz/assets"),
+    );
 }
 
 fn directoryAssetsUnderAllocator(allocator: std.mem.Allocator, dir: std.Io.Dir) !void {
@@ -328,5 +388,9 @@ test "directory asset source survives every allocation failure without leaking" 
     var tmp = std.testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
     try writeFixture(io, tmp.dir);
-    try std.testing.checkAllAllocationFailures(std.testing.allocator, directoryAssetsUnderAllocator, .{tmp.dir});
+    try std.testing.checkAllAllocationFailures(
+        std.testing.allocator,
+        directoryAssetsUnderAllocator,
+        .{tmp.dir},
+    );
 }

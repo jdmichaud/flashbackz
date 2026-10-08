@@ -50,7 +50,12 @@ pub const State = struct {
             .resting => t.rest,
         };
     }
-    pub fn advance(self: *State, definition: Definition, pose: *motion.Pose, environment: Environment) !void {
+    pub fn advance(
+        self: *State,
+        definition: Definition,
+        pose: *motion.Pose,
+        environment: Environment,
+    ) !void {
         const t = self.track(definition);
         const backward = self.direction == .backward;
         switch (self.phase) {
@@ -64,24 +69,52 @@ pub const State = struct {
                     }
                 }
                 var launch = t.paths[self.clearance].launch;
-                if (!backward and self.clearance == 4 and try environment.ledge(pose.*, .support, -3, .ahead)) launch = t.ledge_launch orelse launch;
+                if (!backward and self.clearance == 4 and try environment.ledge(
+                    pose.*,
+                    .support,
+                    -3,
+                    .ahead,
+                )) launch = t.ledge_launch orelse launch;
                 launch.apply(pose);
                 self.phase = .airborne;
             },
             .airborne => {
                 const path = t.paths[self.clearance];
-                if (backward and self.clearance == 4 and try environment.ledge(pose.*, .support, 0, .ahead)) {
+                if (backward and self.clearance == 4 and try environment.ledge(
+                    pose.*,
+                    .support,
+                    0,
+                    .ahead,
+                )) {
                     (t.ledge_landing orelse path.landing).apply(pose);
                     self.phase = .landing;
                     return;
                 }
-                const unsupported = if (backward) !try environment.at(pose.*, .support, 1) else !try environment.at(pose.*, .support, 0);
-                const free_drop = self.clearance == 4 and (if (backward) (!try environment.at(pose.*, .support, 0) or try environment.ledge(pose.*, .support, 0, .behind)) else try environment.ledge(pose.*, .support, 0, .ahead));
+                const unsupported = if (backward) !try environment.at(
+                    pose.*,
+                    .support,
+                    1,
+                ) else !try environment.at(pose.*, .support, 0);
+                const free_drop = self.clearance == 4 and (if (backward) (!try environment.at(
+                    pose.*,
+                    .support,
+                    0,
+                ) or try environment.ledge(
+                    pose.*,
+                    .support,
+                    0,
+                    .behind,
+                )) else try environment.ledge(pose.*, .support, 0, .ahead));
                 if (unsupported or free_drop) {
                     path.drop.apply(pose);
                     self.phase = .falling;
                 } else {
-                    const landing = if (backward and self.clearance == 4 and try environment.ledge(pose.*, .support, -1, .behind)) t.ledge_landing orelse path.landing else path.landing;
+                    const landing = if (backward and self.clearance == 4 and try environment.ledge(
+                        pose.*,
+                        .support,
+                        -1,
+                        .behind,
+                    )) t.ledge_landing orelse path.landing else path.landing;
                     landing.apply(pose);
                     self.phase = .landing;
                 }
@@ -89,7 +122,11 @@ pub const State = struct {
             .falling => {
                 if (!backward and try environment.ledge(pose.*, .support, 0, .ahead)) {
                     (t.ledge_fall orelse t.fall).apply(pose);
-                } else if (!try environment.at(pose.*, .support, 0) or (backward and !try environment.at(pose.*, .support, 1))) {
+                } else if (!try environment.at(
+                    pose.*,
+                    .support,
+                    0,
+                ) or (backward and !try environment.at(pose.*, .support, 1))) {
                     t.fall.apply(pose);
                 } else {
                     t.fall_landing.apply(pose);

@@ -33,7 +33,12 @@ pub const DirectoryStorage = struct {
     pub const OpenError = error{ NotFound, NotADirectory, AccessDenied, Io, Canceled };
 
     /// Opens the directory at `path`. With `create`, first creates it if it does not exist.
-    pub fn open(allocator: std.mem.Allocator, io: std.Io, path: []const u8, create: bool) OpenError!DirectoryStorage {
+    pub fn open(
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        path: []const u8,
+        create: bool,
+    ) OpenError!DirectoryStorage {
         if (create) {
             std.Io.Dir.cwd().createDirPath(io, path) catch |err| return switch (err) {
                 error.AccessDenied, error.PermissionDenied => error.AccessDenied,
@@ -42,7 +47,11 @@ pub const DirectoryStorage = struct {
                 else => error.Io,
             };
         }
-        const dir = std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true }) catch |err| return switch (err) {
+        const dir = std.Io.Dir.cwd().openDir(
+            io,
+            path,
+            .{ .iterate = true },
+        ) catch |err| return switch (err) {
             error.FileNotFound => error.NotFound,
             error.NotDir => error.NotADirectory,
             error.AccessDenied, error.PermissionDenied => error.AccessDenied,
@@ -102,7 +111,11 @@ pub const DirectoryStorage = struct {
         try self.takeFault(.before_create);
         var temp_buf: TempName = undefined;
         const temp = self.tempName(name, &temp_buf);
-        const file = self.dir.createFile(io, temp, .{ .exclusive = true }) catch |err| return mapError(err);
+        const file = self.dir.createFile(
+            io,
+            temp,
+            .{ .exclusive = true },
+        ) catch |err| return mapError(err);
         var file_open = true;
         // Until the rename commits, any exit removes the temporary and keeps the old record.
         var committed = false;
@@ -127,7 +140,10 @@ pub const DirectoryStorage = struct {
     /// slightly longer window for loss at a power failure.
     fn syncDirectory(self: *DirectoryStorage) void {
         if (builtin.os.tag == .windows or builtin.os.tag == .wasi) return;
-        const as_file = std.Io.File{ .handle = self.dir.handle, .flags = .{ .nonblocking = false } };
+        const as_file = std.Io.File{
+            .handle = self.dir.handle,
+            .flags = .{ .nonblocking = false },
+        };
         as_file.sync(self.io) catch {};
     }
 
@@ -244,13 +260,19 @@ test "directory storage ignores leftovers and opens or creates its directory" {
     const base = path_buf[0..len];
     const sub = try std.fmt.allocPrint(std.testing.allocator, "{s}/saves/nested", .{base});
     defer std.testing.allocator.free(sub);
-    try std.testing.expectError(error.NotFound, DirectoryStorage.open(std.testing.allocator, io, sub, false));
+    try std.testing.expectError(
+        error.NotFound,
+        DirectoryStorage.open(std.testing.allocator, io, sub, false),
+    );
     var store = try DirectoryStorage.open(std.testing.allocator, io, sub, true);
     defer store.deinit();
     const s = store.storage();
     try s.save("GAME0001.PT", "pos");
     // The temporary file of an interrupted save, a dot file and a directory are not records.
-    try store.dir.writeFile(io, .{ .sub_path = ".GAME0001.PT.0123456789abcdef.tmp", .data = "half" });
+    try store.dir.writeFile(
+        io,
+        .{ .sub_path = ".GAME0001.PT.0123456789abcdef.tmp", .data = "half" },
+    );
     try store.dir.writeFile(io, .{ .sub_path = ".hidden", .data = "" });
     try store.dir.createDirPath(io, "FOLDER");
     var names = try s.listSaves();
@@ -270,7 +292,11 @@ test "directory storage survives every allocation failure without leaking" {
     const io = std.testing.io;
     var tmp = std.testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
-    try std.testing.checkAllAllocationFailures(std.testing.allocator, directoryStorageUnderAllocator, .{tmp.dir});
+    try std.testing.checkAllAllocationFailures(
+        std.testing.allocator,
+        directoryStorageUnderAllocator,
+        .{tmp.dir},
+    );
     // The last run of the sweep fails at its last allocation, so its record can remain. A
     // temporary file must never remain after a failed save.
     try std.testing.expectEqual(@as(usize, 0), try hostEntries(io, tmp.dir, true));

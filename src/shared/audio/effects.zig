@@ -23,7 +23,10 @@ pub const Mixer = struct {
                 }
             } else if (free == null) free = i;
         }
-        if (free) |index| self.voices[index] = .{ .sound = event.sound, .attenuation = event.attenuation };
+        if (free) |index| self.voices[index] = .{
+            .sound = event.sound,
+            .attenuation = event.attenuation,
+        };
     }
     /// Produce the next hardware-sized source block, before host resampling.
     pub fn mixBlock(self: *Mixer, bank: sounds.Bank) *const [70]i8 {
@@ -97,12 +100,19 @@ pub const Output = struct {
             const status = p.audioStatus();
             if (!status.running or status.suspended or status.queued_frames >= ahead) return;
             if (self.begin == self.end) {
-                const frames: usize = @intCast(@min(self.pending.len / 2, ahead - status.queued_frames));
+                const frames: usize = @intCast(@min(
+                    self.pending.len / 2,
+                    ahead - status.queued_frames,
+                ));
                 self.begin = 0;
                 self.end = frames * 2;
                 self.mixer.render(bank, self.pending[0..self.end], self.rate);
             }
-            const accepted = try @import("output_gain.zig").queue(p, self.pending[self.begin..self.end], self.volume);
+            const accepted = try @import("output_gain.zig").queue(
+                p,
+                self.pending[self.begin..self.end],
+                self.volume,
+            );
             self.begin += accepted * 2;
             if (accepted == 0) return;
         }

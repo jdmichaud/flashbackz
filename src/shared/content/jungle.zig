@@ -21,8 +21,284 @@ const art_bank = @import("art_bank.zig");
 const object_art = @import("object_artwork.zig");
 const inventory_artwork = @import("inventory_artwork.zig");
 
-const Move = enum { throw_item, operate_reach, operate_press, operate_recover, surface_rest, surface_burst, armed_clearing_draw, casing_stand_a, casing_stand_b, casing_crouch_a, casing_crouch_b, armed_roll_recovery, armed_drawing_after_climb, shot_ignition, shot_flash, shot_flash_low, shot_impact, shot_impact_low, armed_firing, armed_firing_crouched, armed_drawing_crouched, armed_draw_crouched_release, armed_draw_start, armed_drawing, armed_draw_release, armed_aiming, armed_lowering_aim, armed_standing, armed_walking, armed_turning, armed_holstering, armed_holstering_aim, armed_raising_aim, armed_crouching, armed_crouched, armed_turning_crouched, armed_rising, armed_holstering_crouched, armed_lowering_aim_crouched, armed_raising_aim_crouched, armed_aim_crouch_release, armed_aiming_crouched, armed_crouching_aim, armed_rising_aim, armed_turning_aim, armed_turning_aim_crouched, armed_stepping_down, armed_landing, roll_running_entry, roll_running_recovery, roll_jump_launch, run_wall_stop, run_stagger_stop, run_ledge_approach, run_ledge_reach, run_ledge_brace, jump_ledge_reach, run_drop, reverse_drop, unbalanced_drop, short_jump_drop, gliding_drop, vertical_drop, run_jump_takeoff, run_jump_ascent, run_jump_crest, run_jump_descent, run_jump_landing, run_jump_stand, run_jump_run, reverse_run, reverse_run_finish, accelerate_run, slow_to_walk, edge_stop, use_item, wake, stand, turn_prepare, turn_finish, walk_start, walk_a, walk_b, run_start, run_a, run_b, run_c, run_d, brake, settle, step_off, land, jump_up, jump_recover, jump_low, jump_low_recover, jump_takeoff, jump_flight, jump_land, jump_finish, crouch_lower, crouch_hold, crouch_rise, crouch_turn, roll_enter, roll_tumble, roll_exit, roll_balance, roll_rise, roll_drop, roll_recover, collision_impact, recoil_fall, recoil_confined, recoil_staggered, recoil_prone, recoil_pause_prone, recoil_pause_tight, recoil_rise, recoil_drop, fall_begin, fall_continue, fatal_land, ledge_lower, ledge_catch, ledge_grip, ledge_hang, ledge_reach, ledge_settle_grip, ledge_climb, ledge_stand, ledge_release, ledge_drop, ledge_turn_release, ledge_tumble_release, ledge_brace, ledge_braced_lower };
-const source_moves = [_]u16{ 69, 179, 181, 180, 565, 566, 77, 162, 163, 164, 165, 177, 174, 443, 414, 415, 411, 413, 58, 59, 160, 222, 182, 175, 223, 57, 55, 44, 45, 48, 52, 262, 54, 46, 50, 49, 51, 161, 53, 47, 224, 56, 71, 72, 76, 173, 166, 167, 33, 39, 40, 125, 67, 95, 121, 122, 32, 127, 129, 225, 63, 62, 41, 13, 21, 22, 23, 24, 31, 14, 10, 184, 11, 12, 30, 168, 99, 1, 0, 183, 231, 2, 3, 8, 6, 17, 7, 18, 9, 20, 128, 93, 4, 5, 185, 186, 26, 27, 28, 29, 64, 66, 65, 233, 34, 35, 36, 37, 38, 126, 88, 263, 94, 85, 84, 83, 111, 74, 103, 86, 89, 90, 73, 15, 60, 61, 25, 101, 102, 16, 178, 91, 107, 123, 92, 104, 105 };
+const Move = enum {
+    throw_item,
+    operate_reach,
+    operate_press,
+    operate_recover,
+    surface_rest,
+    surface_burst,
+    armed_clearing_draw,
+    casing_stand_a,
+    casing_stand_b,
+    casing_crouch_a,
+    casing_crouch_b,
+    armed_roll_recovery,
+    armed_drawing_after_climb,
+    shot_ignition,
+    shot_flash,
+    shot_flash_low,
+    shot_impact,
+    shot_impact_low,
+    armed_firing,
+    armed_firing_crouched,
+    armed_drawing_crouched,
+    armed_draw_crouched_release,
+    armed_draw_start,
+    armed_drawing,
+    armed_draw_release,
+    armed_aiming,
+    armed_lowering_aim,
+    armed_standing,
+    armed_walking,
+    armed_turning,
+    armed_holstering,
+    armed_holstering_aim,
+    armed_raising_aim,
+    armed_crouching,
+    armed_crouched,
+    armed_turning_crouched,
+    armed_rising,
+    armed_holstering_crouched,
+    armed_lowering_aim_crouched,
+    armed_raising_aim_crouched,
+    armed_aim_crouch_release,
+    armed_aiming_crouched,
+    armed_crouching_aim,
+    armed_rising_aim,
+    armed_turning_aim,
+    armed_turning_aim_crouched,
+    armed_stepping_down,
+    armed_landing,
+    roll_running_entry,
+    roll_running_recovery,
+    roll_jump_launch,
+    run_wall_stop,
+    run_stagger_stop,
+    run_ledge_approach,
+    run_ledge_reach,
+    run_ledge_brace,
+    jump_ledge_reach,
+    run_drop,
+    reverse_drop,
+    unbalanced_drop,
+    short_jump_drop,
+    gliding_drop,
+    vertical_drop,
+    run_jump_takeoff,
+    run_jump_ascent,
+    run_jump_crest,
+    run_jump_descent,
+    run_jump_landing,
+    run_jump_stand,
+    run_jump_run,
+    reverse_run,
+    reverse_run_finish,
+    accelerate_run,
+    slow_to_walk,
+    edge_stop,
+    use_item,
+    wake,
+    stand,
+    turn_prepare,
+    turn_finish,
+    walk_start,
+    walk_a,
+    walk_b,
+    run_start,
+    run_a,
+    run_b,
+    run_c,
+    run_d,
+    brake,
+    settle,
+    step_off,
+    land,
+    jump_up,
+    jump_recover,
+    jump_low,
+    jump_low_recover,
+    jump_takeoff,
+    jump_flight,
+    jump_land,
+    jump_finish,
+    crouch_lower,
+    crouch_hold,
+    crouch_rise,
+    crouch_turn,
+    roll_enter,
+    roll_tumble,
+    roll_exit,
+    roll_balance,
+    roll_rise,
+    roll_drop,
+    roll_recover,
+    collision_impact,
+    recoil_fall,
+    recoil_confined,
+    recoil_staggered,
+    recoil_prone,
+    recoil_pause_prone,
+    recoil_pause_tight,
+    recoil_rise,
+    recoil_drop,
+    fall_begin,
+    fall_continue,
+    fatal_land,
+    ledge_lower,
+    ledge_catch,
+    ledge_grip,
+    ledge_hang,
+    ledge_reach,
+    ledge_settle_grip,
+    ledge_climb,
+    ledge_stand,
+    ledge_release,
+    ledge_drop,
+    ledge_turn_release,
+    ledge_tumble_release,
+    ledge_brace,
+    ledge_braced_lower,
+};
+const source_moves = [_]u16{
+    69,
+    179,
+    181,
+    180,
+    565,
+    566,
+    77,
+    162,
+    163,
+    164,
+    165,
+    177,
+    174,
+    443,
+    414,
+    415,
+    411,
+    413,
+    58,
+    59,
+    160,
+    222,
+    182,
+    175,
+    223,
+    57,
+    55,
+    44,
+    45,
+    48,
+    52,
+    262,
+    54,
+    46,
+    50,
+    49,
+    51,
+    161,
+    53,
+    47,
+    224,
+    56,
+    71,
+    72,
+    76,
+    173,
+    166,
+    167,
+    33,
+    39,
+    40,
+    125,
+    67,
+    95,
+    121,
+    122,
+    32,
+    127,
+    129,
+    225,
+    63,
+    62,
+    41,
+    13,
+    21,
+    22,
+    23,
+    24,
+    31,
+    14,
+    10,
+    184,
+    11,
+    12,
+    30,
+    168,
+    99,
+    1,
+    0,
+    183,
+    231,
+    2,
+    3,
+    8,
+    6,
+    17,
+    7,
+    18,
+    9,
+    20,
+    128,
+    93,
+    4,
+    5,
+    185,
+    186,
+    26,
+    27,
+    28,
+    29,
+    64,
+    66,
+    65,
+    233,
+    34,
+    35,
+    36,
+    37,
+    38,
+    126,
+    88,
+    263,
+    94,
+    85,
+    84,
+    83,
+    111,
+    74,
+    103,
+    86,
+    89,
+    90,
+    73,
+    15,
+    60,
+    61,
+    25,
+    101,
+    102,
+    16,
+    178,
+    91,
+    107,
+    123,
+    92,
+    104,
+    105,
+};
 pub const RoomArt = struct { id: geometry.RoomId, artwork: artwork.Artwork };
 
 pub const Pack = struct {
@@ -190,7 +466,16 @@ pub const Pack = struct {
     }
 
     pub fn pistolDefinition(self: *const Pack) @import("../pistol_shot.zig").Definition {
-        return .{ .ignition = self.clip(.shot_ignition), .standing_flash = self.clip(.shot_flash), .crouched_flash = self.clip(.shot_flash_low), .standing_impact = self.clip(.shot_impact), .crouched_impact = self.clip(.shot_impact_low), .range_cells = self.pistol_range, .palette_bank = self.pistol_palette, .behind_player = self.pistol_behind_player };
+        return .{
+            .ignition = self.clip(.shot_ignition),
+            .standing_flash = self.clip(.shot_flash),
+            .crouched_flash = self.clip(.shot_flash_low),
+            .standing_impact = self.clip(.shot_impact),
+            .crouched_impact = self.clip(.shot_impact_low),
+            .range_cells = self.pistol_range,
+            .palette_bank = self.pistol_palette,
+            .behind_player = self.pistol_behind_player,
+        };
     }
 
     pub fn controllerClips(self: *const Pack) conrad.Clips {
@@ -236,7 +521,11 @@ pub const Pack = struct {
             .wake = self.clip(.wake),
             .use_item = self.clip(.use_item),
             .throw_item = self.clip(.throw_item),
-            .operate = .{ .reach = self.clip(.operate_reach), .press = self.clip(.operate_press), .recover = self.clip(.operate_recover) },
+            .operate = .{
+                .reach = self.clip(.operate_reach),
+                .press = self.clip(.operate_press),
+                .recover = self.clip(.operate_recover),
+            },
             .stand = self.clip(.stand),
             .turn_preparation = self.clip(.turn_prepare),
             .turn_follow_through = self.clip(.turn_finish),
@@ -252,7 +541,10 @@ pub const Pack = struct {
                 .accelerate = self.clip(.accelerate_run),
                 .walk_out = self.clip(.slow_to_walk),
                 .edge_stop = self.clip(.edge_stop),
-                .reverse = .{ .brake = self.clip(.reverse_run), .follow_through = self.clip(.reverse_run_finish) },
+                .reverse = .{
+                    .brake = self.clip(.reverse_run),
+                    .follow_through = self.clip(.reverse_run_finish),
+                },
             },
             .descend = .{ .step_off = self.clip(.step_off), .land = self.clip(.land) },
             .descent = .{
@@ -275,12 +567,30 @@ pub const Pack = struct {
             },
             .jumps = .{
                 .upward = .{ .rise = self.clip(.jump_up), .recover = self.clip(.jump_recover) },
-                .low_clearance = .{ .rise = self.clip(.jump_low), .recover = self.clip(.jump_low_recover) },
-                .forward = .{ .takeoff = self.clip(.jump_takeoff), .flight = self.clip(.jump_flight), .landing = self.clip(.jump_land), .recover = self.clip(.jump_finish), .ledge_reach = self.clip(.jump_ledge_reach) },
+                .low_clearance = .{
+                    .rise = self.clip(.jump_low),
+                    .recover = self.clip(.jump_low_recover),
+                },
+                .forward = .{
+                    .takeoff = self.clip(.jump_takeoff),
+                    .flight = self.clip(.jump_flight),
+                    .landing = self.clip(.jump_land),
+                    .recover = self.clip(.jump_finish),
+                    .ledge_reach = self.clip(.jump_ledge_reach),
+                },
             },
-            .crouch = .{ .lower = self.clip(.crouch_lower), .hold = self.clip(.crouch_hold), .rise = self.clip(.crouch_rise), .turn = self.clip(.crouch_turn) },
+            .crouch = .{
+                .lower = self.clip(.crouch_lower),
+                .hold = self.clip(.crouch_hold),
+                .rise = self.clip(.crouch_rise),
+                .turn = self.clip(.crouch_turn),
+            },
             .ledge = .{
-                .running = .{ .approach = self.clip(.run_ledge_approach), .reach = self.clip(.run_ledge_reach), .brace = self.clip(.run_ledge_brace) },
+                .running = .{
+                    .approach = self.clip(.run_ledge_approach),
+                    .reach = self.clip(.run_ledge_reach),
+                    .brace = self.clip(.run_ledge_brace),
+                },
                 .lower = self.clip(.ledge_lower),
                 .catch_fall = self.clip(.ledge_catch),
                 .grip = self.clip(.ledge_grip),
@@ -296,17 +606,43 @@ pub const Pack = struct {
                 .brace = self.clip(.ledge_brace),
                 .braced_lower = self.clip(.ledge_braced_lower),
             },
-            .fall = .{ .initial = self.clip(.fall_begin), .continuing = self.clip(.fall_continue), .landing = self.clip(.fatal_land), .resting = self.clip(.recoil_pause_tight) },
+            .fall = .{
+                .initial = self.clip(.fall_begin),
+                .continuing = self.clip(.fall_continue),
+                .landing = self.clip(.fatal_land),
+                .resting = self.clip(.recoil_pause_tight),
+            },
             .recoil = .{
                 .impact = self.clip(.collision_impact),
                 .fall = self.clip(.recoil_fall),
                 .drop = self.clip(.recoil_drop),
-                .confined = .{ .settle = self.clip(.recoil_confined), .rest = self.clip(.recoil_pause_tight) },
-                .staggered = .{ .settle = self.clip(.recoil_staggered), .rest = self.clip(.recoil_pause_tight) },
-                .prone = .{ .settle = self.clip(.recoil_prone), .rest = self.clip(.recoil_pause_prone) },
+                .confined = .{
+                    .settle = self.clip(.recoil_confined),
+                    .rest = self.clip(.recoil_pause_tight),
+                },
+                .staggered = .{
+                    .settle = self.clip(.recoil_staggered),
+                    .rest = self.clip(.recoil_pause_tight),
+                },
+                .prone = .{
+                    .settle = self.clip(.recoil_prone),
+                    .rest = self.clip(.recoil_pause_prone),
+                },
                 .rise = self.clip(.recoil_rise),
             },
-            .roll = .{ .running_entry = self.clip(.roll_running_entry), .running_recovery = self.clip(.roll_running_recovery), .jump_launch = self.clip(.roll_jump_launch), .enter = self.clip(.roll_enter), .tumble = self.clip(.roll_tumble), .exit = self.clip(.roll_exit), .balance = self.clip(.roll_balance), .rise = self.clip(.roll_rise), .drop = self.clip(.roll_drop), .recover = self.clip(.roll_recover), .upright_landing = self.clip(.land) },
+            .roll = .{
+                .running_entry = self.clip(.roll_running_entry),
+                .running_recovery = self.clip(.roll_running_recovery),
+                .jump_launch = self.clip(.roll_jump_launch),
+                .enter = self.clip(.roll_enter),
+                .tumble = self.clip(.roll_tumble),
+                .exit = self.clip(.roll_exit),
+                .balance = self.clip(.roll_balance),
+                .rise = self.clip(.roll_rise),
+                .drop = self.clip(.roll_drop),
+                .recover = self.clip(.roll_recover),
+                .upright_landing = self.clip(.land),
+            },
         };
     }
 
@@ -344,7 +680,13 @@ const Resolver = struct {
     pub fn resolve(self: *Resolver, kind: animation.VisualKind, index: u15) !motion.VisualId {
         const key: u16 = @as(u16, index) | if (kind == .composition) @as(u16, 0x8000) else 0;
         if (self.ids.get(key)) |id| return id;
-        var frame = if (kind == .sprite) try self.spriteFrame(index) else try object_art.fromArchive(self.allocator, self.compositions, self.bindings, self.banks, index);
+        var frame = if (kind == .sprite) try self.spriteFrame(index) else try object_art.fromArchive(
+            self.allocator,
+            self.compositions,
+            self.bindings,
+            self.banks,
+            index,
+        );
         errdefer frame.deinit();
         try self.frames.ensureUnusedCapacity(self.allocator, 1);
         const id: motion.VisualId = @fromBackingInt(@as(u32, @intCast(self.frames.items.len)));
@@ -354,7 +696,12 @@ const Resolver = struct {
     }
 
     fn spriteFrame(self: *Resolver, index: u16) !sprite.Frame {
-        return sprite.fromArchive(self.allocator, self.sprites, self.offsets, index) catch |err| switch (err) {
+        return sprite.fromArchive(
+            self.allocator,
+            self.sprites,
+            self.offsets,
+            index,
+        ) catch |err| switch (err) {
             error.MissingSprite => self.extra_art.resolve(self.allocator, index),
             else => err,
         };
@@ -377,22 +724,50 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Pack {
     return loadWithDifficulty(allocator, source, .normal);
 }
 
-pub fn loadWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSource, difficulty: @import("../settings.zig").Difficulty) !Pack {
+pub fn loadWithDifficulty(
+    allocator: std.mem.Allocator,
+    source: platform.AssetSource,
+    difficulty: @import("../settings.zig").Difficulty,
+) !Pack {
     return loadLevelWithDifficulty(allocator, source, .jungle, difficulty);
 }
 
-pub fn loadLevel(allocator: std.mem.Allocator, source: platform.AssetSource, level: level_mod.Id) !Pack {
+pub fn loadLevel(
+    allocator: std.mem.Allocator,
+    source: platform.AssetSource,
+    level: level_mod.Id,
+) !Pack {
     return loadLevelWithDifficulty(allocator, source, level, .normal);
 }
 
-pub fn loadLevelWithDifficulty(allocator: std.mem.Allocator, source: platform.AssetSource, level: level_mod.Id, difficulty: @import("../settings.zig").Difficulty) !Pack {
+pub fn loadLevelWithDifficulty(
+    allocator: std.mem.Allocator,
+    source: platform.AssetSource,
+    level: level_mod.Id,
+    difficulty: @import("../settings.zig").Difficulty,
+) !Pack {
     const values = try floppy_interface.load(allocator, source);
     var level_code: [13]u8 = @splat(0);
     @memcpy(level_code[0..6], &values.password_prefix);
     @memcpy(level_code[6..13], &values.passwords[@backingInt(level)][@backingInt(difficulty)]);
     var messages = try @import("world_messages.zig").load(allocator, source);
     errdefer messages.deinit();
-    return assembleLevel(allocator, source, level, difficulty, .{ .level_code = level_code, .messages = messages, .actor_colors = values.actor_colors, .actor_libraries = &values.actor_libraries, .score_awards = values.score_awards, .text_colors = values.text_colors, .interface_colors = values.interface_colors, .level_label = &values.level_label });
+    return assembleLevel(
+        allocator,
+        source,
+        level,
+        difficulty,
+        .{
+            .level_code = level_code,
+            .messages = messages,
+            .actor_colors = values.actor_colors,
+            .actor_libraries = &values.actor_libraries,
+            .score_awards = values.score_awards,
+            .text_colors = values.text_colors,
+            .interface_colors = values.interface_colors,
+            .level_label = &values.level_label,
+        },
+    );
 }
 
 /// Decoded interface content supplied by an edition importer. No executable offsets enter
@@ -409,11 +784,21 @@ pub const Interface = struct {
     level_label: []const u8,
 };
 
-pub fn assemble(allocator: std.mem.Allocator, source: platform.AssetSource, interface: Interface) !Pack {
+pub fn assemble(
+    allocator: std.mem.Allocator,
+    source: platform.AssetSource,
+    interface: Interface,
+) !Pack {
     return assembleLevel(allocator, source, .jungle, .normal, interface);
 }
 
-fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, level: level_mod.Id, difficulty: @import("../settings.zig").Difficulty, interface: Interface) !Pack {
+fn assembleLevel(
+    allocator: std.mem.Allocator,
+    source: platform.AssetSource,
+    level: level_mod.Id,
+    difficulty: @import("../settings.zig").Difficulty,
+    interface: Interface,
+) !Pack {
     const files = level_mod.files(level);
     var rooms = try RoomSource.open(source, files);
     defer rooms.deinit();
@@ -455,7 +840,10 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         for (0..placement_table.count) |i| if ((try placement_table.record(@intCast(i))).initial_state == 1143) break :forest true;
         break :forest false;
     };
-    const forest_calls = try allocator.alloc(@import("../ambience.zig").Call, if (forest_enabled) 5 else 0);
+    const forest_calls = try allocator.alloc(
+        @import("../ambience.zig").Call,
+        if (forest_enabled) 5 else 0,
+    );
     errdefer allocator.free(forest_calls);
     var forest_quiet_steps: u16 = 0;
     if (forest_enabled) {
@@ -463,7 +851,12 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         for (forest_sources, forest_calls, 0..) |state, *call, index| {
             var clip = try animation.decode(allocator, ani.bytes, state);
             defer clip.deinit();
-            call.* = .{ .sound = @fromBackingInt(clip.sound orelse return error.MissingForestSound), .duration = @intCast(clip.frames.len), .chance = if (index < 2) 20 else 10, .repeat_chance = if (index == 2 or index == 3) @as(u16, 2) else null };
+            call.* = .{
+                .sound = @fromBackingInt(clip.sound orelse return error.MissingForestSound),
+                .duration = @intCast(clip.frames.len),
+                .chance = if (index < 2) 20 else 10,
+                .repeat_chance = if (index == 2 or index == 3) @as(u16, 2) else null,
+            };
         }
         var quiet = try animation.decode(allocator, ani.bytes, 1143);
         defer quiet.deinit();
@@ -477,15 +870,36 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     if (shot.parameters[3] < 0) return error.InvalidCasingBinding;
     const casing = try placement_table.record(@intCast(shot.parameters[3]));
     if (casing.initial_state != 163) return error.UnsupportedCasingStart;
-    if (gun.object_id != 2 or shot.parameters[0] < 1 or shot.parameters[0] > 64) return error.UnsupportedPistolDefinition;
-    if ((player.initial_state != 99 and player.initial_state != 1 and player.initial_state != 103) or player.kind != 1 or player.room >= 64) return error.UnsupportedPlayerStart;
-    var inventory_art = try inventory_artwork.load(allocator, icons.bytes, font_bytes.bytes, interface.level_label);
+    if (gun.object_id != 2 or
+        shot.parameters[0] < 1 or
+        shot.parameters[0] > 64) return error.UnsupportedPistolDefinition;
+    if ((player.initial_state != 99 and
+        player.initial_state != 1 and
+        player.initial_state != 103) or
+        player.kind != 1 or
+        player.room >= 64) return error.UnsupportedPlayerStart;
+    var inventory_art = try inventory_artwork.load(
+        allocator,
+        icons.bytes,
+        font_bytes.bytes,
+        interface.level_label,
+    );
     errdefer inventory_art.deinit();
     var room_ids: [64]geometry.RoomId = undefined;
     for (&room_ids, 0..) |*id, i| id.* = @fromBackingInt(@as(u16, @intCast(i)) + 1);
     var terrain = try collision.decode(allocator, ct.bytes, &room_ids);
     errdefer terrain.deinit();
-    var resolver: Resolver = .{ .allocator = allocator, .sprites = sprites.bytes, .offsets = offsets.bytes, .extra_art = .{ .source = source, .libraries = interface.actor_libraries }, .icons = icons.bytes, .compositions = compositions.bytes, .bindings = bindings.bytes, .banks = banks, .ids = std.AutoHashMap(u16, motion.VisualId).init(allocator) };
+    var resolver: Resolver = .{
+        .allocator = allocator,
+        .sprites = sprites.bytes,
+        .offsets = offsets.bytes,
+        .extra_art = .{ .source = source, .libraries = interface.actor_libraries },
+        .icons = icons.bytes,
+        .compositions = compositions.bytes,
+        .bindings = bindings.bytes,
+        .banks = banks,
+        .ids = std.AutoHashMap(u16, motion.VisualId).init(allocator),
+    };
     defer resolver.deinit();
     var surfaces: std.ArrayList(@import("../surface_reactions.zig").Definition) = .empty;
     errdefer surfaces.deinit(allocator);
@@ -495,7 +909,19 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         if (surface.minimum_difficulty != 0) return error.UnsupportedConditionalSurface;
         if (surface.room >= room_ids.len) return error.InvalidSurfaceRoom;
         placement_table.register(@intCast(i), .surface_reactions);
-        try surfaces.append(allocator, .{ .footprint = .{ .room = room_ids[surface.room], .position = surface.position, .width = surface.collision_width }, .facing = if (surface.facing_right != 0) .right else .left, .palette_bank = @intCast(surface.visual_flags & 3), .behind_player = surface.visual_flags & 8 != 0 });
+        try surfaces.append(
+            allocator,
+            .{
+                .footprint = .{
+                    .room = room_ids[surface.room],
+                    .position = surface.position,
+                    .width = surface.collision_width,
+                },
+                .facing = if (surface.facing_right != 0) .right else .left,
+                .palette_bank = @intCast(surface.visual_flags & 3),
+                .behind_player = surface.visual_flags & 8 != 0,
+            },
+        );
     }
     const motions = try allocator.alloc(animation.OwnedClip, source_moves.len);
     var loaded: usize = 0;
@@ -506,8 +932,14 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     for (source_moves, 0..) |index, i| {
         // Unused animation slots can name another sprite bank in other levels. A
         // feature without placed instances owns no clips and resolves no artwork.
-        if (surfaces.items.len == 0 and (i == @backingInt(Move.surface_rest) or i == @backingInt(Move.surface_burst))) {
-            motions[i] = .{ .allocator = allocator, .steps = try allocator.alloc(motion.Step, 0), .presses_floor_switches = false };
+        if (surfaces.items.len == 0 and
+            (i == @backingInt(Move.surface_rest) or i == @backingInt(Move.surface_burst)))
+        {
+            motions[i] = .{
+                .allocator = allocator,
+                .steps = try allocator.alloc(motion.Step, 0),
+                .presses_floor_switches = false,
+            };
             loaded += 1;
             continue;
         }
@@ -516,7 +948,14 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         motions[i] = try clip.resolve(allocator, &resolver);
         loaded += 1;
     }
-    var wounds = try @import("conrad_wound.zig").load(allocator, rules.bytes, player.rule_group, ani.bytes, &source_moves, &resolver);
+    var wounds = try @import("conrad_wound.zig").load(
+        allocator,
+        rules.bytes,
+        player.rule_group,
+        ani.bytes,
+        &source_moves,
+        &resolver,
+    );
     errdefer wounds.deinit();
     for (motions, 0..) |*clip, index| clip.hit_profile = @fromBackingInt(@as(u16, @intCast(index)));
     const walk = try allocator.alloc(conrad.WalkMotion, 2);
@@ -530,73 +969,354 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     placement_table.register(@intCast(gun.parameters[0]), .weapon_effects);
     placement_table.register(@intCast(shot.parameters[3]), .casings);
     if (forest_enabled) for (0..placement_table.count) |i| {
-        if ((try placement_table.record(@intCast(i))).initial_state == 1143) placement_table.register(@intCast(i), .ambience);
+        if ((try placement_table.record(@intCast(i))).initial_state == 1143) placement_table.register(
+            @intCast(i),
+            .ambience,
+        );
     };
-    const starting = try starting_equipment.recover(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &resolver);
+    const starting = try starting_equipment.recover(
+        allocator,
+        placement_table,
+        ani.bytes,
+        rules.bytes,
+        names.bytes,
+        &resolver,
+    );
     defer allocator.free(starting.sources);
     var initial_items = starting.definitions;
     errdefer starting_equipment.release(allocator, initial_items);
-    var props = try prop_import.load(allocator, placement_table, ani.bytes, rules.bytes, names.bytes, &room_ids, difficulty, .{ .index = @intCast(initial_items.len), .generation = 1 }, initial_items, &resolver);
+    var props = try prop_import.load(
+        allocator,
+        placement_table,
+        ani.bytes,
+        rules.bytes,
+        names.bytes,
+        &room_ids,
+        difficulty,
+        .{ .index = @intCast(initial_items.len), .generation = 1 },
+        initial_items,
+        &resolver,
+    );
     errdefer props.deinit();
     var connections: std.ArrayList(prop_import.Connection) = .empty;
     defer connections.deinit(allocator);
     try connections.appendSlice(allocator, props.connections);
-    var operated = try @import("operated_controls.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, &resolver);
+    var operated = try @import("operated_controls.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        names.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        &resolver,
+    );
     errdefer operated.deinit();
-    var detectors = try @import("detectors.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
+    var detectors = try @import("detectors.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        &resolver,
+    );
     errdefer detectors.deinit();
-    var energy_stations = try @import("energy_stations.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &resolver);
+    var energy_stations = try @import("energy_stations.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        names.bytes,
+        &room_ids,
+        difficulty,
+        &resolver,
+    );
     errdefer energy_stations.deinit();
-    const credential_sources = try allocator.alloc(u16, starting.sources.len + props.item_sources.len);
+    const credential_sources = try allocator.alloc(
+        u16,
+        starting.sources.len + props.item_sources.len,
+    );
     defer allocator.free(credential_sources);
     @memcpy(credential_sources[0..starting.sources.len], starting.sources);
     @memcpy(credential_sources[starting.sources.len..], props.item_sources);
-    var credential_terminals = try @import("credential_terminals.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, &resolver);
+    var credential_terminals = try @import("credential_terminals.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        names.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        &resolver,
+    );
     errdefer credential_terminals.deinit();
-    var environmental_alarms = try @import("environmental_alarms.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &resolver);
+    var environmental_alarms = try @import("environmental_alarms.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        &room_ids,
+        difficulty,
+        &resolver,
+    );
     errdefer environmental_alarms.deinit();
-    var timed_items = try @import("timed_items.zig").load(allocator, placement_table, rules.bytes, ani.bytes, terrain.source, &room_ids, props.item_sources, @intCast(initial_items.len), &connections, &resolver);
+    var timed_items = try @import("timed_items.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        terrain.source,
+        &room_ids,
+        props.item_sources,
+        @intCast(initial_items.len),
+        &connections,
+        &resolver,
+    );
     errdefer timed_items.deinit();
-    var scripted_transport = try @import("scripted_transport.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
+    var scripted_transport = try @import("scripted_transport.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        &resolver,
+    );
     errdefer scripted_transport.deinit();
-    var arrival_triggers = try @import("arrival_triggers.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
+    var arrival_triggers = try @import("arrival_triggers.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        &resolver,
+    );
     errdefer arrival_triggers.deinit();
-    var ambient_people = try @import("ambient_people.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &resolver);
+    var ambient_people = try @import("ambient_people.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        &room_ids,
+        difficulty,
+        &resolver,
+    );
     errdefer ambient_people.deinit();
-    var attentive_contacts = try @import("attentive_contacts.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, &resolver);
+    var attentive_contacts = try @import("attentive_contacts.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        names.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        &resolver,
+    );
     errdefer attentive_contacts.deinit();
-    var quest_contacts = try @import("quest_contacts.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, initial_items, &resolver);
+    var quest_contacts = try @import("quest_contacts.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        names.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        initial_items,
+        &resolver,
+    );
     errdefer quest_contacts.deinit();
-    try @import("inventory_grants.zig").outputs(allocator, placement_table, rules.bytes, props.item_sources, &connections);
-    var mission_terminals = try @import("mission_terminals.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, initial_items, &resolver);
+    try @import("inventory_grants.zig").outputs(
+        allocator,
+        placement_table,
+        rules.bytes,
+        props.item_sources,
+        &connections,
+    );
+    var mission_terminals = try @import("mission_terminals.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        names.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        initial_items,
+        &resolver,
+    );
     errdefer mission_terminals.deinit();
-    var service_counters = try @import("service_counters.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, &resolver);
+    var service_counters = try @import("service_counters.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        names.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        &resolver,
+    );
     errdefer service_counters.deinit();
-    var locks = try @import("key_locks.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, credential_sources, quest_contacts, .{ .index = 0, .generation = 1 }, &resolver);
+    var locks = try @import("key_locks.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        names.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        credential_sources,
+        quest_contacts,
+        .{ .index = 0, .generation = 1 },
+        &resolver,
+    );
     errdefer locks.deinit();
-    var item_aid = try @import("item_aid.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, initial_items, &resolver);
+    var item_aid = try @import("item_aid.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        names.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        props.item_sources,
+        .{ .index = @intCast(initial_items.len), .generation = 1 },
+        initial_items,
+        &resolver,
+    );
     errdefer item_aid.deinit();
-    var guides = try @import("rescued_guides.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, initial_items, &resolver);
+    var guides = try @import("rescued_guides.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        names.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        initial_items,
+        &resolver,
+    );
     errdefer guides.deinit();
-    var story_stations = try @import("story_stations.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, &resolver);
+    var story_stations = try @import("story_stations.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        names.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        &resolver,
+    );
     errdefer story_stations.deinit();
-    var traders = try @import("traders.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, initial_items, &resolver);
+    var traders = try @import("traders.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        names.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        initial_items,
+        &resolver,
+    );
     errdefer traders.deinit();
-    var lifts = try @import("lifts.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
+    var lifts = try @import("lifts.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        &resolver,
+    );
     errdefer lifts.deinit();
-    var escort_followers = try @import("escort_followers.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, lifts, &resolver);
+    var escort_followers = try @import("escort_followers.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        names.bytes,
+        &room_ids,
+        difficulty,
+        lifts,
+        &resolver,
+    );
     errdefer escort_followers.deinit();
-    const lift_passengers = try @import("lift_passengers.zig").load(allocator, placement_table, rules.bytes, props, @intCast(initial_items.len), lifts.source_indices);
+    const lift_passengers = try @import("lift_passengers.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        props,
+        @intCast(initial_items.len),
+        lifts.source_indices,
+    );
     errdefer allocator.free(lift_passengers);
-    var riding = try @import("conrad_lift.zig").load(allocator, rules.bytes, player.rule_group, ani.bytes, &resolver);
+    var riding = try @import("conrad_lift.zig").load(
+        allocator,
+        rules.bytes,
+        player.rule_group,
+        ani.bytes,
+        &resolver,
+    );
     errdefer riding.deinit();
-    var guards = try @import("mobile_guards.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
+    var guards = try @import("mobile_guards.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        &resolver,
+    );
     errdefer guards.deinit();
-    var barriers = try @import("event_barriers.zig").load(allocator, placement_table, rules.bytes, ani.bytes, difficulty, &connections);
+    var barriers = try @import("event_barriers.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        difficulty,
+        &connections,
+    );
     errdefer barriers.deinit();
-    var gunmen = try @import("gunmen.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, interface.score_awards, &connections, &resolver);
+    var gunmen = try @import("gunmen.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        &room_ids,
+        difficulty,
+        interface.score_awards,
+        &connections,
+        &resolver,
+    );
     errdefer gunmen.deinit();
-    var rescue_contacts = try @import("rescue_contacts.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, &resolver);
+    var rescue_contacts = try @import("rescue_contacts.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        names.bytes,
+        &room_ids,
+        difficulty,
+        &connections,
+        &resolver,
+    );
     errdefer rescue_contacts.deinit();
     const combined_connections = try connections.toOwnedSlice(allocator);
     allocator.free(props.connections);
@@ -627,31 +1347,159 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer allocator.free(guard_bindings);
     const barrier_bindings = try barriers.bind(props.connections);
     errdefer allocator.free(barrier_bindings);
-    const item_bindings = try @import("quest_items.zig").bindings(allocator, placement_table, rules.bytes, props, @intCast(initial_items.len), props.connections);
+    const item_bindings = try @import("quest_items.zig").bindings(
+        allocator,
+        placement_table,
+        rules.bytes,
+        props,
+        @intCast(initial_items.len),
+        props.connections,
+    );
     errdefer allocator.free(item_bindings);
-    var inventory_grants = try @import("inventory_grants.zig").load(allocator, placement_table, rules.bytes, ani.bytes, props.item_sources, .{ .index = @intCast(initial_items.len), .generation = 1 }, props.connections);
+    var inventory_grants = try @import("inventory_grants.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        props.item_sources,
+        .{ .index = @intCast(initial_items.len), .generation = 1 },
+        props.connections,
+    );
     errdefer inventory_grants.deinit();
-    var triggered_effects = try @import("triggered_effects.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, &resolver);
+    var triggered_effects = try @import("triggered_effects.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        &room_ids,
+        difficulty,
+        props.connections,
+        &resolver,
+    );
     errdefer triggered_effects.deinit();
-    const exits = try @import("level_exits.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty);
+    const exits = try @import("level_exits.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        &room_ids,
+        difficulty,
+    );
     errdefer allocator.free(exits);
-    var hazards = try @import("electrical_hazards.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, &resolver);
+    var hazards = try @import("electrical_hazards.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        &room_ids,
+        difficulty,
+        props.connections,
+        &resolver,
+    );
     errdefer hazards.deinit();
-    var ceiling_guns = try @import("ceiling_guns.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, &resolver);
+    var ceiling_guns = try @import("ceiling_guns.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        &room_ids,
+        difficulty,
+        props.connections,
+        &resolver,
+    );
     errdefer ceiling_guns.deinit();
-    var platform_sections = try @import("platform_sections.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, &resolver);
+    var platform_sections = try @import("platform_sections.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        &room_ids,
+        difficulty,
+        props.connections,
+        &resolver,
+    );
     errdefer platform_sections.deinit();
-    var doors = try @import("doors.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, @intCast(gun.parameters[0]), &resolver);
+    var doors = try @import("doors.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        &room_ids,
+        difficulty,
+        props.connections,
+        @intCast(gun.parameters[0]),
+        &resolver,
+    );
     errdefer doors.deinit();
-    var robots = try @import("ground_robots.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &resolver);
+    var robots = try @import("ground_robots.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        &room_ids,
+        difficulty,
+        &resolver,
+    );
     errdefer robots.deinit();
-    var enemy_barriers = try @import("enemy_barriers.zig").load(allocator, placement_table, rules.bytes, ani.bytes, difficulty, props.connections, gunmen, &resolver);
+    var enemy_barriers = try @import("enemy_barriers.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        difficulty,
+        props.connections,
+        gunmen,
+        &resolver,
+    );
     errdefer enemy_barriers.deinit();
-    var force_fields = try @import("force_fields.zig").load(allocator, placement_table, rules.bytes, ani.bytes, difficulty, &resolver);
+    var force_fields = try @import("force_fields.zig").load(
+        allocator,
+        placement_table,
+        rules.bytes,
+        ani.bytes,
+        difficulty,
+        &resolver,
+    );
     errdefer force_fields.deinit();
-    const character_schedule = try @import("character_schedule.zig").build(allocator, .{ .gunmen = gunmen, .guards = guards, .quest_contacts = quest_contacts, .attentive_contacts = attentive_contacts, .service_counters = service_counters, .rescue_contacts = rescue_contacts, .enemy_barriers = enemy_barriers }, @intCast(gun.parameters[0]));
+    const character_schedule = try @import("character_schedule.zig").build(
+        allocator,
+        .{
+            .gunmen = gunmen,
+            .guards = guards,
+            .quest_contacts = quest_contacts,
+            .attentive_contacts = attentive_contacts,
+            .service_counters = service_counters,
+            .rescue_contacts = rescue_contacts,
+            .enemy_barriers = enemy_barriers,
+        },
+        @intCast(gun.parameters[0]),
+    );
     errdefer allocator.free(character_schedule);
-    var visibility = try @import("visibility.zig").load(allocator, placement_table, &room_ids, difficulty, .{ .props = props, .guards = guards, .gunmen = gunmen, .doors = doors, .item_aid = item_aid, .traders = traders, .guides = guides, .story_stations = story_stations, .force_fields = force_fields, .service_counters = service_counters, .mission_terminals = mission_terminals, .quest_contacts = quest_contacts, .attentive_contacts = attentive_contacts, .escort_followers = escort_followers, .ambient_people = ambient_people, .rescue_contacts = rescue_contacts, .enemy_barriers = enemy_barriers });
+    var visibility = try @import("visibility.zig").load(
+        allocator,
+        placement_table,
+        &room_ids,
+        difficulty,
+        .{
+            .props = props,
+            .guards = guards,
+            .gunmen = gunmen,
+            .doors = doors,
+            .item_aid = item_aid,
+            .traders = traders,
+            .guides = guides,
+            .story_stations = story_stations,
+            .force_fields = force_fields,
+            .service_counters = service_counters,
+            .mission_terminals = mission_terminals,
+            .quest_contacts = quest_contacts,
+            .attentive_contacts = attentive_contacts,
+            .escort_followers = escort_followers,
+            .ambient_people = ambient_people,
+            .rescue_contacts = rescue_contacts,
+            .enemy_barriers = enemy_barriers,
+        },
+    );
     errdefer visibility.deinit();
     const supplied = initial_items.len;
     initial_items = try allocator.realloc(initial_items, supplied + props.items.len);
@@ -679,7 +1527,10 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         errdefer art.deinit();
         const alternate = art.palette_banks[2] != reference_bank;
         @memcpy(art.colors[0x40..0x50], &interface.actor_colors[@intFromBool(alternate)]);
-        if (gunmen.definitions.len != 0) @memcpy(art.colors[0x50..0x60], &interface.actor_libraries[0].colors);
+        if (gunmen.definitions.len != 0) @memcpy(
+            art.colors[0x50..0x60],
+            &interface.actor_libraries[0].colors,
+        );
         @memcpy(art.colors[0xa0..0xb0], &icon_colors);
         @memcpy(art.colors[0xe0..0xf0], &interface.text_colors);
         @memcpy(art.colors[0xf0..0x100], &interface.interface_colors);
@@ -770,8 +1621,17 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .forest_calls = forest_calls,
         .forest_quiet_steps = forest_quiet_steps,
         .casing_definition = .{
-            .trajectories = .{ motions[@backingInt(Move.casing_stand_a)].clip(), motions[@backingInt(Move.casing_stand_b)].clip(), motions[@backingInt(Move.casing_crouch_a)].clip(), motions[@backingInt(Move.casing_crouch_b)].clip() },
-            .initial_pose = .{ .position = casing.position, .facing = if (casing.facing_right != 0) .right else .left, .visual = .{ .id = @fromBackingInt(0) } },
+            .trajectories = .{
+                motions[@backingInt(Move.casing_stand_a)].clip(),
+                motions[@backingInt(Move.casing_stand_b)].clip(),
+                motions[@backingInt(Move.casing_crouch_a)].clip(),
+                motions[@backingInt(Move.casing_crouch_b)].clip(),
+            },
+            .initial_pose = .{
+                .position = casing.position,
+                .facing = if (casing.facing_right != 0) .right else .left,
+                .visual = .{ .id = @fromBackingInt(0) },
+            },
             .initial_room = if (casing.room < room_ids.len) room_ids[casing.room] else null,
             .initial_path = .standing_b,
             .palette_bank = @intCast(casing.visual_flags & 3),
@@ -784,21 +1644,48 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .initial_room = room_ids[player.room],
         .initial_activity = if (player.initial_state == 99) .waking else if (player.initial_state == 103) .{ .wounded = .{ .phase = .backward_rise } } else .standing,
         .forest_enabled = forest_enabled,
-        .initial_pose = .{ .position = player.position, .facing = facing, .visual = .{ .id = first_visual.id, .mirrored = first_visual.mirrored != (facing == .left) } },
+        .initial_pose = .{
+            .position = player.position,
+            .facing = facing,
+            .visual = .{
+                .id = first_visual.id,
+                .mirrored = first_visual.mirrored != (facing == .left),
+            },
+        },
     };
 }
 
 /// Own whichever source representation the user supplied. Both yield ordinary artwork.
 const RoomSource = union(enum) {
     installed: platform.OwnedBytes,
-    compact: struct { rooms: platform.OwnedBytes, tiles: platform.OwnedBytes, background: ?platform.OwnedBytes, tile_bias: u16 },
+    compact: struct {
+        rooms: platform.OwnedBytes,
+        tiles: platform.OwnedBytes,
+        background: ?platform.OwnedBytes,
+        tile_bias: u16,
+    },
     fn open(source: platform.AssetSource, files: level_mod.Files) !RoomSource {
-        if (readLevel(source, files.rooms, "MAP", 8 * 1024 * 1024)) |file| return .{ .installed = file } else |err| if (err != error.NotFound) return err;
+        if (readLevel(
+            source,
+            files.rooms,
+            "MAP",
+            8 * 1024 * 1024,
+        )) |file| return .{ .installed = file } else |err| if (err != error.NotFound) return err;
         var rooms = try readLevel(source, files.rooms, "LEV", 1024 * 1024);
         errdefer rooms.deinit();
         var tiles = try readLevel(source, files.rooms, "BNQ", 1024 * 1024);
         errdefer tiles.deinit();
-        return .{ .compact = .{ .rooms = rooms, .tiles = tiles, .background = if (files.tile_bias != 0) try readLevel(source, files.rooms, "SGD", 1024 * 1024) else null, .tile_bias = files.tile_bias } };
+        return .{ .compact = .{
+            .rooms = rooms,
+            .tiles = tiles,
+            .background = if (files.tile_bias != 0) try readLevel(
+                source,
+                files.rooms,
+                "SGD",
+                1024 * 1024,
+            ) else null,
+            .tile_bias = files.tile_bias,
+        } };
     }
     fn deinit(self: *RoomSource) void {
         switch (self.*) {
@@ -810,15 +1697,34 @@ const RoomSource = union(enum) {
             },
         }
     }
-    fn decode(self: *const RoomSource, allocator: std.mem.Allocator, colors: []const u8, room: u8) !artwork.Artwork {
+    fn decode(
+        self: *const RoomSource,
+        allocator: std.mem.Allocator,
+        colors: []const u8,
+        room: u8,
+    ) !artwork.Artwork {
         return switch (self.*) {
             .installed => |file| artwork.decode(allocator, file.bytes, colors, room),
-            .compact => |files| (floppy_rooms.Archive{ .rooms = files.rooms.bytes, .banks = files.tiles.bytes, .background = if (files.background) |background| background.bytes else &.{}, .tile_bias = files.tile_bias }).decode(allocator, colors, room),
+            .compact => |files| (floppy_rooms.Archive{
+                .rooms = files.rooms.bytes,
+                .banks = files.tiles.bytes,
+                .background = if (files.background) |background| background.bytes else &.{},
+                .tile_bias = files.tile_bias,
+            }).decode(allocator, colors, room),
         };
     }
 };
 
-fn readLevel(source: platform.AssetSource, basename: []const u8, extension: []const u8, limit: usize) !platform.OwnedBytes {
+fn readLevel(
+    source: platform.AssetSource,
+    basename: []const u8,
+    extension: []const u8,
+    limit: usize,
+) !platform.OwnedBytes {
     var path: [64]u8 = undefined;
-    return read(source, try std.fmt.bufPrint(&path, "DATA/{s}.{s}", .{ basename, extension }), limit);
+    return read(
+        source,
+        try std.fmt.bufPrint(&path, "DATA/{s}.{s}", .{ basename, extension }),
+        limit,
+    );
 }

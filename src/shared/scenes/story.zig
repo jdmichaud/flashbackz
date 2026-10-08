@@ -14,7 +14,13 @@ pub const Story = struct {
     skip: bool = false,
     activation_key: ?platform.Key,
 
-    pub fn open(allocator: std.mem.Allocator, source: platform.AssetSource, kind: props.Movie, now: u64, activation: ?platform.Key) !Story {
+    pub fn open(
+        allocator: std.mem.Allocator,
+        source: platform.AssetSource,
+        kind: props.Movie,
+        now: u64,
+        activation: ?platform.Key,
+    ) !Story {
         const cue: struct { film: []const u8, entry: u16, music: []const u8 } = switch (kind) {
             .delivery_briefing => .{ .film = "MISSIONS", .entry = 0, .music = "MISSION3" },
             .escort_briefing => .{ .film = "MISSIONS", .entry = 1, .music = "MISSION3" },
@@ -58,7 +64,13 @@ pub const Story = struct {
         };
         var player = try vector.Player.open(allocator, source, cue.film, cue.entry);
         errdefer player.deinit();
-        return .{ .kind = kind, .player = player, .music = try audio.Soundtrack.open(allocator, source, cue.music, 44100), .started_ns = now, .activation_key = activation };
+        return .{
+            .kind = kind,
+            .player = player,
+            .music = try audio.Soundtrack.open(allocator, source, cue.music, 44100),
+            .started_ns = now,
+            .activation_key = activation,
+        };
     }
     pub fn deinit(self: *Story) void {
         self.player.deinit();
@@ -101,8 +113,13 @@ pub const Story = struct {
             },
             .key_down => |key| {
                 if (self.player.interactive() and key.key != .tab and key.key != .escape) {
-                    const confirm = key.key == .enter or key.key == .space or key.key == .left_shift or key.key == .right_shift;
-                    if (confirm and !key.repeat and self.activation_key != key.key) self.player.confirm();
+                    const confirm = key.key == .enter or
+                        key.key == .space or
+                        key.key == .left_shift or
+                        key.key == .right_shift;
+                    if (confirm and
+                        !key.repeat and
+                        self.activation_key != key.key) self.player.confirm();
                     return confirm;
                 }
                 const skip = switch (key.key) {

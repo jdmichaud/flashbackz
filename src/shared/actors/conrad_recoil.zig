@@ -4,7 +4,14 @@ const motion = @import("../motion.zig");
 const controls = @import("controls.zig");
 
 pub const Landing = enum { confined, staggered, prone };
-pub const Phase = union(enum) { impact, falling, dropping, settling: Landing, resting: Landing, rising };
+pub const Phase = union(enum) {
+    impact,
+    falling,
+    dropping,
+    settling: Landing,
+    resting: Landing,
+    rising,
+};
 pub const Recovery = struct { settle: motion.Clip, rest: motion.Clip };
 pub const Clips = struct {
     impact: motion.Clip,
@@ -28,7 +35,14 @@ pub const Clips = struct {
         };
     }
 };
-pub const Boundary = enum { continued, standing, low_recovery, catch_ledge, long_fall, terrain_requested };
+pub const Boundary = enum {
+    continued,
+    standing,
+    low_recovery,
+    catch_ledge,
+    long_fall,
+    terrain_requested,
+};
 
 pub const State = struct {
     phase: Phase = .impact,
@@ -44,7 +58,13 @@ pub const State = struct {
         };
     }
 
-    pub fn finishPhase(self: *State, clips: Clips, intent: controls.Intent, pose: *motion.Pose, environment: anytype) !Boundary {
+    pub fn finishPhase(
+        self: *State,
+        clips: Clips,
+        intent: controls.Intent,
+        pose: *motion.Pose,
+        environment: anytype,
+    ) !Boundary {
         switch (self.phase) {
             .impact => {
                 const confined = try environment.at(pose.*, .torso, -1);
@@ -92,7 +112,15 @@ test "impact retreats in physical facing once, then preserves the selected recov
     const held = [_]motion.Step{.hold};
     const clip: motion.Clip = .{ .steps = &held };
     const recovery: Recovery = .{ .settle = clip, .rest = clip };
-    const clips: Clips = .{ .impact = clip, .fall = clip, .drop = clip, .confined = recovery, .staggered = recovery, .prone = recovery, .rise = clip };
+    const clips: Clips = .{
+        .impact = clip,
+        .fall = clip,
+        .drop = clip,
+        .confined = recovery,
+        .staggered = recovery,
+        .prone = recovery,
+        .rise = clip,
+    };
     const Ground = struct {
         confined: bool,
         pub fn at(self: @This(), _: motion.Pose, height: anytype, ahead: i16) !bool {
@@ -103,14 +131,21 @@ test "impact retreats in physical facing once, then preserves the selected recov
         }
     };
     for ([_]motion.Facing{ .left, .right }) |facing| for ([_]bool{ false, true }) |confined| {
-        var pose: motion.Pose = .{ .position = .{ .x = 100, .y = 70 }, .facing = facing, .visual = .{ .id = @fromBackingInt(0) } };
+        var pose: motion.Pose = .{
+            .position = .{ .x = 100, .y = 70 },
+            .facing = facing,
+            .visual = .{ .id = @fromBackingInt(0) },
+        };
         var state: State = .{};
         const ground: Ground = .{ .confined = confined };
         try std.testing.expectEqual(.continued, try state.finishPhase(clips, .{}, &pose, ground));
         try std.testing.expectEqual(@as(i16, if (facing == .right) 84 else 116), pose.position.x);
         try std.testing.expectEqual(@as(i16, 54), pose.position.y);
         if (!confined) _ = try state.finishPhase(clips, .{}, &pose, ground);
-        try std.testing.expectEqual(if (confined) Landing.confined else .prone, state.phase.settling);
+        try std.testing.expectEqual(
+            if (confined) Landing.confined else .prone,
+            state.phase.settling,
+        );
         _ = try state.finishPhase(clips, .{}, &pose, ground);
         _ = try state.finishPhase(clips, .{}, &pose, ground);
         try std.testing.expectEqual(.standing, try state.finishPhase(clips, .{}, &pose, ground));

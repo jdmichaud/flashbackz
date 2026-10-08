@@ -35,14 +35,28 @@ pub const ImpactSet = struct {
     }
 };
 pub const Category = enum { player, enemy, civilian, mechanism };
-pub const Target = struct { id: Id, footprint: contacts.Footprint, facing: motion.Facing, vulnerable: Vulnerability, active: bool = true, category: Category = .enemy };
+pub const Target = struct {
+    id: Id,
+    footprint: contacts.Footprint,
+    facing: motion.Facing,
+    vulnerable: Vulnerability,
+    active: bool = true,
+    category: Category = .enemy,
+};
 pub const Hit = struct { target: Id, impact: Impact, sender_room: geometry.RoomId };
 
 pub fn impactFor(direction: motion.Facing, target_facing: motion.Facing, height: Height) Impact {
     return if (direction == target_facing) (if (height == .standing) .rear_high else .rear_low) else (if (height == .standing) .front_high else .front_low);
 }
 
-pub fn trace(view: terrain.View, room: geometry.RoomId, pose: motion.Pose, height: Height, range: u16, targets: []const Target) !?Hit {
+pub fn trace(
+    view: terrain.View,
+    room: geometry.RoomId,
+    pose: motion.Pose,
+    height: Height,
+    range: u16,
+    targets: []const Target,
+) !?Hit {
     const band = @divTrunc(pose.position.y -% 8, 72);
     if (band < 0 or band > 2) return null;
     const step: i16 = if (pose.facing == .right) 1 else -1;
@@ -50,15 +64,32 @@ pub fn trace(view: terrain.View, room: geometry.RoomId, pose: motion.Pose, heigh
     var current_room = room;
     const layout: contacts.Layout = .{};
     for (0..range) |_| {
-        const cell = try view.geometry.locate(current_room, column, band * 2 + 1) orelse return null;
+        const cell = try view.geometry.locate(
+            current_room,
+            column,
+            band * 2 + 1,
+        ) orelse return null;
         // A target in the first solid cell is considered before the terrain at that cell.
         for (targets) |target| {
             if (!target.active) continue;
             const impact = impactFor(pose.facing, target.facing, height);
             if (!target.vulnerable.accepts(impact)) continue;
             for (0..target.footprint.width) |offset| {
-                const occupied = try layout.cell(view.geometry, target.footprint.room, .{ .x = target.footprint.position.x +% @as(i16, @intCast(offset)) *% 16, .y = target.footprint.position.y }) orelse continue;
-                if (occupied.room == cell.room and occupied.column == cell.column and occupied.row == band) return .{ .target = target.id, .impact = impact, .sender_room = room };
+                const occupied = try layout.cell(
+                    view.geometry,
+                    target.footprint.room,
+                    .{
+                        .x = target.footprint.position.x +% @as(i16, @intCast(offset)) *% 16,
+                        .y = target.footprint.position.y,
+                    },
+                ) orelse continue;
+                if (occupied.room == cell.room and
+                    occupied.column == cell.column and
+                    occupied.row == band) return .{
+                    .target = target.id,
+                    .impact = impact,
+                    .sender_room = room,
+                };
             }
         }
         const material = try view.sample(current_room, column, band * 2 + 1);
@@ -73,14 +104,36 @@ test "shots skip immune poses, pass low clearance only when crouched, and hit be
     const std = @import("std");
     const room: geometry.RoomId = @fromBackingInt(17);
     const empty: [48]bool = @splat(false);
-    const rooms = [_]geometry.Room{.{ .id = room, .width = 256, .height = 72, .columns = 16, .rows = 3, .blocking = &empty, .edges = .{ .left = .blocked, .right = .blocked, .up = .blocked, .down = .blocked } }};
+    const rooms = [_]geometry.Room{.{
+        .id = room,
+        .width = 256,
+        .height = 72,
+        .columns = 16,
+        .rows = 3,
+        .blocking = &empty,
+        .edges = .{ .left = .blocked, .right = .blocked, .up = .blocked, .down = .blocked },
+    }};
     var cells: [48]terrain.Material = @splat(.empty);
     cells[16 + 3] = .restricted;
     const view: terrain.View = .{ .geometry = .{ .rooms = &rooms }, .materials = &cells };
-    const pose: motion.Pose = .{ .position = .{ .x = 0, .y = 70 }, .facing = .right, .visual = .{ .id = @fromBackingInt(0) } };
+    const pose: motion.Pose = .{
+        .position = .{ .x = 0, .y = 70 },
+        .facing = .right,
+        .visual = .{ .id = @fromBackingInt(0) },
+    };
     var targets = [_]Target{
-        .{ .id = @fromBackingInt(5), .footprint = .{ .room = room, .position = .{ .x = 32, .y = 70 } }, .facing = .left, .vulnerable = .{ .front_low = true } },
-        .{ .id = @fromBackingInt(9), .footprint = .{ .room = room, .position = .{ .x = 64, .y = 70 } }, .facing = .right, .vulnerable = .{ .rear_high = true, .rear_low = true } },
+        .{
+            .id = @fromBackingInt(5),
+            .footprint = .{ .room = room, .position = .{ .x = 32, .y = 70 } },
+            .facing = .left,
+            .vulnerable = .{ .front_low = true },
+        },
+        .{
+            .id = @fromBackingInt(9),
+            .footprint = .{ .room = room, .position = .{ .x = 64, .y = 70 } },
+            .facing = .right,
+            .vulnerable = .{ .rear_high = true, .rear_low = true },
+        },
     };
     try std.testing.expect((try trace(view, room, pose, .standing, 8, &targets)) == null);
     try std.testing.expect((try trace(view, room, pose, .crouched, 1, &targets)) == null);
@@ -94,5 +147,8 @@ test "shots skip immune poses, pass low clearance only when crouched, and hit be
     cells[16 + 3] = .solid;
     try std.testing.expect((try trace(view, room, pose, .crouched, 8, &targets)) == null);
     targets[1].footprint.position.x = 48;
-    try std.testing.expectEqual(targets[1].id, (try trace(view, room, pose, .standing, 8, &targets)).?.target);
+    try std.testing.expectEqual(
+        targets[1].id,
+        (try trace(view, room, pose, .standing, 8, &targets)).?.target,
+    );
 }

@@ -17,10 +17,25 @@ pub const Frame = struct {
 
 /// The offset index is a compatibility identifier. Scene and animation definitions keep
 /// references to decoded frames, rather than looking up DOS records while drawing.
-pub fn fromArchive(allocator: std.mem.Allocator, sprites: []const u8, offsets: []const u8, index: u16) !Frame {
-    if (sprites.len < 12 or !std.mem.eql(u8, sprites[0..3], "SPP")) return error.InvalidSpriteArchive;
-    if (offsets.len < 2 or (offsets.len - 2) % 6 != 0 or (offsets.len - 2) / 6 > 4096) return error.InvalidSpriteDirectory;
-    if (std.mem.readInt(u16, offsets[offsets.len - 2 ..][0..2], .little) != 0xffff) return error.InvalidSpriteDirectory;
+pub fn fromArchive(
+    allocator: std.mem.Allocator,
+    sprites: []const u8,
+    offsets: []const u8,
+    index: u16,
+) !Frame {
+    if (sprites.len < 12 or !std.mem.eql(
+        u8,
+        sprites[0..3],
+        "SPP",
+    )) return error.InvalidSpriteArchive;
+    if (offsets.len < 2 or
+        (offsets.len - 2) % 6 != 0 or
+        (offsets.len - 2) / 6 > 4096) return error.InvalidSpriteDirectory;
+    if (std.mem.readInt(
+        u16,
+        offsets[offsets.len - 2 ..][0..2],
+        .little,
+    ) != 0xffff) return error.InvalidSpriteDirectory;
     var found: ?u32 = null;
     var cursor: usize = 0;
     while (cursor + 2 < offsets.len) : (cursor += 6) {
@@ -37,7 +52,11 @@ pub fn fromArchive(allocator: std.mem.Allocator, sprites: []const u8, offsets: [
     if (offset == 0xffffffff) {
         const pixels = try allocator.alloc(u8, 1);
         pixels[0] = 0;
-        return .{ .image = .{ .allocator = allocator, .width = 1, .height = 1, .pixels = pixels }, .origin_x = 0, .origin_y = 0 };
+        return .{
+            .image = .{ .allocator = allocator, .width = 1, .height = 1, .pixels = pixels },
+            .origin_x = 0,
+            .origin_y = 0,
+        };
     }
     const body = sprites[12..];
     if (offset >= body.len) return error.InvalidSpriteOffset;
@@ -48,16 +67,24 @@ pub fn fromArchive(allocator: std.mem.Allocator, sprites: []const u8, offsets: [
 pub fn fromIcons(allocator: std.mem.Allocator, file: []const u8, index: u16) !Frame {
     if (file.len < 2) return error.InvalidIconDirectory;
     const directory_length = std.mem.readInt(u16, file[0..2], .little);
-    if (directory_length < 2 or directory_length % 2 != 0 or directory_length > file.len) return error.InvalidIconDirectory;
+    if (directory_length < 2 or
+        directory_length % 2 != 0 or
+        directory_length > file.len) return error.InvalidIconDirectory;
     if (index >= directory_length / 2) return error.MissingIcon;
     const offset: usize = std.mem.readInt(u16, file[@as(usize, index) * 2 ..][0..2], .little);
-    if (offset < directory_length or offset > file.len or file.len - offset < 130) return error.TruncatedIcon;
+    if (offset < directory_length or
+        offset > file.len or
+        file.len - offset < 130) return error.TruncatedIcon;
     const pixels = try allocator.alloc(u8, 256);
     for (file[offset + 2 ..][0..128], 0..) |byte, i| {
         pixels[i * 2] = byte >> 4;
         pixels[i * 2 + 1] = byte & 15;
     }
-    return .{ .image = .{ .allocator = allocator, .width = 16, .height = 16, .pixels = pixels }, .origin_x = 0, .origin_y = 0 };
+    return .{
+        .image = .{ .allocator = allocator, .width = 16, .height = 16, .pixels = pixels },
+        .origin_x = 0,
+        .origin_y = 0,
+    };
 }
 
 pub fn decode(allocator: std.mem.Allocator, record: []const u8) !Frame {
@@ -169,17 +196,33 @@ test "short and long nibble runs, padding and truncation" {
     for (pixels[0..5]) |color| try std.testing.expectEqual(@as(u8, 2), color);
     for (pixels[5..]) |color| try std.testing.expectEqual(@as(u8, 3), color);
     try decodePixels(allocator, &.{0x10}, pixels[0..1]);
-    try std.testing.expectError(error.TruncatedSpriteRun, decodePixels(allocator, &.{0xf2}, pixels[0..5]));
-    try std.testing.expectError(error.SpriteRunOverflow, decodePixels(allocator, &.{ 0xf2, 0x10 }, pixels[0..4]));
-    try std.testing.expectError(error.SpriteRunOverflow, decodePixels(allocator, &.{ 0x12, 0x00 }, pixels[0..2]));
-    try std.testing.expectError(error.TrailingSpriteData, decodePixels(allocator, &.{0x12}, pixels[0..1]));
+    try std.testing.expectError(
+        error.TruncatedSpriteRun,
+        decodePixels(allocator, &.{0xf2}, pixels[0..5]),
+    );
+    try std.testing.expectError(
+        error.SpriteRunOverflow,
+        decodePixels(allocator, &.{ 0xf2, 0x10 }, pixels[0..4]),
+    );
+    try std.testing.expectError(
+        error.SpriteRunOverflow,
+        decodePixels(allocator, &.{ 0x12, 0x00 }, pixels[0..2]),
+    );
+    try std.testing.expectError(
+        error.TrailingSpriteData,
+        decodePixels(allocator, &.{0x12}, pixels[0..1]),
+    );
 }
 
 test "long output can replace a later token before it is decoded" {
     var pixels: [1049]u8 = undefined;
     // Four 259-zero runs, twelve zeros, then a literal 3. The twelve-zero run covers
     // the last token in the shared workspace; the original therefore outputs zero.
-    try decodePixels(std.testing.allocator, &.{ 0xff, 0xff, 0x0f, 0xff, 0xf0, 0xff, 0xff, 0x0f, 0xff, 0xf0, 0xf0, 0x83 }, &pixels);
+    try decodePixels(
+        std.testing.allocator,
+        &.{ 0xff, 0xff, 0x0f, 0xff, 0xf0, 0xff, 0xff, 0x0f, 0xff, 0xf0, 0xf0, 0x83 },
+        &pixels,
+    );
     for (pixels) |color| try std.testing.expectEqual(@as(u8, 0), color);
 }
 
@@ -189,11 +232,23 @@ test "truncated records and absent archive entries are checked" {
     var selected = try fromArchive(std.testing.allocator, &archive, &offsets, 7);
     defer selected.deinit();
     try std.testing.expectEqual(@as(u8, 3), selected.image.pixels[0]);
-    try std.testing.expectError(error.MissingSprite, fromArchive(std.testing.allocator, &archive, &offsets, 8));
-    try std.testing.expectError(error.InvalidSpriteDirectory, fromArchive(std.testing.allocator, &archive, offsets[0..7], 7));
-    try std.testing.expectError(error.TruncatedSprite, decode(std.testing.allocator, &.{ 0, 0, 2, 2, 0, 9 }));
+    try std.testing.expectError(
+        error.MissingSprite,
+        fromArchive(std.testing.allocator, &archive, &offsets, 8),
+    );
+    try std.testing.expectError(
+        error.InvalidSpriteDirectory,
+        fromArchive(std.testing.allocator, &archive, offsets[0..7], 7),
+    );
+    try std.testing.expectError(
+        error.TruncatedSprite,
+        decode(std.testing.allocator, &.{ 0, 0, 2, 2, 0, 9 }),
+    );
     // Direct-draw records keep the selector bit in the dimension: 129 pixels are required.
-    try std.testing.expectError(error.TruncatedSprite, decode(std.testing.allocator, &.{ 0, 0, 0x81, 1, 16 }));
+    try std.testing.expectError(
+        error.TruncatedSprite,
+        decode(std.testing.allocator, &.{ 0, 0, 0x81, 1, 16 }),
+    );
     var direct: [4 + 129]u8 = @splat(16);
     direct[0..4].* = .{ 0, 0, 0x81, 1 };
     var frame = try decode(std.testing.allocator, &direct);
@@ -211,7 +266,10 @@ test "icon offsets and nibble order are bounded independently of sprite archives
     defer icon.deinit();
     try std.testing.expectEqualSlices(u8, &.{ 1, 15, 0, 0 }, icon.image.pixels[0..4]);
     try std.testing.expectError(error.MissingIcon, fromIcons(std.testing.allocator, &file, 1));
-    try std.testing.expectError(error.TruncatedIcon, fromIcons(std.testing.allocator, file[0..131], 0));
+    try std.testing.expectError(
+        error.TruncatedIcon,
+        fromIcons(std.testing.allocator, file[0..131], 0),
+    );
 }
 
 test "explicit null artwork becomes transparent while an absent identifier stays missing" {
@@ -220,5 +278,8 @@ test "explicit null artwork becomes transparent while an absent identifier stays
     var frame = try fromArchive(std.testing.allocator, &archive, &offsets, 7);
     defer frame.deinit();
     try std.testing.expectEqualSlices(u8, &.{0}, frame.image.pixels);
-    try std.testing.expectError(error.MissingSprite, fromArchive(std.testing.allocator, &archive, &offsets, 8));
+    try std.testing.expectError(
+        error.MissingSprite,
+        fromArchive(std.testing.allocator, &archive, &offsets, 8),
+    );
 }

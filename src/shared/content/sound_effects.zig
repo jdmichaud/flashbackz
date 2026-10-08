@@ -28,7 +28,10 @@ pub fn decode(allocator: std.mem.Allocator, bytes: []const u8) !Bank {
         const record = bytes[2 + index * 6 ..][0..6];
         const offset = std.mem.readInt(u32, record[0..4], .little);
         const length = std.mem.readInt(u16, record[4..6], .little);
-        if (length != 0 and (offset < directory_end or offset > bytes.len or length > bytes.len - offset)) return error.InvalidSoundExtent;
+        if (length != 0 and
+            (offset < directory_end or
+                offset > bytes.len or
+                length > bytes.len - offset)) return error.InvalidSoundExtent;
         total += @as(usize, length) * 2;
         if (total > 4 * 1024 * 1024) return error.SoundArchiveTooLarge;
         sample.pcm = try allocator.alloc(i8, @as(usize, length) * 2);
@@ -52,7 +55,17 @@ test "sound delta decoding duplicates the first amplitude and wraps signed addit
     const bytes = [_]u8{ 1, 0, 8, 0, 0, 0, 3, 0, 127, 0xff, 0x08 };
     var bank = try decode(std.testing.allocator, &bytes);
     defer bank.deinit();
-    try std.testing.expectEqualSlices(i8, &.{ 127, 127, -108, -87, -121, -121 }, bank.samples[0].pcm);
-    try std.testing.expectError(error.InvalidSoundExtent, decode(std.testing.allocator, bytes[0..10]));
-    try std.testing.expectError(error.InvalidSoundArchive, decode(std.testing.allocator, &.{ 255, 255 }));
+    try std.testing.expectEqualSlices(
+        i8,
+        &.{ 127, 127, -108, -87, -121, -121 },
+        bank.samples[0].pcm,
+    );
+    try std.testing.expectError(
+        error.InvalidSoundExtent,
+        decode(std.testing.allocator, bytes[0..10]),
+    );
+    try std.testing.expectError(
+        error.InvalidSoundArchive,
+        decode(std.testing.allocator, &.{ 255, 255 }),
+    );
 }

@@ -43,7 +43,11 @@ pub const Inventory = struct {
 
     pub fn remove(self: *Inventory, item: ItemHandle) bool {
         const index = self.indexOf(item) orelse return false;
-        std.mem.copyForwards(ItemHandle, self.storage[index .. self.length - 1], self.storage[index + 1 .. self.length]);
+        std.mem.copyForwards(
+            ItemHandle,
+            self.storage[index .. self.length - 1],
+            self.storage[index + 1 .. self.length],
+        );
         self.length -= 1;
         return true;
     }

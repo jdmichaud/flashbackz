@@ -6,7 +6,12 @@ const contacts = @import("contacts.zig");
 const Circuit = @import("world_props.zig").CircuitId;
 pub const Definition = struct { footprint: contacts.Footprint, clip: motion.Clip, outputs: [2]Circuit, notice: @import("world_messages.zig").Id, hint: motion.VisualId, label: []const u8, priority: u16, initially_active: bool, accepts_signals: bool };
 pub const Binding = struct { circuit: Circuit, target: usize, next_step: bool };
-pub const Instance = struct { active: bool, playback: motion.Playback = .{}, ready: bool = false, pending: bool = false };
+pub const Instance = struct {
+    active: bool,
+    playback: motion.Playback = .{},
+    ready: bool = false,
+    pending: bool = false,
+};
 pub const World = struct {
     allocator: std.mem.Allocator,
     instances: []Instance,
@@ -17,14 +22,26 @@ pub const World = struct {
     pub fn init(allocator: std.mem.Allocator, definitions: []const Definition) !World {
         const instances = try allocator.alloc(Instance, definitions.len);
         errdefer allocator.free(instances);
-        for (instances, definitions) |*instance, definition| instance.* = .{ .active = definition.initially_active };
-        return .{ .allocator = allocator, .instances = instances, .pulses = try allocator.alloc(Circuit, definitions.len * 2) };
+        for (
+            instances,
+            definitions,
+        ) |*instance, definition| instance.* = .{ .active = definition.initially_active };
+        return .{
+            .allocator = allocator,
+            .instances = instances,
+            .pulses = try allocator.alloc(Circuit, definitions.len * 2),
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.instances);
         self.allocator.free(self.pulses);
     }
-    pub fn prepare(self: *World, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint) !void {
+    pub fn prepare(
+        self: *World,
+        definitions: []const Definition,
+        map: geometry.Map,
+        player: contacts.Footprint,
+    ) !void {
         self.pulse_count = 0;
         self.notice = null;
         self.candidate = null;
@@ -40,7 +57,12 @@ pub const World = struct {
             if (binding.next_step) self.instances[binding.target].pending = true else self.instances[binding.target].ready = true;
         };
     }
-    pub fn advance(self: *World, definitions: []const Definition, bindings: []const Binding, talk: bool) void {
+    pub fn advance(
+        self: *World,
+        definitions: []const Definition,
+        bindings: []const Binding,
+        talk: bool,
+    ) void {
         for (self.instances, definitions, 0..) |*instance, definition, index| {
             const speaking = talk and self.candidate == index;
             if ((instance.ready or speaking) and definition.accepts_signals) {
@@ -56,7 +78,11 @@ pub const World = struct {
                         self.route(bindings, &.{circuit});
                     }
                 } else if (speaking) {
-                    self.notice = .{ .message = definition.notice, .icon = definition.hint, .priority = definition.priority };
+                    self.notice = .{
+                        .message = definition.notice,
+                        .icon = definition.hint,
+                        .priority = definition.priority,
+                    };
                 } else instance.active = false;
                 instance.playback = .{};
             }
@@ -64,6 +90,11 @@ pub const World = struct {
         }
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
-        for (self.instances) |instance| for ([_]u64{ @intFromBool(instance.active), instance.playback.next_step, @intFromBool(instance.ready), @intFromBool(instance.pending) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        for (self.instances) |instance| for ([_]u64{
+            @intFromBool(instance.active),
+            instance.playback.next_step,
+            @intFromBool(instance.ready),
+            @intFromBool(instance.pending),
+        }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
     }
 };

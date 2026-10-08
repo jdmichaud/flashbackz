@@ -11,7 +11,10 @@ pub fn queue(p: *platform.Platform, samples: []const i16, percent: u8) !usize {
 }
 
 fn scale(input: []const i16, output: []i16, percent: u8) void {
-    for (input, output) |sample, *result| result.* = @intCast(@divTrunc(@as(i32, sample) * @min(percent, 100), 100));
+    for (input, output) |sample, *result| result.* = @intCast(@divTrunc(
+        @as(i32, sample) * @min(percent, 100),
+        100,
+    ));
 }
 
 test "master volume preserves full range, halves both signs and mutes" {

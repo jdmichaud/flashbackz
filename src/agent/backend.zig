@@ -135,7 +135,10 @@ pub const AgentBackend = struct {
         const self = cast(ctx);
         self.calls.set_resolution += 1;
         if (!self.started) return error.NotStarted;
-        if (width == 0 or height == 0 or width > 8192 or height > 8192) return error.InvalidResolution;
+        if (width == 0 or
+            height == 0 or
+            width > 8192 or
+            height > 8192) return error.InvalidResolution;
         const bytes = @as(usize, width) * height * platform.RgbaFrame.bytes_per_pixel;
         // Prepare the new capture storage before the mode changes.
         self.capture.resize(self.allocator, bytes) catch return error.OutOfMemory;
@@ -184,7 +187,10 @@ pub const AgentBackend = struct {
         return self.clock_ns;
     }
 
-    fn audioOpen(ctx: *anyopaque, requested: platform.AudioFormat) platform.PlatformError!platform.AudioFormat {
+    fn audioOpen(
+        ctx: *anyopaque,
+        requested: platform.AudioFormat,
+    ) platform.PlatformError!platform.AudioFormat {
         const self = cast(ctx);
         if (!self.started) return error.NotStarted;
         if (requested.channels == 0 or requested.sample_rate == 0) return error.Unsupported;
@@ -206,7 +212,10 @@ pub const AgentBackend = struct {
         const room = self.audio.capacity_frames - self.audio.queued_frames;
         const accepted = @min(offered, room);
         if (self.audio.record) {
-            self.audio.pcm.appendSlice(self.allocator, samples[0 .. accepted * channels]) catch return error.OutOfMemory;
+            self.audio.pcm.appendSlice(
+                self.allocator,
+                samples[0 .. accepted * channels],
+            ) catch return error.OutOfMemory;
         }
         self.audio.queued_frames += accepted;
         return accepted;
@@ -238,7 +247,10 @@ pub const AgentBackend = struct {
         if (!self.started) return error.NotStarted;
         self.relative_mouse = enabled;
         // The simulated host grants the request and reports it, as a real host does.
-        self.pending.append(self.allocator, .{ .time_ns = self.clock_ns, .payload = .{ .capture_changed = enabled } }) catch return error.OutOfMemory;
+        self.pending.append(
+            self.allocator,
+            .{ .time_ns = self.clock_ns, .payload = .{ .capture_changed = enabled } },
+        ) catch return error.OutOfMemory;
     }
 };
 
@@ -274,7 +286,10 @@ test "present copies the frame and the game's buffer can be reused" {
     @memset(&pixels, 0);
     const captured = backend.captureFrame().?;
     try std.testing.expectEqual(@as(u8, 7), captured.pixels[0]);
-    try std.testing.expectError(error.InvalidFrame, p.present(.{ .width = 3, .height = 2, .stride = 12, .pixels = &pixels }));
+    try std.testing.expectError(
+        error.InvalidFrame,
+        p.present(.{ .width = 3, .height = 2, .stride = 12, .pixels = &pixels }),
+    );
     // Padded rows are copied without their padding.
     var padded: [40]u8 = @splat(9);
     try p.present(.{ .width = 4, .height = 2, .stride = 20, .pixels = &padded });

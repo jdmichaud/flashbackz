@@ -4,7 +4,12 @@ const std = @import("std");
 const Circuit = @import("world_props.zig").CircuitId;
 pub const Definition = struct { required_updates: u8, output: Circuit };
 pub const Binding = struct { circuit: Circuit, target: usize, next_step: bool };
-pub const State = struct { received: u8 = 0, ready: bool = false, pending: bool = false, released: bool = false };
+pub const State = struct {
+    received: u8 = 0,
+    ready: bool = false,
+    pending: bool = false,
+    released: bool = false,
+};
 pub const World = struct {
     allocator: std.mem.Allocator,
     barriers: []State,
@@ -15,7 +20,11 @@ pub const World = struct {
         const barriers = try allocator.alloc(State, count);
         errdefer allocator.free(barriers);
         @memset(barriers, .{});
-        return .{ .allocator = allocator, .barriers = barriers, .pulses = try allocator.alloc(Circuit, count) };
+        return .{
+            .allocator = allocator,
+            .barriers = barriers,
+            .pulses = try allocator.alloc(Circuit, count),
+        };
     }
     pub fn deinit(self: *World) void {
         self.allocator.free(self.barriers);
@@ -48,7 +57,12 @@ pub const World = struct {
         }
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
-        for (self.barriers) |barrier| hash.update(&.{ barrier.received, @intFromBool(barrier.ready), @intFromBool(barrier.pending), @intFromBool(barrier.released) });
+        for (self.barriers) |barrier| hash.update(&.{
+            barrier.received,
+            @intFromBool(barrier.ready),
+            @intFromBool(barrier.pending),
+            @intFromBool(barrier.released),
+        });
     }
 };
 

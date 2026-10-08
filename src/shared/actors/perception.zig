@@ -5,11 +5,22 @@ const motion = @import("../motion.zig");
 const contacts = @import("../contacts.zig");
 const combat = @import("../combat.zig");
 
-pub const PostureSense = struct { category: combat.Category, same_facing: bool, impact: combat.Impact };
+pub const PostureSense = struct {
+    category: combat.Category,
+    same_facing: bool,
+    impact: combat.Impact,
+};
 
 /// Detect an exposed posture that cannot receive the selected kind of shot. Gunmen use
 /// this to lower their aim; this is a visibility query, not prediction of moving bullets.
-pub fn unhittableTarget(map: geometry.Map, observer: Observer, self_id: combat.Id, range: i16, targets: []const combat.Target, senses: []const ?PostureSense) !bool {
+pub fn unhittableTarget(
+    map: geometry.Map,
+    observer: Observer,
+    self_id: combat.Id,
+    range: i16,
+    targets: []const combat.Target,
+    senses: []const ?PostureSense,
+) !bool {
     const band = @divTrunc(observer.pose.position.y, 72);
     if (band < 0 or band > 2) return false;
     const direction: i16 = if ((observer.pose.facing == .right) == (range > 0)) 1 else -1;
@@ -22,12 +33,23 @@ pub fn unhittableTarget(map: geometry.Map, observer: Observer, self_id: combat.I
             if (target.id == self_id or !target.active) continue;
             var selected = false;
             for (senses) |optional| if (optional) |sense| {
-                if (target.category == sense.category and ((target.facing == observer.pose.facing) == sense.same_facing) and !target.vulnerable.accepts(sense.impact)) selected = true;
+                if (target.category == sense.category and
+                    ((target.facing == observer.pose.facing) == sense.same_facing) and
+                    !target.vulnerable.accepts(sense.impact)) selected = true;
             };
             if (!selected) continue;
             for (0..target.footprint.width) |offset| {
-                const contact = try layout.cell(map, target.footprint.room, .{ .x = target.footprint.position.x +% @as(i16, @intCast(offset)) *% 16, .y = target.footprint.position.y }) orelse continue;
-                if (contact.room == cell.room and contact.column == cell.column and contact.row == band) return true;
+                const contact = try layout.cell(
+                    map,
+                    target.footprint.room,
+                    .{
+                        .x = target.footprint.position.x +% @as(i16, @intCast(offset)) *% 16,
+                        .y = target.footprint.position.y,
+                    },
+                ) orelse continue;
+                if (contact.room == cell.room and
+                    contact.column == cell.column and
+                    contact.row == band) return true;
             }
         }
         if (try map.blocked(room, column, band * 2 + 1)) return false;
@@ -48,7 +70,8 @@ pub const Awareness = struct {
 
     pub fn player(self: Awareness, behind: bool, distance: ?i16) bool {
         const limit = distance orelse return false;
-        if (limit == 0 and (if (behind) self.player_behind_neighbor else self.player_front_neighbor)) return true;
+        if (limit == 0 and
+            (if (behind) self.player_behind_neighbor else self.player_front_neighbor)) return true;
         const actual = (if (behind) self.player_behind else self.player_front) orelse return false;
         return limit == 0 or (actual > 0 and actual < limit);
     }
@@ -59,9 +82,17 @@ pub const Awareness = struct {
     }
 };
 
-pub fn observe(map: geometry.Map, observer: Observer, player: contacts.Footprint, objects: []const contacts.Footprint) !Awareness {
+pub fn observe(
+    map: geometry.Map,
+    observer: Observer,
+    player: contacts.Footprint,
+    objects: []const contacts.Footprint,
+) !Awareness {
     var result: Awareness = .{};
-    if (observer.room == player.room and @divTrunc(observer.pose.position.y, 72) == @divTrunc(player.position.y -% 8, 72)) {
+    if (observer.room == player.room and @divTrunc(
+        observer.pose.position.y,
+        72,
+    ) == @divTrunc(player.position.y -% 8, 72)) {
         var distance = player.position.x -% observer.pose.position.x;
         if (observer.pose.facing == .left) distance = -%distance;
         // The unlimited rear query includes equal X only for a left-facing observer.
@@ -74,7 +105,9 @@ pub fn observe(map: geometry.Map, observer: Observer, player: contacts.Footprint
         result.player_behind_neighbor = behind == .room and behind.room == player.room;
     }
     const room = try map.room(player.room);
-    if (observer.room != player.room and !(room.edges.left == .room and room.edges.left.room == observer.room) and !(room.edges.right == .room and room.edges.right.room == observer.room)) return result;
+    if (observer.room != player.room and
+        !(room.edges.left == .room and room.edges.left.room == observer.room) and
+        !(room.edges.right == .room and room.edges.right.room == observer.room)) return result;
     result.object_front = try scanObjects(map, player.room, observer, objects, false);
     result.object_behind = try scanObjects(map, player.room, observer, objects, true);
     return result;
@@ -83,11 +116,23 @@ pub fn observe(map: geometry.Map, observer: Observer, player: contacts.Footprint
 /// Search the contact view shared by the current room and its horizontal neighbors.
 /// Contact lookup and terrain lookup have different offsets in the original game.
 /// Keep their cursors explicit, including contact-row spill at a room seam.
-pub fn scanObjects(map: geometry.Map, view_room: geometry.RoomId, observer: Observer, objects: []const contacts.Footprint, behind: bool) !?u8 {
+pub fn scanObjects(
+    map: geometry.Map,
+    view_room: geometry.RoomId,
+    observer: Observer,
+    objects: []const contacts.Footprint,
+    behind: bool,
+) !?u8 {
     if (objects.len == 0) return null;
     const view = try map.room(view_room);
-    const rooms = [_]?geometry.RoomId{ if (view.edges.left == .room) view.edges.left.room else null, view_room, if (view.edges.right == .room) view.edges.right.room else null };
-    var slot: i16 = if (observer.room == view_room) 1 else if (rooms[0] != null and rooms[0].? == observer.room) 0 else if (rooms[2] != null and rooms[2].? == observer.room) 2 else return null;
+    const rooms = [_]?geometry.RoomId{
+        if (view.edges.left == .room) view.edges.left.room else null,
+        view_room,
+        if (view.edges.right == .room) view.edges.right.room else null,
+    };
+    var slot: i16 = if (observer.room == view_room) 1 else if (rooms[0] != null and
+        rooms[0].? == observer.room) 0 else if (rooms[2] != null and
+        rooms[2].? == observer.room) 2 else return null;
     const origin = try map.room(observer.room);
     const columns = @divTrunc(origin.width, 16);
     const bands = @divTrunc(origin.height, 72);
@@ -97,7 +142,10 @@ pub fn scanObjects(map: geometry.Map, view_room: geometry.RoomId, observer: Obse
     const band = @divTrunc(observer.pose.position.y, 72);
     if (band < 0 or band >= bands or cells_per_room <= 0) return null;
     var terrain_room = observer.room;
-    var contact_index = slot * cells_per_room + band * columns + column + @as(i16, if (left) 0 else 1);
+    var contact_index = slot * cells_per_room + band * columns + column + @as(
+        i16,
+        if (left) 0 else 1,
+    );
     const layout: contacts.Layout = .{};
     for (1..17) |step| {
         column += if (left) @as(i16, -1) else 1;
@@ -121,8 +169,18 @@ pub fn scanObjects(map: geometry.Map, view_room: geometry.RoomId, observer: Obse
             const contact_slot: usize = @intCast(@divTrunc(contact_index, cells_per_room));
             const local = @mod(contact_index, cells_per_room);
             if (rooms[contact_slot]) |room| for (objects) |object| for (0..object.width) |offset| {
-                const cell = try layout.cell(map, object.room, .{ .x = object.position.x +% @as(i16, @intCast(offset)) *% 16, .y = object.position.y }) orelse continue;
-                if (cell.room == room and cell.column == @mod(local, columns) and cell.row == @divTrunc(local, columns)) return @intCast(step);
+                const cell = try layout.cell(
+                    map,
+                    object.room,
+                    .{
+                        .x = object.position.x +% @as(i16, @intCast(offset)) *% 16,
+                        .y = object.position.y,
+                    },
+                ) orelse continue;
+                if (cell.room == room and cell.column == @mod(
+                    local,
+                    columns,
+                ) and cell.row == @divTrunc(local, columns)) return @intCast(step);
             };
         }
         if (try map.blocked(terrain_room, column, band * 2 + 1)) return null;
@@ -134,11 +192,29 @@ test "loose-item search retains the full range and tests the visited terrain cel
     const std = @import("std");
     const room: geometry.RoomId = @fromBackingInt(17);
     var blocking: [16 * 7]bool = @splat(false);
-    const rooms = [_]geometry.Room{.{ .id = room, .width = 256, .height = 216, .columns = 16, .rows = 7, .blocking = &blocking, .edges = .{ .left = .blocked, .right = .blocked, .up = .blocked, .down = .blocked } }};
+    const rooms = [_]geometry.Room{.{
+        .id = room,
+        .width = 256,
+        .height = 216,
+        .columns = 16,
+        .rows = 7,
+        .blocking = &blocking,
+        .edges = .{ .left = .blocked, .right = .blocked, .up = .blocked, .down = .blocked },
+    }};
     const map: geometry.Map = .{ .rooms = &rooms };
-    const observer: Observer = .{ .room = room, .pose = .{ .position = .{ .x = 224, .y = 214 }, .facing = .left, .visual = .{ .id = @fromBackingInt(0) } } };
+    const observer: Observer = .{
+        .room = room,
+        .pose = .{
+            .position = .{ .x = 224, .y = 214 },
+            .facing = .left,
+            .visual = .{ .id = @fromBackingInt(0) },
+        },
+    };
     var objects = [_]contacts.Footprint{.{ .room = room, .position = .{ .x = 64, .y = 214 } }};
-    try std.testing.expectEqual(@as(?u8, 10), try scanObjects(map, room, observer, &objects, false));
+    try std.testing.expectEqual(
+        @as(?u8, 10),
+        try scanObjects(map, room, observer, &objects, false),
+    );
     blocking[5 * 16 + 8] = true;
     try std.testing.expect((try scanObjects(map, room, observer, &objects, false)) == null);
     blocking[5 * 16 + 8] = false;

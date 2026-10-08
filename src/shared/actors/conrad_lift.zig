@@ -34,8 +34,20 @@ pub const Phase = enum {
     draw_crouched,
 };
 pub const Clips = struct { entries: [@typeInfo(Phase).@"enum".field_names.len]motion.Clip };
-pub const Ground = enum { standing, crouched, armed_standing, armed_aiming, armed_crouched, armed_aiming_crouched };
-pub const Outcome = union(enum) { continued, boarded, leave: Ground, fire: @import("../pistol_shot.zig").Height };
+pub const Ground = enum {
+    standing,
+    crouched,
+    armed_standing,
+    armed_aiming,
+    armed_crouched,
+    armed_aiming_crouched,
+};
+pub const Outcome = union(enum) {
+    continued,
+    boarded,
+    leave: Ground,
+    fire: @import("../pistol_shot.zig").Height,
+};
 pub const State = struct {
     phase: Phase = .waiting,
     pub fn clip(self: State, clips: Clips) motion.Clip {
@@ -50,7 +62,14 @@ pub const State = struct {
     fn reverse(pose: *motion.Pose) void {
         pose.facing = if (pose.facing == .left) .right else .left;
     }
-    pub fn finish(self: *State, intent: controls.Intent, desired: bool, acknowledged: bool, arrived: bool, pose: *motion.Pose) Outcome {
+    pub fn finish(
+        self: *State,
+        intent: controls.Intent,
+        desired: bool,
+        acknowledged: bool,
+        arrived: bool,
+        pose: *motion.Pose,
+    ) Outcome {
         if (arrived and self.acceptsArrival()) return .{ .leave = switch (self.phase) {
             .standing => .standing,
             .crouched => .crouched,
@@ -60,8 +79,14 @@ pub const State = struct {
             .lowering_gun => .armed_standing,
             else => unreachable,
         } };
-        const plain = !intent.action and !intent.weapon and !intent.use_item and !intent.directions_conflict;
-        const backward = plain and intent.vertical == null and intent.direction != null and intent.direction != pose.facing;
+        const plain = !intent.action and
+            !intent.weapon and
+            !intent.use_item and
+            !intent.directions_conflict;
+        const backward = plain and
+            intent.vertical == null and
+            intent.direction != null and
+            intent.direction != pose.facing;
         const down = plain and intent.direction == null and intent.vertical == .down;
         const up = plain and intent.direction == null and intent.vertical == .up;
         const fire = intent.action and !intent.weapon and !intent.use_item;

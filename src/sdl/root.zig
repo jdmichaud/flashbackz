@@ -28,7 +28,11 @@ pub const VersionCheck = struct {
 /// pkg-config reported on Linux, the `sdl2` package's on Windows.
 pub fn checkVersion(buf: []u8) VersionCheck {
     const linked = linkedVersion(buf);
-    return .{ .linked = linked, .pinned = flashbackz.version.sdl, .matches = std.mem.eql(u8, linked, flashbackz.version.sdl) };
+    return .{
+        .linked = linked,
+        .pinned = flashbackz.version.sdl,
+        .matches = std.mem.eql(u8, linked, flashbackz.version.sdl),
+    };
 }
 
 test "the linked library is an SDL 2 release" {

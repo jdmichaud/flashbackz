@@ -5,7 +5,15 @@ const artwork = @import("../content/continue_artwork.zig");
 const palette = @import("../content/palette.zig");
 const text = @import("../render/text.zig");
 const timing = @import("../step_clock.zig");
-const confirm_keys = [_]platform.Key{ .enter, .space, .tab, .left_shift, .right_shift, .left_ctrl, .right_ctrl };
+const confirm_keys = [_]platform.Key{
+    .enter,
+    .space,
+    .tab,
+    .left_shift,
+    .right_shift,
+    .left_ctrl,
+    .right_ctrl,
+};
 pub const Choice = enum { retry, abort };
 pub const View = struct { choice: Choice = .retry, seconds: i16 = 10, pulse: u8 = 0 };
 pub const Menu = struct {
@@ -109,14 +117,30 @@ pub const Menu = struct {
         var hash = std.hash.Wyhash.init(0);
         hash.update(&.{ @backingInt(self.choice), self.pulse, @intFromBool(self.brightening) });
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(i16, self.seconds)));
-        hash.update(&.{ @intFromBool(self.cancel_pending), @intFromBool(self.up_pending), @intFromBool(self.down_pending), @backingInt(self.view.choice), self.view.pulse });
+        hash.update(&.{
+            @intFromBool(self.cancel_pending),
+            @intFromBool(self.up_pending),
+            @intFromBool(self.down_pending),
+            @backingInt(self.view.choice),
+            self.view.pulse,
+        });
         for (self.held_confirmation) |pressed| hash.update(&.{@intFromBool(pressed)});
-        for ([_]u64{ self.score, self.last_second_tick, if (self.clock) |clock| clock.next_tick else 0 }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
-        hash.update(&.{ @intFromBool(self.outcome != null), if (self.outcome) |choice| @backingInt(choice) else 0 });
+        for ([_]u64{
+            self.score,
+            self.last_second_tick,
+            if (self.clock) |clock| clock.next_tick else 0,
+        }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        hash.update(&.{
+            @intFromBool(self.outcome != null),
+            if (self.outcome) |choice| @backingInt(choice) else 0,
+        });
         const origin = if (self.clock) |clock| clock.origin_ns else 0;
         for (self.events.items) |input| {
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, input.time_ns -| origin)));
-            hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u32, @backingInt(std.meta.activeTag(input.payload)))));
+            hash.update(&std.mem.toBytes(std.mem.nativeToLittle(
+                u32,
+                @backingInt(std.meta.activeTag(input.payload)),
+            )));
             const key: u16 = switch (input.payload) {
                 .key_down, .key_up => |press| @backingInt(press.key),
                 else => 0,
@@ -130,7 +154,10 @@ pub const Scene = struct {
     assets: artwork.Assets,
     menu: Menu,
     pub fn init(allocator: std.mem.Allocator, source: platform.AssetSource, score: u32) !Scene {
-        return .{ .assets = try artwork.load(allocator, source), .menu = Menu.init(allocator, score) };
+        return .{
+            .assets = try artwork.load(allocator, source),
+            .menu = Menu.init(allocator, score),
+        };
     }
     pub fn deinit(self: *Scene) void {
         self.menu.deinit();
@@ -154,15 +181,61 @@ pub const Scene = struct {
     }
 };
 
-pub fn drawView(art: *const artwork.Assets, view: View, score: u32, indices: []u8, rgba: []u8) !void {
+pub fn drawView(
+    art: *const artwork.Assets,
+    view: View,
+    score: u32,
+    indices: []u8,
+    rgba: []u8,
+) !void {
     if (indices.len != art.pixels.len) return error.InvalidFrameLength;
     @memcpy(indices, art.pixels);
     const style: text.Style = .{ .foreground = 0xe3, .shadow = 0xe2, .palette_bank = 14 };
-    try text.draw(indices, 256, 224, &art.font, art.title, @divTrunc(256 - @as(i32, @intCast(art.title.len)) * 8, 2), 64, style);
+    try text.draw(
+        indices,
+        256,
+        224,
+        &art.font,
+        art.title,
+        @divTrunc(256 - @as(i32, @intCast(art.title.len)) * 8, 2),
+        64,
+        style,
+    );
     var buffer: [96]u8 = undefined;
-    try text.draw(indices, 256, 224, &art.font, try std.fmt.bufPrint(&buffer, "{s}{d}", .{ art.time, view.seconds }), 96, 88, style);
-    for ([_][]const u8{ art.retry, art.abort }, 0..) |label, i| try text.draw(indices, 256, 224, &art.font, label, @divTrunc(256 - @as(i32, @intCast(label.len)) * 8, 2), 104 + @as(i32, @intCast(i)) * 8, .{ .foreground = if (i == @backingInt(view.choice)) 0xe4 else 0xe5, .shadow = 0xe2, .palette_bank = 14 });
-    try text.draw(indices, 256, 224, &art.font, try std.fmt.bufPrint(&buffer, "{s}{d:0>8}", .{ art.score, score }), 64, 154, style);
+    try text.draw(
+        indices,
+        256,
+        224,
+        &art.font,
+        try std.fmt.bufPrint(&buffer, "{s}{d}", .{ art.time, view.seconds }),
+        96,
+        88,
+        style,
+    );
+    for ([_][]const u8{ art.retry, art.abort }, 0..) |label, i| try text.draw(
+        indices,
+        256,
+        224,
+        &art.font,
+        label,
+        @divTrunc(256 - @as(i32, @intCast(label.len)) * 8, 2),
+        104 + @as(i32, @intCast(i)) * 8,
+        .{
+            .foreground = if (i == @backingInt(view.choice)) 0xe4 else 0xe5,
+            .shadow = 0xe2,
+            .palette_bank = 14,
+        },
+    );
+    try text.draw(
+        indices,
+        256,
+        224,
+        &art.font,
+        try std.fmt.bufPrint(&buffer, "{s}{d:0>8}", .{ art.score, score }),
+        64,
+        154,
+        style,
+    );
     var colors = art.colors;
     colors[0xe4].g = (view.pulse << 2) | (view.pulse >> 4);
     colors[0xe4].b = colors[0xe4].g;
@@ -196,7 +269,8 @@ test "the Continue clock keeps all eleven countdown values and bounds catch-up w
     var seen: [11]bool = @splat(false);
     while (menu.outcome == null) {
         try menu.update(menu.clock.?.deadline());
-        if (menu.view.seconds >= 0 and menu.view.seconds <= 10) seen[@intCast(menu.view.seconds)] = true;
+        if (menu.view.seconds >= 0 and
+            menu.view.seconds <= 10) seen[@intCast(menu.view.seconds)] = true;
         try std.testing.expect(menu.pulse <= 62 and menu.pulse % 2 == 0);
     }
     for (seen) |value| try std.testing.expect(value);

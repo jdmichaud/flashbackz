@@ -18,11 +18,20 @@ pub const Assets = struct {
     }
 
     pub fn artwork(self: *const Assets) menu.Artwork {
-        return .{ .background = &self.background, .colors = &self.colors, .font = &self.font, .labels = .{ "START", "SKILL", "PASSWORD", "INFO", "DEMO", "QUIT" } };
+        return .{
+            .background = &self.background,
+            .colors = &self.colors,
+            .font = &self.font,
+            .labels = .{ "START", "SKILL", "PASSWORD", "INFO", "DEMO", "QUIT" },
+        };
     }
 };
 
-fn read(source: platform.AssetSource, path: []const u8, maximum: usize) platform.AssetError!platform.OwnedBytes {
+fn read(
+    source: platform.AssetSource,
+    path: []const u8,
+    maximum: usize,
+) platform.AssetError!platform.OwnedBytes {
     return source.readAll(path, maximum) catch |err| switch (err) {
         error.NotFound => source.readAll(path[5..], maximum),
         else => err,
@@ -48,7 +57,11 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !?Assets
     return .{ .background = background, .colors = colors, .font = font };
 }
 
-pub fn loadNamed(allocator: std.mem.Allocator, source: platform.AssetSource, name: []const u8) !Assets {
+pub fn loadNamed(
+    allocator: std.mem.Allocator,
+    source: platform.AssetSource,
+    name: []const u8,
+) !Assets {
     var path: [64]u8 = undefined;
     var image_file = try read(source, try std.fmt.bufPrint(&path, "DATA/{s}.MAP", .{name}), 57344);
     defer image_file.deinit();
@@ -59,7 +72,11 @@ pub fn loadNamed(allocator: std.mem.Allocator, source: platform.AssetSource, nam
     var background = try bitmap.decodePlanar(allocator, image_file.bytes, 256, 224);
     errdefer background.deinit();
     const colors = try palette.decodeRgb8(palette_file.bytes);
-    return .{ .background = background, .colors = colors, .font = try font_mod.decode(allocator, font_file.bytes) };
+    return .{
+        .background = background,
+        .colors = colors,
+        .font = try font_mod.decode(allocator, font_file.bytes),
+    };
 }
 
 test "missing menu is distinguishable from incomplete supplied content" {

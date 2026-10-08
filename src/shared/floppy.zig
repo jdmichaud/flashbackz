@@ -29,7 +29,9 @@ const Volume = struct {
             return try result.toOwnedSlice(allocator);
         }
         while (true) {
-            if (cluster < 2 or cluster >= self.cluster_count + 2 or cluster >= 0xff0) return error.InvalidChain;
+            if (cluster < 2 or
+                cluster >= self.cluster_count + 2 or
+                cluster >= 0xff0) return error.InvalidChain;
             if (self.claimed[cluster]) return error.CrossLinkedCluster;
             self.claimed[cluster] = true;
             const offset = self.data_offset + (cluster - 2) * self.cluster_bytes;
@@ -39,12 +41,19 @@ const Volume = struct {
             if (length) |size| if (result.items.len >= size) return error.InvalidChainLength;
         }
         if (length) |size| {
-            if (size > result.items.len or result.items.len - size >= self.cluster_bytes) return error.InvalidChainLength;
+            if (size > result.items.len or
+                result.items.len - size >= self.cluster_bytes) return error.InvalidChainLength;
             result.shrinkRetainingCapacity(size);
         }
         return try result.toOwnedSlice(allocator);
     }
-    fn directory(self: *Volume, pack: *Pack, bytes: []const u8, prefix: []const u8, depth: usize) anyerror!void {
+    fn directory(
+        self: *Volume,
+        pack: *Pack,
+        bytes: []const u8,
+        prefix: []const u8,
+        depth: usize,
+    ) anyerror!void {
         if (depth > 8) return error.DirectoryTooDeep;
         const allocator = pack.source.allocator;
         var offset: usize = 0;
@@ -56,13 +65,21 @@ const Volume = struct {
             if (word(record, 20) != 0 or record[11] & 0xc0 != 0) return error.InvalidDirectory;
             const stem = std.mem.trimEnd(u8, record[0..8], " ");
             const ext = std.mem.trimEnd(u8, record[8..11], " ");
-            const name = try std.fmt.allocPrint(allocator, "{s}{s}{s}{s}", .{ prefix, stem, if (ext.len == 0) "" else ".", ext });
+            const name = try std.fmt.allocPrint(
+                allocator,
+                "{s}{s}{s}{s}",
+                .{ prefix, stem, if (ext.len == 0) "" else ".", ext },
+            );
             defer allocator.free(name);
             try @import("platform.zig").validateAssetName(name);
             const size = std.mem.readInt(u32, record[28..32], .little);
             const is_directory = record[11] & 0x10 != 0;
             if (is_directory and size != 0) return error.InvalidDirectory;
-            const data = try self.chain(allocator, word(record, 26), if (is_directory) null else size);
+            const data = try self.chain(
+                allocator,
+                word(record, 26),
+                if (is_directory) null else size,
+            );
             defer allocator.free(data);
             if (is_directory) {
                 const child = try std.mem.concat(allocator, u8, &.{ name, "/" });
@@ -82,8 +99,15 @@ pub fn load(allocator: std.mem.Allocator, image: []const u8) !Pack {
     const root_entries: usize = word(image, 17);
     const sectors: usize = word(image, 19);
     const fat_sectors: usize = word(image, 22);
-    if (sector != 512 or sectors_per_cluster == 0 or sectors_per_cluster > 64 or !std.math.isPowerOfTwo(sectors_per_cluster) or
-        reserved == 0 or fats != 2 or root_entries == 0 or sectors == 0 or fat_sectors == 0) return error.UnsupportedFloppyGeometry;
+    if (sector != 512 or
+        sectors_per_cluster == 0 or
+        sectors_per_cluster > 64 or
+        !std.math.isPowerOfTwo(sectors_per_cluster) or
+        reserved == 0 or
+        fats != 2 or
+        root_entries == 0 or
+        sectors == 0 or
+        fat_sectors == 0) return error.UnsupportedFloppyGeometry;
     if (image.len != sectors * sector) return error.InvalidImageLength;
     const root_offset = (reserved + fats * fat_sectors) * sector;
     const root_size = std.mem.alignForward(usize, root_entries * 32, sector);
@@ -93,9 +117,22 @@ pub fn load(allocator: std.mem.Allocator, image: []const u8) !Pack {
     const count = (image.len - data_offset) / cluster_bytes;
     if (count == 0 or count > 4084) return error.UnsupportedFloppyGeometry;
     const fat = image[reserved * sector ..][0 .. fat_sectors * sector];
-    if (fat.len < ((count + 2) * 3 + 1) / 2 or fat[0] != image[21] or fat[1] != 255 or fat[2] != 255) return error.InvalidFat;
-    if (!std.mem.eql(u8, fat, image[(reserved + fat_sectors) * sector ..][0..fat.len])) return error.FatCopiesDiffer;
-    var volume: Volume = .{ .bytes = image, .fat = fat, .cluster_bytes = cluster_bytes, .data_offset = data_offset, .cluster_count = count };
+    if (fat.len < ((count + 2) * 3 + 1) / 2 or
+        fat[0] != image[21] or
+        fat[1] != 255 or
+        fat[2] != 255) return error.InvalidFat;
+    if (!std.mem.eql(
+        u8,
+        fat,
+        image[(reserved + fat_sectors) * sector ..][0..fat.len],
+    )) return error.FatCopiesDiffer;
+    var volume: Volume = .{
+        .bytes = image,
+        .fat = fat,
+        .cluster_bytes = cluster_bytes,
+        .data_offset = data_offset,
+        .cluster_count = count,
+    };
     var pack = Pack.init(allocator);
     errdefer pack.deinit();
     try volume.directory(&pack, image[root_offset..][0 .. root_entries * 32], "", 0);
@@ -143,7 +180,10 @@ test "FAT12 follows fragmented chains and rejects mismatched FATs, loops and tru
     try std.testing.expectEqual(@as(usize, 600), data.bytes.len);
     for (data.bytes[0..512]) |byte| try std.testing.expectEqual(@as(u8, 'A'), byte);
     for (data.bytes[512..]) |byte| try std.testing.expectEqual(@as(u8, 'B'), byte);
-    try std.testing.expectError(error.InvalidImageLength, load(allocator, image[0 .. image.len - 1]));
+    try std.testing.expectError(
+        error.InvalidImageLength,
+        load(allocator, image[0 .. image.len - 1]),
+    );
     image[512 + 6] = 4;
     try std.testing.expectError(error.FatCopiesDiffer, load(allocator, image));
     image[5120 + 6] = 4;

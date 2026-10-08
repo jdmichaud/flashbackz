@@ -37,8 +37,14 @@ const Command = union(enum) {
         if (prefix == 1) return .{ .reference = .{ .length = 2, .distance = try bits.take(8) } };
         const kind = ((prefix & 1) << 1) | try bits.take(1);
         if (kind == 3) return .{ .literal = try bits.take(8) + 9 };
-        if (kind == 2) return .{ .reference = .{ .length = try bits.take(8) + 1, .distance = try bits.take(12) } };
-        return .{ .reference = .{ .length = kind + 3, .distance = try bits.take(@intCast(kind + 9)) } };
+        if (kind == 2) return .{ .reference = .{
+            .length = try bits.take(8) + 1,
+            .distance = try bits.take(12),
+        } };
+        return .{ .reference = .{
+            .length = kind + 3,
+            .distance = try bits.take(@intCast(kind + 9)),
+        } };
     }
 };
 
@@ -49,7 +55,12 @@ pub fn decode(allocator: std.mem.Allocator, bytes: []const u8, maximum: usize) !
     const checksum = std.mem.readInt(u32, bytes[cursor + 4 ..][0..4], .big);
     const size = std.mem.readInt(u32, bytes[cursor + 8 ..][0..4], .big);
     if (size > maximum) return error.ExpandedContentTooLarge;
-    var bits: Bits = .{ .bytes = bytes, .cursor = cursor, .word = initial_word, .checksum = checksum ^ initial_word };
+    var bits: Bits = .{
+        .bytes = bytes,
+        .cursor = cursor,
+        .word = initial_word,
+        .checksum = checksum ^ initial_word,
+    };
     const output = try allocator.alloc(u8, size);
     errdefer allocator.free(output);
     var remaining = output.len;
@@ -80,7 +91,28 @@ pub fn decode(allocator: std.mem.Allocator, bytes: []const u8, maximum: usize) !
 test "backward literals cross refill boundaries and overlapping references repeat written bytes" {
     const allocator = std.testing.allocator;
     // Synthetic bitstreams, generated from literal and distance-one commands, not game data.
-    const literals = [_]u8{ 0x86, 0x46, 0xc6, 0x26, 0xa6, 0x66, 0xe6, 0x16, 0, 0, 0, 0x3c, 0x20, 0x20, 0x20, 0x0c, 0, 0, 0, 8 };
+    const literals = [_]u8{
+        0x86,
+        0x46,
+        0xc6,
+        0x26,
+        0xa6,
+        0x66,
+        0xe6,
+        0x16,
+        0,
+        0,
+        0,
+        0x3c,
+        0x20,
+        0x20,
+        0x20,
+        0x0c,
+        0,
+        0,
+        0,
+        8,
+    };
     const text = try decode(allocator, &literals, 8);
     defer allocator.free(text);
     try std.testing.expectEqualStrings("abcdefgh", text);

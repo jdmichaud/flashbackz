@@ -64,9 +64,15 @@ pub const Projection = struct {
 test "projection identity, quarter turn, and quantized trigonometric ties" {
     const identity = try Projection.fromDegrees(0, 180, 90);
     const pivot: Point = .{ .x = 2, .y = 2 };
-    try std.testing.expectEqual(Point{ .x = 8, .y = 2 }, identity.point(.{ .x = 8, .y = 2 }, pivot));
+    try std.testing.expectEqual(
+        Point{ .x = 8, .y = 2 },
+        identity.point(.{ .x = 8, .y = 2 }, pivot),
+    );
     const quarter = try Projection.fromDegrees(90, 180, 90);
-    try std.testing.expectEqual(Point{ .x = 2, .y = -4 }, quarter.point(.{ .x = 8, .y = 2 }, pivot));
+    try std.testing.expectEqual(
+        Point{ .x = 2, .y = -4 },
+        quarter.point(.{ .x = 8, .y = 2 }, pivot),
+    );
     try std.testing.expectEqual(@as(i16, 127), try cosine(60));
     try std.testing.expectEqual(@as(i16, -128), try cosine(120));
     try std.testing.expectEqual(@as(i16, -127), try sine(330));
