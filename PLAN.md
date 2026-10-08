@@ -75,6 +75,12 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
 - [x] Activate the carried force field through normal inventory use. Recover its deployment,
   animation, lifetime, repeat-use and projectile-blocking behavior from the supplied original;
   implement a shared equipment capability and qualify with a focused native encounter.
+- [ ] **Systematic gap detection (user concern, 2026-10-08):** replace reliance on manual play
+  with a family-agnostic world comparison. On every update, compare each placement's presence,
+  room and position with the original, and report placements that act in the original but have
+  no modern owner, plus each implemented placement's first divergence. Drive it with the
+  original demos, every retained capture and a per-room sweep of all levels. Gate: synthetic
+  tests detect planted gaps; the report covers every level and room from recorded inputs.
 - [x] Audit every original placement, behavior family and static connection across all
   levels and difficulties against actual importer registrations. Keep optional, hidden and
   difficulty-excluded content visible; imported content is not automatically fidelity-qualified.
