@@ -93,14 +93,20 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
       for every character; one documented copy-protection exclusion.
   - [x] Complete the vocabulary for the remaining unmapped families: every original
     condition and effect is implemented, so the engine runs every character of every level.
-  - [ ] Revised 2026-10-08: since the engine runs whole levels, the families are replaced
+  - [x] Revised 2026-10-08: since the engine runs whole levels, the families are replaced
     together rather than one at a time. Presentation research: the original's character
     drawing (0x2539, draw lists, edge rooms), HUD, labels, world messages, inventory screen,
     scene and sound requests, and input processing, recorded in flashback-re.
-  - [ ] Table-driven level scene: every level runs on the behavior engine (Conrad included) and
+    - flashback-re `docs/rules/engine-presentation.md`.
+  - [x] Table-driven level scene: every level runs on the behavior engine (Conrad included) and
     is presented from the engine's state and requests. Gate: the native game reproduces the
     original frames of the retained captures with recorded video, and its per-update character
     state matches the engine regression.
+    - `src/shared/scenes/level.zig`: playfield, HUD, labels, password, world messages, inventory,
+      options, films from the scene table, continue from checkpoints, shake, demos and new games.
+      flashback-re `engine_regression.py`: 9,116 updates (every character, inventory links
+      included), 788 gameplay frames and 234 message frames match. Not yet: film and level
+      music (research running), the zoom view, the ending sequence, catch-up walks.
   - [ ] Remove the hand-coded families, their importers and their tests once the scene
     replaces them. Golden traces are re-recorded and each difference is explained.
 - [ ] **Systematic gap detection (user concern, 2026-10-08):** replace reliance on manual play
