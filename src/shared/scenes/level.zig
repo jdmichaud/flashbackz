@@ -17,6 +17,7 @@ const input_recording = @import("../input_recording.zig");
 const step_clock = @import("../step_clock.zig");
 const settings = @import("../settings.zig");
 const audio_effects = @import("../audio/effects.zig");
+const inventory_menu = @import("inventory_menu.zig");
 const World = behavior.world.World;
 const data_set = behavior.data_set;
 const contacts = behavior.contacts;
@@ -58,6 +59,19 @@ pub const Scene = struct {
     effects: audio_effects.Output = .{},
     sound_enabled: bool = true,
     outcome: Outcome = .playing,
+    /// Presented frames before the inventory key works: 4 after the level starts, 10 after the
+    /// inventory closes.
+    inventory_delay: u8 = 4,
+    inventory: ?Inventory = null,
+
+    const Inventory = struct {
+        menu: inventory_menu.Menu,
+        keys: inventory_menu.Keys = .{},
+        clock: step_clock.Clock,
+        items: [max_items]u16 = undefined,
+        entries: [max_items]inventory_menu.Entry = undefined,
+        const max_items = 32;
+    };
 
     pub const Demo = struct { bytes: []u8, cursor: usize = 0 };
 
@@ -141,7 +155,14 @@ pub const Scene = struct {
         };
         const interface = try floppy_interface.load(allocator, assets);
         const first_room = if (start) |s| s.room else data.characters[0].room orelse 0;
-        var pack = try level_pack.load(allocator, assets, &interface, level, difficulty, first_room);
+        var pack = try level_pack.load(
+            allocator,
+            assets,
+            &interface,
+            level,
+            difficulty,
+            first_room,
+        );
         errdefer pack.deinit();
         var world = try World.init(
             allocator,
@@ -189,6 +210,12 @@ pub const Scene = struct {
         if (self.clock == null) self.clock = try step_clock.Clock.init(step_clock.jungle, now_ns);
         var work: usize = 0;
         while (self.outcome == .playing and self.needsCatchup(now_ns) and work < 8) : (work += 1) {
+            if (self.inventory) |*inventory| {
+                const deadline = inventory.clock.deadline();
+                inventory.clock.consume();
+                try self.pollInventory(deadline);
+                continue;
+            }
             if (self.message_clock) |*clock| {
                 const deadline = clock.deadline();
                 clock.consume();
@@ -197,12 +224,17 @@ pub const Scene = struct {
             }
             const deadline = self.clock.?.deadline();
             self.clock.?.consume();
-            try self.step(deadline);
-            if (self.screen.message != null) try self.openMessage(deadline);
+            const controls = try self.step(deadline);
+            if (self.screen.message != null) {
+                try self.openMessage(deadline);
+            } else if (self.outcome == .playing) {
+                try self.checkInventoryKey(controls, deadline);
+            }
         }
     }
 
     pub fn nextDeadline(self: *const Scene) ?u64 {
+        if (self.inventory) |inventory| return inventory.clock.deadline();
         if (self.message_clock) |clock| return clock.deadline();
         return if (self.clock) |clock| clock.deadline() else null;
     }
@@ -241,23 +273,24 @@ pub const Scene = struct {
         return if (self.nextDeadline()) |time| now_ns >= time else false;
     }
 
-    /// One update with the input held at `deadline`.
-    fn step(self: *Scene, deadline: u64) !void {
+    /// One update with the input held at `deadline`; returns the input byte it used.
+    fn step(self: *Scene, deadline: u64) !u8 {
         const held = self.takeKeys(deadline);
         // Esc leaves (the options dialog is not modeled yet); Tab or Backspace ends a demo.
         if (self.keys.escape or (self.demo != null and held & 0x80 != 0)) {
             self.outcome = .aborted;
-            return;
+            return 0;
         }
         const raw = if (self.demo) |*demo| byte: {
             if (demo.cursor == demo.bytes.len) {
                 self.outcome = .aborted;
-                return;
+                return 0;
             }
             demo.cursor += 1;
             break :byte demo.bytes[demo.cursor - 1];
         } else held;
-        const outcome = try self.world.update(@bitCast(self.keys.collapse(raw)), false);
+        const controls = self.keys.collapse(raw);
+        const outcome = try self.world.update(@bitCast(controls), false);
         for (self.world.requests.sounds[0..self.world.requests.sound_count]) |sound| {
             if (self.sound_enabled) self.effects.submit(self.pack.sounds, .{
                 .sound = @fromBackingInt(sound.id),
@@ -270,6 +303,87 @@ pub const Scene = struct {
             .level_changed => self.outcome = .{
                 .level = std.enums.fromInt(level_mod.Id, self.world.requests.level.?) orelse
                     return error.UnknownLevel,
+            },
+        }
+        return controls;
+    }
+
+    /// After each presented frame, the inventory key opens the inventory once the delay has
+    /// run out. With no items, or Conrad without health, it closes at once.
+    fn checkInventoryKey(self: *Scene, controls: u8, deadline: u64) !void {
+        if (self.inventory_delay != 0) {
+            self.inventory_delay -= 1;
+            return;
+        }
+        if (controls & 0x80 == 0) return;
+        self.keys.release();
+        if (self.world.characters[0].health <= 0) return;
+        var inventory: Inventory = .{
+            .menu = undefined,
+            .clock = try step_clock.Clock.init(step_clock.inventory, deadline),
+        };
+        var count: usize = 0;
+        var next = self.world.characters[0].first_item;
+        while (next) |item| : (next = self.world.characters[item].next_item) {
+            if (count == Inventory.max_items) break;
+            const definition = self.data.characters[item];
+            const icon = iconFrame(&self.pack, definition.inventory_icon) orelse continue;
+            inventory.items[count] = item;
+            inventory.entries[count] = .{
+                .icon = icon,
+                .label = definition.label,
+                // Items with the quantity flag show their health: charges, credits.
+                .quantity = if (definition.other_visual_flags & 4 != 0)
+                    @bitCast(self.world.characters[item].health)
+                else
+                    null,
+            };
+            count += 1;
+        }
+        inventory.menu = inventory_menu.Menu.init(count) catch return;
+        self.inventory = inventory;
+    }
+
+    /// One poll of the inventory: directions move, a button shows the score, the inventory key
+    /// closes it and selects the item shown.
+    fn pollInventory(self: *Scene, deadline: u64) !void {
+        const inventory = &self.inventory.?;
+        while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
+            const event = self.pending.orderedRemove(0);
+            switch (event.payload) {
+                .key_down => |key| try inventory.keys.key(key.key, true),
+                .key_up => |key| try inventory.keys.key(key.key, false),
+                .focus_lost => inventory.keys = .{},
+                else => {},
+            }
+        }
+        if (self.demo) |*demo| {
+            if (demo.cursor == demo.bytes.len) {
+                self.outcome = .aborted;
+                return;
+            }
+            const byte = demo.bytes[demo.cursor];
+            demo.cursor += 1;
+            inventory.keys.directions = .{
+                .up = byte & 0x01 != 0,
+                .down = byte & 0x02 != 0,
+                .left = byte & 0x04 != 0,
+                .right = byte & 0x08 != 0,
+            };
+            inventory.keys.enter = byte & 0x10 != 0;
+            inventory.keys.space = byte & 0x20 != 0;
+            inventory.keys.left_shift = byte & 0x40 != 0;
+            inventory.keys.tab = byte & 0x80 != 0;
+        }
+        switch (inventory.menu.poll(inventory.keys.sample())) {
+            .stay => {},
+            .choose => |index| {
+                self.world.selectItem(0, inventory.items[index]);
+                const paused = deadline -| inventory.clock.origin_ns;
+                self.inventory = null;
+                self.inventory_delay = 10;
+                self.keys.release();
+                self.clock.?.origin_ns +|= paused;
             },
         }
     }
@@ -288,27 +402,43 @@ pub const Scene = struct {
         return self.keys.held;
     }
 
-    /// Every character's state, the score, the view and the random state.
+    /// Every character's state and inventory links, the score, the view and the random state.
     pub fn stateHash(self: *const Scene) u64 {
         var hash = std.hash.Wyhash.init(@backingInt(self.level));
         for (self.world.characters) |c| {
-            hash.update(std.mem.asBytes(&[_]i32{
-                c.state,       c.cursor,                      c.x,                          c.y,
-                c.room,        c.health,                      c.counter,                    @intFromBool(c.active),
-                c.look.sprite, @intFromBool(c.look.mirrored), @intFromBool(c.facing_right),
-            }));
+            const fields = [_]i32{
+                c.state,
+                c.cursor,
+                c.x,
+                c.y,
+                c.room,
+                c.health,
+                c.counter,
+                @intFromBool(c.active),
+                @intFromBool(c.facing_right),
+                c.look.sprite,
+                @intFromBool(c.look.mirrored),
+                if (c.first_item) |item| item else -1,
+                if (c.next_item) |item| item else -1,
+            };
+            hash.update(std.mem.asBytes(&fields));
         }
-        hash.update(std.mem.asBytes(&[_]u32{
-            self.world.score,
-            self.world.view_room,
-            self.world.random.state,
-        }));
+        const globals = [_]u32{ self.world.score, self.world.view_room, self.world.random.state };
+        hash.update(std.mem.asBytes(&globals));
         return hash.final();
     }
 
     pub fn draw(self: *const Scene, indices: []u8, rgba: []u8) !void {
         @memcpy(indices, &self.screen.picture);
-        try self.screen.writeRgba(rgba);
+        if (self.inventory) |inventory| try inventory.menu.draw(
+            self.pack.inventory.artwork(),
+            inventory.entries[0..inventory.menu.count],
+            self.world.score,
+            indices,
+            width,
+            height,
+        );
+        try palette.writeRgba(indices, &self.screen.colors, rgba);
     }
 
     pub fn pumpAudio(self: *Scene, p: *platform.Platform) !void {
@@ -866,7 +996,10 @@ fn restore(target: *[pixel_count]u8, source: *const [pixel_count]u8, rect: Scree
     const y0: usize = @intCast(std.math.clamp(rect.y, 0, height));
     const y1: usize = @intCast(std.math.clamp(rect.y + rect.h, 0, height));
     if (x1 <= x0) return;
-    for (y0..y1) |row| @memcpy(target[row * width + x0 .. row * width + x1], source[row * width + x0 .. row * width + x1]);
+    for (y0..y1) |row| {
+        const line = row * width;
+        @memcpy(target[line + x0 .. line + x1], source[line + x0 .. line + x1]);
+    }
 }
 
 const Label = struct { icon: u8, character: u16 };
@@ -876,8 +1009,10 @@ const Label = struct { icon: u8, character: u16 };
 /// from the first cell of the last character the first search examined.
 fn labelTarget(world: *const World) ?Label {
     var last: u16 = 0;
-    if (search(world, 0, &.{ 3, 0xff }, &last)) |found| if (positive(found.icon)) return found;
-    if (search(world, last, &.{ 0xff, 5, 9 }, &last)) |found| if (positive(found.icon)) return found;
+    const item = search(world, 0, &.{ 3, 0xff }, &last);
+    if (item) |found| if (positive(found.icon)) return found;
+    const other = search(world, last, &.{ 0xff, 5, 9 }, &last);
+    if (other) |found| if (positive(found.icon)) return found;
     return null;
 }
 

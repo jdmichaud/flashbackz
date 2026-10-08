@@ -11,6 +11,7 @@ const character_art = @import("character_art.zig");
 const sprite = @import("sprite.zig");
 const font_mod = @import("font.zig");
 const sound_effects = @import("sound_effects.zig");
+const inventory_artwork = @import("inventory_artwork.zig");
 const settings = @import("../settings.zig");
 const RoomSource = @import("room_source.zig").RoomSource;
 const behavior = @import("../behavior/root.zig");
@@ -34,6 +35,8 @@ pub const Pack = struct {
     /// "CODE: " and the level's password at the chosen difficulty.
     password: [13]u8,
     sounds: sound_effects.Bank,
+    /// The inventory screen's panel, page arrows, marker and font.
+    inventory: inventory_artwork.Assets,
 
     pub fn deinit(self: *Pack) void {
         for (&self.rooms) |*slot| if (slot.*) |*art| art.deinit();
@@ -43,6 +46,7 @@ pub const Pack = struct {
         self.allocator.free(self.icons);
         self.font.deinit();
         self.sounds.deinit();
+        self.inventory.deinit();
     }
 
     pub fn room(self: *const Pack, id: u8) ?*const artwork.Artwork {
@@ -98,6 +102,15 @@ pub fn load(
     defer font_file.deinit();
     var font = try font_mod.decode(allocator, font_file.bytes);
     errdefer font.deinit();
+    var icon_file = try source.readAll("DATA/GLOBAL.ICN", 32768);
+    defer icon_file.deinit();
+    var inventory = try inventory_artwork.load(
+        allocator,
+        icon_file.bytes,
+        font_file.bytes,
+        &interface.level_label,
+    );
+    errdefer inventory.deinit();
     var library_colors: [4]palette.Bank = undefined;
     for (&library_colors, interface.actor_libraries) |*colors, library| colors.* = library.colors;
     var password: [13]u8 = undefined;
@@ -119,6 +132,7 @@ pub fn load(
         .library_colors = library_colors,
         .password = password,
         .sounds = sounds,
+        .inventory = inventory,
     };
 }
 
@@ -160,7 +174,8 @@ fn loadRooms(
     };
     const icon_colors = try palette.decodeLevelBank(colors.bytes, reference_bank);
     for (rooms, 0..) |*slot, index| {
-        var art = room_files.decode(allocator, colors.bytes, @intCast(index)) catch |err| switch (err) {
+        const decoded = room_files.decode(allocator, colors.bytes, @intCast(index));
+        var art = decoded catch |err| switch (err) {
             error.AbsentRoom => continue,
             else => return err,
         };

@@ -822,7 +822,12 @@ test "world messages load as pages of lines" {
         \\.{ .{ .{ .{ .text = "HELLO", .ink = 232 } }, .{} } }
     );
     var diagnostic: Diagnostic = .{};
-    const messages = try loadMessages(std.testing.allocator, arena.allocator(), &files, &diagnostic);
+    const messages = try loadMessages(
+        std.testing.allocator,
+        arena.allocator(),
+        &files,
+        &diagnostic,
+    );
     try std.testing.expectEqual(@as(usize, 1), messages.len);
     try std.testing.expectEqual(@as(usize, 2), messages[0].len);
     try std.testing.expectEqualStrings("HELLO", messages[0][0][0].text);
