@@ -479,6 +479,9 @@ pub const Game = struct {
         }
         try scene.update(now);
         self.applyPreferences(scene.settings);
+        if (scene.options) |*options| if (options.menu.free_memory_mb == null) {
+            if (p.availableMemory()) |bytes| options.menu.free_memory_mb = bytes / (1024 * 1024);
+        };
         switch (scene.outcome) {
             .playing => {
                 try scene.pumpAudio(p);
