@@ -51,6 +51,7 @@ pub const Pack = struct {
     transport_bindings: []@import("../scripted_transport.zig").Binding,
     arrival_triggers: @import("arrival_triggers.zig").Assets,
     escort_followers: @import("escort_followers.zig").Assets,
+    ambient_people: @import("ambient_people.zig").Assets,
     attentive_contacts: @import("attentive_contacts.zig").Assets,
     quest_contacts: @import("quest_contacts.zig").Assets,
     quest_contact_bindings: []@import("../quest_contacts.zig").Binding,
@@ -120,6 +121,7 @@ pub const Pack = struct {
         self.mission_terminals.deinit();
         self.quest_contacts.deinit();
         self.attentive_contacts.deinit();
+        self.ambient_people.deinit();
         self.escort_followers.deinit();
         self.arrival_triggers.deinit();
         self.scripted_transport.deinit();
@@ -549,6 +551,8 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer scripted_transport.deinit();
     var arrival_triggers = try @import("arrival_triggers.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &connections, &resolver);
     errdefer arrival_triggers.deinit();
+    var ambient_people = try @import("ambient_people.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &resolver);
+    errdefer ambient_people.deinit();
     var attentive_contacts = try @import("attentive_contacts.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, &resolver);
     errdefer attentive_contacts.deinit();
     var quest_contacts = try @import("quest_contacts.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, initial_items, &resolver);
@@ -627,7 +631,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer robots.deinit();
     var force_fields = try @import("force_fields.zig").load(allocator, placement_table, rules.bytes, ani.bytes, difficulty, &resolver);
     errdefer force_fields.deinit();
-    var visibility = try @import("visibility.zig").load(allocator, placement_table, &room_ids, difficulty, .{ .props = props, .guards = guards, .doors = doors, .item_aid = item_aid, .traders = traders, .guides = guides, .story_stations = story_stations, .force_fields = force_fields, .service_counters = service_counters, .mission_terminals = mission_terminals, .quest_contacts = quest_contacts, .attentive_contacts = attentive_contacts, .escort_followers = escort_followers });
+    var visibility = try @import("visibility.zig").load(allocator, placement_table, &room_ids, difficulty, .{ .props = props, .guards = guards, .doors = doors, .item_aid = item_aid, .traders = traders, .guides = guides, .story_stations = story_stations, .force_fields = force_fields, .service_counters = service_counters, .mission_terminals = mission_terminals, .quest_contacts = quest_contacts, .attentive_contacts = attentive_contacts, .escort_followers = escort_followers, .ambient_people = ambient_people });
     errdefer visibility.deinit();
     const supplied = initial_items.len;
     initial_items = try allocator.realloc(initial_items, supplied + props.items.len);
@@ -691,6 +695,7 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .mission_terminals = mission_terminals,
         .quest_contacts = quest_contacts,
         .attentive_contacts = attentive_contacts,
+        .ambient_people = ambient_people,
         .escort_followers = escort_followers,
         .arrival_triggers = arrival_triggers,
         .scripted_transport = scripted_transport,

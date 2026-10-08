@@ -73,6 +73,11 @@ accept WORK PERMIT with Return. Return, Space or Shift advances film pages; Tab 
 The first parcel assignment's conversations, grant, ambush, delivery, 100-credit payment and
 next-terminal unlock are connected. Its prepared route matches the original; the remaining
 assignment consumers and full street-route qualification are still incomplete.
+The android assignment now issues REPLICANT PHOTO and reveals its informant. Hold Shift
+beside him for the introduction or repeat reply; his first conversation reveals the policeman,
+whose first/repeat conversations also work. Decorative bar patrons animate from the same
+content family. The rescue, hostile handoff, key, android fights and photo witnesses remain
+unfinished, so the full assignment cannot yet be completed through normal play.
 The reactor assignment now grants TIME and TERMINAL CARD after transport. Select the card
 and hold Return at its matching terminal to complete the repair, receive 500 credits and
 return. Inventory and Game Options pause the countdown. Expiry plays the reactor explosion

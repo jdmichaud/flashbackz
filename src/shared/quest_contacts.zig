@@ -5,10 +5,20 @@ const geometry = @import("geometry.zig");
 const contacts = @import("contacts.zig");
 const Circuit = @import("world_props.zig").CircuitId;
 pub const Pose = enum { resting, fidgeting, leaning, recovering };
-pub const Stage = enum { hidden, available, conversation_finished, departing, removed };
+pub const Stage = enum { hidden, available, conversation_finished, speaking, speech_recovery, departing, removed };
 pub const Action = enum { reveal, deliver };
 pub const Role = enum { giver, recipient, conversation, introducer, seller };
+pub const Speech = struct { introduction: motion.Clip, reply: motion.Clip, recovery: motion.Clip };
 pub const Definition = struct {
+    speech: ?Speech = null,
+    reply_notice: ?@import("world_messages.zig").Id = null,
+    after_chances: ?[4]i16 = null,
+    release_unless_chance: bool = false,
+    talking_forward: [4]i16 = @splat(0),
+    disappear_after_leaving: bool = false,
+    finish_gestures_offscreen: bool = false,
+    dismiss_when_acknowledged: bool = false,
+    reveal_outputs: []const Circuit = &.{},
     footprint: contacts.Footprint,
     contact_kind: contacts.Kind,
     facing: motion.Facing,
@@ -37,6 +47,7 @@ pub const Payment = struct { item: @import("equipment.zig").ItemHandle, contact:
 pub const Binding = struct { circuit: Circuit, target: usize, action: Action, next_step: bool };
 pub const Instance = struct {
     pose: motion.Pose,
+    spoken_once: bool = false,
     stage: Stage,
     idle_pose: Pose = .resting,
     playback: motion.Playback = .{},
@@ -55,6 +66,11 @@ pub const Instance = struct {
         return result;
     }
     pub fn clip(self: Instance, definition: Definition) motion.Clip {
+        if (self.stage == .speaking) {
+            const speech = definition.speech.?;
+            return if (self.spoken_once) speech.reply else speech.introduction;
+        }
+        if (self.stage == .speech_recovery) return definition.speech.?.recovery;
         return if (self.stage == .hidden) definition.hidden_clip else if (self.stage == .conversation_finished or self.stage == .departing) definition.after[@backingInt(self.idle_pose)] else definition.idle[@backingInt(self.idle_pose)];
     }
 };
@@ -75,7 +91,7 @@ pub const World = struct {
                 .hold => return error.MissingQuestContactVisual,
             };
             instance.* = .{ .pose = .{ .position = definition.footprint.position, .facing = definition.facing, .visual = .{ .id = visual.id, .mirrored = visual.mirrored != (definition.facing == .left) } }, .stage = if (definition.hidden) .hidden else .available, .active = definition.initially_active };
-            capacity += definition.outputs.len + definition.departure_outputs.len;
+            capacity += definition.outputs.len + definition.departure_outputs.len + definition.reveal_outputs.len;
         }
         return .{ .allocator = allocator, .instances = instances, .pulses = try allocator.alloc(Circuit, capacity) };
     }
@@ -131,18 +147,19 @@ pub const World = struct {
     }
     fn choosePose(instance: *Instance, definition: Definition, random: anytype) void {
         if (definition.cycle == .stationary) return;
+        const chances = if (instance.spoken_once) definition.after_chances orelse definition.chances else definition.chances;
         switch (instance.idle_pose) {
-            .resting => if (chance(random, definition.chances[0])) {
+            .resting => if (chance(random, chances[0])) {
                 instance.idle_pose = .fidgeting;
             },
             .fidgeting => if (definition.cycle == .alternating) {
                 instance.idle_pose = .leaning;
-            } else if (chance(random, definition.chances[1])) {
+            } else if (chance(random, chances[1])) {
                 instance.idle_pose = .leaning;
-            } else if (chance(random, definition.chances[2])) {
+            } else if (chance(random, chances[2])) {
                 instance.idle_pose = .resting;
             },
-            .leaning => if (chance(random, definition.chances[3])) {
+            .leaning => if (chance(random, chances[3]) != definition.release_unless_chance) {
                 instance.idle_pose = if (definition.cycle == .alternating) .recovering else .fidgeting;
             },
             .recovering => instance.idle_pose = .resting,
@@ -158,18 +175,34 @@ pub const World = struct {
     pub fn advance(self: *World, definitions: []const Definition, bindings: []const Binding, map: geometry.Map, room: geometry.RoomId, talk: bool, items: *@import("equipment.zig").Loadout, random: anytype) !void {
         for (self.instances, definitions, 0..) |*instance, definition, index| {
             if (instance.stage == .removed) continue;
-            const speaking = talk and self.candidate == index and instance.stage == .available;
+            const speaking = talk and self.candidate == index and (instance.stage == .available or (instance.stage == .conversation_finished and definition.reply_notice != null));
+            const acknowledging = instance.delivery and instance.stage == .conversation_finished and definition.dismiss_when_acknowledged;
             const receiving = instance.stage == .available and ((instance.delivery and definition.role == .recipient) or (instance.payment and definition.role == .seller));
             const revealing = instance.reveal and instance.stage == .hidden;
-            if ((speaking or receiving or revealing) and definition.accepts_signals) instance.active = true;
+            if ((speaking or receiving or revealing or acknowledging) and definition.accepts_signals) instance.active = true;
             if (!instance.active) continue;
             var clip = instance.clip(definition);
-            if (speaking or receiving or revealing) instance.playback.completeDisplacement(clip, &instance.pose);
+            if (speaking or receiving or revealing or acknowledging) instance.playback.completeDisplacement(clip, &instance.pose);
             if (instance.playback.exhausted(clip)) {
                 const near = try @import("activation.zig").around(map, room, definition.footprint.room, instance.pose.position.y);
                 if (revealing) {
                     instance.stage = .available;
+                    self.emit(bindings, definition.reveal_outputs);
                 } else if (instance.stage == .hidden) {
+                    instance.active = false;
+                } else if (acknowledging) {
+                    self.emit(bindings, definition.departure_outputs);
+                    instance.stage = .removed;
+                    instance.active = false;
+                } else if (instance.stage == .speaking) {
+                    self.notice = .{ .message = if (instance.spoken_once) definition.reply_notice.? else definition.notice, .icon = definition.hint, .priority = definition.priority };
+                    instance.spoken_once = true;
+                    instance.stage = .speech_recovery;
+                } else if (instance.stage == .speech_recovery) {
+                    instance.stage = .conversation_finished;
+                    instance.idle_pose = .resting;
+                } else if (instance.stage == .conversation_finished and definition.disappear_after_leaving and instance.idle_pose == .resting and !near.same) {
+                    instance.stage = .removed;
                     instance.active = false;
                 } else if (instance.stage == .departing) {
                     self.emit(bindings, definition.departure_outputs);
@@ -179,12 +212,18 @@ pub const World = struct {
                     if (definition.sale) |sale| try items.debit(sale.purse, sale.debit) else instance.stage = .departing;
                     self.emit(bindings, definition.outputs);
                 } else if (speaking) {
-                    self.notice = .{ .message = definition.notice, .icon = definition.hint, .priority = definition.priority };
-                    if (definition.role == .giver or definition.role == .introducer) {
-                        instance.stage = if (definition.role == .introducer) .departing else .conversation_finished;
-                        self.emit(bindings, definition.outputs);
+                    const adjustment = definition.talking_forward[@backingInt(instance.idle_pose)];
+                    instance.pose.position.x +%= if (instance.pose.facing == .right) adjustment else -adjustment;
+                    const first = !instance.spoken_once;
+                    if (definition.speech != null) {
+                        instance.stage = .speaking;
+                    } else {
+                        self.notice = .{ .message = if (first) definition.notice else definition.reply_notice orelse definition.notice, .icon = definition.hint, .priority = definition.priority };
+                        instance.spoken_once = true;
+                        if (first and (definition.role == .giver or definition.role == .introducer)) instance.stage = if (definition.role == .introducer) .departing else .conversation_finished;
                     }
-                } else if (!near.same) {
+                    if (first and (definition.role == .giver or definition.role == .introducer)) self.emit(bindings, definition.outputs);
+                } else if (!near.same and !(definition.finish_gestures_offscreen and instance.idle_pose != .resting)) {
                     const before = instance.idle_pose;
                     if (definition.offscreen_choice_first[@backingInt(before)]) choosePose(instance, definition, random);
                     if (instance.idle_pose == before and !(definition.wake_nearby and near.near)) instance.active = false;
@@ -202,6 +241,6 @@ pub const World = struct {
         }
     }
     pub fn hashInto(self: World, hash: *std.hash.Wyhash) void {
-        for (self.instances) |instance| for ([_]u64{ @backingInt(instance.stage), @backingInt(instance.idle_pose), instance.playback.next_step, @intFromBool(instance.active), @intFromBool(instance.reveal), @intFromBool(instance.delivery), @intFromBool(instance.pending_reveal), @intFromBool(instance.pending_delivery), @intFromBool(instance.payment), @intFromBool(instance.pending_payment), @as(u16, @bitCast(instance.pose.position.x)), @as(u16, @bitCast(instance.pose.position.y)) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        for (self.instances) |instance| for ([_]u64{ @backingInt(instance.stage), @intFromBool(instance.spoken_once), @backingInt(instance.idle_pose), instance.playback.next_step, @intFromBool(instance.active), @intFromBool(instance.reveal), @intFromBool(instance.delivery), @intFromBool(instance.pending_reveal), @intFromBool(instance.pending_delivery), @intFromBool(instance.payment), @intFromBool(instance.pending_payment), @as(u16, @bitCast(instance.pose.position.x)), @as(u16, @bitCast(instance.pose.position.y)) }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
     }
 };

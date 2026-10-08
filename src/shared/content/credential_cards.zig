@@ -88,3 +88,16 @@ pub fn terminal(group: rules.Group) ?TerminalCard {
     if (group.at(0).conditions[0].argument != 102 or group.at(0).effect.argument != 46 or group.at(1).effect.argument != 0 or group.at(3).effect.argument != 0) return null;
     return .{ .idle = group.at(0).source, .using = group.at(3).source, .signal = group.at(0).conditions[1].argument, .grant_signal = group.at(1).conditions[0].argument, .output_parameter = 1, .granted = group.at(1).conditions[1].argument, .consumed = group.at(3).conditions[1].argument };
 }
+
+pub const Issued = struct { idle: u16, signal: i16, grant_signal: i16 };
+pub fn issued(group: rules.Group) ?Issued {
+    if (group.count() != 3) return null;
+    const codes = [_][3]u8{ .{ 34, 48, 0 }, .{ 34, 72, 0 }, .{ 0, 0, 67 } };
+    for (codes, 0..) |ops, i| {
+        const row = group.at(i);
+        if (row.source != group.at(0).source or row.target != row.source or row.next != 0 or row.dx != 0 or row.dy != 0 or row.flags != 0) return null;
+        for ([_]rules.Operation{ row.conditions[0], row.conditions[1], row.effect }, ops) |op, code| if (op.code != code) return null;
+    }
+    if (group.at(0).conditions[1].argument != 0 or group.at(1).conditions[0].argument != 102) return null;
+    return .{ .idle = group.at(0).source, .grant_signal = group.at(0).conditions[0].argument, .signal = group.at(1).conditions[1].argument };
+}

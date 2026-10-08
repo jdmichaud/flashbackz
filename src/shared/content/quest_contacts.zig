@@ -6,6 +6,15 @@ const animation = @import("animation.zig");
 const routes = @import("first_world_props.zig");
 const Output = struct { parameter: u2, signal: i16 };
 pub const Spec = struct {
+    speech: ?[3]u16 = null,
+    reply_notice: ?i16 = null,
+    after_chances: ?[4]i16 = null,
+    release_unless_chance: bool = false,
+    talking_forward: [4]i16 = @splat(0),
+    disappear_after_leaving: bool = false,
+    finish_gestures_offscreen: bool = false,
+    dismiss_when_acknowledged: bool = false,
+    reveal_outputs: [2]?Output = @splat(null),
     role: runtime.Role,
     kind: u8,
     cycle: @FieldType(runtime.Definition, "cycle"),
@@ -30,8 +39,42 @@ fn simple(group: rules.Group) bool {
     }
     return true;
 }
+fn seatedGuest(group: rules.Group) ?Spec {
+    if (group.count() != 70) return null;
+    const sources = [_]usize{ 0, 0, 0, 0, 0, 5, 6, 7, 8, 8, 10, 10, 10, 13, 13, 15, 15, 15, 15, 19, 19, 21, 21, 21, 24, 24 };
+    const next = [_]u16{ 5, 0, 0, 8, 0, 7, 7, 15, 5, 10, 5, 10, 13, 5, 0, 15, 6, 19, 15, 6, 21, 6, 21, 24, 6, 15 };
+    const ops = [_][3]u8{ .{ 34, 0, 35 }, .{ 34, 37, 87 }, .{ 77, 0, 67 }, .{ 97, 0, 0 }, .{ 0, 0, 0 }, .{ 0, 0, 123 }, .{ 0, 0, 123 }, .{ 0, 0, 0 }, .{ 34, 0, 35 }, .{ 0, 0, 0 }, .{ 34, 0, 35 }, .{ 97, 0, 0 }, .{ 0, 0, 0 }, .{ 34, 0, 35 }, .{ 0, 0, 0 }, .{ 77, 0, 75 }, .{ 34, 0, 0 }, .{ 97, 0, 0 }, .{ 0, 0, 0 }, .{ 34, 0, 0 }, .{ 0, 0, 0 }, .{ 34, 0, 0 }, .{ 97, 0, 0 }, .{ 0, 0, 0 }, .{ 34, 0, 0 }, .{ 0, 0, 0 } };
+    for (sources, next, ops, 0..) |source, target, operations, i| {
+        const row = group.at(i);
+        if (row.source != group.at(source).source or row.target != group.at(target).source or row.next != target or row.dy != 0 or row.flags != 0 or !codes(row, operations)) return null;
+        const shifts = i == 8 or i == 10 or i == 19 or i == 21;
+        if (row.dx != (if (shifts) group.at(8).dx else 0)) return null;
+        if (row.conditions[0].code == 34 and i != 1 and row.conditions[0].argument != 30) return null;
+    }
+    // This conversation subgraph cannot reach the family's decorative civilian variants.
+    // Ambient-person import handles those placements independently; the audit records both.
+    for (26..group.count()) |i| for (sources) |source| if (group.at(i).source == group.at(source).source) return null;
+    if (group.at(5).effect.argument < 0 or group.at(6).effect.argument < 0 or group.at(1).effect.argument < 0 or group.at(1).effect.argument > 3 or group.at(11).conditions[0].argument != group.at(22).conditions[0].argument) return null;
+    return .{ .role = .giver, .kind = 3, .cycle = .alternating, .idle = .{ group.at(0).source, group.at(8).source, group.at(10).source, group.at(13).source }, .after = .{ group.at(15).source, group.at(19).source, group.at(21).source, group.at(24).source }, .hidden = .{ .state = group.at(1).source, .parameter = @intCast(group.at(1).effect.argument), .signal = group.at(1).conditions[0].argument }, .notice = group.at(5).effect.argument, .reply_notice = group.at(6).effect.argument, .speech = .{ group.at(5).source, group.at(6).source, group.at(7).source }, .chances = .{ group.at(3).conditions[0].argument, 0, 0, group.at(11).conditions[0].argument }, .after_chances = .{ group.at(17).conditions[0].argument, 0, 0, group.at(22).conditions[0].argument }, .release_unless_chance = true, .talking_forward = .{ 0, -@as(i16, group.at(8).dx), -@as(i16, group.at(10).dx), 0 }, .disappear_after_leaving = true, .finish_gestures_offscreen = true, .outputs = .{ .{ .parameter = 0, .signal = group.at(0).effect.argument }, null }, .reveal_outputs = .{ .{ .parameter = 2, .signal = group.at(1).conditions[1].argument }, null } };
+}
 pub fn recognize(group: rules.Group) ?Spec {
+    if (seatedGuest(group)) |spec| return spec;
     if (!simple(group)) return null;
+    if (group.count() == 8) {
+        const reveal = group.at(0);
+        const talk = group.at(1);
+        const done = group.at(4);
+        const reply = group.at(5);
+        const sources = [_]usize{ 0, 0, 0, 0, 4, 4, 4, 4 };
+        const next = [_]u16{ 0, 4, 0, 0, 4, 4, 4, 4 };
+        const ops = [_][3]u8{ .{ 34, 0, 87 }, .{ 34, 123, 35 }, .{ 77, 0, 67 }, .{ 0, 0, 0 }, .{ 34, 36, 75 }, .{ 34, 123, 0 }, .{ 77, 0, 67 }, .{ 0, 0, 0 } };
+        for (sources, next, ops, 0..) |source, target, operations, i| {
+            const row = group.at(i);
+            if (row.source != group.at(source).source or row.next != target or !codes(row, operations)) return null;
+        }
+        if (talk.conditions[0].argument != 30 or reply.conditions[0].argument != 30 or talk.conditions[1].argument < 0 or reply.conditions[1].argument < 0 or reveal.effect.argument < 0 or reveal.effect.argument > 3) return null;
+        return .{ .role = .giver, .kind = 3, .cycle = .stationary, .idle = @splat(reveal.source), .after = @splat(done.source), .hidden = .{ .state = reveal.source, .parameter = @intCast(reveal.effect.argument), .signal = reveal.conditions[0].argument }, .receive = done.conditions[0].argument, .notice = talk.conditions[1].argument, .reply_notice = reply.conditions[1].argument, .chances = @splat(0), .outputs = .{ .{ .parameter = 0, .signal = talk.effect.argument }, null }, .departure_outputs = .{ .{ .parameter = 1, .signal = done.conditions[1].argument }, null }, .dismiss_when_acknowledged = true };
+    }
     if (group.count() == 5) {
         const reveal = group.at(0);
         const talk = group.at(1);
@@ -136,6 +179,7 @@ pub const Assets = struct {
             self.allocator.free(d.label);
             self.allocator.free(d.outputs);
             self.allocator.free(d.departure_outputs);
+            self.allocator.free(d.reveal_outputs);
         }
         self.allocator.free(self.definitions);
         self.allocator.free(self.sources);
@@ -161,6 +205,7 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
             allocator.free(d.label);
             allocator.free(d.outputs);
             allocator.free(d.departure_outputs);
+            allocator.free(d.reveal_outputs);
         }
         definitions.deinit(allocator);
     }
@@ -194,6 +239,26 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
             try clips.append(allocator, clip);
             destination.* = clip.clip();
         }
+        var speech: ?runtime.Speech = null;
+        if (spec.speech) |speech_states| {
+            var speech_clips: [3]@import("../motion.zig").Clip = undefined;
+            for (speech_states, &speech_clips) |state, *destination| {
+                var source = try animation.decode(allocator, animations, state);
+                defer source.deinit();
+                var clip = try source.resolve(allocator, resolver);
+                errdefer clip.deinit();
+                try clips.append(allocator, clip);
+                destination.* = clip.clip();
+            }
+            speech = .{ .introduction = speech_clips[0], .reply = speech_clips[1], .recovery = speech_clips[2] };
+        }
+        var reveal_outputs: std.ArrayList(@import("../world_props.zig").CircuitId) = .empty;
+        defer reveal_outputs.deinit(allocator);
+        for (spec.reveal_outputs) |optional| if (optional) |output| {
+            const recipient = record.parameters[output.parameter];
+            if (recipient < 0 or recipient >= table.count) return error.InvalidQuestRevealOutput;
+            try reveal_outputs.append(allocator, try routes.internConnection(allocator, connections, @intCast(index), @intCast(recipient), output.signal));
+        };
         var outputs: std.ArrayList(@import("../world_props.zig").CircuitId) = .empty;
         defer outputs.deinit(allocator);
         for (spec.outputs) |optional| if (optional) |output| {
@@ -223,13 +288,15 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
         }
         try sources.append(allocator, @intCast(index));
         try inputs.append(allocator, .{ .reveal = if (spec.hidden) |h| h.signal else null, .deliver = spec.receive });
+        const owned_reveal = try reveal_outputs.toOwnedSlice(allocator);
+        errdefer allocator.free(owned_reveal);
         const owned = try outputs.toOwnedSlice(allocator);
         errdefer allocator.free(owned);
         const owned_departure = try departure.toOwnedSlice(allocator);
         errdefer allocator.free(owned_departure);
         const label = try @import("string_table.zig").copy(allocator, names, record.text_id);
         errdefer allocator.free(label);
-        try definitions.append(allocator, .{ .contact_kind = if(record.kind==3) .interactable else .mechanism, .footprint = .{ .room = rooms[@intCast(room)], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .hidden = hidden, .role = spec.role, .cycle = spec.cycle, .idle = resolved[0..4].*, .after = resolved[4..8].*, .hidden_clip = resolved[8], .chances = spec.chances, .offscreen_choice_first = spec.offscreen_choice_first, .notice = @fromBackingInt(@as(u16, @intCast(spec.notice))), .outputs = owned, .departure_outputs = owned_departure, .sale = sale, .hint = try resolver.icon(record.contact_icon - 1), .label = label, .priority = @intCast(index), .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0 });
+        try definitions.append(allocator, .{ .speech = speech, .reply_notice = if (spec.reply_notice) |id| @fromBackingInt(@as(u16, @intCast(id))) else null, .after_chances = spec.after_chances, .release_unless_chance = spec.release_unless_chance, .talking_forward = spec.talking_forward, .disappear_after_leaving = spec.disappear_after_leaving, .finish_gestures_offscreen = spec.finish_gestures_offscreen, .dismiss_when_acknowledged = spec.dismiss_when_acknowledged, .reveal_outputs = owned_reveal, .contact_kind = if (record.kind == 3) .interactable else .mechanism, .footprint = .{ .room = rooms[@intCast(room)], .position = record.position, .width = record.collision_width }, .facing = if (record.facing_right == 0) .left else .right, .hidden = hidden, .role = spec.role, .cycle = spec.cycle, .idle = resolved[0..4].*, .after = resolved[4..8].*, .hidden_clip = resolved[8], .chances = spec.chances, .offscreen_choice_first = spec.offscreen_choice_first, .notice = @fromBackingInt(@as(u16, @intCast(spec.notice))), .outputs = owned, .departure_outputs = owned_departure, .sale = sale, .hint = try resolver.icon(record.contact_icon - 1), .label = label, .priority = @intCast(index), .palette_bank = @intCast(record.visual_flags & 3), .behind_player = record.visual_flags & 8 != 0, .initially_active = record.initially_active != 0, .wake_nearby = record.flags & 4 != 0, .accepts_signals = record.flags & 1 != 0 });
         table.register(@intCast(index), .quest_contacts);
     }
     const owned = try definitions.toOwnedSlice(allocator);
@@ -238,6 +305,7 @@ pub fn load(allocator: std.mem.Allocator, table: @import("placement.zig").Table,
             allocator.free(d.label);
             allocator.free(d.outputs);
             allocator.free(d.departure_outputs);
+            allocator.free(d.reveal_outputs);
         }
         allocator.free(owned);
     }

@@ -105,6 +105,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   conversations, rescue/hostile handoffs, enemy activation, dropped access keys and counted
   defeat completion. Import shared actor/item/relay behaviors and preserve optional photo
   witnesses and decorative variants in the coverage audit; qualify the connected route.
+  - Photo grant, informant/policeman first/repeat dialogue and decorative patrons match
+    705 original updates with native checks. Rescue, live guard handoff, dropped key,
+    two android fights, counted completion and optional photo witnesses remain open.
+    Preserve same-update contact-to-guard delivery when connecting the handoff.
 - [ ] Reactor assignment: recover contact-gated transport, the carried countdown and its
   expiry, terminal-card grants/use, linked terminal outputs, alarm and failure presentation.
   Compile shared transport, timed-item and credential components; connect completion/payment

@@ -83,7 +83,7 @@ pub const World = struct {
             else => posture,
         };
     }
-    pub fn advance(self: *World, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint, talk: bool, random: anytype) !void {
+    pub fn advance(self: *World, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint, contact_snapshot: contacts.Footprint, talk: bool, random: anytype) !void {
         for (self.instances, definitions, 0..) |*instance, definition, index| {
             const speaking = talk and self.candidate == index and instance.topic == null and (!instance.acquainted or instance.posture == .centered);
             if (speaking and definition.accepts_signals) instance.active = true;
@@ -109,7 +109,7 @@ pub const World = struct {
                         if (!(definition.wake_nearby and near.near)) instance.active = false;
                     } else {
                         const layout: contacts.Layout = .{};
-                        const touching = try layout.overlaps(map, player, definition.footprint);
+                        const touching = try layout.overlaps(map, contact_snapshot, definition.footprint);
                         const awareness = try @import("actors/perception.zig").observe(map, .{ .room = definition.footprint.room, .pose = instance.pose }, player, &.{});
                         const front = awareness.player(false, definition.attention_distance);
                         const back = awareness.player(true, definition.attention_distance);

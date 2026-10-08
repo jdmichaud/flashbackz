@@ -122,6 +122,7 @@ pub const Scene = struct {
     scripted_transport: @import("../scripted_transport.zig").World,
     arrival_triggers: @import("../arrival_triggers.zig").World,
     escort_followers: @import("../escort_followers.zig").World,
+    ambient_people: @import("../ambient_people.zig").World,
     attentive_contacts: @import("../attentive_contacts.zig").World,
     quest_contacts: @import("../quest_contacts.zig").World,
     mission_terminals: @import("../mission_terminals.zig").World,
@@ -214,6 +215,8 @@ pub const Scene = struct {
         errdefer arrival_triggers.deinit();
         var escort_followers = try @import("../escort_followers.zig").World.init(allocator, pack.escort_followers.definitions);
         errdefer escort_followers.deinit();
+        var ambient_people = try @import("../ambient_people.zig").World.init(allocator, pack.ambient_people.definitions, pack.ambient_people.profiles);
+        errdefer ambient_people.deinit();
         var attentive_contacts = try @import("../attentive_contacts.zig").World.init(allocator, pack.attentive_contacts.definitions);
         errdefer attentive_contacts.deinit();
         var quest_contacts = try @import("../quest_contacts.zig").World.init(allocator, pack.quest_contacts.definitions);
@@ -296,6 +299,7 @@ pub const Scene = struct {
             .mission_terminals = mission_terminals,
             .quest_contacts = quest_contacts,
             .attentive_contacts = attentive_contacts,
+            .ambient_people = ambient_people,
             .escort_followers = escort_followers,
             .arrival_triggers = arrival_triggers,
             .scripted_transport = scripted_transport,
@@ -380,6 +384,7 @@ pub const Scene = struct {
         self.mission_terminals.deinit();
         self.quest_contacts.deinit();
         self.attentive_contacts.deinit();
+        self.ambient_people.deinit();
         self.escort_followers.deinit();
         self.arrival_triggers.deinit();
         self.scripted_transport.deinit();
@@ -826,7 +831,7 @@ pub const Scene = struct {
                 if (channel.state.sound_requested) |sound| try self.emitSound(sound, channel.state.effect.?.room);
             }
             self.casings.advance(self.content.casing_definition, self.controller.shot_requested, self.pose, self.environment.room, &self.random);
-            try self.attentive_contacts.advance(self.content.attentive_contacts.definitions, self.terrain.map(), self.props.player_contact, self.controller.operate_requested and self.interaction == .host, &self.random);
+            try self.attentive_contacts.advance(self.content.attentive_contacts.definitions, self.terrain.map(), .{ .room = self.environment.room, .position = self.pose.position, .width = self.content.player_contact_width }, self.props.player_contact, self.controller.operate_requested and self.interaction == .host, &self.random);
             self.quest_contacts.route(self.content.quest_contact_bindings, self.attentive_contacts.pulses[0..self.attentive_contacts.pulse_count]);
             self.quest_contacts.route(self.content.quest_contact_bindings, self.mission_terminals.pulses[0..self.mission_terminals.pulse_count]);
             self.quest_contacts.route(self.content.quest_contact_bindings, self.locks.pulses[0..self.locks.pulse_count]);
@@ -878,6 +883,8 @@ pub const Scene = struct {
                 try field.advance(definition, deploy_field, self.pose, self.environment.room, self.terrain.view(), self.combat_targets);
                 if (field.sound) |sound| if (field.room) |room| try self.emitSound(sound, room);
             }
+            try self.ambient_people.advance(self.content.ambient_people.definitions, self.content.ambient_people.profiles, self.terrain.map(), self.environment.room, &self.random);
+            for (self.ambient_people.actors) |actor| if (actor.sound) |sound| try self.emitSound(sound, actor.room);
             for (self.triggered_effects.instances) |instance| if (instance.sound) |sound| try self.emitSound(sound, instance.room);
             for (self.attentive_contacts.instances, self.content.attentive_contacts.definitions) |instance, definition| if (instance.sound) |sound| try self.emitSound(sound, definition.footprint.room);
             for (self.traders.actors, self.content.traders.definitions) |actor, definition| if (actor.sound) |sound| try self.emitSound(sound, definition.footprint.room);
@@ -1098,6 +1105,7 @@ pub const Scene = struct {
         }
         self.props.pickup_candidate = null;
         return switch (owner) {
+            .ambient_person => .none,
             .escort => |index| result: {
                 self.escort_followers.candidate = index;
                 break :result .escort;
@@ -1201,6 +1209,10 @@ pub const Scene = struct {
             if (actor.room != self.environment.room or definition.behind_player != behind_player) continue;
             try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(actor.pose.visual.id), @as(i32, actor.pose.position.x) + 8, @as(i32, actor.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (actor.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
         }
+        for (self.ambient_people.actors, self.content.ambient_people.definitions) |actor, definition| {
+            if (actor.room != self.environment.room or definition.behind_player != behind_player) continue;
+            try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(actor.pose.visual.id), @as(i32, actor.pose.position.x) + 8, @as(i32, actor.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (actor.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
+        }
         for (self.attentive_contacts.instances, self.content.attentive_contacts.definitions) |instance, definition| {
             if (definition.footprint.room != self.environment.room or definition.behind_player != behind_player) continue;
             try sprite_renderer.draw(indices, room.image.width, room.image.height, try self.content.frame(instance.pose.visual.id), @as(i32, instance.pose.position.x) + 8, @as(i32, instance.pose.position.y) + 2, .{ .palette_bank = definition.palette_bank, .facing = if (instance.pose.visual.mirrored) .mirrored else .original, .occlusion = room.foreground });
@@ -1242,6 +1254,7 @@ pub const Scene = struct {
     fn syncVisibility(self: *Scene) !void {
         for (self.content.visibility.bindings) |binding| {
             const observation: @import("../visibility.zig").Observation = switch (binding.owner) {
+                .ambient_person => |index| .{ .body = .{ .room = self.ambient_people.actors[index].room, .position = self.ambient_people.actors[index].pose.position, .width = self.content.ambient_people.definitions[index].width }, .active = self.ambient_people.actors[index].active },
                 .escort => |index| .{ .body = self.escort_followers.actors[index].contact, .active = self.escort_followers.actors[index].active },
                 .attentive_contact => |index| .{ .body = self.content.attentive_contacts.definitions[index].footprint, .active = self.attentive_contacts.instances[index].active },
                 .quest_contact => |index| .{ .body = self.quest_contacts.instances[index].body(self.content.quest_contacts.definitions[index]), .active = self.quest_contacts.instances[index].active },
@@ -1425,6 +1438,7 @@ pub const Scene = struct {
         self.mission_terminals.hashInto(&hash);
         self.quest_contacts.hashInto(&hash);
         self.attentive_contacts.hashInto(&hash);
+        self.ambient_people.hashInto(&hash);
         self.escort_followers.hashInto(&hash);
         self.arrival_triggers.hashInto(&hash);
         self.scripted_transport.hashInto(&hash);
