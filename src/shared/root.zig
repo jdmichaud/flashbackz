@@ -36,6 +36,7 @@ pub const terrain = @import("terrain.zig");
 pub const conrad_environment = @import("actors/conrad_environment.zig");
 pub const step_clock = @import("step_clock.zig");
 pub const jungle_scene = @import("scenes/jungle.zig");
+pub const level_scene = @import("scenes/level.zig");
 pub const game = @import("game.zig");
 pub const Game = game.Game;
 const std = @import("std");
