@@ -16,6 +16,22 @@ pub const Values = struct {
     text_colors: palette.Bank,
     interface_colors: palette.Bank,
     level_label: [6]u8,
+    /// Per level, which enemy sprite library (an index into `actor_libraries`) each rule group
+    /// draws from.
+    library_groups: [7]LibraryGroups,
+};
+
+pub const LibraryGroups = struct {
+    groups: [8]u8 = @splat(0),
+    libraries: [8]u8 = @splat(0),
+    count: u8 = 0,
+
+    pub fn library(self: LibraryGroups, group: u16) ?u8 {
+        for (self.groups[0..self.count], self.libraries[0..self.count]) |g, l| {
+            if (g == group) return l;
+        }
+        return null;
+    }
 };
 fn word(bytes: []const u8, at: usize) u16 {
     return std.mem.readInt(u16, bytes[at..][0..2], .little);
@@ -138,6 +154,18 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
         const colors = word(data, 0xea9 + i * 2);
         library.colors = try palette.decodeActorBank(data[colors..][0..32]);
     }
+    var library_groups: [7]LibraryGroups = @splat(.{});
+    for (&library_groups, 0..) |*table, level| {
+        var at: usize = word(data, 0xe6e + level * 2);
+        while (data[at] != 0xff) : (at += 2) {
+            if (table.count == table.groups.len or data[at + 1] >= 4) {
+                return error.InvalidLibraryTable;
+            }
+            table.groups[table.count] = data[at];
+            table.libraries[table.count] = data[at + 1];
+            table.count += 1;
+        }
+    }
     var passwords: [7][3][7]u8 = undefined;
     for (&passwords, 0..) |*level, l| for (level, 0..) |*code, d| {
         for (code, 0..) |*character, c| character.* = data[0x12ad + l * 21 + d * 7 + c] ^ 0x55;
@@ -164,6 +192,7 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
         .text_colors = try palette.decodeActorBank(data[0xf71..0xf91]),
         .interface_colors = interface_colors,
         .level_label = data[0x13e2..0x13e8].*,
+        .library_groups = library_groups,
     };
 }
 

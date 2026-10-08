@@ -40,6 +40,7 @@ pub fn extractAll(
             .rules = rules.bytes,
             .labels = labels.bytes,
             .score_awards = interface.score_awards,
+            .library_groups = interface.library_groups[@backingInt(id)],
             .overlay = overlay,
         }, output, &report);
     }

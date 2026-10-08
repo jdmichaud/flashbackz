@@ -18,7 +18,12 @@ pub const Input = struct {
     labels: []const u8,
     score_awards: [16]u16,
     overlay: names.Overlay,
+    /// Which enemy sprite library each rule group draws from.
+    library_groups: flashbackz.content.floppy_interface.LibraryGroups = .{},
 };
+
+/// The enemy sprite libraries, in the executable's order.
+const library_names = [_][]const u8{ "junky", "mercenai", "replican", "glue" };
 
 /// Receives each generated file.
 pub const Output = struct {
@@ -610,6 +615,12 @@ fn writeCharacters(level: *Level, out: *std.Io.Writer) !void {
         );
         if (record.object_id != 0) try w.line(".object = {d},", .{record.object_id});
         if (record.reserved != 0) try w.line(".unknown_byte_29 = {d},", .{record.reserved});
+        // Enemies (and rule group 73) draw library sprites only from their group's library.
+        if (record.kind == 10 or record.rule_group == 73) {
+            if (level.input.library_groups.library(record.rule_group)) |library| {
+                try w.line(".sprite_library = .{s},", .{library_names[library]});
+            } else try w.line(".sprite_library = .none,", .{});
+        }
         try writeParameters(level, behavior, record, &w);
         try w.close();
     }

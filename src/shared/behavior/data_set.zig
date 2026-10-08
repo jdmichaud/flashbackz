@@ -8,6 +8,9 @@ const Node = Zoir.Node;
 /// Above expert: never placed.
 pub const Difficulty = enum(u8) { easy, normal, expert, _ };
 pub const Facing = enum { left, right };
+/// The enemy sprite libraries, in the original's order. `none`: the character's sprites need a
+/// library but its group has none, so they are never drawn.
+pub const SpriteLibrary = enum { junky, mercenai, replican, glue, none };
 
 pub const Character = struct {
     name: []const u8,
@@ -15,6 +18,8 @@ pub const Character = struct {
     label: []const u8 = "",
     /// The label's number in the level's text.
     label_number: u16 = 0,
+    /// Set for enemies: the library their sprites are drawn from.
+    sprite_library: ?SpriteLibrary = null,
     kind: vocabulary.Kind,
     behavior: u16,
     start: u16,
@@ -606,6 +611,9 @@ const Loader = struct {
         };
         if (tree.field(fields.node, "label_number") != null) {
             result.label_number = try fields.integer(u16, "label_number");
+        }
+        if (tree.field(fields.node, "sprite_library") != null) {
+            result.sprite_library = try fields.choice(SpriteLibrary, "sprite_library");
         }
         inline for (.{
             "other_flags",
