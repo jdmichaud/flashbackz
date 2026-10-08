@@ -64,7 +64,8 @@ pub const Grid = struct {
         if (column >= columns) {
             // The original tests the right link after zero-extending it, so a missing right
             // neighbor (0xff) is never noticed and the read lands past the grid.
-            const right: u8 = @bitCast(self.signedLink(room, .right) orelse return .{ .outside = address(0) });
+            const link = self.signedLink(room, .right) orelse return .{ .outside = address(0) };
+            const right: u8 = @bitCast(link);
             return self.cell(right, row, column - columns);
         }
         if (row < 1) {
