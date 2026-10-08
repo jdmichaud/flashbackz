@@ -46,6 +46,11 @@ pub const Canvas = struct {
     }
 
     fn ellipseSpan(self: Canvas, center: Point, row: i32, radius: i32, ink: Ink) void {
+        const top = @max(@as(i32, self.clip.y), 0);
+        const bottom = @min(@as(i32, self.clip.y) + self.clip.height, self.height);
+        const lower = @as(i32, center.y) + row;
+        const upper = @as(i32, center.y) - row;
+        if ((lower < top or lower >= bottom) and (upper < top or upper >= bottom)) return;
         const left = @max(@as(i32, center.x) - radius, self.clip.x);
         const right = @min(@as(i32, center.x) + radius, @as(i32, self.clip.x) + self.clip.width - 1);
         var x = left;
@@ -59,30 +64,30 @@ pub const Canvas = struct {
     /// then clipped by the canvas, so indexed tinting cannot accumulate through overdraw.
     pub fn ellipse(self: Canvas, center: Point, radius_x: u16, radius_y: u16, ink: Ink) !void {
         if (self.pixels.len != @as(usize, self.width) * self.height) return error.InvalidVectorShape;
-        if (radius_x > 1024 or radius_y > 1024) return error.UnsupportedVectorExtent;
-        const xx: i64 = @as(i64, radius_x) * radius_x;
-        const yy: i64 = @as(i64, radius_y) * radius_y;
+        if (radius_x > std.math.maxInt(i16) or radius_y > std.math.maxInt(i16)) return error.UnsupportedVectorExtent;
+        const xx: i32 = @as(i32, radius_x) * radius_x;
+        const yy: i32 = @as(i32, radius_y) * radius_y;
         var x: i32 = radius_x;
         var y: i32 = 0;
-        // The source rasterizer combines the words of 2*ry² before this multiplication.
-        // Keep that measured arithmetic at this compatibility-sensitive raster boundary.
-        const initial = @as(i64, radius_x) * ((2 * yy & 65535) + (2 * yy >> 16));
-        var horizontal_slope = 2 * initial;
-        var vertical_slope: i64 = 0;
-        var horizontal_error = 2 * xx - initial + yy;
-        var vertical_error = 2 * yy - horizontal_slope + xx;
+        // Preserve the original cross-word multiply: only the high word of its
+        // upper partial product contributes. Error accumulators then wrap at 32 bits.
+        const initial = @as(i32, radius_x) * (2 * yy & 65535) + ((@as(i32, radius_x) * (2 * yy >> 16)) >> 16);
+        var horizontal_slope = 2 *% initial;
+        var vertical_slope: i32 = 0;
+        var horizontal_error = 2 * xx -% initial +% yy;
+        var vertical_error = 2 * yy -% horizontal_slope +% xx;
         while (vertical_error < 0) {
             if (x != 0) self.ellipseSpan(center, y, x, ink);
             y += 1;
-            vertical_slope += 4 * xx;
+            vertical_slope +%= 4 *% xx;
             if (horizontal_error < 0) {
-                horizontal_error += vertical_slope + 2 * xx;
-                vertical_error += vertical_slope;
+                horizontal_error +%= vertical_slope +% 2 * xx;
+                vertical_error +%= vertical_slope;
             } else {
                 x -= 1;
-                horizontal_slope -= 4 * yy;
-                horizontal_error += vertical_slope + 2 * xx - horizontal_slope;
-                vertical_error += vertical_slope + 2 * yy - horizontal_slope;
+                horizontal_slope -%= 4 *% yy;
+                horizontal_error +%= vertical_slope +% 2 * xx -% horizontal_slope;
+                vertical_error +%= vertical_slope +% 2 * yy -% horizontal_slope;
             }
         }
         var row_written = false;
@@ -91,13 +96,13 @@ pub const Canvas = struct {
                 self.ellipseSpan(center, y, x, ink);
                 row_written = true;
             }
-            horizontal_slope -= 4 * yy;
+            horizontal_slope -%= 4 *% yy;
             if (vertical_error < 0) {
                 y += 1;
                 row_written = false;
-                vertical_slope += 4 * xx;
-                vertical_error += vertical_slope - horizontal_slope + 2 * yy;
-            } else vertical_error += 2 * yy - horizontal_slope;
+                vertical_slope +%= 4 *% xx;
+                vertical_error +%= vertical_slope -% horizontal_slope +% 2 * yy;
+            } else vertical_error +%= 2 * yy -% horizontal_slope;
         }
         if (row_written) y += 1;
         while (y <= radius_y) : (y += 1) self.ellipseSpan(center, y, 0, ink);
@@ -253,4 +258,17 @@ test "ellipse clipping and indexed tint preserve the surrounding page" {
     for (0..9) |y| for (0..9) |x| if (x < 2 or y < 2 or x > 6 or y > 6) {
         try std.testing.expectEqual(@as(u8, 2), pixels[y * 9 + x]);
     };
+}
+
+test "large ellipse radii retain bounded canvas writes" {
+    var pixels: [81]u8 = @splat(2);
+    const canvas: Canvas = .{ .pixels = &pixels, .width = 9, .height = 9, .clip = .{ .x = 2, .y = 2, .width = 5, .height = 5 } };
+    for ([_]u16{ 196, 264, 1109, 1315 }) |radius| {
+        @memset(&pixels, 2);
+        try canvas.ellipse(.{ .x = 4, .y = 4 }, radius, radius, .{ .color = 7 });
+        try std.testing.expectEqual(@as(u8, 7), pixels[4 * 9 + 4]);
+        for (0..9) |y| for (0..9) |x| if (x < 2 or x >= 7 or y < 2 or y >= 7) {
+            try std.testing.expectEqual(@as(u8, 2), pixels[y * 9 + x]);
+        };
+    }
 }
