@@ -627,6 +627,7 @@ pub const Game = struct {
                 next.world.score = scene.world.score;
                 next.world.entry_score = scene.world.score;
                 next.world.random = scene.world.random;
+                next.world.shake = scene.world.shake;
                 scene.stopAudio(p);
                 scene.deinit();
                 self.level = destination;

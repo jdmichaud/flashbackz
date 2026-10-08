@@ -508,15 +508,16 @@ pub const Scene = struct {
     }
 
     pub fn draw(self: *const Scene, indices: []u8, rgba: []u8) !void {
-        @memcpy(indices, &self.screen.picture);
+        var picture = self.screen.picture;
         if (self.inventory) |inventory| try inventory.menu.draw(
             self.pack.inventory.artwork(),
             inventory.entries[0..inventory.menu.count],
             self.world.score,
-            indices,
+            &picture,
             width,
             height,
         );
+        self.screen.display(&picture, indices[0..pixel_count]);
         try palette.writeRgba(indices, &self.screen.colors, rgba);
     }
 
@@ -670,6 +671,10 @@ pub const Screen = struct {
     previous_rects: Rects = .{},
     /// A new HUD icon reaches the picture when it is flipped, after any message.
     hud_unshown: bool = false,
+    /// The screen shake moves the displayed picture down by 0 to 3 rows. Each flip takes the
+    /// value computed after the previous one.
+    shake_rows: u2 = 0,
+    next_shake_rows: u2 = 0,
     /// The icon beside the message: what Conrad touched while one was pending (it can be
     /// stale, as in the original).
     message_icon: u8 = 0,
@@ -730,6 +735,8 @@ pub const Screen = struct {
         }
         if (self.message == null) self.showHudIcon(pack);
         self.previous_rects = self.frame_rects;
+        self.shake_rows = self.next_shake_rows;
+        self.next_shake_rows = @truncate(@as(u8, @bitCast(world.shake)));
         if (self.room_countdown == 1) {
             self.room_countdown = 0;
             self.setRoomColors(pack, world.view_room);
@@ -800,7 +807,21 @@ pub const Screen = struct {
     }
 
     pub fn writeRgba(self: *const Screen, rgba: []u8) !void {
-        try palette.writeRgba(&self.picture, &self.colors, rgba);
+        var shown: [pixel_count]u8 = undefined;
+        self.display(&self.picture, &shown);
+        try palette.writeRgba(&shown, &self.colors, rgba);
+    }
+
+    /// What the display shows of `picture`: shaken down by the shake rows, the rows above
+    /// blank.
+    pub fn display(
+        self: *const Screen,
+        picture: *const [pixel_count]u8,
+        shown: *[pixel_count]u8,
+    ) void {
+        const offset = @as(usize, self.shake_rows) * width;
+        @memset(shown[0..offset], 0);
+        @memcpy(shown[offset..], picture[0 .. pixel_count - offset]);
     }
 
     fn loadRoom(self: *Screen, pack: *const level_pack.Pack, room: u8) void {
