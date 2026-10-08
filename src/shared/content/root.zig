@@ -15,6 +15,7 @@ pub const menu_artwork = @import("menu_artwork.zig");
 pub const room_artwork = @import("room_artwork.zig");
 pub const room_source = @import("room_source.zig");
 pub const character_art = @import("character_art.zig");
+pub const level_pack = @import("level_pack.zig");
 pub const sprite = @import("sprite.zig");
 pub const art_bank = @import("art_bank.zig");
 pub const object_artwork = @import("object_artwork.zig");
