@@ -109,6 +109,9 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     705 original updates with native checks. Rescue, live guard handoff, dropped key,
     two android fights, counted completion and optional photo witnesses remain open.
     Preserve same-update contact-to-guard delivery when connecting the handoff.
+  - Compile authored character update order into typed actor tasks for contacts, hosts,
+    service counters and enemies; deliver each actor's new circuit outputs before later
+    recipients advance, without a source-instruction interpreter.
 - [ ] Reactor assignment: recover contact-gated transport, the carried countdown and its
   expiry, terminal-card grants/use, linked terminal outputs, alarm and failure presentation.
   Compile shared transport, timed-item and credential components; connect completion/payment
