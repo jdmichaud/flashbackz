@@ -85,9 +85,12 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     levels extract, and every unnamed condition or effect is reported.
     - `flashbackz-extract`: 1,097 characters and 418 behaviors; no unknown operations. The
       overlay names Conrad and the city ambush; other behaviors keep systematic names.
-  - [ ] Behavior engine: tables load into the content pack and run with the stated evaluation
+  - [x] Behavior engine: tables load into the content pack and run with the stated evaluation
     order. Gate: the android ambush (civilian, gunman, defensive fields) runs from tables and
     matches its 260-update capture and the whole-world replay.
+    - `src/shared/behavior/`: the whole vocabulary is implemented. flashback-re
+      `tools/engine_regression.py`: all 40 retained captures (9,116 updates) match the original
+      for every character; one documented copy-protection exclusion.
   - [ ] Migrate implemented families to tables one at a time, deleting their Zig components.
     Gate for each: golden traces and the whole-world comparison are unchanged.
   - [ ] Complete the vocabulary for the remaining unmapped families (95 at the start),
