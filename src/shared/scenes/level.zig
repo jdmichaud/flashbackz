@@ -9,6 +9,14 @@ const sprite = @import("../content/sprite.zig");
 const palette = @import("../content/palette.zig");
 const sprite_renderer = @import("../render/sprite.zig");
 const text_renderer = @import("../render/text.zig");
+const platform = @import("../platform.zig");
+const level_mod = @import("../content/level.zig");
+const floppy_interface = @import("../content/floppy_interface.zig");
+const demo_mod = @import("../content/demo.zig");
+const input_recording = @import("../input_recording.zig");
+const step_clock = @import("../step_clock.zig");
+const settings = @import("../settings.zig");
+const audio_effects = @import("../audio/effects.zig");
 const World = behavior.world.World;
 const data_set = behavior.data_set;
 const contacts = behavior.contacts;
@@ -16,6 +24,307 @@ const contacts = behavior.contacts;
 pub const width = 256;
 pub const height = 224;
 const pixel_count = width * height;
+
+/// How a level ends, for the game to act on.
+pub const Outcome = union(enum) {
+    playing,
+    /// An exit to another level.
+    level: level_mod.Id,
+    /// Conrad's defeat: the continue screen follows.
+    defeated,
+    /// The player left, or the demo ended.
+    aborted,
+};
+
+/// A level being played: the engine, the screen, the player's keys and the sound effects.
+pub const Scene = struct {
+    allocator: std.mem.Allocator,
+    /// Owns the level's data set.
+    arena: *std.heap.ArenaAllocator,
+    level: level_mod.Id,
+    data: *const data_set.Level,
+    pack: level_pack.Pack,
+    world: World,
+    screen: *Screen,
+    keys: Keys = .{},
+    /// A demo replays its recorded input bytes instead of the keys.
+    demo: ?Demo = null,
+    clock: ?step_clock.Clock = null,
+    pending: std.ArrayList(platform.Event) = .empty,
+    effects: audio_effects.Output = .{},
+    sound_enabled: bool = true,
+    outcome: Outcome = .playing,
+
+    pub const Demo = struct { bytes: []u8, cursor: usize = 0 };
+
+    /// Loads `level` from the data set `files` and the original art and sound in `assets`.
+    pub fn load(
+        allocator: std.mem.Allocator,
+        assets: platform.AssetSource,
+        files: *const data_set.Files,
+        level: level_mod.Id,
+        difficulty: settings.Difficulty,
+    ) !Scene {
+        return loadWithStart(allocator, assets, files, level, difficulty, null);
+    }
+
+    /// Loads demo `index`: its level, with Conrad where the demo starts, replaying its input.
+    pub fn loadDemo(
+        allocator: std.mem.Allocator,
+        assets: platform.AssetSource,
+        files: *const data_set.Files,
+        index: usize,
+    ) !Scene {
+        const recording = try demo_mod.load(allocator, assets, index);
+        defer allocator.free(recording.controls);
+        const start: ?World.Start = if (recording.descriptor.start) |start| .{
+            .room = @intCast(@backingInt(start.room) - 1),
+            .x = start.position.x,
+            .y = start.position.y,
+        } else null;
+        var scene = try loadWithStart(
+            allocator,
+            assets,
+            files,
+            recording.descriptor.level,
+            .normal,
+            start,
+        );
+        errdefer scene.deinit();
+        const bytes = try allocator.alloc(u8, recording.controls.len);
+        for (bytes, recording.controls) |*byte, sample| byte.* = inputByte(sample);
+        scene.demo = .{ .bytes = bytes };
+        scene.screen.password_frames = 0;
+        // Demos replay from a fixed random state.
+        scene.world.random.state = 0;
+        return scene;
+    }
+
+    fn loadWithStart(
+        allocator: std.mem.Allocator,
+        assets: platform.AssetSource,
+        files: *const data_set.Files,
+        level: level_mod.Id,
+        difficulty: settings.Difficulty,
+        start: ?World.Start,
+    ) !Scene {
+        const arena = try allocator.create(std.heap.ArenaAllocator);
+        arena.* = .init(allocator);
+        errdefer {
+            arena.deinit();
+            allocator.destroy(arena);
+        }
+        var diagnostic: data_set.Diagnostic = .{};
+        const data = try arena.allocator().create(data_set.Level);
+        data.* = data_set.loadLevel(
+            allocator,
+            arena.allocator(),
+            files,
+            @tagName(level),
+            &diagnostic,
+        ) catch |err| {
+            std.log.err("data set: {s}", .{diagnostic.message()});
+            return err;
+        };
+        const interface = try floppy_interface.load(allocator, assets);
+        const first_room = if (start) |s| s.room else data.characters[0].room orelse 0;
+        var pack = try level_pack.load(allocator, assets, &interface, level, difficulty, first_room);
+        errdefer pack.deinit();
+        var world = try World.init(
+            allocator,
+            data,
+            pack.animations,
+            pack.grid,
+            @fromBackingInt(@backingInt(difficulty)),
+            start,
+        );
+        errdefer world.deinit();
+        const screen = try allocator.create(Screen);
+        screen.* = .init(start != null);
+        return .{
+            .allocator = allocator,
+            .arena = arena,
+            .level = level,
+            .data = data,
+            .pack = pack,
+            .world = world,
+            .screen = screen,
+        };
+    }
+
+    pub fn deinit(self: *Scene) void {
+        if (self.demo) |demo| self.allocator.free(demo.bytes);
+        self.pending.deinit(self.allocator);
+        self.allocator.destroy(self.screen);
+        self.world.deinit();
+        self.pack.deinit();
+        self.arena.deinit();
+        self.allocator.destroy(self.arena);
+        self.* = undefined;
+    }
+
+    pub fn enqueue(self: *Scene, event: platform.Event) !void {
+        switch (event.payload) {
+            .key_down, .key_up, .focus_lost => try self.pending.append(self.allocator, event),
+            else => {},
+        }
+    }
+
+    /// Runs the updates due by `now_ns`, at the original's cadence.
+    pub fn update(self: *Scene, now_ns: u64) !void {
+        if (self.clock == null) self.clock = try step_clock.Clock.init(step_clock.jungle, now_ns);
+        var work: usize = 0;
+        while (self.outcome == .playing and self.needsCatchup(now_ns) and work < 8) : (work += 1) {
+            const deadline = self.clock.?.deadline();
+            self.clock.?.consume();
+            try self.step(deadline);
+        }
+    }
+
+    pub fn nextDeadline(self: *const Scene) ?u64 {
+        return if (self.clock) |clock| clock.deadline() else null;
+    }
+
+    pub fn needsCatchup(self: *const Scene, now_ns: u64) bool {
+        if (self.outcome != .playing) return false;
+        return if (self.nextDeadline()) |time| now_ns >= time else false;
+    }
+
+    /// One update with the input held at `deadline`.
+    fn step(self: *Scene, deadline: u64) !void {
+        const held = self.takeKeys(deadline);
+        // Esc leaves (the options dialog is not modeled yet); Tab or Backspace ends a demo.
+        if (self.keys.escape or (self.demo != null and held & 0x80 != 0)) {
+            self.outcome = .aborted;
+            return;
+        }
+        const raw = if (self.demo) |*demo| byte: {
+            if (demo.cursor == demo.bytes.len) {
+                self.outcome = .aborted;
+                return;
+            }
+            demo.cursor += 1;
+            break :byte demo.bytes[demo.cursor - 1];
+        } else held;
+        const outcome = try self.world.update(@bitCast(self.keys.collapse(raw)), false);
+        for (self.world.requests.sounds[0..self.world.requests.sound_count]) |sound| {
+            if (self.sound_enabled) self.effects.submit(self.pack.sounds, .{
+                .sound = @fromBackingInt(sound.id),
+                .attenuation = @intFromBool(sound.distant),
+            });
+        }
+        switch (outcome) {
+            .played => try self.screen.present(&self.pack, &self.world),
+            .defeated => self.outcome = .defeated,
+            .level_changed => self.outcome = .{
+                .level = std.enums.fromInt(level_mod.Id, self.world.requests.level.?) orelse
+                    return error.UnknownLevel,
+            },
+        }
+    }
+
+    /// The keys held at `deadline`, from the events that arrived by then.
+    fn takeKeys(self: *Scene, deadline: u64) u8 {
+        while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
+            const event = self.pending.orderedRemove(0);
+            switch (event.payload) {
+                .focus_lost => self.keys = .{ .last_direction = self.keys.last_direction },
+                .key_down => |key| self.keys.press(key.key, true),
+                .key_up => |key| self.keys.press(key.key, false),
+                else => {},
+            }
+        }
+        return self.keys.held;
+    }
+
+    /// Every character's state, the score, the view and the random state.
+    pub fn stateHash(self: *const Scene) u64 {
+        var hash = std.hash.Wyhash.init(@backingInt(self.level));
+        for (self.world.characters) |c| {
+            hash.update(std.mem.asBytes(&[_]i32{
+                c.state,       c.cursor,                      c.x,                          c.y,
+                c.room,        c.health,                      c.counter,                    @intFromBool(c.active),
+                c.look.sprite, @intFromBool(c.look.mirrored), @intFromBool(c.facing_right),
+            }));
+        }
+        hash.update(std.mem.asBytes(&[_]u32{
+            self.world.score,
+            self.world.view_room,
+            self.world.random.state,
+        }));
+        return hash.final();
+    }
+
+    pub fn draw(self: *const Scene, indices: []u8, rgba: []u8) !void {
+        @memcpy(indices, &self.screen.picture);
+        try self.screen.writeRgba(rgba);
+    }
+
+    pub fn pumpAudio(self: *Scene, p: *platform.Platform) !void {
+        if (!self.sound_enabled) return self.effects.stop(p);
+        try self.effects.pump(self.pack.sounds, p);
+    }
+
+    pub fn stopAudio(self: *Scene, p: *platform.Platform) void {
+        self.effects.stop(p);
+    }
+};
+
+/// The keyboard as the original reads it: one byte of held keys (no edge detection) and the
+/// last direction held without a diagonal.
+pub const Keys = struct {
+    held: u8 = 0,
+    last_direction: u8 = 0,
+    escape: bool = false,
+
+    pub fn press(self: *Keys, key: platform.Key, down: bool) void {
+        const bit: u8 = switch (key) {
+            .up => 0x01,
+            .down => 0x02,
+            .left => 0x04,
+            .right => 0x08,
+            .enter => 0x10,
+            .space => 0x20,
+            .left_shift, .right_shift => 0x40,
+            .tab, .backspace => 0x80,
+            .escape => {
+                self.escape = down;
+                return;
+            },
+            else => return,
+        };
+        if (down) self.held |= bit else self.held &= ~bit;
+    }
+
+    /// Holding a vertical and a horizontal direction keeps the last single direction, with the
+    /// buttons held now.
+    pub fn collapse(self: *Keys, raw: u8) u8 {
+        if (raw & 0x03 != 0 and raw & 0x0c != 0) return (raw & 0xf0) | (self.last_direction & 0x0f);
+        self.last_direction = raw;
+        return raw;
+    }
+};
+
+fn inputByte(sample: input_recording.Sample) u8 {
+    var byte: u8 = 0;
+    if (sample.up) byte |= 0x01;
+    if (sample.down) byte |= 0x02;
+    if (sample.left) byte |= 0x04;
+    if (sample.right) byte |= 0x08;
+    if (sample.use_item) byte |= 0x10;
+    if (sample.weapon) byte |= 0x20;
+    if (sample.action) byte |= 0x40;
+    if (sample.inventory) byte |= 0x80;
+    return byte;
+}
+
+test "diagonals keep the last single direction with the current buttons" {
+    var keys: Keys = .{};
+    try std.testing.expectEqual(@as(u8, 0x08), keys.collapse(0x08));
+    try std.testing.expectEqual(@as(u8, 0x48), keys.collapse(0x49));
+    try std.testing.expectEqual(@as(u8, 0x03), keys.collapse(0x03));
+    try std.testing.expectEqual(@as(u8, 0x23), keys.collapse(0x25));
+}
 
 /// What the screen keeps between updates.
 pub const Screen = struct {

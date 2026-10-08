@@ -25,6 +25,7 @@ test "floppy menu preview rejects missing introduction and wake-up resources" {
         allocator,
         source.assetSource(),
         null,
+        null,
         .menu_development,
     );
     defer preview.deinit();

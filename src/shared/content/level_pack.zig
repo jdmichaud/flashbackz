@@ -10,6 +10,7 @@ const backward_stream = @import("backward_stream.zig");
 const character_art = @import("character_art.zig");
 const sprite = @import("sprite.zig");
 const font_mod = @import("font.zig");
+const sound_effects = @import("sound_effects.zig");
 const settings = @import("../settings.zig");
 const RoomSource = @import("room_source.zig").RoomSource;
 const behavior = @import("../behavior/root.zig");
@@ -32,6 +33,7 @@ pub const Pack = struct {
     library_colors: [4]palette.Bank,
     /// "CODE: " and the level's password at the chosen difficulty.
     password: [13]u8,
+    sounds: sound_effects.Bank,
 
     pub fn deinit(self: *Pack) void {
         for (&self.rooms) |*slot| if (slot.*) |*art| art.deinit();
@@ -40,6 +42,7 @@ pub const Pack = struct {
         for (self.icons) |*icon| icon.deinit();
         self.allocator.free(self.icons);
         self.font.deinit();
+        self.sounds.deinit();
     }
 
     pub fn room(self: *const Pack, id: u8) ?*const artwork.Artwork {
@@ -100,6 +103,10 @@ pub fn load(
     var password: [13]u8 = undefined;
     @memcpy(password[0..6], &interface.password_prefix);
     @memcpy(password[6..], &interface.passwords[@backingInt(id)][@backingInt(difficulty)]);
+    var sound_file = try source.readAll("DATA/GLOBAL.FIB", 4 * 1024 * 1024);
+    defer sound_file.deinit();
+    var sounds = try sound_effects.decode(allocator, sound_file.bytes);
+    errdefer sounds.deinit();
     return .{
         .allocator = allocator,
         .rooms = rooms,
@@ -111,6 +118,7 @@ pub fn load(
         .font = font,
         .library_colors = library_colors,
         .password = password,
+        .sounds = sounds,
     };
 }
 

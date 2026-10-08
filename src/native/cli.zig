@@ -1,5 +1,5 @@
 //! The command-line options that both native hosts take and open for the game: a positional
-//! asset paths and `--saves <dir>`.
+//! asset paths, `--saves <dir>` and `--data <dir>`.
 //!
 //! Each asset path is a directory or a FAT12 floppy image. `--saves` defaults to the per-user application data directory, which
 //! is created on first use. The result is a bound `AssetSource` and `Storage`. The game uses
@@ -13,11 +13,14 @@ const DirectoryStorage = storage_mod.DirectoryStorage;
 const Pack = flashbackz.asset_pack.Pack;
 const directory_mod = @import("directory.zig");
 const storage_mod = @import("storage.zig");
+const data_set = @import("data_set.zig");
 
 pub const usage =
     \\  ASSET_PATH    FAT12 IMG/IMA images or extracted directories; repeat for all disks
-    \\  --scene NAME   development shortcut: menu or a level name (default: normal startup)
+    \\  --scene NAME   development shortcut: menu, a level name, or tables:LEVEL for the level
+    \\                 run from the behavior tables (default: normal startup)
     \\  --saves DIR    where saves are kept (default: the per-user application data directory)
+    \\  --data DIR     the data set made by flashbackz-extract (default: extracted at startup)
     \\
 ;
 
@@ -28,6 +31,7 @@ pub const Options = struct {
     additional_assets: [7][]const u8 = undefined,
     additional_count: usize = 0,
     saves: ?[]const u8 = null,
+    data: ?[]const u8 = null,
     entry: flashbackz.game.Entry = .automatic,
 
     /// Consumes `--saves` and positional asset paths. Returns false for
@@ -35,7 +39,13 @@ pub const Options = struct {
     pub fn take(self: *Options, arg: []const u8, args: anytype) TakeError!bool {
         if (std.mem.eql(u8, arg, "--scene")) {
             const value = args.next() orelse return error.MissingValue;
-            self.entry = if (std.mem.eql(u8, value, "jungle")) .jungle_development else if (std.mem.eql(u8, value, "menu")) .menu_development else if (std.meta.stringToEnum(flashbackz.content.level.Id, value)) |level| .{ .level_development = level } else return error.UnknownScene;
+            self.entry = try sceneEntry(value);
+            return true;
+        }
+        if (std.mem.eql(u8, arg, "--data")) {
+            const value = args.next() orelse return error.MissingValue;
+            if (value.len == 0) return error.MissingValue;
+            self.data = value;
             return true;
         }
         if (std.mem.eql(u8, arg, "--saves")) {
@@ -53,6 +63,19 @@ pub const Options = struct {
             return true;
         }
         return false;
+    }
+
+    fn sceneEntry(value: []const u8) TakeError!flashbackz.game.Entry {
+        const Id = flashbackz.content.level.Id;
+        if (std.mem.eql(u8, value, "jungle")) return .jungle_development;
+        if (std.mem.eql(u8, value, "menu")) return .menu_development;
+        if (std.mem.startsWith(u8, value, "tables:")) {
+            const level = std.meta.stringToEnum(Id, value["tables:".len..]) orelse
+                return error.UnknownScene;
+            return .{ .table_level_development = level };
+        }
+        const level = std.meta.stringToEnum(Id, value) orelse return error.UnknownScene;
+        return .{ .level_development = level };
     }
 
     pub fn addAsset(self: *Options, path: []const u8) error{ MissingValue, TooManyAssets }!void {
@@ -80,6 +103,8 @@ pub const OpenError = error{
     Io,
     Canceled,
     OutOfMemory,
+    /// The `--data` directory is missing or unreadable.
+    InvalidDataSet,
 };
 
 /// The providers that a host owns while the game runs.
@@ -90,6 +115,9 @@ pub const Providers = struct {
     saves_path: []u8 = &.{},
     content: ?Pack = null,
     saves: ?DirectoryStorage = null,
+    /// The data set, when original files are open: read from `--data` or extracted from them.
+    data_arena: ?*std.heap.ArenaAllocator = null,
+    data: ?flashbackz.behavior.data_set.Files = null,
 
     pub const empty: Providers = .{};
 
@@ -115,6 +143,29 @@ pub const Providers = struct {
         try self.importPath(io, path);
         for (options.additional_assets[0..options.additional_count]) |additional| try self.importPath(io, additional);
         flashbackz.content.archive.expandAll(&self.content.?) catch |err| return mapImportError(err);
+        try self.openDataSet(io, options.data);
+    }
+
+    /// Reads the data set from `directory`, or extracts it in memory from the original files.
+    /// Without a directory, a failed extraction only leaves the data set out: scenes that do
+    /// not need it still run.
+    fn openDataSet(self: *Providers, io: std.Io, directory: ?[]const u8) OpenError!void {
+        const arena = try self.allocator.create(std.heap.ArenaAllocator);
+        arena.* = .init(self.allocator);
+        self.data_arena = arena;
+        if (directory) |path| {
+            self.data = data_set.readDirectory(arena.allocator(), io, path) catch
+                return error.InvalidDataSet;
+        } else {
+            self.data = data_set.extractInMemory(
+                self.allocator,
+                arena.allocator(),
+                self.assetSource().?,
+            ) catch |err| missing: {
+                std.log.warn("data set not extracted: {s}", .{@errorName(err)});
+                break :missing null;
+            };
+        }
     }
 
     /// Opens only asset paths, for tools that read the game and never save.
@@ -184,6 +235,10 @@ pub const Providers = struct {
     }
 
     pub fn deinit(self: *Providers) void {
+        if (self.data_arena) |arena| {
+            arena.deinit();
+            self.allocator.destroy(arena);
+        }
         if (self.content) |*content| content.deinit();
         if (self.saves) |*s| s.deinit();
         self.allocator.free(self.saves_path);
@@ -197,6 +252,10 @@ pub const Providers = struct {
 
     pub fn storage(self: *Providers) platform.Storage {
         return self.saves.?.storage();
+    }
+
+    pub fn dataSet(self: *const Providers) ?*const flashbackz.behavior.data_set.Files {
+        return if (self.data) |*files| files else null;
     }
 };
 

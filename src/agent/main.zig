@@ -62,7 +62,9 @@ pub fn main(init: std.process.Init) !void {
             return fail(io);
         }
     }
-    if ((options.entry == .jungle_development or options.entry == .level_development) and
+    if ((options.entry == .jungle_development or
+        options.entry == .level_development or
+        options.entry == .table_level_development) and
         options.assets == null) return fail(io);
 
     // Real providers when the options name them, else in-memory ones. They outlive the game.
@@ -85,7 +87,7 @@ pub fn main(init: std.process.Init) !void {
 
     var backend = agent.AgentBackend.init(gpa, .{});
     defer backend.deinit();
-    var game = try flashbackz.Game.initWithEntry(gpa, assets, storage, options.entry);
+    var game = try flashbackz.Game.initWithEntry(gpa, assets, storage, providers.dataSet(), options.entry);
     defer game.deinit();
     var p = backend.asPlatform();
     var frame: u64 = 0;

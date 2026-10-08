@@ -114,6 +114,7 @@ pub fn run(
         gpa,
         providers.assetSource(),
         providers.storage(),
+        providers.dataSet(),
         options.providers.entry,
     ) catch |e| {
         if (e == error.NotFound) {

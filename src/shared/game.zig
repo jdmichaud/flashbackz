@@ -8,6 +8,8 @@ const front_end = @import("scenes/front_end.zig");
 const continue_mod = @import("scenes/continue_game.zig");
 const story_mod = @import("scenes/story.zig");
 const jungle_mod = @import("scenes/jungle.zig");
+const level_scene = @import("scenes/level.zig");
+const data_set = @import("behavior/data_set.zig");
 const content_level = @import("content/level.zig");
 const demo = @import("content/demo.zig");
 const game_options = @import("scenes/game_options.zig");
@@ -20,11 +22,15 @@ pub const Entry = union(enum) {
     menu_development,
     jungle_development,
     level_development: content_level.Id,
+    /// A level run from the behavior tables (needs the data set).
+    table_level_development: content_level.Id,
 };
 const Scene = union(enum) {
     smoke,
     menu: front_end.Scene,
     jungle: jungle_mod.Scene,
+    /// A level run from the behavior tables.
+    level: level_scene.Scene,
     continue_game: continue_mod.Scene,
 };
 
@@ -187,6 +193,8 @@ pub const Game = struct {
     /// The original's files and the saves, bound by the host. Null when the host has none.
     assets: ?platform.AssetSource,
     storage: ?platform.Storage,
+    /// The data set that levels run from, when the host provides one.
+    data: ?*const data_set.Files = null,
     phase: Phase = .startup,
     state: State = .{},
     update_count: u64 = 0,
@@ -217,13 +225,14 @@ pub const Game = struct {
         assets: ?platform.AssetSource,
         storage: ?platform.Storage,
     ) !Game {
-        return initWithEntry(allocator, assets, storage, .automatic);
+        return initWithEntry(allocator, assets, storage, null, .automatic);
     }
 
     pub fn initWithEntry(
         allocator: std.mem.Allocator,
         assets: ?platform.AssetSource,
         storage: ?platform.Storage,
+        data: ?*const data_set.Files,
         entry: Entry,
     ) !Game {
         const page = try allocator.alloc(u8, page_width * page_height);
@@ -234,6 +243,27 @@ pub const Game = struct {
         );
         errdefer allocator.free(rgba);
         const preferences: game_options.Settings = .{ .volume = volume_preference.load(storage) };
+        if (entry == .table_level_development) {
+            const level = entry.table_level_development;
+            const scene = try level_scene.Scene.load(
+                allocator,
+                assets orelse return error.OriginalContentRequired,
+                data orelse return error.DataSetRequired,
+                level,
+                .normal,
+            );
+            return .{
+                .allocator = allocator,
+                .assets = assets,
+                .storage = storage,
+                .data = data,
+                .page = page,
+                .rgba = rgba,
+                .preferences = preferences,
+                .level = level,
+                .scene = .{ .level = scene },
+            };
+        }
         if (entry == .jungle_development or entry == .level_development) {
             const level: content_level.Id = if (entry == .level_development) entry.level_development else .jungle;
             var scene = try jungle_mod.Scene.loadLevel(
@@ -279,6 +309,7 @@ pub const Game = struct {
             .smoke => {},
             .menu => |*scene| scene.deinit(),
             .jungle => |*scene| scene.deinit(),
+            .level => |*scene| scene.deinit(),
             .continue_game => |*scene| scene.deinit(),
         }
         self.allocator.free(self.page);
@@ -308,6 +339,7 @@ pub const Game = struct {
             }
             return world;
         }
+        if (self.scene == .level) return self.scene.level.stateHash();
         if (self.scene == .menu) return self.scene.menu.stateHash();
         if (self.scene == .continue_game) return self.scene.continue_game.stateHash();
         return self.state.hash();
@@ -324,6 +356,7 @@ pub const Game = struct {
     pub fn needsCatchup(self: *const Game, now_ns: u64) bool {
         if (self.story) |*story| return story.player.needsCatchup(now_ns);
         if (self.scene == .jungle) return self.scene.jungle.needsCatchup(now_ns);
+        if (self.scene == .level) return self.scene.level.needsCatchup(now_ns);
         if (self.scene == .menu) return self.scene.menu.needsCatchup(now_ns);
         if (self.scene == .continue_game) return self.scene.continue_game.needsCatchup(now_ns);
         return false;
@@ -361,7 +394,11 @@ pub const Game = struct {
             if (self.audio != null) p.audioClose();
             if (self.scene == .menu) self.scene.menu.stopAudio(p);
             if (self.jungle()) |scene| scene.stopAudio(p);
+            if (self.scene == .level) self.scene.level.stopAudio(p);
             return .finished;
+        }
+        if (self.scene == .level) {
+            if (try self.updateLevel(p)) return .running;
         }
         if (self.scene == .menu) {
             const front = &self.scene.menu;
@@ -515,6 +552,56 @@ pub const Game = struct {
         return .running;
     }
 
+    /// Runs the table-driven level and acts on how it ends. True when the frame is done and
+    /// the caller should return.
+    fn updateLevel(self: *Game, p: *platform.Platform) !bool {
+        const scene = &self.scene.level;
+        const now = p.nowNs();
+        try scene.update(now);
+        switch (scene.outcome) {
+            .playing => {
+                try scene.pumpAudio(p);
+                return scene.needsCatchup(now);
+            },
+            .level => |destination| {
+                var next = try level_scene.Scene.load(
+                    self.allocator,
+                    self.assets.?,
+                    self.data.?,
+                    destination,
+                    self.difficulty,
+                );
+                next.world.score = scene.world.score;
+                next.world.random = scene.world.random;
+                scene.stopAudio(p);
+                scene.deinit();
+                self.level = destination;
+                self.scene = .{ .level = next };
+            },
+            .defeated => {
+                scene.stopAudio(p);
+                const next = try continue_mod.Scene.init(
+                    self.allocator,
+                    self.assets.?,
+                    scene.world.score,
+                );
+                scene.deinit();
+                self.scene = .{ .continue_game = next };
+            },
+            .aborted => {
+                scene.stopAudio(p);
+                const art = (try menu_art.load(self.allocator, self.assets.?)) orelse
+                    return error.MissingMenu;
+                var next = front_end.Scene.init(self.allocator, self.assets.?, art);
+                next.difficulty = self.difficulty;
+                next.music_enabled = self.preferences.music;
+                scene.deinit();
+                self.scene = .{ .menu = next };
+            },
+        }
+        return false;
+    }
+
     /// The first line of `title_asset`, when the host has the asset.
     fn readTitle(self: *Game) void {
         const assets = self.assets orelse return;
@@ -545,6 +632,10 @@ pub const Game = struct {
                         .quit => self.phase = .finished,
                         else => try scene.enqueue(event),
                     }
+                    continue;
+                }
+                if (self.scene == .level) {
+                    if (event.payload == .quit) self.phase = .finished else try self.scene.level.enqueue(event);
                     continue;
                 }
                 if (self.scene == .continue_game) {
@@ -615,7 +706,7 @@ pub const Game = struct {
         return switch (self.scene) {
             .smoke => .{ .width = page_width, .height = page_height },
             .menu => |*front| front.resolution(),
-            .jungle, .continue_game => .{ .width = 256, .height = 224 },
+            .jungle, .level, .continue_game => .{ .width = 256, .height = 224 },
         };
     }
 
@@ -642,6 +733,15 @@ pub const Game = struct {
                 .stride = size.width * 4,
                 .pixels = frame,
             });
+            self.frames_presented += 1;
+            return;
+        }
+        if (self.scene == .level) {
+            const indices = self.page[0..57344];
+            const frame = self.rgba[0 .. 57344 * 4];
+            try self.scene.level.draw(indices, frame);
+            self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
+            try p.present(.{ .width = 256, .height = 224, .stride = 256 * 4, .pixels = frame });
             self.frames_presented += 1;
             return;
         }
