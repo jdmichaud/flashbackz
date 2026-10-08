@@ -117,6 +117,20 @@ pub const Providers = struct {
         flashbackz.content.archive.expandAll(&self.content.?) catch |err| return mapImportError(err);
     }
 
+    /// Opens only asset paths, for tools that read the game and never save.
+    pub fn openAssets(
+        self: *Providers,
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        paths: []const []const u8,
+    ) OpenError!void {
+        self.allocator = allocator;
+        errdefer self.deinit();
+        self.content = Pack.init(allocator);
+        for (paths) |path| try self.importPath(io, path);
+        flashbackz.content.archive.expandAll(&self.content.?) catch |err| return mapImportError(err);
+    }
+
     fn importPath(self: *Providers, io: std.Io, path: []const u8) OpenError!void {
         const allocator = self.allocator;
         const kind: AssetKind = if (DirectoryAssetSource.open(allocator, io, path)) |opened| directory: {

@@ -3,6 +3,7 @@
 //! Targets:
 //!   flashbackz-agent  headless debugging host (shared game + AgentBackend), never links SDL
 //!   flashbackz-sdl    SDL interactive host (Linux, Windows)
+//!   flashbackz-extract  converts the user's game files into the readable data set
 //! Steps: `zig build` installs both native hosts. `test` runs standalone unit tests;
 //! `smoke` exercises the headless host; `verify` checks that it has no SDL dependency.
 //! `all` installs both native hosts for the selected target.
@@ -101,8 +102,25 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    // Converts the user's game files into the readable data set; never links SDL.
+    const extract_module = b.createModule(.{
+        .root_source_file = b.path("src/extract/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "flashbackz", .module = shared },
+            .{ .name = "native", .module = native },
+        },
+    });
+    const extract_exe = b.addExecutable(.{ .name = "flashbackz-extract", .root_module = extract_module });
+
     b.installArtifact(agent_exe);
     b.installArtifact(sdl_exe);
+    b.installArtifact(extract_exe);
+    b.step(
+        "extract",
+        "Build and install only the data-set extractor",
+    ).dependOn(&b.addInstallArtifact(extract_exe, .{}).step);
 
     b.step(
         "agent",
@@ -114,7 +132,7 @@ pub fn build(b: *std.Build) void {
     ).dependOn(&b.addInstallArtifact(sdl_exe, .{}).step);
     // Unit tests of every module. The tests of the SDL module link SDL2 as the host does.
     const test_step = b.step("test", "Run the unit tests of every module");
-    const unit_modules = [_]*std.Build.Module{ shared, agent, native, sdl };
+    const unit_modules = [_]*std.Build.Module{ shared, agent, native, sdl, extract_module };
     for (unit_modules) |m| {
         const t = b.addTest(.{ .root_module = m });
         test_step.dependOn(&b.addRunArtifact(t).step);

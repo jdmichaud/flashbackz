@@ -1,0 +1,176 @@
+//! flashbackz-extract: convert the user's game files into the readable data set (DESIGN.md
+//! section 3). Images and sound are not extracted; the game reads them from the originals.
+const std = @import("std");
+const flashbackz = @import("flashbackz");
+const native = @import("native");
+const level = @import("level.zig");
+const names = @import("names.zig");
+const zon = @import("zon.zig");
+
+const usage =
+    \\usage: flashbackz-extract [--names FILE] OUTPUT_DIRECTORY ASSET_PATH...
+    \\  OUTPUT_DIRECTORY  new or empty directory outside any Git repository
+    \\  ASSET_PATH        the floppy images (IMG/IMA) or extracted directories
+    \\  --names FILE      naming overlay to use instead of the built-in one
+    \\
+;
+
+const built_in_names = @embedFile("names.zon");
+
+pub fn main(init: std.process.Init) !void {
+    const gpa = init.gpa;
+    const io = init.io;
+    var arena_state: std.heap.ArenaAllocator = .init(gpa);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    var args = try init.minimal.args.iterateAllocator(arena);
+    _ = args.skip();
+    var names_path: ?[]const u8 = null;
+    var output_path: ?[]const u8 = null;
+    var assets: std.ArrayList([]const u8) = .empty;
+    while (args.next()) |arg| {
+        if (std.mem.eql(u8, arg, "--names")) {
+            names_path = args.next() orelse return fail(io, "--names needs a file");
+        } else if (output_path == null) output_path = arg else try assets.append(arena, arg);
+    }
+    const output = output_path orelse return fail(io, usage);
+    if (assets.items.len == 0) return fail(io, usage);
+
+    const overlay_source: [:0]const u8 = if (names_path) |path|
+        try std.Io.Dir.cwd().readFileAllocOptions(
+            io,
+            path,
+            arena,
+            .limited(1024 * 1024),
+            .of(u8),
+            0,
+        )
+    else
+        built_in_names;
+    const overlay = try names.parse(gpa, arena, overlay_source);
+
+    var providers: native.Providers = .empty;
+    defer providers.deinit();
+    try providers.openAssets(gpa, io, assets.items);
+    const source = providers.assetSource().?;
+
+    try std.Io.Dir.cwd().createDirPath(io, output);
+    var out_dir = try std.Io.Dir.cwd().openDir(io, output, .{ .iterate = true });
+    defer out_dir.close(io);
+    var entries = out_dir.iterate();
+    if (try entries.next(io) != null) return fail(
+        io,
+        "the output directory must be new or empty\n",
+    );
+    var files: Files = .{ .dir = out_dir, .io = io };
+    const sink: level.Output = .{ .context = &files, .put = Files.put };
+
+    const interface = try flashbackz.content.floppy_interface.load(gpa, source);
+    var report: level.Report = .{};
+    for (std.enums.values(flashbackz.content.level.Id)) |id| {
+        const basename = flashbackz.content.level.files(id).actors;
+        var placements = try read(source, basename, "PGE", 16 * 1024);
+        defer placements.deinit();
+        var rules = try read(source, basename, "OBJ", 256 * 1024);
+        defer rules.deinit();
+        var labels = try read(source, basename, "TBN", 16 * 1024);
+        defer labels.deinit();
+        try level.extract(arena, .{
+            .name = @tagName(id),
+            .placements = placements.bytes,
+            .rules = rules.bytes,
+            .labels = labels.bytes,
+            .score_awards = interface.score_awards,
+            .overlay = overlay,
+        }, sink, &report);
+    }
+    try writeMessages(arena, source, sink);
+
+    var summary: std.Io.Writer.Allocating = .init(arena);
+    try summary.writer.print(
+        \\Extracted {d} characters and {d} behaviors ({d} named by the overlay).
+        \\Dropped {d} unreachable rules; {d} operations had an argument the original ignores.
+        \\
+    , .{
+        report.characters,
+        report.behaviors,
+        report.named_behaviors,
+        report.dead_rules,
+        report.ignored_arguments,
+    });
+    try summary.writer.writeAll(report.notes.items);
+    try sink.put(sink.context, "report.txt", summary.written());
+    var stdout = std.Io.File.stdout().writerStreaming(io, &.{});
+    try stdout.interface.writeAll(summary.written());
+}
+
+fn read(
+    source: flashbackz.platform.AssetSource,
+    basename: []const u8,
+    extension: []const u8,
+    limit: usize,
+) !flashbackz.platform.OwnedBytes {
+    var path: [64]u8 = undefined;
+    return source.readAll(
+        try std.fmt.bufPrint(&path, "DATA/{s}.{s}", .{ basename, extension }),
+        limit,
+    );
+}
+
+/// World messages, indexed as `show_message` refers to them.
+fn writeMessages(
+    arena: std.mem.Allocator,
+    source: flashbackz.platform.AssetSource,
+    sink: level.Output,
+) !void {
+    var messages = try flashbackz.content.world_messages.load(arena, source);
+    defer messages.deinit();
+    var text: std.Io.Writer.Allocating = .init(arena);
+    var w: zon.Writer = .{ .out = &text.writer };
+    try text.writer.writeAll(
+        \\// Generated by flashbackz-extract from the user's game files. Do not commit.
+        \\// World messages by number; each page lists its lines and their ink.
+        \\
+    );
+    try w.open(null);
+    for (messages.messages, 0..) |message, number| {
+        try w.line("// message {d}", .{number});
+        try w.open(null);
+        for (message.pages) |page| {
+            try w.open(null);
+            for (page.lines) |line| try w.line(
+                ".{{ .text = {f}, .ink = {d} }},",
+                .{ zon.string(line.text), line.ink },
+            );
+            try w.close();
+        }
+        try w.close();
+    }
+    try w.close();
+    try sink.put(sink.context, "messages.zon", text.written());
+}
+
+const Files = struct {
+    dir: std.Io.Dir,
+    io: std.Io,
+    fn put(context: *anyopaque, path: []const u8, bytes: []const u8) anyerror!void {
+        const self: *Files = @ptrCast(@alignCast(context));
+        if (std.fs.path.dirname(path)) |parent| try self.dir.createDirPath(self.io, parent);
+        try self.dir.writeFile(self.io, .{ .sub_path = path, .data = bytes });
+    }
+};
+
+fn fail(io: std.Io, message: []const u8) !void {
+    var stderr = std.Io.File.stderr().writerStreaming(io, &.{});
+    try stderr.interface.writeAll(message);
+    std.process.exit(2);
+}
+
+test {
+    _ = @import("codes.zig");
+    _ = @import("key.zig");
+    _ = @import("level.zig");
+    _ = @import("names.zig");
+    _ = @import("zon.zig");
+}
