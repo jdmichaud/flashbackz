@@ -143,10 +143,27 @@ fn slotWithKey(world: *const World, key: contacts.Key) ?u8 {
 }
 
 // Facing targets that would not accept a hit (98, 99) --------------------------------------
-//
-// The original reads the range from the placement's first number, which the vocabulary does
-// not carry for `facing_target_unhittable` and `backturned_target_unhittable` yet; once their
-// payloads name it, each is `unhittableTargets(...) != 0` with `.opposite` or `.same`.
+
+/// An awake character of that kind facing this one within range is not waiting for the hit.
+pub fn facingTargetUnhittable(
+    world: *World,
+    actor: u16,
+    argument: @FieldType(vocabulary.Operation, "facing_target_unhittable"),
+) !bool {
+    const range = world.number(actor, argument.range);
+    return unhittableTargets(world, actor, argument.kind, argument.hit, range, .opposite) != 0;
+}
+
+/// An awake character of that kind with its back turned within range is not waiting for the
+/// hit.
+pub fn backturnedTargetUnhittable(
+    world: *World,
+    actor: u16,
+    argument: @FieldType(vocabulary.Operation, "backturned_target_unhittable"),
+) !bool {
+    const range = world.number(actor, argument.range);
+    return unhittableTargets(world, actor, argument.kind, argument.hit, range, .same) != 0;
+}
 
 const Facing = enum { opposite, same };
 
@@ -214,10 +231,15 @@ fn unhittableTargets(
 }
 
 // Shots meeting walls (95) -------------------------------------------------------------------
-//
-// The original reads the range from the placement's first number and lets an argument of 1
-// pass low gaps; the vocabulary's `snap_to_wall_ahead` carries neither yet. Once it does, the
-// operation is `snapToWall(...)`.
+
+pub fn snapToWallAhead(
+    world: *World,
+    actor: u16,
+    argument: @FieldType(vocabulary.Operation, "snap_to_wall_ahead"),
+) !bool {
+    const range = world.number(actor, argument.range);
+    return snapToWall(world, actor, argument.through_low_gaps, range);
+}
 
 /// Finds the first wall within `range` cells, from the own cell, and moves onto it: x to the
 /// wall's column, the room to the room it was found in, y unchanged. The probes always look

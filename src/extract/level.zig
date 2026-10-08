@@ -441,10 +441,18 @@ fn writeOperation(
         .{ name, value.written() },
     );
     // The original also reads one placement number; the table names it explicitly.
-    const slot = behavior.numbers[number.parameter].?;
-    try out.print(".{{ {f} = .{{ .{s} = {s}, .{s} = {f} }} }}", .{
-        name, number.main_field, value.written(), number.field, zon.identifier(slot),
-    });
+    const slot = zon.identifier(behavior.numbers[number.parameter].?);
+    if (number.main_field) |field| {
+        try out.print(".{{ {f} = .{{ .{s} = {s}, .{s} = {f} }} }}", .{
+            name, field, value.written(), number.field, slot,
+        });
+    } else {
+        // The argument is written as `.{ fields }`: the number becomes one more field.
+        const fields = value.written();
+        try out.print(".{{ {f} = {s}, .{s} = {f} }} }}", .{
+            name, fields[0 .. fields.len - " }".len], number.field, slot,
+        });
+    }
 }
 
 /// Write an operation's argument; false when the original data holds an unexpected value.
@@ -503,6 +511,11 @@ fn writeValue(
         .height => try out.print(".{s}", .{switch (arg) {
             0 => "standing",
             1 => "crouched",
+            else => return false,
+        }}),
+        .flag => try out.print("{s}", .{switch (arg) {
+            0 => "false",
+            1 => "true",
             else => return false,
         }}),
         .kind_and => |field| {

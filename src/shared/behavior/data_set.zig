@@ -459,6 +459,13 @@ const Loader = struct {
             return std.math.cast(i16, tree.int(index) orelse -0x10000) orelse
                 fail(self.diagnostic, "{s}: {s} needs a number", .{ context.file, operation });
         }
+        if (T == bool) return switch (tree.get(index)) {
+            .true => true,
+            .false => false,
+            else => fail(self.diagnostic, "{s}: {s} needs true or false", .{
+                context.file, operation,
+            }),
+        };
         if (@typeInfo(T) == .@"struct") {
             var result: T = undefined;
             const node = tree.get(index);

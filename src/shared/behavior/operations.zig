@@ -18,7 +18,7 @@ const groups = .{
     @import("operations/carriers.zig"),
 };
 
-pub const Error = error{ UnimplementedOperation, InvalidAnimation };
+pub const Error = error{InvalidAnimation};
 
 pub fn perform(world: *World, actor: u16, operation: vocabulary.Operation) Error!bool {
     switch (operation) {
@@ -27,23 +27,10 @@ pub fn perform(world: *World, actor: u16, operation: vocabulary.Operation) Error
             inline for (groups) |group| {
                 if (@hasDecl(group, name)) return @field(group, name)(world, actor, argument);
             }
-            world.missing_operation = @tagName(tag);
-            return error.UnimplementedOperation;
+            @compileError("no group implements " ++ @tagName(tag));
         },
     }
 }
-
-/// Vocabulary names not implemented by any group yet.
-pub const unimplemented: []const []const u8 = names: {
-    @setEvalBranchQuota(200_000);
-    var names: []const []const u8 = &.{};
-    for (@typeInfo(vocabulary.Operation).@"union".field_names) |field_name| {
-        var found = false;
-        for (groups) |group| found = found or @hasDecl(group, camelCase(field_name));
-        if (!found) names = names ++ .{field_name};
-    }
-    break :names names;
-};
 
 fn camelCase(comptime name: []const u8) []const u8 {
     comptime {
@@ -164,5 +151,4 @@ test "operations read input, terrain, timers, chance and messages" {
     try std.testing.expect(try perform(&w, 1, .defeated) == false);
     try std.testing.expect(try perform(&w, 1, .remove));
     try std.testing.expectEqual(@as(u32, 200), w.score);
-    try std.testing.expect(unimplemented.len > 0);
 }

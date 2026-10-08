@@ -206,8 +206,6 @@ pub const World = struct {
     entry_sound: bool = true,
     /// Probes that read original memory outside the grid that the engine does not model.
     unmodeled_reads: u32 = 0,
-    /// The vocabulary name that stopped the engine, when one is not implemented yet.
-    missing_operation: ?[]const u8 = null,
     scratch: std.ArrayList(u16) = .empty,
     // Terrain history and checkpoint (see `TerrainHistory` and `Checkpoint` above).
     terrain_history: TerrainHistory = .{},

@@ -436,19 +436,6 @@ const testing = struct {
     }
 };
 
-test "every operation of this group is dispatched" {
-    const names = [_][]const u8{
-        "carried_by",       "drop_at",            "selected_item_is", "player_has_item",
-        "move_with_riders", "board_sender",       "release_on",       "board_touching",
-        "no_loose_cargo",   "align_with_carrier", "follow_carrier_x", "transport",
-        "make_solid",       "make_empty",         "make_low_passage", "restore_terrain",
-        "snap_to_grid",     "checkpoint",
-    };
-    for (names) |name| for (@import("../operations.zig").unimplemented) |missing| {
-        try std.testing.expect(!std.mem.eql(u8, name, missing));
-    };
-}
-
 test "items join the end of the inventory, are selected from the front and dropped" {
     var characters = [_]testing.data_set.Character{
         testing.character(0, .player, 0),

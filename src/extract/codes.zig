@@ -29,6 +29,8 @@ pub const Argument = union(enum) {
     hit_side,
     /// Standing or crouched.
     height,
+    /// 0 or 1, written as false or true.
+    flag,
     /// A second condition that also reads the first condition's argument as a kind. The
     /// payload names its own argument.
     kind_and: []const u8,
@@ -41,10 +43,12 @@ pub const Operation = struct {
     implicit: ?Implicit = null,
 };
 
-/// The table writes such operations as `.{ .name = .{ .main_field = argument, .field = number } }`.
+/// The table writes such operations as `.{ .name = .{ .main_field = argument, .field = number } }`,
+/// or, when the argument already has fields, adds the number as one more field.
 pub const Implicit = struct {
     parameter: u2,
-    main_field: []const u8,
+    /// Null when the argument writes its own fields.
+    main_field: ?[]const u8 = null,
     field: []const u8,
     /// Name for the number when the overlay gives none.
     default_name: []const u8,
@@ -162,8 +166,16 @@ pub fn lookup(code: u8) ?Operation {
         69 => op("touching_anyone", .none),
         80 => op("touching", .kind),
         84 => op("player_touching", .kind),
-        98 => op("facing_target_unhittable", .{ .kind_and = "hit" }),
-        99 => op("backturned_target_unhittable", .{ .kind_and = "hit" }),
+        98 => withNumber(
+            "facing_target_unhittable",
+            .{ .kind_and = "hit" },
+            .{ .parameter = 0, .field = "range", .default_name = "shot_range" },
+        ),
+        99 => withNumber(
+            "backturned_target_unhittable",
+            .{ .kind_and = "hit" },
+            .{ .parameter = 0, .field = "range", .default_name = "shot_range" },
+        ),
         106 => op("enemy_in_line", .number),
         118 => op("player_above", .none),
         119 => op("player_below", .none),
@@ -193,7 +205,16 @@ pub fn lookup(code: u8) ?Operation {
                 .default_name = "strike_range",
             },
         ),
-        95 => op("snap_to_wall_ahead", .none),
+        95 => withNumber(
+            "snap_to_wall_ahead",
+            .flag,
+            .{
+                .parameter = 0,
+                .main_field = "through_low_gaps",
+                .field = "range",
+                .default_name = "range",
+            },
+        ),
         79 => op("start_defeat", .number),
         92 => withNumber(
             "start_defeat_with_scene",
