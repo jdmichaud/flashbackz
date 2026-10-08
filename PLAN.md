@@ -101,6 +101,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   damage/death signals, encounter-clearance relays and the Ian conversation/seat/recording
   sequence. Preserve family-wide rules and data links; qualify with original city input
   and focused native encounters, without per-placement scripting.
+- [ ] Android assignment: recover issued photo credentials, revealed civilian/police
+  conversations, rescue/hostile handoffs, enemy activation, dropped access keys and counted
+  defeat completion. Import shared actor/item/relay behaviors and preserve optional photo
+  witnesses and decorative variants in the coverage audit; qualify the connected route.
 - [ ] Reactor assignment: recover contact-gated transport, the carried countdown and its
   expiry, terminal-card grants/use, linked terminal outputs, alarm and failure presentation.
   Compile shared transport, timed-item and credential components; connect completion/payment
