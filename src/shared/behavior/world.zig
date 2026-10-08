@@ -496,6 +496,19 @@ pub const World = struct {
         }
     }
 
+    /// The inventory screen's choice: the item becomes its owner's first, selected item.
+    pub fn selectItem(self: *World, owner: u16, item: u16) void {
+        if (self.characters[owner].first_item == item) return;
+        var cursor = &self.characters[owner].first_item;
+        while (cursor.*) |current| : (cursor = &self.characters[current].next_item) {
+            if (current != item) continue;
+            cursor.* = self.characters[item].next_item;
+            self.characters[item].next_item = self.characters[owner].first_item;
+            self.characters[owner].first_item = item;
+            return;
+        }
+    }
+
     /// Sounds play for awake characters in the view room, or quieter from a room beside it.
     /// Only ids below 66 exist.
     pub fn requestSound(self: *World, index: u16, id: i16) void {
