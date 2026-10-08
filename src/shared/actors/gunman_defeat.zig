@@ -14,6 +14,10 @@ pub const Move = struct {
 };
 pub const Path = struct { launch: Move, landing: Move, drop: Move };
 pub const Track = struct {
+    notify_on_landing: bool = false,
+    notify_on_fall_landing: bool = false,
+    notify_while_resting: bool = false,
+    remove_offscreen: bool = false,
     impact: motion.Clip,
     paths: [5]Path,
     ledge_launch: ?Move = null,

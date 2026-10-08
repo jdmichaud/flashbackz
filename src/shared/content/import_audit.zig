@@ -43,6 +43,8 @@ pub const System = enum(u6) {
     credential_terminals,
     environmental_alarms,
     ambient_people,
+    rescue_contacts,
+    enemy_barriers,
 };
 pub const Ledger = struct {
     entries: [256]u64 = @splat(0),

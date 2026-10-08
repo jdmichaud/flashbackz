@@ -245,7 +245,15 @@ pub const World = struct {
         };
     }
     pub fn advance(self: *World, definitions: []const Definition, profiles: []const Profile, map: geometry.Map, player: contacts.Footprint, player_down: bool, targets: []combat.Target, first_target: usize, visibility: *@import("../visibility.zig").World, visibility_entities: []const @import("../visibility.zig").Entity, random: anytype) !void {
-        for (self.actors, definitions, 0..) |*actor, definition, index| {
+        return self.advanceRange(definitions, profiles, map, player, player_down, targets, first_target, visibility, visibility_entities, random, 0, self.actors.len);
+    }
+    pub fn advanceOne(self: *World, index: usize, definitions: []const Definition, profiles: []const Profile, map: geometry.Map, player: contacts.Footprint, player_down: bool, targets: []combat.Target, first_target: usize, visibility: *@import("../visibility.zig").World, visibility_entities: []const @import("../visibility.zig").Entity, random: anytype) !void {
+        return self.advanceRange(definitions, profiles, map, player, player_down, targets, first_target, visibility, visibility_entities, random, index, index + 1);
+    }
+    fn advanceRange(self: *World, definitions: []const Definition, profiles: []const Profile, map: geometry.Map, player: contacts.Footprint, player_down: bool, targets: []combat.Target, first_target: usize, visibility: *@import("../visibility.zig").World, visibility_entities: []const @import("../visibility.zig").Entity, random: anytype, range_start: usize, range_end: usize) !void {
+        for (range_start..range_end) |index| {
+            const actor = &self.actors[index];
+            const definition = definitions[index];
             if (actor.activity == .removed) continue;
             if (actor.ready and definition.accepts_signals) actor.active = true;
             if (actor.room) |room| {

@@ -4,19 +4,21 @@ const std = @import("std");
 const runtime = @import("../visibility.zig");
 const placement = @import("placement.zig");
 const geometry = @import("../geometry.zig");
-pub const Owner = union(enum) { player, prop: usize, guard: usize, door: usize, item_aid: usize, trader: usize, guide: usize, station: usize, force_field: usize, service_counter: usize, mission_terminal: usize, quest_contact: usize, attentive_contact: usize, escort: usize, ambient_person: usize, unbound };
+pub const Owner = union(enum) { player, prop: usize, guard: usize, door: usize, item_aid: usize, trader: usize, guide: usize, station: usize, force_field: usize, service_counter: usize, mission_terminal: usize, quest_contact: usize, attentive_contact: usize, escort: usize, ambient_person: usize, rescue_contact: usize, enemy_barrier: usize, gunman: usize, unbound };
 pub const Binding = struct { entity: runtime.Entity, owner: Owner };
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     definitions: []runtime.Definition,
     bindings: []Binding,
     guard_entities: []runtime.Entity,
+    gunman_entities: []runtime.Entity,
     player_entity: runtime.Entity,
     unbound_count: usize,
     pub fn deinit(self: *Assets) void {
         self.allocator.free(self.definitions);
         self.allocator.free(self.bindings);
         self.allocator.free(self.guard_entities);
+        self.allocator.free(self.gunman_entities);
     }
 };
 fn group(value: u8) ?runtime.Group {
@@ -50,6 +52,8 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rooms: *const 
     errdefer allocator.free(bindings);
     const guard_entities = try allocator.alloc(runtime.Entity, owners.guards.sources.len);
     errdefer allocator.free(guard_entities);
+    const gunman_entities = try allocator.alloc(runtime.Entity, owners.gunmen.sources.len);
+    errdefer allocator.free(gunman_entities);
     var unbound: usize = 0;
     for (identities, 0..) |optional, index| {
         const identity = optional orelse continue;
@@ -70,6 +74,11 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rooms: *const 
         for (owners.guards.sources, 0..) |source, i| if (source == index) {
             owner = .{ .guard = i };
             guard_entities[i] = identity;
+            break;
+        };
+        for (owners.gunmen.sources, 0..) |source, i| if (source == index) {
+            owner = .{ .gunman = i };
+            gunman_entities[i] = identity;
             break;
         };
         for (owners.doors.source_indices, 0..) |source, i| if (source == index) {
@@ -104,6 +113,14 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rooms: *const 
             owner = .{ .mission_terminal = i };
             break;
         };
+        for (owners.enemy_barriers.sources, 0..) |source, i| if (source == index) {
+            owner = .{ .enemy_barrier = i };
+            break;
+        };
+        for (owners.rescue_contacts.sources, 0..) |source, i| if (source == index) {
+            owner = .{ .rescue_contact = i };
+            break;
+        };
         for (owners.ambient_people.sources, 0..) |source, i| if (source == index) {
             owner = .{ .ambient_person = i };
             break;
@@ -123,5 +140,5 @@ pub fn load(allocator: std.mem.Allocator, table: placement.Table, rooms: *const 
         if (owner == .unbound) unbound += 1;
         bindings[@backingInt(identity)] = .{ .entity = identity, .owner = owner };
     }
-    return .{ .allocator = allocator, .definitions = definitions, .bindings = bindings, .guard_entities = guard_entities, .player_entity = identities[0] orelse return error.MissingPlayerVisibility, .unbound_count = unbound };
+    return .{ .allocator = allocator, .definitions = definitions, .bindings = bindings, .guard_entities = guard_entities, .gunman_entities = gunman_entities, .player_entity = identities[0] orelse return error.MissingPlayerVisibility, .unbound_count = unbound };
 }

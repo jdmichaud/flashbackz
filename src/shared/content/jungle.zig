@@ -87,6 +87,11 @@ pub const Pack = struct {
     lifts: @import("lifts.zig").Assets,
     lift_passengers: []@import("../lift_passengers.zig").Binding,
     riding: @import("conrad_lift.zig").Assets,
+    enemy_barriers: @import("enemy_barriers.zig").Assets,
+    rescue_contacts: @import("rescue_contacts.zig").Assets,
+    rescue_contact_bindings: []@import("../rescue_contacts.zig").Binding,
+    gunman_bindings: []@import("../actors/gunman.zig").Binding,
+    character_schedule: []@import("../character_schedule.zig").Task,
     gunmen: @import("gunmen.zig").Assets,
     robots: @import("ground_robots.zig").Assets,
     wounds: @import("conrad_wound.zig").Assets,
@@ -162,6 +167,11 @@ pub const Pack = struct {
         self.allocator.free(self.lift_passengers);
         self.riding.deinit();
         self.gunmen.deinit();
+        self.rescue_contacts.deinit();
+        self.enemy_barriers.deinit();
+        self.allocator.free(self.rescue_contact_bindings);
+        self.allocator.free(self.gunman_bindings);
+        self.allocator.free(self.character_schedule);
         self.robots.deinit();
         self.wounds.deinit();
         self.sounds.deinit();
@@ -584,6 +594,10 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer guards.deinit();
     var barriers = try @import("event_barriers.zig").load(allocator, placement_table, rules.bytes, ani.bytes, difficulty, &connections);
     errdefer barriers.deinit();
+    var gunmen = try @import("gunmen.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, interface.score_awards, &connections, &resolver);
+    errdefer gunmen.deinit();
+    var rescue_contacts = try @import("rescue_contacts.zig").load(allocator, placement_table, rules.bytes, ani.bytes, names.bytes, &room_ids, difficulty, &connections, &resolver);
+    errdefer rescue_contacts.deinit();
     const combined_connections = try connections.toOwnedSlice(allocator);
     allocator.free(props.connections);
     props.connections = combined_connections;
@@ -595,6 +609,10 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer allocator.free(timed_item_bindings);
     const transport_bindings = try scripted_transport.bind(props.connections);
     errdefer allocator.free(transport_bindings);
+    const rescue_contact_bindings = try rescue_contacts.bind(props.connections);
+    errdefer allocator.free(rescue_contact_bindings);
+    const gunman_bindings = try gunmen.bind(props.connections);
+    errdefer allocator.free(gunman_bindings);
     const quest_contact_bindings = try quest_contacts.bind(props.connections);
     errdefer allocator.free(quest_contact_bindings);
     const mission_terminal_bindings = try mission_terminals.bind(props.connections);
@@ -625,13 +643,15 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
     errdefer platform_sections.deinit();
     var doors = try @import("doors.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, props.connections, @intCast(gun.parameters[0]), &resolver);
     errdefer doors.deinit();
-    var gunmen = try @import("gunmen.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, interface.score_awards, &resolver);
-    errdefer gunmen.deinit();
     var robots = try @import("ground_robots.zig").load(allocator, placement_table, rules.bytes, ani.bytes, &room_ids, difficulty, &resolver);
     errdefer robots.deinit();
+    var enemy_barriers = try @import("enemy_barriers.zig").load(allocator, placement_table, rules.bytes, ani.bytes, difficulty, props.connections, gunmen, &resolver);
+    errdefer enemy_barriers.deinit();
     var force_fields = try @import("force_fields.zig").load(allocator, placement_table, rules.bytes, ani.bytes, difficulty, &resolver);
     errdefer force_fields.deinit();
-    var visibility = try @import("visibility.zig").load(allocator, placement_table, &room_ids, difficulty, .{ .props = props, .guards = guards, .doors = doors, .item_aid = item_aid, .traders = traders, .guides = guides, .story_stations = story_stations, .force_fields = force_fields, .service_counters = service_counters, .mission_terminals = mission_terminals, .quest_contacts = quest_contacts, .attentive_contacts = attentive_contacts, .escort_followers = escort_followers, .ambient_people = ambient_people });
+    const character_schedule = try @import("character_schedule.zig").build(allocator, .{ .gunmen = gunmen, .guards = guards, .quest_contacts = quest_contacts, .attentive_contacts = attentive_contacts, .service_counters = service_counters, .rescue_contacts = rescue_contacts, .enemy_barriers = enemy_barriers }, @intCast(gun.parameters[0]));
+    errdefer allocator.free(character_schedule);
+    var visibility = try @import("visibility.zig").load(allocator, placement_table, &room_ids, difficulty, .{ .props = props, .guards = guards, .gunmen = gunmen, .doors = doors, .item_aid = item_aid, .traders = traders, .guides = guides, .story_stations = story_stations, .force_fields = force_fields, .service_counters = service_counters, .mission_terminals = mission_terminals, .quest_contacts = quest_contacts, .attentive_contacts = attentive_contacts, .escort_followers = escort_followers, .ambient_people = ambient_people, .rescue_contacts = rescue_contacts, .enemy_barriers = enemy_barriers });
     errdefer visibility.deinit();
     const supplied = initial_items.len;
     initial_items = try allocator.realloc(initial_items, supplied + props.items.len);
@@ -738,6 +758,11 @@ fn assembleLevel(allocator: std.mem.Allocator, source: platform.AssetSource, lev
         .lift_passengers = lift_passengers,
         .riding = riding,
         .gunmen = gunmen,
+        .rescue_contacts = rescue_contacts,
+        .enemy_barriers = enemy_barriers,
+        .rescue_contact_bindings = rescue_contact_bindings,
+        .gunman_bindings = gunman_bindings,
+        .character_schedule = character_schedule,
         .robots = robots,
         .wounds = wounds,
         .surfaces = try surfaces.toOwnedSlice(allocator),

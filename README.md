@@ -76,8 +76,11 @@ assignment consumers and full street-route qualification are still incomplete.
 The android assignment now issues REPLICANT PHOTO and reveals its informant. Hold Shift
 beside him for the introduction or repeat reply; his first conversation reveals the policeman,
 whose first/repeat conversations also work. Decorative bar patrons animate from the same
-content family. The rescue, hostile handoff, key, android fights and photo witnesses remain
-unfinished, so the full assignment cannot yet be completed through normal play.
+content family. The frightened civilian now flees when he sees Conrad, which activates the
+ambush gunman; the gunman approaches, aims and is defeated by Conrad's shots, and the civilian
+then relaxes and sits. Talking to him afterwards, the gunman's defensive field, the hostile
+guard handoff, key, android fights and photo witnesses are still unfinished, so the full
+assignment cannot yet be completed through normal play.
 The reactor assignment now grants TIME and TERMINAL CARD after transport. Select the card
 and hold Return at its matching terminal to complete the repair, receive 500 credits and
 return. Inventory and Game Options pause the countdown. Expiry plays the reactor explosion

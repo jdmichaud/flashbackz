@@ -118,6 +118,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   - Compile authored character update order into typed actor tasks for contacts, hosts,
     service counters and enemies; deliver each actor's new circuit outputs before later
     recipients advance, without a source-instruction interpreter.
+    - Done for gunmen, guards, quest/rescue contacts, hosts, service counters and the
+      player's shot. The prepared civilian-alert/ambush route matches 260 original updates;
+      all 24 retained city captures still agree. Rescue acknowledgement, defensive-field
+      deployment and the guard handoff are not yet exercised against the original.
 - [ ] Reactor assignment: recover contact-gated transport, the carried countdown and its
   expiry, terminal-card grants/use, linked terminal outputs, alarm and failure presentation.
   Compile shared transport, timed-item and credential components; connect completion/payment

@@ -67,7 +67,15 @@ pub const World = struct {
         };
     }
     pub fn advance(self: *World, definitions: []const Definition, map: geometry.Map, room: geometry.RoomId, operate: bool, random: anytype) !void {
-        for (self.instances, definitions, 0..) |*instance, definition, index| {
+        return self.advanceRange(definitions, map, room, operate, random, 0, self.instances.len);
+    }
+    pub fn advanceOne(self: *World, index: usize, definitions: []const Definition, map: geometry.Map, room: geometry.RoomId, operate: bool, random: anytype) !void {
+        return self.advanceRange(definitions, map, room, operate, random, index, index + 1);
+    }
+    fn advanceRange(self: *World, definitions: []const Definition, map: geometry.Map, room: geometry.RoomId, operate: bool, random: anytype, range_start: usize, range_end: usize) !void {
+        for (range_start..range_end) |index| {
+            const instance = &self.instances[index];
+            const definition = definitions[index];
             const speaking = operate and self.candidate == index;
             if ((instance.ready or speaking) and definition.accepts_signals) instance.active = true;
             if (!instance.active) continue;

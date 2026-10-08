@@ -173,7 +173,15 @@ pub const World = struct {
         }
     }
     pub fn advance(self: *World, definitions: []const Definition, bindings: []const Binding, map: geometry.Map, room: geometry.RoomId, talk: bool, items: *@import("equipment.zig").Loadout, random: anytype) !void {
-        for (self.instances, definitions, 0..) |*instance, definition, index| {
+        return self.advanceRange(definitions, bindings, map, room, talk, items, random, 0, self.instances.len);
+    }
+    pub fn advanceOne(self: *World, index: usize, definitions: []const Definition, bindings: []const Binding, map: geometry.Map, room: geometry.RoomId, talk: bool, items: *@import("equipment.zig").Loadout, random: anytype) !void {
+        return self.advanceRange(definitions, bindings, map, room, talk, items, random, index, index + 1);
+    }
+    fn advanceRange(self: *World, definitions: []const Definition, bindings: []const Binding, map: geometry.Map, room: geometry.RoomId, talk: bool, items: *@import("equipment.zig").Loadout, random: anytype, range_start: usize, range_end: usize) !void {
+        for (range_start..range_end) |index| {
+            const instance = &self.instances[index];
+            const definition = definitions[index];
             if (instance.stage == .removed) continue;
             const speaking = talk and self.candidate == index and (instance.stage == .available or (instance.stage == .conversation_finished and definition.reply_notice != null));
             const acknowledging = instance.delivery and instance.stage == .conversation_finished and definition.dismiss_when_acknowledged;

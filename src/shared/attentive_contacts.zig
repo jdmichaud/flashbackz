@@ -84,7 +84,15 @@ pub const World = struct {
         };
     }
     pub fn advance(self: *World, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint, contact_snapshot: contacts.Footprint, talk: bool, random: anytype) !void {
-        for (self.instances, definitions, 0..) |*instance, definition, index| {
+        return self.advanceRange(definitions, map, player, contact_snapshot, talk, random, 0, self.instances.len);
+    }
+    pub fn advanceOne(self: *World, index: usize, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint, contact_snapshot: contacts.Footprint, talk: bool, random: anytype) !void {
+        return self.advanceRange(definitions, map, player, contact_snapshot, talk, random, index, index + 1);
+    }
+    fn advanceRange(self: *World, definitions: []const Definition, map: geometry.Map, player: contacts.Footprint, contact_snapshot: contacts.Footprint, talk: bool, random: anytype, range_start: usize, range_end: usize) !void {
+        for (range_start..range_end) |index| {
+            const instance = &self.instances[index];
+            const definition = definitions[index];
             const speaking = talk and self.candidate == index and instance.topic == null and (!instance.acquainted or instance.posture == .centered);
             if (speaking and definition.accepts_signals) instance.active = true;
             if (!instance.active) continue;
