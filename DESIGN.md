@@ -1,6 +1,7 @@
 # Flashbackz design
 
-Initial design, 2026-10-03. This is an independently organized game, verified against the supplied
+Initial design, 2026-10-03; revised 2026-10-08 with the user's approval: character behavior and
+level content are data (sections 3, 4 and 7). This is an independently organized game, verified against the supplied
 Flashback DOS floppy edition. The implementation goal authorizes this initial design. Changes to the
 established contracts require the user's approval; measured content and port maps evolve with
 the research. Unknown original behavior is not replaced by guessed rules.
@@ -64,34 +65,39 @@ function table, borrowed completed RGBA8 frames, copied bounded PCM queues, vali
 asset names, explicit allocation ownership, and atomic storage replacement. Hosts own the outer
 loop and cleanup. The agent supplies a virtual clock and never links SDL.
 
-## 3. Content import
+## 3. Original files, extraction and the data set
 
-The compatibility boundary reads the user's extracted files or floppy images, validates ranges and formats,
-and produces meaningful typed content. The modern game never indexes an executable by address.
-Imported entity identifiers are mapped to semantic content identifiers and actor handles before
-the simulation starts. Original addresses and layouts remain in importers, provenance and port
-maps, not in world state or public engine APIs.
+Revised 2026-10-08 with the user's approval: behavior and level content become readable data.
 
-A `ContentPack` contains named definitions:
+Two kinds of original content are used, in two different ways:
 
-- Rooms: background/layers, collision geometry, exits, actor placements and encounter rules.
-- Actors: visual definition, health/collision properties, movement and behavior definitions.
-- Motion: named moves with animation frames, displacement, collision shapes, transition guards,
-  timing and associated events. Original discrete timing and arithmetic are preserved explicitly.
-- Items and puzzles: inventory properties, interaction conditions and effects on the world.
-- Scenes: menus, text, cinematic selection and transitions.
-- Sound: instruments, timed sequences and decoded samples with their rates and priorities.
+- **Images and sound** are always read from the user's original files at runtime: room art,
+  sprites, palettes, cinematics, music and samples. They are decoded into owned assets and
+  never written out or committed.
+- **Everything else** (placements, behavior rules, links between characters, timings, text)
+  is converted once by the **extractor** into a readable **data set** stored outside Git, in a
+  directory the user chooses. The game loads only the data set plus the original images and
+  sound. The extractor is the only code that understands the original's placement and rule
+  formats; addresses and record layouts never leave it.
 
-Legacy object scripts are imported into typed conditions and world effects; the engine does not
-dispatch original opcode numbers or reproduce the original's register machine. Conditions name
-input actions, pose, collision, health, room, inventory, timers and received events. Effects name
-motion changes, damage, item transfers, room changes, activation, spawning and sound. Rules retain
-the observable evaluation and event ordering established by the original. They do not retain its
-call graph or unstructured jumps.
+```text
+disk images --extractor--> data set (outside Git)  --+
+                          committed overlays (ours) --+--> ContentPack --> World
+disk images --------------------------------------------> art and sound decoders
+```
 
-Parsing and semantic recovery are separate steps. A decoded binary record is not automatically
-a useful engine definition. Unsupported content fails with its location and reason; it is not
-silently replaced by a default actor, animation or rule.
+The data set uses ZON (Zig object notation): human-readable, parsed by the standard library,
+no new dependency. Per level it contains `characters.zon` (every placement: name, kind, room,
+position, facing, behavior, links, numeric settings), one `behaviors/<name>.zon` table per
+behavior, and `text.zon`. Names are ours. The extractor's vocabulary maps every original
+condition and effect to a named, typed form. A committed naming overlay, keyed by the behavior's
+structure, names behaviors and states (`frightened_civilian`, `aiming`). Unnamed states keep a
+systematic name until someone names them. Overlays are committed ZON files in the same format.
+They may rename, add or replace data, and must not contain original content.
+
+Unsupported content fails loudly. The extractor reports every condition or effect it cannot
+name, with level, character and state. The engine refuses a table that uses an unimplemented
+condition or effect; it never substitutes a default.
 
 ## 4. Session and systems
 
@@ -108,6 +114,38 @@ contacts; interactions identify and operate nearby items; combat applies hits an
 behaviors choose transitions and emit actions; room flow moves actors across named exits. Their
 ordering is explicit and will be established from measured original outcomes. A fidelity test
 can require one event before another without requiring the original's routine boundaries.
+
+### Characters and behavior tables
+
+Every acting character except Conrad follows a behavior table. Conrad keeps a Zig controller
+for now; moving him to a table is a later decision.
+
+- A **state** has a name and an animation, given as original frames, per-frame movement and
+  sound cues.
+- Each state lists its **transitions** in order. A transition has conditions (`when`), at most
+  one effect (`then`), a movement, and a target state. It may be marked `reacts`: such a
+  transition can fire before the animation completes, for example when a hit is received.
+- **Conditions and effects** form a fixed vocabulary implemented once in Zig. Each is a small
+  named function with typed arguments, for example `sees(player, within_cells: 16)`,
+  `chance(1, in: 20)`, `timer_expired`, `received(.hit_front)`, `signal(.ambush, .cover)` or
+  `reveal(in_room: 19)`. Original quirks live inside the condition or effect that has them,
+  documented there (for example, the sight scan's leftward continuation).
+- **Links** connect a character to others by name (`alarm -> gunman_148`). Signals travel
+  over links.
+
+The evaluation order is part of the behavior and is stated explicitly:
+
+1. Characters advance in authored order, which is the data set's order.
+2. When a character's animation completes, it tries its current state's transitions in order.
+   The first transition whose conditions all hold applies its effect and movement, enters its
+   target state, and restarts that state's animation.
+3. Conditions are evaluated left to right and stop at the first false one. Random draws
+   therefore happen only where the original draws them.
+4. A signal reaches its recipient immediately. A recipient later in the order reacts in the
+   same update; an earlier one reacts in the next update. Conrad's shot is a character in that
+   order.
+
+Research measures each part of this model against the original before the engine relies on it.
 
 Player progress and checkpoints include the complete game state needed by the original's
 restart/save behavior. Persistence semantics and the initial state remain unmeasured until their
@@ -145,16 +183,16 @@ A new room adds a room definition, art/collision content, placements and named e
 the existing jungle room's right exit to it changes content; it does not add a new branch in the
 collision engine, renderer, input interpreter or original-code dispatcher.
 
-A new guard behavior adds a definition with named states such as patrol, pursue, aim and recover.
-Its conditions use distance, visibility, health, timers and events; its effects start motions and
-emit attacks. Existing movement, collision, damage, animation and sound systems execute those
-effects. A genuinely new mechanic adds a small cohesive behavior/system API, rather than an
-original-address branch or a duplicate update loop. The definition can be exercised in a
-synthetic room without original assets.
+A new guard behavior is a new behavior table with named states (patrol, pursue, aim, recover),
+using existing conditions (distance, sight, health, timers, received signals) and effects
+(start motion, fire, signal). It needs no Zig change. A genuinely new mechanic adds one new
+condition or effect to the vocabulary, with tests, rather than a new hand-coded component.
+A table can be exercised in a synthetic room without original assets.
 
-Implementation review checks that these additions remain local and understandable. Merely
-renaming original fields, writing a bytecode interpreter with prettier opcodes, or passing pixel
-tests over copied original control flow fails this gate. If an exact behavior is a quirk, it is
+Implementation review checks that these additions remain local and understandable. Behavior
+tables must read as game rules: named states, named conditions and effects with typed arguments,
+and named links. A table that only renames original opcode numbers and argument slots fails
+this gate, as does copied original control flow that merely passes pixel tests. If an exact behavior is a quirk, it is
 documented as a named rule at the narrowest relevant boundary.
 
 ## 8. Evidence and delivery

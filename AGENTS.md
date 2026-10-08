@@ -6,18 +6,21 @@ Rules:
 - Add missing items to PLAN.md in a separate commit before implementation; check only gates
   that actually pass. Make small commits on main; never push.
 - The original's observable behavior is authoritative. Exactness is required from the start.
-  Never transplant decompiler output or remaster control flow into this runtime.
 - Model rooms, actors, actions, animation, collision, inventory, puzzles, scenes and audio in
   game terms. Use typed state and explicit ownership. Keep the simulation independent of hosts.
-- Design the architecture independently for readability and extensibility. Renaming original
-  routines or fields is insufficient. Original routine boundaries, object records, dispatch
-  tables and state numbers must not dictate module or API boundaries.
-- Content definitions and small, cohesive systems must support adding a room, actor behavior,
-  item or scene without reconstructing DOS control flow. No embedded executable, translated
-  machine-state interpreter or runtime dependency on a remaster or research tool.
-- Recover original scripts into meaningful content rules at the import boundary where needed;
-  do not make the modern engine a reproduction of the original program's instruction dispatch.
-  Evidence may require observable event order, but does not require the original's call graph.
+- Design from a blank page (user direction, 2026-10-08): the game must be easy to understand,
+  extensible and as simple as possible while staying faithful to the original. The original's
+  code is evidence of behavior, not a template: never transplant decompiler output, addresses
+  or routine structure, and never add complexity the design does not need.
+- Character behavior is data (user decision, 2026-10-08). Every acting character follows a
+  declarative rule table: named states, ordered transitions, named conditions and effects with
+  typed arguments, and named links to other characters. The engine implements each condition
+  and effect once and runs every table with the original's observable evaluation order. Do not
+  hand-code a behavior family in Zig when it can be expressed as a table.
+- An extractor turns the user's disks into a readable data set (characters, behavior tables,
+  text, timings) stored outside Git. Images and sound are always read from the original files.
+  Committed overlays may add or adjust data but never contain original content. Names in the
+  data set are ours (states such as `aiming`, effects such as `signal(gunman)`), not opcodes.
 - Original addresses, CPU registers, segment layouts and DOS services belong in research or
   compatibility parsers, never as the engine's state model. Semantic comparisons must not
   require a copy of the original's RAM layout.
@@ -67,9 +70,9 @@ Rules:
   whole-game goals remain open, and missing sound-producing world behavior must stay visible.
 
 - Mechanisms must be handled systematically from original data (user clarification). Discover
-  instances, behaviour families and links across levels; import typed definitions for shared
-  components. Do not hand-code each switch or door, and do not introduce a legacy script VM
-  into the modern engine. Reference scenarios qualify families, not individual hard-coded IDs.
+  instances, behaviour families and links across levels through the extracted behavior tables.
+  Do not hand-code each switch or door. Reference scenarios qualify conditions, effects and
+  tables, not individual hard-coded IDs.
 
 - Latest user workflow preference: keep iteration fast. Launch the game and test the feature
   directly, then move on when it works. Do not run broad regressions or lengthy qualification
