@@ -2680,6 +2680,33 @@ pub const Scene = struct {
         }
         return null;
     }
+    /// Sprite origins are relative to this offset from a pose's world position.
+    const sprite_anchor: struct { x: i32, y: i32 } = .{ .x = 8, .y = 2 };
+
+    /// Draw a pose's current frame in the room, mirrored as the pose requests and hidden
+    /// behind the room's foreground mask.
+    fn drawPose(
+        self: *const Scene,
+        room: *const room_artwork.Artwork,
+        indices: []u8,
+        pose: motion.Pose,
+        palette_bank: u4,
+    ) !void {
+        try sprite_renderer.draw(
+            indices,
+            room.image.width,
+            room.image.height,
+            try self.content.frame(pose.visual.id),
+            @as(i32, pose.position.x) + sprite_anchor.x,
+            @as(i32, pose.position.y) + sprite_anchor.y,
+            .{
+                .palette_bank = palette_bank,
+                .facing = if (pose.visual.mirrored) .mirrored else .original,
+                .occlusion = room.foreground,
+            },
+        );
+    }
+
     fn drawItemAid(
         self: *const Scene,
         room: *const room_artwork.Artwork,
@@ -2693,19 +2720,7 @@ pub const Scene = struct {
             if (instance.effect_room != self.environment.room or
                 definition.behind_player != behind_player) continue;
             const pose = instance.effect_pose;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(pose.visual.id),
-                @as(i32, pose.position.x) + 8,
-                @as(i32, pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, pose, definition.palette_bank);
         }
         for (
             self.enemy_barriers.emitters,
@@ -2713,36 +2728,12 @@ pub const Scene = struct {
         ) |field, definition| {
             if (field.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(field.pose.visual.id),
-                @as(i32, field.pose.position.x) + 8,
-                @as(i32, field.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (field.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, field.pose, definition.palette_bank);
         }
         for (self.force_fields, self.content.force_fields.definitions) |field, definition| {
             if (field.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(field.pose.visual.id),
-                @as(i32, field.pose.position.x) + 8,
-                @as(i32, field.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (field.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, field.pose, definition.palette_bank);
         }
         for (
             self.escort_followers.actors,
@@ -2750,19 +2741,7 @@ pub const Scene = struct {
         ) |actor, definition| {
             if (actor.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(actor.pose.visual.id),
-                @as(i32, actor.pose.position.x) + 8,
-                @as(i32, actor.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (actor.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, actor.pose, definition.palette_bank);
         }
         for (
             self.rescue_contacts.actors,
@@ -2771,19 +2750,7 @@ pub const Scene = struct {
             if (actor.body(definition) == null or
                 actor.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(actor.pose.visual.id),
-                @as(i32, actor.pose.position.x) + 8,
-                @as(i32, actor.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (actor.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, actor.pose, definition.palette_bank);
         }
         for (
             self.ambient_people.actors,
@@ -2791,19 +2758,7 @@ pub const Scene = struct {
         ) |actor, definition| {
             if (actor.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(actor.pose.visual.id),
-                @as(i32, actor.pose.position.x) + 8,
-                @as(i32, actor.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (actor.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, actor.pose, definition.palette_bank);
         }
         for (
             self.attentive_contacts.instances,
@@ -2811,19 +2766,7 @@ pub const Scene = struct {
         ) |instance, definition| {
             if (definition.footprint.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(instance.pose.visual.id),
-                @as(i32, instance.pose.position.x) + 8,
-                @as(i32, instance.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (instance.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, instance.pose, definition.palette_bank);
         }
         for (
             self.quest_contacts.instances,
@@ -2833,19 +2776,7 @@ pub const Scene = struct {
                 instance.stage == .removed or
                 definition.footprint.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(instance.pose.visual.id),
-                @as(i32, instance.pose.position.x) + 8,
-                @as(i32, instance.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (instance.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, instance.pose, definition.palette_bank);
         }
         for (
             self.mission_terminals.instances,
@@ -2853,19 +2784,7 @@ pub const Scene = struct {
         ) |instance, definition| {
             if (definition.footprint.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(instance.pose.visual.id),
-                @as(i32, instance.pose.position.x) + 8,
-                @as(i32, instance.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (instance.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, instance.pose, definition.palette_bank);
         }
         for (
             self.service_counters.instances,
@@ -2873,19 +2792,7 @@ pub const Scene = struct {
         ) |instance, definition| {
             if (definition.footprint.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(instance.pose.visual.id),
-                @as(i32, instance.pose.position.x) + 8,
-                @as(i32, instance.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (instance.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, instance.pose, definition.palette_bank);
         }
         for (
             self.triggered_effects.instances,
@@ -2893,36 +2800,12 @@ pub const Scene = struct {
         ) |instance, definition| {
             if (instance.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(instance.pose.visual.id),
-                @as(i32, instance.pose.position.x) + 8,
-                @as(i32, instance.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (instance.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, instance.pose, definition.palette_bank);
         }
         for (self.traders.actors, self.content.traders.definitions) |actor, definition| {
             if (definition.footprint.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(actor.pose.visual.id),
-                @as(i32, actor.pose.position.x) + 8,
-                @as(i32, actor.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (actor.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, actor.pose, definition.palette_bank);
         }
         for (
             self.story_stations.instances,
@@ -2931,54 +2814,18 @@ pub const Scene = struct {
             if ((instance.phase != .ready and instance.phase != .using) or
                 definition.footprint.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(instance.pose.visual.id),
-                @as(i32, instance.pose.position.x) + 8,
-                @as(i32, instance.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (instance.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, instance.pose, definition.palette_bank);
         }
         for (self.guides.actors, self.content.guides.definitions) |actor, definition| {
             if (actor.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(actor.pose.visual.id),
-                @as(i32, actor.pose.position.x) + 8,
-                @as(i32, actor.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (actor.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, actor.pose, definition.palette_bank);
         }
         for (self.item_aid.actors, self.content.item_aid.definitions) |actor, definition| {
             if (actor.phase == .gone or
                 actor.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(actor.pose.visual.id),
-                @as(i32, actor.pose.position.x) + 8,
-                @as(i32, actor.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (actor.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, actor.pose, definition.palette_bank);
         }
     }
 
@@ -3188,19 +3035,7 @@ pub const Scene = struct {
         };
         if (definition.behind_player != behind_player) return;
         if (self.pistol.effect) |effect| if (effect.room == self.environment.room) {
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(effect.pose.visual.id),
-                @as(i32, effect.pose.position.x) + 8,
-                @as(i32, effect.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (effect.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, effect.pose, definition.palette_bank);
         };
     }
 
@@ -3213,19 +3048,7 @@ pub const Scene = struct {
         const definition = self.content.casing_definition;
         if (definition.behind_player != behind_player) return;
         if (self.casings.flight) |flight| if (flight.room == self.environment.room) {
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(flight.pose.visual.id),
-                @as(i32, flight.pose.position.x) + 8,
-                @as(i32, flight.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (flight.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, flight.pose, definition.palette_bank);
         };
     }
 
@@ -3238,19 +3061,7 @@ pub const Scene = struct {
         for (self.surfaces.instances, self.content.surfaces) |instance, definition| {
             if (definition.footprint.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(instance.pose.visual.id),
-                @as(i32, instance.pose.position.x) + 8,
-                @as(i32, instance.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (instance.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, instance.pose, definition.palette_bank);
         }
     }
 
@@ -3325,19 +3136,7 @@ pub const Scene = struct {
         for (instances, definitions) |instance, definition| {
             if (definition.layer != layer or
                 definition.footprint.room != self.environment.room) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(instance.pose.visual.id),
-                @as(i32, instance.pose.position.x) + 8,
-                @as(i32, instance.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (instance.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, instance.pose, definition.palette_bank);
         }
     }
 
@@ -3350,19 +3149,7 @@ pub const Scene = struct {
         for (self.hazards.instances, self.content.hazards.definitions) |instance, definition| {
             if (definition.layer != layer or
                 definition.footprint.room != self.environment.room) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(instance.pose.visual.id),
-                @as(i32, instance.pose.position.x) + 8,
-                @as(i32, instance.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (instance.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, instance.pose, definition.palette_bank);
         }
     }
 
@@ -3377,19 +3164,7 @@ pub const Scene = struct {
                 actor.dormant or
                 actor.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(actor.pose.visual.id),
-                @as(i32, actor.pose.position.x) + 8,
-                @as(i32, actor.pose.position.y) + 2,
-                .{
-                    .palette_bank = 5,
-                    .facing = if (actor.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, actor.pose, 5);
         }
     }
 
@@ -3403,37 +3178,13 @@ pub const Scene = struct {
             if (actor.room != self.environment.room or
                 actor.activity == .removed or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(actor.pose.visual.id),
-                @as(i32, actor.pose.position.x) + 8,
-                @as(i32, actor.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (actor.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, actor.pose, definition.palette_bank);
         }
         for (self.robots.actors, self.content.robots.definitions) |actor, definition| {
             if (actor.removed or
                 actor.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(actor.pose.visual.id),
-                @as(i32, actor.pose.position.x) + 8,
-                @as(i32, actor.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (actor.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, actor.pose, definition.palette_bank);
         }
     }
 
@@ -3450,19 +3201,7 @@ pub const Scene = struct {
             if (!instance.present or
                 definition.footprint.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(instance.pose.visual.id),
-                @as(i32, instance.pose.position.x) + 8,
-                @as(i32, instance.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (instance.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, instance.pose, definition.palette_bank);
         }
     }
 
@@ -3475,19 +3214,7 @@ pub const Scene = struct {
         for (self.lifts.instances, self.content.lifts.definitions) |instance, definition| {
             if (instance.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(instance.pose.visual.id),
-                @as(i32, instance.pose.position.x) + 8,
-                @as(i32, instance.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (instance.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, instance.pose, definition.palette_bank);
         }
     }
 
@@ -3500,19 +3227,7 @@ pub const Scene = struct {
         for (self.doors.instances, self.content.doors.definitions) |instance, definition| {
             if (definition.footprint.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(instance.pose.visual.id),
-                @as(i32, instance.pose.position.x) + 8,
-                @as(i32, instance.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (instance.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, instance.pose, definition.palette_bank);
         }
     }
 
@@ -3527,19 +3242,7 @@ pub const Scene = struct {
         for (instances, definitions) |instance, definition| {
             if (definition.room != self.environment.room or
                 definition.behind_player != behind_player) continue;
-            try sprite_renderer.draw(
-                indices,
-                room.image.width,
-                room.image.height,
-                try self.content.frame(instance.pose.visual.id),
-                @as(i32, instance.pose.position.x) + 8,
-                @as(i32, instance.pose.position.y) + 2,
-                .{
-                    .palette_bank = definition.palette_bank,
-                    .facing = if (instance.pose.visual.mirrored) .mirrored else .original,
-                    .occlusion = room.foreground,
-                },
-            );
+            try self.drawPose(room, indices, instance.pose, definition.palette_bank);
         }
     }
 
