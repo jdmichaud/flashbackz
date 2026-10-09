@@ -24,6 +24,8 @@ const usage =
     \\  --button-down F:BUTTON, --button-up F:BUTTON
     \\                   press or release a gamepad button (a platform.ControllerButton, as `a`
     \\                   or `dpad_left`) at host frame F
+    \\  --stall F:MS     stop the host for MS milliseconds before host frame F, as a slow
+    \\                   machine would
     \\
 ;
 
@@ -38,6 +40,7 @@ const ButtonPress = struct {
     button: flashbackz.platform.ControllerButton,
     down: bool,
 };
+const Stall = struct { frame: u64, ns: u64 };
 
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
@@ -48,6 +51,8 @@ pub fn main(init: std.process.Init) !void {
     defer presses.deinit(gpa);
     var buttons: std.ArrayList(ButtonPress) = .empty;
     defer buttons.deinit(gpa);
+    var stalls: std.ArrayList(Stall) = .empty;
+    defer stalls.deinit(gpa);
     var options: native.cli.Options = .{};
     // `iterateAllocator` is the form that Windows needs; the arena keeps the arguments for the
     // whole run.
@@ -76,6 +81,8 @@ pub fn main(init: std.process.Init) !void {
             var press = parsePress(args.next() orelse return fail(io)) orelse return fail(io);
             press.mode = if (std.mem.eql(u8, arg, "--key-down")) .down else .up;
             try presses.append(gpa, press);
+        } else if (std.mem.eql(u8, arg, "--stall")) {
+            try stalls.append(gpa, parseStall(args.next() orelse return fail(io)) orelse return fail(io));
         } else {
             return fail(io);
         }
@@ -128,6 +135,7 @@ pub fn main(init: std.process.Init) !void {
                 .payload = if (press.down) .{ .controller_button_down = change } else .{ .controller_button_up = change },
             });
         };
+        for (stalls.items) |stall| if (stall.frame == frame) backend.advance(stall.ns);
         if (try game.update(&p) == .finished) break;
         backend.advance(frame_ns);
     }
@@ -150,7 +158,7 @@ pub fn main(init: std.process.Init) !void {
         const scene = &game.scene.level;
         const conrad = scene.world.characters[0];
         try w.interface.print(
-            "{{\"scene\":\"level\",\"level\":\"{s}\",\"difficulty\":\"{s}\",\"room\":{d},\"x\":{d},\"y\":{d},\"score\":{d}}}\n",
+            "{{\"scene\":\"level\",\"level\":\"{s}\",\"difficulty\":\"{s}\",\"room\":{d},\"x\":{d},\"y\":{d},\"score\":{d},\"catch_up_walks\":{d}}}\n",
             .{
                 @tagName(scene.level),
                 @tagName(game.difficulty),
@@ -158,6 +166,7 @@ pub fn main(init: std.process.Init) !void {
                 conrad.x,
                 conrad.y,
                 scene.world.score,
+                scene.catch_up_walks,
             },
         );
     } else {
@@ -175,6 +184,14 @@ fn parsePress(text: []const u8) ?Press {
         text[colon + 1 ..],
     ) orelse return null;
     return .{ .frame = frame, .key = key };
+}
+
+/// `FRAME:MS`, as `600:500`.
+fn parseStall(text: []const u8) ?Stall {
+    const colon = std.mem.indexOfScalar(u8, text, ':') orelse return null;
+    const frame = std.fmt.parseInt(u64, text[0..colon], 10) catch return null;
+    const ms = std.fmt.parseInt(u64, text[colon + 1 ..], 10) catch return null;
+    return .{ .frame = frame, .ns = ms * std.time.ns_per_ms };
 }
 
 /// `FRAME:BUTTON`, as `30:dpad_left`.
