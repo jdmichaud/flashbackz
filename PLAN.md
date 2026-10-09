@@ -34,10 +34,17 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   - 2026-10-09, flashback-re `capture_cinematics.py` and `vector_cinematic_probe.zig`: LOGOS
     153/153 and INTRO1 260/260 presented frames match the original exactly, INTRO2 362/380
     (the rest differ on polygon edges, at most 33 pixels). Timing and input are not compared.
-- [ ] Import Flashback MIDI/PRF/INS music into named parts, instruments and scheduled events;
+- [x] Import Flashback MIDI/PRF/INS music into named parts, instruments and scheduled events;
   verify malformed inputs, profile bindings, loops and note adjustments without game fixtures.
-- [ ] Compare the music driver's timed register output against the original, then connect
+  - `content/music.zig` imports profiles, instruments and tracks into an immutable score; its
+    synthetic tests cover truncated and impossible profiles, invalid drums, adjustment
+    wrapping, zero-velocity releases, order and loop alignment.
+- [x] Compare the music driver's timed register output against the original, then connect
   startup/menu sound to the existing chip and native PCM queue. Preserve scene stop/skip order.
+  - 2026-10-09, flashback-re `capture_music.py` and `compare_music.py` on the current code:
+    the logo, introduction and menu cues agree with the original in every musical tick,
+    register and value (257, 12,550 and 3,901 writes). The cues start and stop with their
+    scenes as engine-music.md describes (film music, the ending's one cue across the list).
 - [ ] **Latest user priority: finish the casings, then complete gameplay sound throughout.**
   Include forest ambience, movement, switches, weapons and every other original effect; bind
   cues to original animation/interaction timing through one shared sound system. Do not stop
