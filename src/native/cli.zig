@@ -48,6 +48,12 @@ pub const shared_options = [_]clap.Option{
         .value = "FILE",
         .help = "with --extract: the naming overlay to use instead of the built-in one",
     },
+    .{
+        .long = "megadrive",
+        .value = "FILE",
+        .help = "the Mega Drive edition's cartridge, Flashback (Europe) (En,Fr): its tunes\n" ++
+            "play during play where it plays them (default: none, as in DOS)",
+    },
 };
 
 /// The game's files: both floppy images, or directories extracted from them.
@@ -69,6 +75,7 @@ pub fn fromArgs(args: anytype, diagnostic: *clap.Diagnostic) clap.Error!Options 
     if (args.value("data")) |dir| result.data = try nonEmpty("--data", dir, diagnostic);
     if (args.value("extract")) |dir| result.extract = try nonEmpty("--extract", dir, diagnostic);
     if (args.value("names")) |file| result.names = try nonEmpty("--names", file, diagnostic);
+    if (args.value("megadrive")) |file| result.megadrive = try nonEmpty("--megadrive", file, diagnostic);
     for (args.positional("ASSET_PATH")) |path| result.addAsset(path) catch {
         diagnostic.* = .{ .argument = "ASSET_PATH", .value = path };
         return error.InvalidValue;
@@ -149,6 +156,8 @@ pub const Options = struct {
     extract: ?[]const u8 = null,
     /// `--names`: the naming overlay for `--extract`.
     names: ?[]const u8 = null,
+    /// `--megadrive`: the Mega Drive edition's cartridge, for its tunes.
+    megadrive: ?[]const u8 = null,
     entry: flashbackz.game.Entry = .automatic,
 
     /// The asset paths in order, in `buffer`.
@@ -183,6 +192,8 @@ pub const OpenError = error{
     OutOfMemory,
     /// The `--data` directory is missing or unreadable.
     InvalidDataSet,
+    /// The `--megadrive` file is not the accepted cartridge.
+    UnsupportedCartridge,
 };
 
 /// The providers that a host owns while the game runs.
@@ -220,7 +231,23 @@ pub const Providers = struct {
         try self.importPath(io, path);
         if (options.second_assets) |second| try self.importPath(io, second);
         flashbackz.content.archive.expandAll(&self.content.?) catch |err| return mapImportError(err);
+        if (options.megadrive) |file| try self.importCartridge(io, file);
         try self.openDataSet(io, options.data);
+    }
+
+    /// Adds the Mega Drive cartridge to the asset source, once it is known to be the accepted one.
+    fn importCartridge(self: *Providers, io: std.Io, path: []const u8) OpenError!void {
+        const megadrive = flashbackz.content.megadrive;
+        const bytes = std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, .limited(megadrive.size + 1)) catch |err| return switch (err) {
+            error.FileNotFound => error.NotFound,
+            error.AccessDenied => error.AccessDenied,
+            error.OutOfMemory => error.OutOfMemory,
+            error.Canceled => error.Canceled,
+            else => error.UnsupportedCartridge,
+        };
+        defer self.allocator.free(bytes);
+        if (!megadrive.isCartridge(bytes)) return error.UnsupportedCartridge;
+        self.content.?.add(megadrive.asset, bytes) catch |err| return mapImportError(err);
     }
 
     /// Reads the data set from `directory`, or extracts it in memory from the original files.
@@ -564,4 +591,9 @@ test "multiple disks merge files and conflicting editions fail without partial p
     try std.testing.expect(failed.content == null and failed.saves == null);
     // The game's files are the two disks: a third path is refused.
     try std.testing.expectError(error.TooManyAssets, options.addAsset("third.img"));
+    // A --megadrive file that is not the accepted cartridge is refused, leaving no provider.
+    var cartridge: Options = .{ .saves = paths[3], .megadrive = paths[1] };
+    try cartridge.addAsset(paths[0]);
+    try std.testing.expectError(error.UnsupportedCartridge, failed.open(allocator, io, &env, cartridge));
+    try std.testing.expect(failed.content == null and failed.saves == null);
 }

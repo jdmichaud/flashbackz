@@ -38,6 +38,7 @@ pub const cinematic_text = @import("cinematic_text.zig");
 pub const cinematic_transform = @import("cinematic_transform.zig");
 pub const music = @import("music.zig");
 pub const sound_effects = @import("sound_effects.zig");
+pub const megadrive = @import("megadrive.zig");
 
 test {
     std.testing.refAllDecls(@This());
