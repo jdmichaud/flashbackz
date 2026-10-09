@@ -3,6 +3,8 @@
 const std = @import("std");
 const platform = @import("../platform.zig");
 const sounds = @import("../content/sound_effects.zig");
+const megadrive = @import("../content/megadrive.zig");
+const megadrive_tunes = @import("megadrive_tunes.zig");
 /// A sample of the effects bank.
 pub const SoundId = enum(u16) { _ };
 const output_gain = @import("output_gain.zig");
@@ -82,9 +84,25 @@ pub const Output = struct {
     pending: [2048]i16 = undefined,
     begin: usize = 0,
     end: usize = 0,
+    /// The Mega Drive edition's tunes, when the user gave its cartridge (PLAN MD-D): its effects
+    /// 68-75, which the DOS bank lacks, play them instead of being dropped.
+    tunes: ?*const megadrive.Tunes = null,
+    /// Their sound, made when the device opens at its rate, and a tune asked for before that.
+    music: ?megadrive_tunes.Output = null,
+    tune_due: ?usize = null,
+
     pub fn submit(self: *Output, bank: sounds.Bank, event: Event) void {
-        self.mixer.start(bank, event);
         self.started = true;
+        const id = @backingInt(event.sound);
+        if (self.tunes != null and id >= megadrive.first_tune and
+            id < megadrive.first_tune + megadrive.tune_count)
+        {
+            // As in the cartridge, a tune asked for restarts the tunes' player with it.
+            const index = id - megadrive.first_tune;
+            if (self.music) |*music| music.player.start(index) else self.tune_due = index;
+            return;
+        }
+        self.mixer.start(bank, event);
     }
     pub fn pump(self: *Output, bank: sounds.Bank, p: *platform.Platform) !void {
         if (!self.started) return;
@@ -96,6 +114,11 @@ pub const Output = struct {
             }
             self.rate = format.sample_rate;
             self.opened = true;
+            if (self.tunes) |tunes| {
+                self.music = .init(tunes, self.rate);
+                if (self.tune_due) |index| self.music.?.player.start(index);
+                self.tune_due = null;
+            }
         }
         const ahead = output_gain.leadFrames(self.rate);
         for (0..8) |_| {
@@ -109,6 +132,7 @@ pub const Output = struct {
                 self.begin = 0;
                 self.end = frames * 2;
                 self.mixer.render(bank, self.pending[0..self.end], self.rate);
+                if (self.music) |*music| music.mixInto(self.pending[0..self.end]);
             }
             const accepted = try output_gain.queue(
                 p,
@@ -119,9 +143,10 @@ pub const Output = struct {
             if (accepted == 0) return;
         }
     }
+    /// Stops the sound, a tune playing included, as a film does in the cartridge.
     pub fn stop(self: *Output, p: *platform.Platform) void {
         if (self.opened) p.audioClose();
-        self.* = .{};
+        self.* = .{ .tunes = self.tunes };
     }
 };
 

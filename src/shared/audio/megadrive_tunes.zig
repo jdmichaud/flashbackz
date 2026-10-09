@@ -5,6 +5,7 @@
 //! then counts the note's length down to its release.
 const std = @import("std");
 const megadrive = @import("../content/megadrive.zig");
+const chips = @import("megadrive/root.zig");
 
 const channels = megadrive.channels;
 
@@ -114,6 +115,100 @@ pub const Player = struct {
     }
 };
 
+/// The tunes as sound: the player's writes given to the Mega Drive's chips on its master clock,
+/// one VBlank at a time (NTSC), and the chips' output added to the effects' (PLAN MD-D).
+pub const Output = struct {
+    player: Player,
+    synth: chips.synth.Default,
+    /// The chips' time at the start of the next VBlank.
+    vblank: u64 = 0,
+    /// A VBlank's frames, rendered and not yet mixed (stereo, interleaved).
+    frames: [2 * max_frames]i16 = undefined,
+    begin: usize = 0,
+    end: usize = 0,
+    coupling: [2]Coupling,
+
+    /// The cartridge's play driver writes a frame's registers from about 148,000 master cycles
+    /// after the VBlank, 2,925 cycles apart (measured on capture_md_tune.py's recordings; the
+    /// first write varies between 78,000 and 173,000). A register is its address and its data.
+    const first_write: u64 = 148_000;
+    const write_spacing: u64 = 2_925;
+    /// The most frames a VBlank gives at the chips' highest output rate.
+    const max_frames = 900;
+
+    pub fn init(tunes: *const megadrive.Tunes, rate: u32) Output {
+        const synth = chips.synth.init(.{ .rate = rate });
+        std.debug.assert(synth.maxFrames(chips.synth.cycles_per_vblank) <= max_frames);
+        var output: Output = .{
+            .player = .{ .tunes = tunes },
+            .synth = synth,
+            .coupling = @splat(.init(rate)),
+        };
+        // The console's filter starts from zero: a silent VBlank brings the chips to their
+        // resting level, which the coupling then starts from.
+        output.renderVBlank();
+        output.begin = output.end;
+        return output;
+    }
+
+    /// Adds the tunes' next `out.len / 2` frames to `out`, about as loud as the loudest effects,
+    /// as on the Mega Drive: there a full-scale effect through the DAC peaks at 5,400
+    /// (`megadrive/model1.zig`) and the tunes at 5,100 to 8,300; here the effects reach 32,767,
+    /// so the tunes are raised 3.5 times, the loudest (72) to 29,000, short of clipping alone.
+    pub fn mixInto(self: *Output, out: []i16) void {
+        var i: usize = 0;
+        while (i < out.len) {
+            if (self.begin == self.end) self.renderVBlank();
+            const n = @min(out.len - i, self.end - self.begin);
+            for (out[i..][0..n], self.frames[self.begin..][0..n], self.begin..) |*sample, tune, k| {
+                const heard = self.coupling[k % 2].pass(tune);
+                const sum = @as(i32, sample.*) + @divTrunc(heard * 7, 2);
+                const low = std.math.minInt(i16);
+                sample.* = @intCast(std.math.clamp(sum, low, std.math.maxInt(i16)));
+            }
+            i += n;
+            self.begin += n;
+        }
+    }
+
+    fn renderVBlank(self: *Output) void {
+        const writes = self.player.frame();
+        var count: usize = 0;
+        for (writes.slice(), 0..) |write, k| {
+            const at = self.vblank + first_write + k * write_spacing;
+            count += self.synth.advanceTo(at, self.frames[2 * count ..]);
+            self.synth.writeFm(0, write.register);
+            self.synth.writeFm(1, write.value);
+        }
+        self.vblank += chips.synth.cycles_per_vblank;
+        count += self.synth.advanceTo(self.vblank, self.frames[2 * count ..]);
+        self.begin = 0;
+        self.end = 2 * count;
+    }
+};
+
+/// The console's output is AC-coupled: the chips' constant level, such as the YM2612's offset
+/// while silent, is not heard. A one-pole high-pass at 5 Hz, in 16-bit fixed point, which starts
+/// from the first level it is given so that the start makes no step.
+const Coupling = struct {
+    keep: i64,
+    previous: ?i32 = null,
+    level: i64 = 0,
+
+    fn init(rate: u32) Coupling {
+        const corner = 2.0 * std.math.pi * 5.0 * 65536.0 / @as(f64, @floatFromInt(rate));
+        return .{ .keep = 65536 - @as(i64, @intFromFloat(@round(corner))) };
+    }
+
+    fn pass(self: *Coupling, input: i16) i32 {
+        const previous = self.previous orelse input;
+        self.previous = input;
+        const step = @as(i64, input) - previous;
+        self.level = step * 65536 + @divTrunc(self.keep * self.level, 65536);
+        return @intCast(@divTrunc(self.level, 65536));
+    }
+};
+
 // ----- tests: synthetic tunes, no cartridge
 
 fn testTunes(rows: []const megadrive.Row, frames_per_row: u16, length: u8) megadrive.Tunes {
@@ -182,4 +277,33 @@ test "a note's length releases it; channels 2 and 3 repeat their key off" {
     try std.testing.expectEqualSlices(bool, &.{ x, o, x, x, x, x, x, x }, &offs[0]);
     try std.testing.expectEqualSlices(bool, &.{ x, o, o, o, o, o, o, o }, &offs[1]);
     try std.testing.expectEqualSlices(bool, &.{ x, o, x, o, x, o, x, o }, &offs[2]);
+}
+
+test "the output adds a VBlank's tune to the effects, silent before a tune" {
+    var tunes = testTunes(&.{.{ 1, 1, 0, 0, 0, 0 }}, 5, 0);
+    // Heard at once: the fastest attack and no attenuation on every operator.
+    @memset(tunes.tunes[0].instruments[0][5..9], 31);
+    @memset(tunes.tunes[0].instruments[0][21..25], 0);
+    tunes.tunes[0].instruments[0][29] = 0xC0; // both sides
+    var output = Output.init(&tunes, 48000);
+    var effects: [2 * 400]i16 = @splat(100);
+    output.mixInto(&effects);
+    for (effects) |sample| try std.testing.expectEqual(@as(i16, 100), sample);
+    output.player.start(0);
+    var heard: [2 * 2000]i16 = @splat(0);
+    output.mixInto(&heard);
+    var loudest: u16 = 0;
+    for (heard) |sample| loudest = @max(loudest, @abs(sample));
+    try std.testing.expect(loudest > 0);
+}
+
+test "the coupling passes a tone and removes a constant level" {
+    var coupling = Coupling.init(48000);
+    for (0..48000) |_| try std.testing.expectEqual(@as(i32, 0), coupling.pass(143));
+    var loudest: i32 = 0;
+    for (0..4800) |n| {
+        const tone: i16 = if (n / 24 % 2 == 0) 1000 else -1000;
+        loudest = @max(loudest, coupling.pass(tone + 143));
+    }
+    try std.testing.expect(loudest > 900);
 }

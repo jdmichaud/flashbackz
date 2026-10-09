@@ -18,6 +18,7 @@ const step_clock = @import("../step_clock.zig");
 const key_latch = @import("../key_latch.zig");
 const settings = @import("../settings.zig");
 const audio_effects = @import("../audio/effects.zig");
+const megadrive = @import("../content/megadrive.zig");
 const inventory_menu = @import("inventory_menu.zig");
 const game_options = @import("game_options.zig");
 const ending_mod = @import("ending.zig");
@@ -112,6 +113,8 @@ pub const Scene = struct {
         difficulty: settings.Difficulty = .normal,
         /// The records' flags as the previous level left them (none in a new game).
         inherited: []const behavior.world.Inherited = &.{},
+        /// The Mega Drive edition's tunes, when the user gave its cartridge.
+        tunes: ?*const megadrive.Tunes = null,
     };
 
     pub fn load(
@@ -130,7 +133,7 @@ pub const Scene = struct {
         assets: platform.AssetSource,
         files: *const data_set.Files,
         index: usize,
-        inherited: []const behavior.world.Inherited,
+        setup: Setup,
     ) !Scene {
         const recording = try demo_mod.load(allocator, assets, index);
         defer allocator.free(recording.controls);
@@ -144,7 +147,7 @@ pub const Scene = struct {
             assets,
             files,
             recording.descriptor.level,
-            .{ .inherited = inherited },
+            setup,
             start,
         );
         errdefer scene.deinit();
@@ -239,6 +242,7 @@ pub const Scene = struct {
             .pack = pack,
             .world = world,
             .screen = screen,
+            .effects = .{ .tunes = setup.tunes },
         };
     }
 

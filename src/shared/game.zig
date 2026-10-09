@@ -17,6 +17,7 @@ const memory = @import("memory.zig");
 const settings_mod = @import("settings.zig");
 const step_clock = @import("step_clock.zig");
 const volume_preference = @import("volume_preference.zig");
+const megadrive = @import("content/megadrive.zig");
 pub const Entry = union(enum) {
     automatic,
     menu_development,
@@ -228,6 +229,9 @@ pub const Game = struct {
     /// The character records' flags as the last level left them; the next level's characters
     /// that it does not place keep them, as in the original.
     inherited: [256]behavior_world.Inherited = @splat(.{}),
+    /// The Mega Drive edition's tunes, when the user gave its cartridge (PLAN MD-D), read once
+    /// for every level; on the heap so that the levels' pointers outlive moves of the game.
+    tunes: ?*megadrive.Tunes = null,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -252,6 +256,8 @@ pub const Game = struct {
         );
         errdefer allocator.free(rgba);
         const preferences: game_options.Settings = .{ .volume = volume_preference.load(storage) };
+        const tunes = try loadTunes(allocator, assets);
+        errdefer if (tunes) |t| freeTunes(allocator, t);
         if (entry == .level_development) {
             const level = entry.level_development;
             var scene = try level_scene.Scene.load(
@@ -259,7 +265,7 @@ pub const Game = struct {
                 assets orelse return error.OriginalContentRequired,
                 data orelse return error.DataSetRequired,
                 level,
-                .{},
+                .{ .tunes = tunes },
             );
             scene.settings = preferences;
             return .{
@@ -272,6 +278,7 @@ pub const Game = struct {
                 .preferences = preferences,
                 .level = level,
                 .scene = .{ .level = scene },
+                .tunes = tunes,
             };
         }
         const original_menu = if (assets) |source| try menu_art.load(allocator, source) else null;
@@ -291,7 +298,27 @@ pub const Game = struct {
             .rgba = rgba,
             .preferences = preferences,
             .scene = scene,
+            .tunes = tunes,
         };
+    }
+
+    /// The Mega Drive cartridge's tunes, if the user gave it (`content.megadrive.asset`).
+    fn loadTunes(allocator: std.mem.Allocator, assets: ?platform.AssetSource) !?*megadrive.Tunes {
+        const source = assets orelse return null;
+        var cartridge = source.readAll(megadrive.asset, megadrive.size) catch |err| switch (err) {
+            error.NotFound => return null,
+            else => return err,
+        };
+        defer cartridge.deinit();
+        const tunes = try allocator.create(megadrive.Tunes);
+        errdefer allocator.destroy(tunes);
+        tunes.* = try megadrive.Tunes.read(allocator, cartridge.bytes);
+        return tunes;
+    }
+
+    fn freeTunes(allocator: std.mem.Allocator, tunes: *megadrive.Tunes) void {
+        tunes.deinit();
+        allocator.destroy(tunes);
     }
 
     pub fn deinit(self: *Game) void {
@@ -306,6 +333,7 @@ pub const Game = struct {
         }
         self.allocator.free(self.page);
         self.allocator.free(self.rgba);
+        if (self.tunes) |tunes| freeTunes(self.allocator, tunes);
         self.* = undefined;
     }
 
@@ -410,7 +438,7 @@ pub const Game = struct {
                         self.assets.?,
                         self.data orelse return error.DataSetRequired,
                         self.demo_index,
-                        &self.inherited,
+                        .{ .inherited = &self.inherited, .tunes = self.tunes },
                     );
                     next.settings = self.preferences;
                     front.deinit();
@@ -432,7 +460,11 @@ pub const Game = struct {
                     self.assets.?,
                     self.data orelse return error.DataSetRequired,
                     front.selected_level,
-                    .{ .difficulty = front.difficulty, .inherited = &self.inherited },
+                    .{
+                        .difficulty = front.difficulty,
+                        .inherited = &self.inherited,
+                        .tunes = self.tunes,
+                    },
                 );
                 next.settings = self.preferences;
                 self.level = front.selected_level;
@@ -455,7 +487,11 @@ pub const Game = struct {
                                 self.assets.?,
                                 self.data.?,
                                 level.level,
-                                .{ .difficulty = self.difficulty, .inherited = &self.inherited },
+                                .{
+                                    .difficulty = self.difficulty,
+                                    .inherited = &self.inherited,
+                                    .tunes = self.tunes,
+                                },
                             );
                             fresh.world.score = level.world.entry_score;
                             fresh.world.entry_score = level.world.entry_score;
@@ -544,7 +580,11 @@ pub const Game = struct {
                     self.assets.?,
                     self.data.?,
                     destination,
-                    .{ .difficulty = self.difficulty, .inherited = &self.inherited },
+                    .{
+                        .difficulty = self.difficulty,
+                        .inherited = &self.inherited,
+                        .tunes = self.tunes,
+                    },
                 );
                 next.world.score = scene.world.score;
                 next.world.entry_score = scene.world.score;

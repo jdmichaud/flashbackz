@@ -749,9 +749,10 @@ pub const World = struct {
     }
 
     /// Sounds play for awake characters in the view room, or quieter from a room beside it.
-    /// Only ids below 66 exist.
+    /// Every id is asked for, as in the original: its DOS sound driver refuses those from 66 on,
+    /// which the Mega Drive edition plays (the sound output decides).
     pub fn requestSound(self: *World, index: u16, id: i16) void {
-        if (id < 0 or id >= 66) return;
+        if (id < 0 or id > 255) return;
         const character = self.characters[index];
         if (!character.active) return;
         const distant = character.room != self.view_room;
@@ -769,7 +770,6 @@ pub const World = struct {
     pub fn playSoundAnywhere(self: *World, index: u16, value: i16) void {
         const bits: u16 = @bitCast(value);
         const id: u8 = @truncate(bits);
-        if (id >= 66) return;
         self.requests.addSound(.{ .id = id, .character = index, .distant = bits >> 8 != 0 });
     }
 

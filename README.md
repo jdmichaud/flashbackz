@@ -150,6 +150,15 @@ dropped unreachable rules and anything the extractor could not name. The game bu
 data set in memory from the disks at startup; `--data DIR` makes it read an extracted one
 instead, an edited copy for example.
 
+## Mega Drive tunes during play
+
+`--megadrive FILE` names the user's cartridge of the Mega Drive edition, Flashback (Europe)
+(En,Fr); other editions are refused. Its eight short tunes then play during play where that
+edition plays them: 64 places over the seven levels, each once per visit of its room, the first
+on entering the second room of level 2. The DOS edition asks for them as well but has no sound
+for them. They play on an emulated YM2612 (sorz's chips, NTSC timing), mixed with the effects;
+nothing of the cartridge is in the repository. Without the option the game is the DOS edition.
+
 Both programs list their options with `--help`: the help is generated from the same description
 the command line is parsed with (`src/native/clap.zig`).
 
