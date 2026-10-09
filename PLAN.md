@@ -145,8 +145,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     - 2026-10-09: 129 files (about 29,000 lines) removed. The golden traces recorded the
       removed scene's output, so they are retired rather than re-recorded: the engine
       regression compares with the original itself, update by update and frame by frame.
-- [ ] **Systematic gap detection (user concern, 2026-10-08):** replace reliance on manual play
+- [x] **Systematic gap detection (user concern, 2026-10-08):** replace reliance on manual play
   with a family-agnostic world comparison.
+  - The regression covers every capture, level and room; the ending, the introduction and the
+    installation have their own comparisons (items below and above).
   - [x] Every character, every update: flashback-re `engine_regression.py` compares the whole
     world (state, position, room, cursor, health, counter, flags, sprite, inventory links)
     with every retained capture and the jungle demo, plus the recorded frames.
@@ -236,6 +238,8 @@ gates. All runtime work uses the original as the reference; no approximate accep
   - Linux, Windows and browser packaging, inputs, audio, storage, lifecycle and long sessions.
   - Gate: Linux runtime acceptance and a successful Windows cross-build suffice for Windows
     (user decision, 2026-10-03); browser acceptance still includes actual browser execution.
-- [ ] **S1 — Standalone builds and tests** — Depends: none.
+- [x] **S1 — Standalone builds and tests** — Depends: none.
   - Gate, repeated at each phase: clean checkout builds and tests without game files, research
     tools or sibling repositories; no proprietary content enters version control.
+  - 2026-10-09 at `b6f3350`: a fresh clone in /tmp with empty Zig caches passes `zig build
+    test` and builds the SDL, agent and extractor programs; no game file types are tracked.
