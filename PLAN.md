@@ -46,6 +46,13 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     uses 70.09 Hz. Open: whether to calibrate to the emulator's beat (DOSBox's refresh is not
     real VGA's 70 Hz), and the input comparison.
   - User decision 2026-10-09: keep the current timing (no calibration to the emulator's beat).
+  - [ ] Film input as the original (flashback-re engine-presentation 6.1; the film player
+    tests DS:0xad6a & 0x80 after every command and while it waits, 0xc757 and 0xcfed): Backspace
+    and Tab skip a film while held, so a key still held when the next film starts skips it too;
+    P pauses the pictures while the music plays on (0xc750); Escape, Enter, Space and Shift do
+    not skip (Enter, Space and Shift still turn interactive pages). With the joystick option its
+    inventory button skips too. Gate: agent runs of the introduction and an in-game film with
+    each key.
 - [x] Import Flashback MIDI/PRF/INS music into named parts, instruments and scheduled events;
   verify malformed inputs, profile bindings, loops and note adjustments without game fixtures.
   - `content/music.zig` imports profiles, instruments and tracks into an immutable score; its
