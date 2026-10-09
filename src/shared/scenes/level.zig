@@ -15,6 +15,7 @@ const floppy_interface = @import("../content/floppy_interface.zig");
 const demo_mod = @import("../content/demo.zig");
 const input_recording = @import("../input_recording.zig");
 const step_clock = @import("../step_clock.zig");
+const key_latch = @import("../key_latch.zig");
 const settings = @import("../settings.zig");
 const audio_effects = @import("../audio/effects.zig");
 const inventory_menu = @import("inventory_menu.zig");
@@ -88,12 +89,17 @@ pub const Scene = struct {
     /// The catch-up walks run so far: how often the host fell behind.
     catch_up_walks: u32 = 0,
 
-    const Options = struct { menu: game_options.Menu, clock: step_clock.Clock };
+    const Options = struct {
+        menu: game_options.Menu,
+        clock: step_clock.Clock,
+        direction_repeat: key_latch.DirectionRepeat = .{},
+    };
 
     const Inventory = struct {
         menu: inventory_menu.Menu,
         keys: inventory_menu.Keys = .{},
         clock: step_clock.Clock,
+        direction_repeat: key_latch.DirectionRepeat = .{},
         items: [max_items]u16 = undefined,
         entries: [max_items]inventory_menu.Entry = undefined,
         const max_items = 32;
@@ -357,7 +363,11 @@ pub const Scene = struct {
         const options = &self.options.?;
         while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
             const event = self.pending.orderedRemove(0);
-            if (event.payload == .key_down) options.menu.key(event.payload.key_down.key) else self.keys.controller(event.payload);
+            switch (event.payload) {
+                .key_down => |press| if (options.direction_repeat.registers(press, event.time_ns))
+                    options.menu.key(press.key),
+                else => self.keys.controller(event.payload),
+            }
         }
         const outcome = options.menu.outcome orelse return;
         self.settings = options.menu.settings;
@@ -588,7 +598,8 @@ pub const Scene = struct {
         while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
             const event = self.pending.orderedRemove(0);
             switch (event.payload) {
-                .key_down => |key| inventory.keys.key(key.key, true),
+                .key_down => |key| if (!key_latch.isDirection(key.key) or
+                    inventory.direction_repeat.accept(key, event.time_ns)) inventory.keys.key(key.key, true),
                 .key_up => |key| inventory.keys.key(key.key, false),
                 .focus_lost => inventory.keys = .{},
                 else => self.keys.controller(event.payload),

@@ -10,6 +10,7 @@ pub const asset_pack = @import("asset_pack.zig");
 pub const settings = @import("settings.zig");
 pub const random = @import("random.zig");
 pub const step_clock = @import("step_clock.zig");
+pub const key_latch = @import("key_latch.zig");
 pub const input_recording = @import("input_recording.zig");
 
 // What the game is made of: the original files' content, the behavior engine and the scenes.

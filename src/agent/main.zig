@@ -17,6 +17,8 @@ const usage =
     \\                   frame FRAME; the option repeats
     \\  --key-down F:KEY hold KEY from host frame F
     \\  --key-up F:KEY   release KEY at host frame F
+    \\  --key-repeat F:KEY
+    \\                   the keyboard repeats the held KEY at host frame F
     \\  --scene menu     open the title preview while floppy startup is being recovered
     \\  ASSET_PATH       FAT12 images or extracted directories; repeat for all disks
     \\  --saves DIR      where saves are kept
@@ -33,7 +35,7 @@ const frame_ns: u64 = std.time.ns_per_s / 60;
 const Press = struct {
     frame: u64,
     key: flashbackz.platform.Key,
-    mode: enum { tap, down, up } = .tap,
+    mode: enum { tap, down, up, repeat } = .tap,
 };
 const ButtonPress = struct {
     frame: u64,
@@ -77,9 +79,13 @@ pub fn main(init: std.process.Init) !void {
             var button = parseButton(args.next() orelse return fail(io)) orelse return fail(io);
             button.down = std.mem.eql(u8, arg, "--button-down");
             try buttons.append(gpa, button);
-        } else if (std.mem.eql(u8, arg, "--key-down") or std.mem.eql(u8, arg, "--key-up")) {
+        } else if (std.mem.eql(u8, arg, "--key-down") or std.mem.eql(u8, arg, "--key-up") or
+            std.mem.eql(u8, arg, "--key-repeat"))
+        {
             var press = parsePress(args.next() orelse return fail(io)) orelse return fail(io);
-            press.mode = if (std.mem.eql(u8, arg, "--key-down")) .down else .up;
+            press.mode = if (std.mem.eql(u8, arg, "--key-down"))
+                .down
+            else if (std.mem.eql(u8, arg, "--key-up")) .up else .repeat;
             try presses.append(gpa, press);
         } else if (std.mem.eql(u8, arg, "--stall")) {
             try stalls.append(gpa, parseStall(args.next() orelse return fail(io)) orelse return fail(io));
@@ -118,9 +124,9 @@ pub fn main(init: std.process.Init) !void {
         for (presses.items) |press| if (press.frame == frame) {
             if (press.mode != .up) try backend.inject(.{
                 .time_ns = backend.clock_ns,
-                .payload = .{ .key_down = .{ .key = press.key } },
+                .payload = .{ .key_down = .{ .key = press.key, .repeat = press.mode == .repeat } },
             });
-            if (press.mode != .down) try backend.inject(.{
+            if (press.mode == .tap or press.mode == .up) try backend.inject(.{
                 .time_ns = backend.clock_ns,
                 .payload = .{ .key_up = .{ .key = press.key } },
             });
@@ -174,7 +180,7 @@ pub fn main(init: std.process.Init) !void {
         );
     } else if (game.scene == .menu) {
         const front = &game.scene.menu;
-        try w.interface.print("{{\"scene\":\"menu\",\"stage\":\"{s}\",\"film_frame\":", .{@tagName(front.stage)});
+        try w.interface.print("{{\"scene\":\"menu\",\"stage\":\"{s}\",\"selected\":\"{s}\",\"film_frame\":", .{ @tagName(front.stage), @tagName(front.menu.selected) });
         if (front.player) |player| try w.interface.print("{d}}}\n", .{player.playback.frame}) else try w.interface.print("null}}\n", .{});
     } else {
         try w.interface.print("{{\"scene\":\"{s}\"}}\n", .{@tagName(game.sceneKind())});
