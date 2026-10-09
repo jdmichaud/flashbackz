@@ -5,6 +5,7 @@
 pub const directory = @import("directory.zig");
 pub const storage = @import("storage.zig");
 pub const cli = @import("cli.zig");
+pub const clap = @import("clap.zig");
 pub const contract = @import("contract.zig");
 pub const data_set = @import("data_set.zig");
 

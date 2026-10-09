@@ -1,5 +1,5 @@
-//! The command-line options that both native hosts take and open for the game: a positional
-//! asset paths, `--saves <dir>` and `--data <dir>`.
+//! The command-line options that both native hosts take and open for the game: the asset paths,
+//! `--scene`, `--saves` and `--data`, described for `clap` once.
 //!
 //! Each asset path is a directory or a FAT12 floppy image. `--saves` defaults to the per-user application data directory, which
 //! is created on first use. The result is a bound `AssetSource` and `Storage`. The game uses
@@ -14,62 +14,75 @@ const Pack = flashbackz.asset_pack.Pack;
 const directory_mod = @import("directory.zig");
 const storage_mod = @import("storage.zig");
 const data_set = @import("data_set.zig");
+const clap = @import("clap.zig");
 
-pub const usage =
-    \\  ASSET_PATH    FAT12 IMG/IMA images or extracted directories; repeat for all disks
-    \\  --scene NAME   development shortcut: menu or a level name (default: normal startup)
-    \\  --saves DIR    where saves are kept (default: the per-user application data directory)
-    \\  --data DIR     the data set made by flashbackz-extract (default: extracted at startup)
-    \\
-;
+/// The options that both hosts take; each host's description adds them to its own.
+pub const shared_options = [_]clap.Option{
+    .{
+        .long = "scene",
+        .value = "NAME",
+        .help = "start in the title menu (menu) or directly in a level: jungle, city,\n" ++
+            "tower, earth_city, spaceport, alien_surface or alien_base\n" ++
+            "(default: the introduction)",
+    },
+    .{
+        .long = "saves",
+        .value = "DIR",
+        .help = "where saves are kept\n(default: the per-user application data directory)",
+    },
+    .{
+        .long = "data",
+        .value = "DIR",
+        .help = "read the data set from DIR, written by flashbackz-extract\n" ++
+            "(default: extracted from the disks at startup)",
+    },
+};
 
-pub const TakeError = error{ MissingValue, TooManyAssets, UnknownScene };
+/// The game's files: both floppy images, or directories extracted from them.
+pub const assets: clap.Positional = .{
+    .name = "ASSET_PATH",
+    .help = "a floppy image (IMG/IMA) or extracted directory; give both disks",
+    .min = 0,
+    .max = 1 + max_additional_assets,
+};
+
+const max_additional_assets = 7;
+
+/// The providers' options from a parse whose description includes `shared_options` and `assets`.
+pub fn fromArgs(args: anytype, diagnostic: *clap.Diagnostic) clap.Error!Options {
+    var result: Options = .{};
+    if (args.value("scene")) |name| result.entry = sceneEntry(name) orelse {
+        diagnostic.* = .{ .argument = "--scene", .value = name };
+        return error.InvalidValue;
+    };
+    if (args.value("saves")) |dir| result.saves = try nonEmpty("--saves", dir, diagnostic);
+    if (args.value("data")) |dir| result.data = try nonEmpty("--data", dir, diagnostic);
+    for (args.positional("ASSET_PATH")) |path| result.addAsset(path) catch {
+        diagnostic.* = .{ .argument = "ASSET_PATH", .value = path };
+        return error.InvalidValue;
+    };
+    return result;
+}
+
+fn nonEmpty(comptime name: []const u8, value: []const u8, diagnostic: *clap.Diagnostic) clap.Error![]const u8 {
+    if (value.len != 0) return value;
+    diagnostic.* = .{ .argument = name, .value = value };
+    return error.InvalidValue;
+}
+
+fn sceneEntry(value: []const u8) ?flashbackz.game.Entry {
+    if (std.mem.eql(u8, value, "menu")) return .menu_development;
+    const level = std.meta.stringToEnum(flashbackz.content.level.Id, value) orelse return null;
+    return .{ .level_development = level };
+}
 
 pub const Options = struct {
     assets: ?[]const u8 = null,
-    additional_assets: [7][]const u8 = undefined,
+    additional_assets: [max_additional_assets][]const u8 = undefined,
     additional_count: usize = 0,
     saves: ?[]const u8 = null,
     data: ?[]const u8 = null,
     entry: flashbackz.game.Entry = .automatic,
-
-    /// Consumes `--saves` and positional asset paths. Returns false for
-    /// any other argument. After `--`, an asset path can start with a dash.
-    pub fn take(self: *Options, arg: []const u8, args: anytype) TakeError!bool {
-        if (std.mem.eql(u8, arg, "--scene")) {
-            const value = args.next() orelse return error.MissingValue;
-            self.entry = try sceneEntry(value);
-            return true;
-        }
-        if (std.mem.eql(u8, arg, "--data")) {
-            const value = args.next() orelse return error.MissingValue;
-            if (value.len == 0) return error.MissingValue;
-            self.data = value;
-            return true;
-        }
-        if (std.mem.eql(u8, arg, "--saves")) {
-            const value = args.next() orelse return error.MissingValue;
-            if (value.len == 0) return error.MissingValue;
-            self.saves = value;
-            return true;
-        }
-        if (std.mem.eql(u8, arg, "--")) {
-            while (args.next()) |path| try self.addAsset(path);
-            return true;
-        }
-        if (arg.len == 0 or arg[0] != '-') {
-            try self.addAsset(arg);
-            return true;
-        }
-        return false;
-    }
-
-    fn sceneEntry(value: []const u8) TakeError!flashbackz.game.Entry {
-        if (std.mem.eql(u8, value, "menu")) return .menu_development;
-        const Id = flashbackz.content.level.Id;
-        const level = std.meta.stringToEnum(Id, value) orelse return error.UnknownScene;
-        return .{ .level_development = level };
-    }
 
     pub fn addAsset(self: *Options, path: []const u8) error{ MissingValue, TooManyAssets }!void {
         if (path.len == 0) return error.MissingValue;

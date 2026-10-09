@@ -3,26 +3,30 @@
 //! outer loop.
 const std = @import("std");
 const sdl = @import("sdl");
+const native = @import("native");
+const clap = native.clap;
 
 pub fn main(init: std.process.Init) !void {
-    // `iterateAllocator` is the form that Windows needs; the arena keeps the arguments for the
-    // whole run.
-    const options = sdl.host.parseArgs(try init.minimal.args.iterateAllocator(init.arena.allocator())) catch |err| {
-        try showUsage(
-            init.io,
-            if (err == error.MissingAssets) "an asset path is required" else "invalid arguments",
-        );
+    // The arena keeps the arguments for the whole run.
+    const arena = init.arena.allocator();
+    const args = try clap.processArguments(arena, init.minimal.args);
+    var diagnostic: clap.Diagnostic = .{};
+    const options = sdl.host.parseArgs(arena, args, &diagnostic) catch |err| {
+        var buf: [1024]u8 = undefined;
+        var w = std.Io.File.stderr().writerStreaming(init.io, &buf);
+        if (err == error.MissingAssets) {
+            try w.interface.writeAll("flashbackz-sdl: --scene with a level needs the disks (ASSET_PATH)\n");
+            try sdl.host.Args.writeUsage(&w.interface);
+        } else try sdl.host.Args.writeError(&w.interface, @errorCast(err), diagnostic);
+        try w.interface.flush();
         std.process.exit(2);
     };
-    if (options.help) return showUsage(init.io, null);
+    if (options.help) {
+        var buf: [4096]u8 = undefined;
+        var w = std.Io.File.stdout().writerStreaming(init.io, &buf);
+        try sdl.host.Args.writeHelp(&w.interface);
+        return w.interface.flush();
+    }
     const status = try sdl.host.run(init.gpa, init.io, init.environ_map, options);
     if (status != 0) std.process.exit(status);
-}
-
-fn showUsage(io: std.Io, message: ?[]const u8) !void {
-    var buf: [512]u8 = undefined;
-    var w = std.Io.File.stderr().writerStreaming(io, &buf);
-    if (message) |text| try w.interface.print("flashbackz-sdl: {s}\n\n", .{text});
-    try w.interface.writeAll(sdl.host.usage);
-    try w.interface.flush();
 }

@@ -147,8 +147,12 @@ zig build extract --prefix /tmp/flashback/modern/out --cache-dir /tmp/flashback/
 Names come from the committed overlay `src/extract/names.zon`. Anything not named there keeps
 a systematic name (`state_768`, `signal_20`, `link_0`). Each generated behavior shows its key
 and its states' ordinals, which is what the overlay uses to name them. `report.txt` lists
-dropped unreachable rules and anything the extractor could not name. The game does not load
-the data set yet; that is the next step of the plan.
+dropped unreachable rules and anything the extractor could not name. The game builds the same
+data set in memory from the disks at startup; `--data DIR` makes it read an extracted one
+instead, an edited copy for example.
+
+Every program lists its options with `--help`: the help is generated from the same description
+the command line is parsed with (`src/native/clap.zig`).
 
 For development checks, `--scene` also accepts `city`, `tower`, `earth_city`, `spaceport`,
 `alien_surface` and `alien_base`, alongside `menu` and `jungle`. These shortcuts skip startup;

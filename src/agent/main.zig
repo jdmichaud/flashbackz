@@ -9,27 +9,51 @@ const std = @import("std");
 const flashbackz = @import("flashbackz");
 const agent = @import("agent");
 const native = @import("native");
+const clap = native.clap;
 
-const usage =
-    \\usage: flashbackz-agent [--frames N] [--key FRAME:NAME]... [ASSET_PATH...] [--saves DIR]
-    \\  --frames N       run N frames (default 120)
-    \\  --key FRAME:NAME press and release the key NAME (a platform.Key, as `f2` or `left`) at
-    \\                   frame FRAME; the option repeats
-    \\  --key-down F:KEY hold KEY from host frame F
-    \\  --key-up F:KEY   release KEY at host frame F
-    \\  --key-repeat F:KEY
-    \\                   the keyboard repeats the held KEY at host frame F
-    \\  --scene menu     open the title preview while floppy startup is being recovered
-    \\  ASSET_PATH       FAT12 images or extracted directories; repeat for all disks
-    \\  --saves DIR      where saves are kept
-    \\  --pcm FILE       write the audio the game queued (interleaved 16-bit samples) to FILE
-    \\  --button-down F:BUTTON, --button-up F:BUTTON
-    \\                   press or release a gamepad button (a platform.ControllerButton, as `a`
-    \\                   or `dpad_left`) at host frame F
-    \\  --stall F:MS     stop the host for MS milliseconds before host frame F, as a slow
-    \\                   machine would
-    \\
-;
+/// The command line, described once for parsing and for `--help`.
+const Args = clap.Parser(.{
+    .name = "flashbackz-agent",
+    .description = "The headless host: runs the game for a number of frames at a fixed 60 Hz clock, presses\n" ++
+        "the keys it is told and prints the state and frame hashes as JSON lines.",
+    .options = &(native.cli.shared_options ++ [_]clap.Option{
+        .{ .long = "frames", .value = "N", .help = "run N host frames (default 120)" },
+        .{
+            .long = "key",
+            .value = "F:KEY",
+            .repeats = true,
+            .help = "tap KEY (a platform.Key, as f2 or left) at host frame F",
+        },
+        .{ .long = "key-down", .value = "F:KEY", .repeats = true, .help = "hold KEY from host frame F" },
+        .{ .long = "key-up", .value = "F:KEY", .repeats = true, .help = "release KEY at host frame F" },
+        .{
+            .long = "key-repeat",
+            .value = "F:KEY",
+            .repeats = true,
+            .help = "the keyboard repeats the held KEY at host frame F",
+        },
+        .{
+            .long = "button-down",
+            .value = "F:BUTTON",
+            .repeats = true,
+            .help = "press a gamepad button (a platform.ControllerButton, as a or\n" ++
+                "dpad_left) at host frame F",
+        },
+        .{ .long = "button-up", .value = "F:BUTTON", .repeats = true, .help = "release a gamepad button at host frame F" },
+        .{
+            .long = "stall",
+            .value = "F:MS",
+            .repeats = true,
+            .help = "stop the host for MS milliseconds before host frame F, as a slow\nmachine would",
+        },
+        .{
+            .long = "pcm",
+            .value = "FILE",
+            .help = "write the audio the game queued (interleaved 16-bit samples) to FILE",
+        },
+    }),
+    .positionals = &.{native.cli.assets},
+});
 
 const frame_ns: u64 = std.time.ns_per_s / 60;
 const Press = struct {
@@ -47,53 +71,51 @@ const Stall = struct { frame: u64, ns: u64 };
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
     const io = init.io;
-    var frames: u64 = 120;
-    var pcm_path: ?[]const u8 = null;
+    // The arena keeps the arguments for the whole run.
+    const arena = init.arena.allocator();
+    var diagnostic: clap.Diagnostic = .{};
+    const args = Args.parse(arena, try clap.processArguments(arena, init.minimal.args), &diagnostic) catch |err|
+        return fail(io, err, diagnostic);
+    if (args.help) return help(io);
+    const frames = (args.number(u64, "frames", 0, std.math.maxInt(u64), &diagnostic) catch |err|
+        return fail(io, err, diagnostic)) orelse 120;
+    const options = native.cli.fromArgs(args, &diagnostic) catch |err| return fail(io, err, diagnostic);
+    if (options.entry == .level_development and options.assets == null) {
+        return fail(io, error.MissingArgument, .{ .argument = "ASSET_PATH (--scene with a level needs the disks)" });
+    }
+    const pcm_path = args.value("pcm");
     var presses: std.ArrayList(Press) = .empty;
     defer presses.deinit(gpa);
     var buttons: std.ArrayList(ButtonPress) = .empty;
     defer buttons.deinit(gpa);
     var stalls: std.ArrayList(Stall) = .empty;
     defer stalls.deinit(gpa);
-    var options: native.cli.Options = .{};
-    // `iterateAllocator` is the form that Windows needs; the arena keeps the arguments for the
-    // whole run.
-    var args = try init.minimal.args.iterateAllocator(init.arena.allocator());
-    _ = args.skip();
-    while (args.next()) |arg| {
-        if (options.take(arg, &args) catch return fail(io)) continue;
-        if (std.mem.eql(u8, arg, "--frames")) {
-            frames = std.fmt.parseInt(
-                u64,
-                args.next() orelse return fail(io),
-                10,
-            ) catch return fail(io);
-        } else if (std.mem.eql(u8, arg, "--pcm")) {
-            pcm_path = args.next() orelse return fail(io);
-        } else if (std.mem.eql(u8, arg, "--key")) {
-            try presses.append(
+    // In command-line order: the order of the events at one frame matters.
+    for (args.given) |given| {
+        const bad: clap.Diagnostic = .{ .argument = Args.flagName(given.option), .value = given.value };
+        switch (given.option) {
+            Args.index("key"), Args.index("key-down"), Args.index("key-up"), Args.index("key-repeat") => {
+                var press = parsePress(given.value) orelse return fail(io, error.InvalidValue, bad);
+                press.mode = switch (given.option) {
+                    Args.index("key") => .tap,
+                    Args.index("key-down") => .down,
+                    Args.index("key-up") => .up,
+                    else => .repeat,
+                };
+                try presses.append(gpa, press);
+            },
+            Args.index("button-down"), Args.index("button-up") => {
+                var button = parseButton(given.value) orelse return fail(io, error.InvalidValue, bad);
+                button.down = given.option == Args.index("button-down");
+                try buttons.append(gpa, button);
+            },
+            Args.index("stall") => try stalls.append(
                 gpa,
-                parsePress(args.next() orelse return fail(io)) orelse return fail(io),
-            );
-        } else if (std.mem.eql(u8, arg, "--button-down") or std.mem.eql(u8, arg, "--button-up")) {
-            var button = parseButton(args.next() orelse return fail(io)) orelse return fail(io);
-            button.down = std.mem.eql(u8, arg, "--button-down");
-            try buttons.append(gpa, button);
-        } else if (std.mem.eql(u8, arg, "--key-down") or std.mem.eql(u8, arg, "--key-up") or
-            std.mem.eql(u8, arg, "--key-repeat"))
-        {
-            var press = parsePress(args.next() orelse return fail(io)) orelse return fail(io);
-            press.mode = if (std.mem.eql(u8, arg, "--key-down"))
-                .down
-            else if (std.mem.eql(u8, arg, "--key-up")) .up else .repeat;
-            try presses.append(gpa, press);
-        } else if (std.mem.eql(u8, arg, "--stall")) {
-            try stalls.append(gpa, parseStall(args.next() orelse return fail(io)) orelse return fail(io));
-        } else {
-            return fail(io);
+                parseStall(given.value) orelse return fail(io, error.InvalidValue, bad),
+            ),
+            else => {},
         }
     }
-    if (options.entry == .level_development and options.assets == null) return fail(io);
 
     // Real providers when the options name them, else in-memory ones. They outlive the game.
     var providers: native.cli.Providers = .empty;
@@ -218,10 +240,17 @@ fn parseButton(text: []const u8) ?ButtonPress {
     return .{ .frame = frame, .button = button, .down = true };
 }
 
-fn fail(io: std.Io) !void {
-    var buf: [512]u8 = undefined;
+fn fail(io: std.Io, err: clap.Error, diagnostic: clap.Diagnostic) !void {
+    var buf: [1024]u8 = undefined;
     var w = std.Io.File.stderr().writerStreaming(io, &buf);
-    try w.interface.writeAll(usage);
+    try Args.writeError(&w.interface, err, diagnostic);
     try w.interface.flush();
     std.process.exit(2);
+}
+
+fn help(io: std.Io) !void {
+    var buf: [4096]u8 = undefined;
+    var w = std.Io.File.stdout().writerStreaming(io, &buf);
+    try Args.writeHelp(&w.interface);
+    try w.interface.flush();
 }

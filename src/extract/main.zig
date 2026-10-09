@@ -4,13 +4,25 @@ const std = @import("std");
 const native = @import("native");
 const extract = @import("extract");
 
-const usage =
-    \\usage: flashbackz-extract [--names FILE] OUTPUT_DIRECTORY ASSET_PATH...
-    \\  OUTPUT_DIRECTORY  new or empty directory outside any Git repository
-    \\  ASSET_PATH        the floppy images (IMG/IMA) or extracted directories
-    \\  --names FILE      naming overlay to use instead of the built-in one
-    \\
-;
+const clap = native.clap;
+
+/// The command line, described once for parsing and for `--help`.
+const Args = clap.Parser(.{
+    .name = "flashbackz-extract",
+    .description = "Converts the user's game files into the readable data set: characters, behavior\n" ++
+        "tables and messages. Images and sound are not extracted.",
+    .options = &.{
+        .{ .long = "names", .value = "FILE", .help = "naming overlay to use instead of the built-in one" },
+    },
+    .positionals = &.{
+        .{ .name = "OUTPUT_DIRECTORY", .help = "a new or empty directory, outside any Git repository" },
+        .{
+            .name = "ASSET_PATH",
+            .help = "a floppy image (IMG/IMA) or extracted directory; give both disks",
+            .max = 8,
+        },
+    },
+});
 
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
@@ -19,18 +31,23 @@ pub fn main(init: std.process.Init) !void {
     defer arena_state.deinit();
     const arena = arena_state.allocator();
 
-    var args = try init.minimal.args.iterateAllocator(arena);
-    _ = args.skip();
-    var names_path: ?[]const u8 = null;
-    var output_path: ?[]const u8 = null;
-    var assets: std.ArrayList([]const u8) = .empty;
-    while (args.next()) |arg| {
-        if (std.mem.eql(u8, arg, "--names")) {
-            names_path = args.next() orelse return fail(io, "--names needs a file");
-        } else if (output_path == null) output_path = arg else try assets.append(arena, arg);
+    var diagnostic: clap.Diagnostic = .{};
+    const args = Args.parse(arena, try clap.processArguments(arena, init.minimal.args), &diagnostic) catch |err| {
+        var buf: [1024]u8 = undefined;
+        var w = std.Io.File.stderr().writerStreaming(io, &buf);
+        try Args.writeError(&w.interface, err, diagnostic);
+        try w.interface.flush();
+        std.process.exit(2);
+    };
+    if (args.help) {
+        var buf: [2048]u8 = undefined;
+        var w = std.Io.File.stdout().writerStreaming(io, &buf);
+        try Args.writeHelp(&w.interface);
+        return w.interface.flush();
     }
-    const output = output_path orelse return fail(io, usage);
-    if (assets.items.len == 0) return fail(io, usage);
+    const names_path = args.value("names");
+    const output = args.positional("OUTPUT_DIRECTORY")[0];
+    const assets = args.positional("ASSET_PATH");
 
     const names_source: [:0]const u8 = if (names_path) |path|
         try std.Io.Dir.cwd().readFileAllocOptions(
@@ -46,7 +63,7 @@ pub fn main(init: std.process.Init) !void {
 
     var providers: native.Providers = .empty;
     defer providers.deinit();
-    try providers.openAssets(gpa, io, assets.items);
+    try providers.openAssets(gpa, io, assets);
     const source = providers.assetSource().?;
 
     try std.Io.Dir.cwd().createDirPath(io, output);

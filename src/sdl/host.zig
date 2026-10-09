@@ -12,6 +12,7 @@ const c = @import("sdl.zig");
 const version = @import("root.zig");
 const SdlBackend = backend_mod.SdlBackend;
 const backend_mod = @import("backend.zig");
+const clap = native.clap;
 
 /// The rate of the fallback pacer, when the display does not pace the presentation.
 pub const fallback_hz: u32 = 60;
@@ -22,22 +23,25 @@ pub const assets_required = false;
 
 const program_name = "flashbackz-sdl";
 
-pub const usage =
-    \\usage: flashbackz-sdl [OPTIONS] [ASSET_PATH...]
-    \\  ASSET_PATH           FAT12 images or extracted directories; repeat for all disks
-    \\  --scene jungle       enter the jungle development slice directly
-    \\  --help, -h           show this help
-    \\  --scale N            window scale, 1 to 64 (default 3)
-    \\  --no-vsync           do not ask for display-paced presentation
-    \\  --software           force SDL's software renderer
-    \\  --event-log SECONDS  write every polled event to standard output as one JSON line
-    \\                       and quit after that many seconds
-    \\  --run-for SECONDS    quit after that many seconds, without the event log
-    \\  --fps N              the fallback pacer's rate, 1 to 1000 (default 60)
-    \\  --saves DIR          where saves are kept (default: the per-user application data
-    \\                       directory)
-    \\
-;
+/// The command line, described once for parsing and for `--help`.
+pub const Args = clap.Parser(.{
+    .name = program_name,
+    .description = "Flashback, played from the original floppy disks.",
+    .options = &(native.cli.shared_options ++ [_]clap.Option{
+        .{ .long = "scale", .value = "N", .help = "window scale, 1 to 64 (default 3)" },
+        .{ .long = "no-vsync", .help = "do not ask for display-paced presentation" },
+        .{ .long = "software", .help = "force SDL's software renderer" },
+        .{
+            .long = "event-log",
+            .value = "SECONDS",
+            .help = "write every polled event to standard output as one JSON line, and quit\n" ++
+                "after that many seconds",
+        },
+        .{ .long = "run-for", .value = "SECONDS", .help = "quit after that many seconds, without the event log" },
+        .{ .long = "fps", .value = "N", .help = "the fallback pacer's rate, 1 to 1000 (default 60)" },
+    }),
+    .positionals = &.{native.cli.assets},
+});
 
 pub const Options = struct {
     help: bool = false,
@@ -215,81 +219,45 @@ pub const Pacer = struct {
     }
 };
 
-pub const ArgError = error{ BadArguments, MissingAssets };
+pub const ArgError = clap.Error || error{MissingAssets};
 
-/// Parses the command line from an iterator shaped like `std.process.Args.iterate()`, whose first
-/// item is the program name.
-pub fn parseArgs(iter: anytype) ArgError!Options {
-    var args = iter;
-    var options: Options = .{};
-    _ = args.skip();
-    while (args.next()) |arg| {
-        if (options.providers.take(arg, &args) catch return error.BadArguments) continue;
-        if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
-            options.help = true;
-        } else if (std.mem.eql(u8, arg, "--scale")) {
-            const value = args.next() orelse return error.BadArguments;
-            const scale = std.fmt.parseInt(u32, value, 10) catch return error.BadArguments;
-            if (scale == 0 or scale > SdlBackend.max_window_scale) return error.BadArguments;
-            options.scale = scale;
-        } else if (std.mem.eql(u8, arg, "--no-vsync")) {
-            options.vsync = false;
-        } else if (std.mem.eql(u8, arg, "--software")) {
-            options.software = true;
-        } else if (std.mem.eql(u8, arg, "--event-log")) {
-            options.event_log_ns = try seconds(args.next());
-        } else if (std.mem.eql(u8, arg, "--run-for")) {
-            options.run_for_ns = try seconds(args.next());
-        } else if (std.mem.eql(u8, arg, "--fps")) {
-            const value = args.next() orelse return error.BadArguments;
-            const rate = std.fmt.parseInt(u32, value, 10) catch return error.BadArguments;
-            if (rate == 0 or rate > 1000) return error.BadArguments;
-            options.fps = rate;
-        } else {
-            return error.BadArguments;
-        }
-    }
+/// Parses `args`, the arguments after the program's name; the options point into them.
+pub fn parseArgs(allocator: std.mem.Allocator, args: []const []const u8, diagnostic: *clap.Diagnostic) ArgError!Options {
+    var parsed = try Args.parse(allocator, args, diagnostic);
+    defer parsed.deinit(allocator);
+    if (parsed.help) return .{ .help = true };
+    const options: Options = .{
+        .scale = try parsed.number(u32, "scale", 1, SdlBackend.max_window_scale, diagnostic),
+        .vsync = if (parsed.flag("no-vsync")) false else null,
+        .software = parsed.flag("software"),
+        .event_log_ns = try seconds(parsed, "event-log", diagnostic),
+        .run_for_ns = try seconds(parsed, "run-for", diagnostic),
+        .fps = try parsed.number(u32, "fps", 1, 1000, diagnostic),
+        .providers = try native.cli.fromArgs(parsed, diagnostic),
+    };
     if ((assets_required or options.providers.entry == .level_development) and
-        !options.help and
         options.providers.assets == null) return error.MissingAssets;
     return options;
 }
 
-fn seconds(value: ?[]const u8) ArgError!u64 {
-    const text = value orelse return error.BadArguments;
-    const s = std.fmt.parseFloat(f64, text) catch return error.BadArguments;
-    if (!(s > 0) or s > 86_400) return error.BadArguments;
+/// A positive number of seconds, at most a day, in nanoseconds.
+fn seconds(parsed: Args, comptime long: []const u8, diagnostic: *clap.Diagnostic) clap.Error!?u64 {
+    const s = try parsed.number(f64, long, std.math.floatMin(f64), 86_400, diagnostic) orelse return null;
     return @intFromFloat(s * std.time.ns_per_s);
 }
 
-/// A replacement for the process argument iterator, to test the parser without a process. Its
-/// methods are public because the shared option parser (`native.cli`) reads the iterator
-/// generically, and Zig sees only public declarations across modules.
-const SliceArgs = struct {
-    items: []const []const u8,
-    index: usize = 0,
-
-    pub fn skip(self: *SliceArgs) bool {
-        if (self.index >= self.items.len) return false;
-        self.index += 1;
-        return true;
-    }
-
-    pub fn next(self: *SliceArgs) ?[]const u8 {
-        if (self.index >= self.items.len) return null;
-        defer self.index += 1;
-        return self.items[self.index];
-    }
-};
+fn testParse(args: []const []const u8) ArgError!Options {
+    var diagnostic: clap.Diagnostic = .{};
+    return parseArgs(std.testing.allocator, args, &diagnostic);
+}
 
 test "the host options are parsed, bounded and defaulted" {
-    const defaults = try parseArgs(SliceArgs{ .items = &.{"flashbackz-sdl"} });
+    const defaults = try testParse(&.{});
     try std.testing.expectEqual(@as(?u32, null), defaults.scale);
     try std.testing.expectEqual(@as(?bool, null), defaults.vsync);
     try std.testing.expectEqual(@as(?u64, null), defaults.deadlineNs());
 
-    const all = try parseArgs(SliceArgs{ .items = &.{
-        "flashbackz-sdl",
+    const all = try testParse(&.{
         "--scale",
         "2",
         "--no-vsync",
@@ -301,7 +269,7 @@ test "the host options are parsed, bounded and defaulted" {
         "game",
         "--saves",
         "saves",
-    } });
+    });
     try std.testing.expectEqual(@as(?u32, 2), all.scale);
     try std.testing.expectEqual(@as(?bool, false), all.vsync);
     try std.testing.expect(all.software);
@@ -310,33 +278,31 @@ test "the host options are parsed, bounded and defaulted" {
     try std.testing.expectEqualStrings("saves", all.providers.saves.?);
 
     for ([_][]const []const u8{
-        &.{ "flashbackz-sdl", "--scale", "0" },
-        &.{ "flashbackz-sdl", "--scale", "99999" },
-        &.{ "flashbackz-sdl", "--event-log", "-1" },
-        &.{ "flashbackz-sdl", "--fps", "0" },
-        &.{ "flashbackz-sdl", "--frobnicate" },
-        &.{ "flashbackz-sdl", "--scene", "jungle" },
-        &.{ "flashbackz-sdl", "--scene", "unknown", "game" },
-    }) |args| {
-        const result = parseArgs(SliceArgs{ .items = args });
-        if (args.len == 3 and std.mem.eql(u8, args[1], "--scene")) {
-            try std.testing.expectError(error.MissingAssets, result);
-        } else try std.testing.expectError(error.BadArguments, result);
-    }
-    const disks = try parseArgs(SliceArgs{ .items = &.{
-        "flashbackz-sdl",
+        &.{ "--scale", "0" },
+        &.{ "--scale", "99999" },
+        &.{ "--event-log", "-1" },
+        &.{ "--event-log", "0" },
+        &.{ "--fps", "0" },
+        &.{ "--scene", "unknown", "game" },
+        &.{ "--data", "" },
+    }) |args| try std.testing.expectError(error.InvalidValue, testParse(args));
+    try std.testing.expectError(error.UnknownOption, testParse(&.{"--frobnicate"}));
+    try std.testing.expectError(error.MissingAssets, testParse(&.{ "--scene", "jungle" }));
+    try std.testing.expect((try testParse(&.{ "--scale", "2", "--help" })).help);
+    const data = try testParse(&.{ "--data", "set", "disk1.img" });
+    try std.testing.expectEqualStrings("set", data.providers.data.?);
+    const disks = try testParse(&.{
         "disk1.img",
         "disk2.img",
-    } });
+    });
     try std.testing.expectEqualStrings("disk1.img", disks.providers.assets.?);
     try std.testing.expectEqual(@as(usize, 1), disks.providers.additional_count);
     try std.testing.expectEqualStrings("disk2.img", disks.providers.additional_assets[0]);
-    const jungle_options = try parseArgs(SliceArgs{ .items = &.{
-        "flashbackz-sdl",
+    const jungle_options = try testParse(&.{
         "--scene",
         "jungle",
         "game.ima",
-    } });
+    });
     try std.testing.expectEqual(
         flashbackz.game.Entry{ .level_development = .jungle },
         jungle_options.providers.entry,

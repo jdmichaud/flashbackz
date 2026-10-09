@@ -26,3 +26,15 @@ licence.
 
 Reused from vpoolz commit 9459fb3a8695eb8b8af451711b2351c849924a87.
 Full LGPL 2.1 text: LICENSES/LGPL-2.1.txt. The original notice permits later LGPL versions.
+
+src/native/clap.zig
+-------------------
+
+The command-line parser is adapted from `src/clap.zig` of zig-utils
+(https://github.com/jdmichaud/zig-utils, commit 36148a198f787371f393084cb3e3bd7c2c34ce49),
+ported to Zig 0.17 and extended. It carries that project's licence:
+
+  MIT License
+  Copyright (c) 2025 JD Michaud
+
+Full text: LICENSES/MIT-zig-utils.txt.
