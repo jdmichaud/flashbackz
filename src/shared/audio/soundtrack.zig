@@ -28,7 +28,7 @@ pub const Soundtrack = struct {
         self.* = undefined;
     }
     pub fn pump(self: *Soundtrack, p: *platform.Platform) !void {
-        const ahead = self.player.rate / 20;
+        const ahead = output_gain.leadFrames(self.player.rate);
         for (0..8) |_| {
             const status = p.audioStatus();
             if (!status.running or status.suspended or status.queued_frames >= ahead) return;

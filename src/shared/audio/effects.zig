@@ -97,7 +97,7 @@ pub const Output = struct {
             self.rate = format.sample_rate;
             self.opened = true;
         }
-        const ahead = self.rate / 50;
+        const ahead = output_gain.leadFrames(self.rate);
         for (0..8) |_| {
             const status = p.audioStatus();
             if (!status.running or status.suspended or status.queued_frames >= ahead) return;

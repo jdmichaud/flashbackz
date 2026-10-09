@@ -2,6 +2,14 @@
 const std = @import("std");
 const platform = @import("../platform.zig");
 
+/// How far ahead of the device music and effects keep their queue: 50 ms. A device takes a
+/// period at a time (SDL's 1,024 frames are 23 ms at 44.1 kHz), and the queue is topped up
+/// once a host frame, so less than a period plus a frame leaves the device short, and SDL plays
+/// silence for the rest of the period.
+pub fn leadFrames(rate: u32) u32 {
+    return rate / 20;
+}
+
 pub fn queue(p: *platform.Platform, samples: []const i16, percent: u8) !usize {
     if (percent >= 100) return p.audioQueue(samples);
     var scaled: [2048]i16 = undefined;
