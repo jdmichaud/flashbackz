@@ -25,9 +25,14 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   research and shelved generic work; retain independent reusable systems for requalification.
 - [x] Support direct IMA input and bounded ABA decompression, with malformed-input tests and
   independent extraction comparison. Support extracted floppy content through the same API.
-- [ ] Import both floppy images together through native command-line input; recover the
+- [x] Import both floppy images together through native command-line input; recover the
   installer's level expansion without a runtime dependency on DOS. Gate: all installed file
   bytes match the original installer's output, including all five generated level maps.
+  - 2026-10-09: the hosts take both images on the command line, and the game decodes rooms
+    from the compact level files without an installation. flashback-re `compare_install.py`
+    rebuilds the installation from the images through this import: all 232 installed files
+    other than FB.CFG (the user's configuration and a date) are identical, the five generated
+    level maps included. The agent host plays levels of both disks from the images.
 - [ ] Reproduce title, vector introduction and original scene order. Gate: exact original
   presented-frame comparisons, palette changes, timing and input behavior. Small documented
   pixel differences may be accepted to avoid excessive renderer complexity (user decision).
