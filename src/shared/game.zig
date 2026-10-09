@@ -661,14 +661,16 @@ pub const Game = struct {
         }
     }
 
-    /// The keys the original's keyboard interrupt acts on whatever the screen: P, the keypad's
-    /// + and -, S, J and K. The event still goes on to the scene: a code being typed may
-    /// contain these letters.
+    /// The keys the original's keyboard interrupt acts on whatever the screen, except the code
+    /// entry: P, the keypad's + and -, S, J and K. The event still goes on to the scene.
     fn globalKey(self: *Game, event: platform.Event) void {
         const press = switch (event.payload) {
             .key_down => |key| key,
             else => return,
         };
+        // While a code is typed the original leaves the keyboard to the BIOS: these keys are
+        // only characters of the code.
+        if (self.scene == .menu and self.scene.menu.view == .password) return;
         switch (press.key) {
             .p => if (!press.repeat) {
                 self.films_paused = !self.films_paused;
