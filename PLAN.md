@@ -333,6 +333,11 @@ flashback-re MD1–MD3.
 - [ ] **MD-D — Music during play** — The tunes start, stop and fade where the cartridge plays them
   (flashback-re MD3), with the effects and the films' music. Gate: a played route in the SDL
   build where each tune starts where the cartridge starts it.
+  - [x] 2026-10-09, `925476f`: with `--megadrive`, effects 68-75 play the tunes on the chips,
+    mixed with the effects; a film stops them. The engine asks for every request the original
+    makes (68-77 at the original's updates in all engine-regression captures). SDL build:
+    tune 68 starts on entering level 2's room 17, where the DOS original asks for it.
+  - [ ] The cartridge's own placements (flashback-re MD3), and the other tunes heard in play.
 
 ## Historical CD implementation/research milestones
 
