@@ -40,12 +40,13 @@ pub const Scene = struct {
     volume: u8 = 100,
     introduction_part: enum { first, second } = .first,
     skip_requested: bool = false,
+    /// The joystick option: the joystick's inventory button skips films too.
+    joystick: bool = false,
     stage: Stage = .menu,
     view: View = .main,
     difficulty: Difficulty = .normal,
     selected_level: content_level.Id = .jungle,
     pending_difficulty: Difficulty = .normal,
-    activation_key: ?platform.Key = null,
     password: [6]u8 = @splat(0),
     password_length: usize = 0,
     notice: []const u8 = "",
@@ -77,7 +78,6 @@ pub const Scene = struct {
         if (self.player) |*previous| previous.deinit();
         self.player = next;
         self.skip_requested = false;
-        self.activation_key = null;
     }
 
     pub fn deinit(self: *Scene) void {
@@ -172,7 +172,6 @@ pub const Scene = struct {
                 if (self.stage == .game_over) {
                     player.deinit();
                     self.player = null;
-                    self.skip_requested = false;
                     self.stage = .menu;
                 } else if (self.stage == .awakening) {
                     player.deinit();
@@ -188,7 +187,6 @@ pub const Scene = struct {
                 } else {
                     player.deinit();
                     self.player = null;
-                    self.skip_requested = false;
                     self.stage = .menu;
                 }
             }
@@ -213,22 +211,20 @@ pub const Scene = struct {
         self.menu.selected = .start;
     }
 
-    pub fn start(self: *Scene, key: ?platform.Key) !void {
-        try self.startLevel(.jungle, key);
+    pub fn start(self: *Scene) !void {
+        try self.startLevel(.jungle);
     }
 
-    pub fn startLevel(self: *Scene, level: content_level.Id, key: ?platform.Key) !void {
+    pub fn startLevel(self: *Scene, level: content_level.Id) !void {
         self.selected_level = level;
         if (level == .jungle) {
             try self.play("DEBUT");
             self.stage = .awakening;
         } else self.stage = .ready;
-        self.activation_key = key;
     }
 
-    pub fn gameOver(self: *Scene, key: ?platform.Key) !void {
+    pub fn gameOver(self: *Scene) !void {
         try self.play("OVER");
-        self.activation_key = key;
         self.stage = .game_over;
     }
 
@@ -237,20 +233,16 @@ pub const Scene = struct {
             self.stage = .quit;
             return;
         }
-        if (input.payload == .focus_lost) self.activation_key = null;
-        if (input.payload == .key_up) {
-            if (self.activation_key == input.payload.key_up.key) self.activation_key = null;
-            return;
-        }
+        // Films read only their skip keys and P.
+        if (self.player != null and vector_player.skips(input.payload, self.joystick)) self.skip_requested = true;
         if (input.payload != .key_down) return;
         const press = input.payload.key_down;
         const key = press.key;
-        const confirm = key == .enter or key == .space or key == .left_shift or key == .right_shift;
-        if (self.player != null) {
-            if (!press.repeat and
-                (key == .tab or key == .escape or confirm)) self.skip_requested = true;
+        if (self.player) |*player| {
+            if (key == .p and !press.repeat) player.togglePause(input.time_ns);
             return;
         }
+        const confirm = key == .enter or key == .space or key == .left_shift or key == .right_shift;
         if (self.stage != .menu) return;
         switch (self.view) {
             .main => {
@@ -265,7 +257,7 @@ pub const Scene = struct {
                 ));
                 if (key == .escape) self.stage = .quit;
                 if (confirm and !press.repeat) switch (self.menu.selected) {
-                    .start => try self.start(key),
+                    .start => try self.start(),
                     .skill => {
                         self.pending_difficulty = self.difficulty;
                         try self.show(.skill, "MENU3");
@@ -298,7 +290,7 @@ pub const Scene = struct {
                     return;
                 }
                 if (key == .enter) {
-                    try self.submitPassword(key);
+                    try self.submitPassword();
                     return;
                 }
                 const code = @backingInt(key);
@@ -312,7 +304,7 @@ pub const Scene = struct {
         }
     }
 
-    fn submitPassword(self: *Scene, key: platform.Key) !void {
+    fn submitPassword(self: *Scene) !void {
         const destination = try level_codes.lookup(
             self.allocator,
             self.source,
@@ -321,7 +313,7 @@ pub const Scene = struct {
         self.mainMenu();
         if (destination) |entry| {
             self.difficulty = entry.difficulty;
-            try self.startLevel(entry.level, key);
+            try self.startLevel(entry.level);
         } else if (try level_codes.isEnding(
             self.allocator,
             self.source,

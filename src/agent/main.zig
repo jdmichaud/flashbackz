@@ -158,7 +158,7 @@ pub fn main(init: std.process.Init) !void {
         const scene = &game.scene.level;
         const conrad = scene.world.characters[0];
         try w.interface.print(
-            "{{\"scene\":\"level\",\"level\":\"{s}\",\"difficulty\":\"{s}\",\"room\":{d},\"x\":{d},\"y\":{d},\"score\":{d},\"catch_up_walks\":{d}}}\n",
+            "{{\"scene\":\"level\",\"level\":\"{s}\",\"difficulty\":\"{s}\",\"room\":{d},\"x\":{d},\"y\":{d},\"score\":{d},\"catch_up_walks\":{d},\"film\":{}}}\n",
             .{
                 @tagName(scene.level),
                 @tagName(game.difficulty),
@@ -167,8 +167,13 @@ pub fn main(init: std.process.Init) !void {
                 conrad.y,
                 scene.world.score,
                 scene.catch_up_walks,
+                game.isStoryPlaying(),
             },
         );
+    } else if (game.scene == .menu) {
+        const front = &game.scene.menu;
+        try w.interface.print("{{\"scene\":\"menu\",\"stage\":\"{s}\",\"film_frame\":", .{@tagName(front.stage)});
+        if (front.player) |player| try w.interface.print("{d}}}\n", .{player.playback.frame}) else try w.interface.print("null}}\n", .{});
     } else {
         try w.interface.print("{{\"scene\":\"{s}\"}}\n", .{@tagName(game.sceneKind())});
     }

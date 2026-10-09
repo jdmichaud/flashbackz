@@ -381,6 +381,7 @@ pub const Game = struct {
             const front = &self.scene.menu;
             front.music_enabled = self.preferences.music;
             front.volume = self.preferences.volume;
+            front.joystick = self.preferences.joystick;
             if (front.stage == .quit) {
                 front.stopAudio(p);
                 self.phase = .finished;
@@ -464,7 +465,7 @@ pub const Game = struct {
                 var next = front_end.Scene.init(self.allocator, self.assets.?, art);
                 errdefer next.deinit();
                 next.difficulty = self.difficulty;
-                if (choice == .retry) try next.startLevel(self.level, dialog.menu.activation_key) else try next.gameOver(dialog.menu.activation_key);
+                if (choice == .retry) try next.startLevel(self.level) else try next.gameOver();
                 dialog.deinit();
                 self.scene = .{ .menu = next };
             }
@@ -489,8 +490,8 @@ pub const Game = struct {
                     film.entry,
                     film.music,
                     now,
-                    null,
                 );
+                self.story.?.joystick = scene.settings.joystick;
             }
             const story = &self.story.?;
             story.music_enabled = self.preferences.music;

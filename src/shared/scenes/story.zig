@@ -10,7 +10,8 @@ pub const Story = struct {
     audio_open: bool = false,
     music_enabled: bool = true,
     skip: bool = false,
-    activation_key: ?platform.Key,
+    /// The joystick option: the joystick's buttons turn pages and skip as the keys do.
+    joystick: bool = false,
 
     /// Plays entry `entry` of film `film`, with the music file `music` if any.
     pub fn openFilm(
@@ -20,7 +21,6 @@ pub const Story = struct {
         entry: u16,
         music: ?[]const u8,
         now: u64,
-        activation: ?platform.Key,
     ) !Story {
         var player = try vector.Player.open(allocator, source, film, entry);
         errdefer player.deinit();
@@ -28,7 +28,6 @@ pub const Story = struct {
             .player = player,
             .music = if (music) |name| try audio.Soundtrack.open(allocator, source, name, 44100) else null,
             .started_ns = now,
-            .activation_key = activation,
         };
     }
 
@@ -61,35 +60,26 @@ pub const Story = struct {
         try self.music.?.pump(p);
         return false;
     }
+    /// The film's keys: Backspace or Tab skips it, Enter, Space or Shift turns an interactive
+    /// page and P pauses the pictures. True when the film took the event.
     pub fn event(self: *Story, input: platform.Event) bool {
+        if (vector.skips(input.payload, self.joystick)) {
+            self.skip = true;
+            return true;
+        }
         switch (input.payload) {
-            .key_up => |key| {
-                if (self.activation_key == key.key) self.activation_key = null;
-                return false;
+            .key_down => |press| switch (press.key) {
+                .enter, .space, .left_shift, .right_shift => if (!press.repeat) self.player.confirm(),
+                .p => if (!press.repeat) self.player.togglePause(input.time_ns),
+                .tab, .backspace => {},
+                else => return false,
             },
-            .focus_lost => {
-                self.activation_key = null;
-                return false;
-            },
-            .key_down => |key| {
-                if (self.player.interactive() and key.key != .tab and key.key != .escape) {
-                    const confirm = key.key == .enter or
-                        key.key == .space or
-                        key.key == .left_shift or
-                        key.key == .right_shift;
-                    if (confirm and
-                        !key.repeat and
-                        self.activation_key != key.key) self.player.confirm();
-                    return confirm;
-                }
-                const skip = switch (key.key) {
-                    .tab, .escape, .enter, .space, .left_shift, .right_shift => true,
-                    else => false,
-                };
-                if (skip and !key.repeat and self.activation_key != key.key) self.skip = true;
-                return skip;
+            .controller_button_down => |change| switch (change.button) {
+                .a, .b, .x => if (self.joystick) self.player.confirm() else return false,
+                else => return false,
             },
             else => return false,
         }
+        return true;
     }
 };
