@@ -55,7 +55,9 @@ pub const Player = struct {
     cadence: Cadence,
     origin_ns: ?u64 = null,
     confirmed: bool = false,
-    /// Since when P holds the pictures; the time held does not count.
+    /// P's toggle as the film last saw it.
+    pause_requested: bool = false,
+    /// Since when the film stands still for P.
     paused_at: ?u64 = null,
     pub fn interactive(self: *const Player) bool {
         for (self.movie.frames) |frame| if (frame.input_loop_start != null) return true;
@@ -76,14 +78,19 @@ pub const Player = struct {
         if (self.awaitingInput()) self.confirmed = true;
     }
 
-    /// While P's toggle is set the pictures stop, and they resume where they stopped; the
-    /// music plays on.
+    /// P's toggle, which the original's film player reads between its commands: the film
+    /// stops after the picture it is presenting (a film not started yet, before its first),
+    /// and when P is pressed again the next picture comes at once, its hold having run out
+    /// meanwhile. The music plays on.
     pub fn setPaused(self: *Player, paused: bool, now_ns: u64) void {
-        if (paused == (self.paused_at != null)) return;
-        if (self.paused_at) |at| {
-            if (self.origin_ns) |*origin| origin.* +|= now_ns -| at;
-            self.paused_at = null;
-        } else self.paused_at = now_ns;
+        self.pause_requested = paused;
+        if (paused) {
+            if (self.origin_ns == null and self.paused_at == null) self.paused_at = now_ns;
+            return;
+        }
+        if (self.paused_at == null) return;
+        self.paused_at = null;
+        if (self.origin_ns) |*origin| origin.* = now_ns -| self.cadence.deadline_ns;
     }
 
     pub fn open(
@@ -104,25 +111,29 @@ pub const Player = struct {
         self.* = undefined;
     }
     pub fn update(self: *Player, now_ns: u64) !bool {
-        if (self.origin_ns == null) self.origin_ns = now_ns;
         if (self.paused_at != null) return self.playback.finished;
-        if (self.needsCatchup(now_ns)) {
-            if (self.movie.frames[self.playback.frame].input_loop_start) |start| {
-                if (!self.confirmed) {
-                    self.playback.frame = start;
-                    const ticks = self.movie.frames[start].hold_ticks;
-                    self.playback.next_tick = try std.math.add(u64, self.playback.next_tick, ticks);
-                    try self.cadence.hold(ticks);
-                    return false;
-                }
-                if (self.staticInputWait()) self.origin_ns = now_ns -| self.cadence.deadline_ns;
-                self.confirmed = false;
-            }
-            if (try self.playback.advance(self.movie.view(), self.playback.next_tick)) {
-                try self.cadence.hold(self.movie.frames[self.playback.frame].hold_ticks);
-            }
-        }
+        if (self.origin_ns == null) self.origin_ns = now_ns;
+        if (!self.needsCatchup(now_ns)) return self.playback.finished;
+        try self.present(now_ns);
+        if (self.pause_requested) self.paused_at = now_ns;
         return self.playback.finished;
+    }
+
+    fn present(self: *Player, now_ns: u64) !void {
+        if (self.movie.frames[self.playback.frame].input_loop_start) |start| {
+            if (!self.confirmed) {
+                self.playback.frame = start;
+                const ticks = self.movie.frames[start].hold_ticks;
+                self.playback.next_tick = try std.math.add(u64, self.playback.next_tick, ticks);
+                try self.cadence.hold(ticks);
+                return;
+            }
+            if (self.staticInputWait()) self.origin_ns = now_ns -| self.cadence.deadline_ns;
+            self.confirmed = false;
+        }
+        if (try self.playback.advance(self.movie.view(), self.playback.next_tick)) {
+            try self.cadence.hold(self.movie.frames[self.playback.frame].hold_ticks);
+        }
     }
     pub fn needsCatchup(self: *const Player, now_ns: u64) bool {
         if (self.paused_at != null) return false;
@@ -192,7 +203,7 @@ test "only a fresh press of the inventory key skips a film" {
     try std.testing.expect(skips(.{ .controller_button_down = y }, true));
 }
 
-test "a paused film keeps its picture and resumes where it stopped" {
+test "P stops a film after its picture, and the next picture comes at once when P is pressed again" {
     const allocator = std.testing.allocator;
     const arena = try allocator.create(std.heap.ArenaAllocator);
     arena.* = .init(allocator);
@@ -200,24 +211,39 @@ test "a paused film keeps its picture and resumes where it stopped" {
     const frames = [_]film.Frame{
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4 },
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4 },
+        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4 },
+        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4 },
     };
     var player: Player = .{
         .movie = .{ .allocator = allocator, .arena = arena, .frames = &frames },
         .playback = try film.Playback.init(.{ .frames = &frames }),
         .cadence = .{},
-        .origin_ns = 0,
     };
     defer player.deinit();
     try player.cadence.hold(frames[0].hold_ticks);
-    const due = player.cadence.deadline_ns;
-    player.setPaused(true, due - 1);
-    player.setPaused(true, due);
-    try std.testing.expect(!player.needsCatchup(due + std.time.ns_per_s));
-    _ = try player.update(due + std.time.ns_per_s);
-    try std.testing.expectEqual(@as(usize, 0), player.playback.frame);
-    player.setPaused(false, due + std.time.ns_per_s);
-    try std.testing.expect(!player.needsCatchup(due + std.time.ns_per_s - 2));
-    try std.testing.expect(player.needsCatchup(due + std.time.ns_per_s + 1));
-    _ = try player.update(due + std.time.ns_per_s + 1);
+    // Not started yet: it stands before its first picture, which then holds from the resume.
+    player.setPaused(true, 0);
+    _ = try player.update(std.time.ns_per_s);
+    try std.testing.expectEqual(@as(?u64, null), player.origin_ns);
+    player.setPaused(false, std.time.ns_per_s);
+    _ = try player.update(std.time.ns_per_s);
+    const first = std.time.ns_per_s + player.cadence.deadline_ns;
+    try std.testing.expect(!player.needsCatchup(first - 1));
+    // Pressed and pressed again within a hold: nothing happens.
+    player.setPaused(true, first - 2);
+    player.setPaused(false, first - 1);
+    _ = try player.update(first);
     try std.testing.expectEqual(@as(usize, 1), player.playback.frame);
+    // Pressed during a hold: the picture in progress is presented, then the film stands.
+    player.setPaused(true, first + 1);
+    const second = std.time.ns_per_s + player.cadence.deadline_ns;
+    _ = try player.update(second);
+    try std.testing.expectEqual(@as(usize, 2), player.playback.frame);
+    _ = try player.update(second + 5 * std.time.ns_per_s);
+    try std.testing.expectEqual(@as(usize, 2), player.playback.frame);
+    // Pressed again: the next picture is due at once.
+    const resume_ns = second + 5 * std.time.ns_per_s;
+    player.setPaused(false, resume_ns);
+    _ = try player.update(resume_ns);
+    try std.testing.expectEqual(@as(usize, 3), player.playback.frame);
 }

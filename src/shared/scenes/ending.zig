@@ -57,7 +57,9 @@ pub const Ending = struct {
     /// The ending's own clock: presents wait for their timer ticks, then a display refresh.
     cadence: vector.Cadence = .{},
     origin_ns: ?u64 = null,
-    /// Since when P holds the films; the time held does not count.
+    /// P's toggle as the films last saw it.
+    pause_requested: bool = false,
+    /// Since when the films stand still for P.
     paused_at: ?u64 = null,
     /// Timer ticks the last present lasted, which the next credits step sees elapsed.
     elapsed_ticks: u32 = 0,
@@ -134,10 +136,14 @@ pub const Ending = struct {
         const now = p.nowNs();
         switch (self.stage) {
             .films => {
-                if (self.origin_ns == null) self.origin_ns = now;
+                if (self.paused_at == null and self.origin_ns == null) self.origin_ns = now;
                 var work: usize = 0;
                 while (self.stage == .films and self.due(now) and work < 16) : (work += 1) {
                     if (!try self.present()) try self.nextFilm(p);
+                    if (self.pause_requested) {
+                        self.paused_at = now;
+                        break;
+                    }
                 }
                 if (self.stage == .films) try self.pumpMusic(p);
             },
@@ -149,15 +155,19 @@ pub const Ending = struct {
         }
     }
 
-    /// While P's toggle is set the films stop, and they resume where they stopped; the music
-    /// plays on.
+    /// P's toggle, as the film player reads it (`vector_player.Player.setPaused`): the films
+    /// stop after the present in progress, and the next present comes at once when P is
+    /// pressed again. The music plays on.
     pub fn setPaused(self: *Ending, paused: bool, now_ns: u64) void {
         if (self.player) |*player| player.setPaused(paused, now_ns);
-        if (paused == (self.paused_at != null)) return;
-        if (self.paused_at) |at| {
-            if (self.origin_ns) |*origin| origin.* +|= now_ns -| at;
-            self.paused_at = null;
-        } else self.paused_at = now_ns;
+        self.pause_requested = paused;
+        if (paused) {
+            if (self.origin_ns == null and self.paused_at == null) self.paused_at = now_ns;
+            return;
+        }
+        if (self.paused_at == null) return;
+        self.paused_at = null;
+        if (self.origin_ns) |*origin| origin.* = now_ns -| self.cadence.deadline_ns;
     }
 
     fn due(self: *const Ending, now_ns: u64) bool {
