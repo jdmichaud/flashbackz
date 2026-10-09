@@ -90,6 +90,10 @@ const Builder = struct {
     colors: palette.Palette = @splat(.{ .r = 0, .g = 0, .b = 0 }),
     background_mode: u8 = 0,
     wait_ticks: u32 = 0,
+    /// Presents of the held picture the waits since the last present make in replay mode.
+    wait_presents: u32 = 0,
+    /// A new background since the last present.
+    new_background: bool = false,
     vertices: usize = 0,
     references: usize = 0,
 
@@ -106,7 +110,7 @@ const Builder = struct {
         }
         if (self.background_mode == 0) try self.working.appendSlice(self.allocator, self.saved_background);
     }
-    fn present(self: *Builder, ticks: u32) !void {
+    fn present(self: *Builder, ticks: u32, replay: film.ReplayPresent) !void {
         if (self.frames.items.len >= 10000) return error.CinematicTooLarge;
         const previous = &self.frames.items[self.frames.items.len - 1];
         previous.hold_ticks = try std.math.add(
@@ -114,7 +118,9 @@ const Builder = struct {
             previous.hold_ticks,
             try std.math.add(u32, self.wait_ticks, ticks),
         );
+        previous.held_presents += self.wait_presents;
         self.wait_ticks = 0;
+        self.wait_presents = 0;
         self.visible = try self.snapshot(self.working.items);
         try self.frames.append(
             self.allocator,
@@ -124,8 +130,12 @@ const Builder = struct {
                 .hold_ticks = 0,
                 .captions = self.captions,
                 .caption_band = self.caption_band,
+                .present_ticks = @intCast(ticks),
+                .replay_present = replay,
+                .ends_hold = self.new_background,
             },
         );
+        self.new_background = false;
     }
     fn textAssets(self: *Builder) !cinematic_text.Text {
         if (self.text_assets == null) {
@@ -330,7 +340,7 @@ fn compileFrom(
     var builder: Builder = .{ .allocator = content, .geometry = polygons, .source = source };
     try builder.frames.append(
         content,
-        .{ .drawings = &.{}, .colors = builder.colors, .hold_ticks = 0 },
+        .{ .drawings = &.{}, .colors = builder.colors, .hold_ticks = 0, .presented = false },
     );
     var command_frames: std.AutoHashMap(usize, usize) = .init(allocator);
     defer command_frames.deinit();
@@ -346,18 +356,21 @@ fn compileFrom(
         if (encoded & 3 != 0) return error.UnsupportedCinematicCommandFlags;
         switch (encoded >> 2) {
             0, 5 => {
-                try builder.present(4);
+                try builder.present(4, .picture);
                 try builder.clear();
             },
             1 => {
                 builder.background_mode = try reader.byte();
-                if (builder.background_mode != 0) try builder.clear();
+                if (builder.background_mode != 0) {
+                    try builder.clear();
+                    builder.new_background = true;
+                }
             },
-            2 => builder.wait_ticks = try std.math.add(
-                u32,
-                builder.wait_ticks,
-                @as(u32, try reader.byte()) * 4,
-            ),
+            2 => {
+                const count = try reader.byte();
+                builder.wait_ticks = try std.math.add(u32, builder.wait_ticks, @as(u32, count) * 4);
+                builder.wait_presents += 2 * @as(u32, count) + 1;
+            },
             3 => try builder.drawShape(&reader, .placed),
             4 => try builder.setPalette(try reader.byte(), try reader.byte()),
             6 => try builder.caption(try reader.word()),
@@ -375,11 +388,11 @@ fn compileFrom(
             12 => {
                 builder.working.clearRetainingCapacity();
                 try builder.working.appendSlice(content, builder.visible);
-                try builder.present(9);
+                try builder.present(9, .hold);
             },
             9, 14 => |kind| {
                 if (kind == 9) {
-                    try builder.present(4);
+                    try builder.present(4, .page);
                     try builder.clear();
                 }
                 const mask = try reader.byte();
@@ -421,6 +434,7 @@ fn compileFrom(
     }
     if (!finished) return error.CinematicTooLarge;
     builder.frames.items[builder.frames.items.len - 1].hold_ticks = builder.wait_ticks;
+    builder.frames.items[builder.frames.items.len - 1].held_presents += builder.wait_presents;
     const frames = try builder.frames.toOwnedSlice(content);
     return .{
         .allocator = allocator,

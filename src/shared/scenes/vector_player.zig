@@ -6,18 +6,23 @@ const content = @import("../content/vector_cinematic.zig");
 const film = @import("../vector_film.zig");
 const palette = @import("../content/palette.zig");
 
-const Cadence = struct {
+/// When a film presents: a present waits for its timer ticks, then for the next display refresh.
+pub const Cadence = struct {
     // English reference profile: calibrated hold ticks and the measured video cadence.
     const timer_numerator: u64 = 17_024 * std.time.ns_per_s;
     const timer_denominator: u64 = 1_193_182;
     const refresh_ns: u64 = 16_683_217;
     deadline_ns: u64 = 0,
 
-    fn hold(self: *Cadence, ticks: u32) !void {
+    /// Timer ticks elapsed at the deadline.
+    pub fn elapsedTicks(self: Cadence) u64 {
+        return self.deadline_ns * timer_denominator / timer_numerator;
+    }
+
+    pub fn hold(self: *Cadence, ticks: u32) !void {
         if (ticks == 0) return;
         if (self.deadline_ns > 3600 * std.time.ns_per_s) return error.CinematicDurationTooLarge;
-        const elapsed_ticks = self.deadline_ns * timer_denominator / timer_numerator;
-        const target_tick = try std.math.add(u64, elapsed_ticks, ticks);
+        const target_tick = try std.math.add(u64, self.elapsedTicks(), ticks);
         const whole = target_tick / timer_denominator;
         const rest = target_tick % timer_denominator;
         const target_ns = try std.math.add(

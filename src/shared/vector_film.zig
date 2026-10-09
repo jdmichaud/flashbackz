@@ -26,6 +26,25 @@ pub const Frame = struct {
     background: u8 = 0xc0,
     captions: []const TextRun = &.{},
     caption_band: bool = false,
+    /// In the ending's replay mode the picture is presented once, with this period in timer
+    /// ticks, then again `held_presents` times, every 2 ticks, for the waits that follow it. The
+    /// first frame of a film is not presented by itself.
+    presented: bool = true,
+    present_ticks: u8 = 4,
+    held_presents: u32 = 0,
+    replay_present: ReplayPresent = .picture,
+    /// A new background before this frame ends the hold of the picture.
+    ends_hold: bool = false,
+};
+
+/// How a frame's own present treats the ending's credits in replay mode.
+pub const ReplayPresent = enum {
+    /// A new picture, with the credits typed over it. Afterwards the picture is not held.
+    picture,
+    /// A page the viewer could confirm: presented without the credits, then held.
+    page,
+    /// The shown picture held for a moment: presented again with the credits.
+    hold,
 };
 
 pub const View = struct {
@@ -35,6 +54,8 @@ pub const View = struct {
     height: u16 = 224,
     viewport: shapes.Rect = .{ .x = 8, .y = 50, .width = 240, .height = 128 },
     background: u8 = 0,
+    /// The ending's replay mode leaves out the films' captions and placed texts.
+    texts: bool = true,
 
     pub fn validate(self: View) !void {
         if (self.frames.len == 0) return error.EmptyFilm;
@@ -79,8 +100,9 @@ pub const View = struct {
                 ellipse.radius_y,
                 drawing.ink,
             ),
-            .text => |run| try self.drawText(pixels, run),
+            .text => |run| if (self.texts) try self.drawText(pixels, run),
         };
+        if (!self.texts) return palette.writeRgba(pixels, &frame.colors, rgba);
         if (frame.caption_band) {
             const start = @min(pixels.len, @as(usize, self.width) * 178);
             const end = @min(pixels.len, @as(usize, self.width) * 203);
