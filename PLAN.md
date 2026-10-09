@@ -191,13 +191,13 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   from the original on polygon edges or one- and two-point shapes (at most 337 pixels; FIN,
   MEMO, ESPIONS, VOYAGE). Gate: the ending and introduction comparisons report every film
   frame identical, or each remaining difference is explained and accepted.
-  - 2026-10-09, flashback-re `capture_polygons.py` (engine-ending-zoom 3.5): the canvas's
-    polygon spans equal the original's for all 24,000 scan conversions of the introduction,
-    scaled and rotated vertices agree, and lines are the original's Bresenham. INTRO2's
-    differences are explained: 16 frames from the centre of rotated ellipses (one to four
-    pixels; the original rounds it through its rotation accumulator) and 2 frames from one
-    stale-span pixel at the left edge. Next: the rotated ellipse centre, then the ending's
-    differences with the same capture of its films.
+  - 2026-10-09, flashback-re shape captures (`capture_polygons.py`, `--shapes`,
+    `compare_shapes.py`; engine-ending-zoom 3.5, 3.6): polygons, lines and scaled ellipses
+    rasterize exactly; rotated ellipses keep their column (fixed) and a caption's bottom row
+    follows the display page (fixed). Now: logo 153/153, INTRO1 260/260, INTRO2 378/380 (one
+    stale-span pixel), ending 4,780/4,799. Open: MEMO's polygons crossing the top edge (13
+    presents), four single presents (MEMO, GENEXP, PONT, VOYAGE) and the stale-span pixel;
+    MEMO and PONT play in the city and jungle, where `--shapes` captures can settle them.
 - [x] The zoom view option (flashback-re engine-presentation 4.3), including the automatic
   combat zoom. Gate: original frames with the option on.
   - flashback-re `docs/rules/engine-ending-zoom.md`; all 816 frames of four zoom captures match.
