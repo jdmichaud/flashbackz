@@ -42,9 +42,9 @@ Rules:
 - Original code-wheel/copy protection is explicitly excluded by the user (2026-10-04).
   Do not port its prompts or checks; normal Start proceeds to the game opening sequence.
 
-- Windows compilation is deferred until Linux gameplay is working (user priority, 2026-10-04).
-  Focus validation on Linux while preserving portable boundaries and avoiding obvious Windows
-  incompatibilities; do not run Windows cross-builds during this phase.
+- Windows compilation was deferred until Linux gameplay worked (user priority, 2026-10-04).
+  Linux gameplay works, and the user authorized the Windows cross-build on 2026-10-09; Windows
+  acceptance remains Linux runtime checks plus a successful cross-build.
 
 - The user permits small pixel differences when exact matching would add undue complexity
   (2026-10-04). Prefer readable, general rendering rules over frame-specific pixel fixes.

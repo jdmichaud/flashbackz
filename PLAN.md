@@ -314,6 +314,8 @@ gates. All runtime work uses the original as the reference; no approximate accep
   - Status 2026-10-09: every level, room and difficulty runs and is compared; the ending, the
     score and the codes work; catch-up walks and the film differences are decided (2026-10-09).
     Waiting on the user playing the game through.
+  - User decision 2026-10-09: the user plays the game through and reports what they find; this
+    item stays open until then.
   - All levels, difficulties, enemy and puzzle behaviors, menus, demos, cinematics, languages,
     sound modes, checkpoints/passwords and configuration.
   - Gate: exact behavior coverage is complete and the user can play the game through.
@@ -323,6 +325,9 @@ gates. All runtime work uses the original as the reference; no approximate accep
 - [ ] **05 — Target acceptance** — Depends: 04.
   - Status 2026-10-09: Linux builds and runs (SDL and agent hosts); Windows builds are deferred
     and browser support is excluded by the user (2026-10-04).
+  - User decision 2026-10-09: cross-build Windows now (Linux gameplay works).
+  - [ ] Windows cross-build of both hosts (`zig build all -Dtarget=x86_64-windows-gnu`), with
+    SDL2 from source; fix what fails. Gate: a successful build, recorded with its toolchain.
   - Linux, Windows and browser packaging, inputs, audio, storage, lifecycle and long sessions.
   - Gate: Linux runtime acceptance and a successful Windows cross-build suffice for Windows
     (user decision, 2026-10-03); browser acceptance still includes actual browser execution.
