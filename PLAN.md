@@ -308,6 +308,26 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     catch-up; a 1 s stall gives one catch-up walk, two stalls two, and a stall during a film
     none.
 
+## Mega Drive music during play — user decision, 2026-10-09
+
+An addition to the DOS edition: the tunes the Mega Drive edition plays during play, sounding
+like the Mega Drive ("make it sound like the megadrive"). sorz's sound chips are reused (user
+permission, 2026-10-09); improvements found here go back to sor's agent. The cartridge is read
+at run time from the user's file; without it the game is the DOS edition, unchanged. Research:
+flashback-re MD1–MD3.
+
+- [ ] **MD-A — Mega Drive sound chips** — sorz's YM2612 (its port of ymfm, with ymfm's BSD
+  notice), PSG, DAC player, model 1 output and resampling, as a module of their own.
+  Gate: their tests pass here.
+- [ ] **MD-B — The cartridge as an input** — An option naming the user's cartridge, read at run
+  time and validated; nothing of it committed. Gate: tests; without the option the agent
+  session keeps its hashes.
+- [ ] **MD-C — GEMS player** — Plays a tune of the cartridge through the chips. Gate: its writes
+  equal the cartridge's for every tune (flashback-re MD2).
+- [ ] **MD-D — Music during play** — The tunes start, stop and fade where the cartridge plays them
+  (flashback-re MD3), with the effects and the films' music. Gate: a played route in the SDL
+  build where each tune starts where the cartridge starts it.
+
 ## Historical CD implementation/research milestones
 
 The sibling flashback-re plan owns research. Exact fidelity and maintainability are independent
