@@ -94,7 +94,8 @@ time once.
   sockets fail (Wine lacks the AFD device), a child process's timeout never fires and killing it
   aborts (a missing `RtlReportSilentProcessExit`), XTEST pointer motion does not reach a game on a
   bare Xvfb, and Wine emulates DPI scaling. The Windows gate needs Windows.
-- **Zig development versions** move: `@cImport` was removed (declare SDL's externs by hand);
+- **Zig development versions** move: `@cImport` was removed (translate the C headers in
+  build.zig with `b.addTranslateC`; write no extern by hand);
   `zig fmt` rewrites renamed builtins such as `@enumFromInt` into `@fromBackingInt(@intCast(...))`,
   so run it before every commit; `**` array repetition is refused (use `@splat`); standard output
   needs a streaming writer; directory entries can report an unknown kind; `std.process.Args.iterate`

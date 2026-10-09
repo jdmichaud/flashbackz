@@ -69,7 +69,13 @@ pub fn build(b: *std.Build) void {
     });
 
     // SDL platform: the only module that links SDL2, and thus libc. It imports `native` for the
-    // asset and save providers of the host, which link nothing.
+    // asset and save providers of the host, which link nothing, and `c`, SDL2's API translated
+    // from the headers of the SDL2 it links.
+    const sdl_api = b.addTranslateC(.{
+        .root_source_file = b.path("src/sdl/c.h"),
+        .target = target,
+        .optimize = optimize,
+    });
     const sdl = b.addModule("sdl", .{
         .root_source_file = b.path("src/sdl/root.zig"),
         .target = target,
@@ -78,12 +84,13 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "flashbackz", .module = shared },
             .{ .name = "native", .module = native },
+            .{ .name = "c", .module = sdl_api.createModule() },
         },
     });
     if (target.result.os.tag == .windows)
-        linkPackagedSdl(b, sdl, target, versions)
+        linkPackagedSdl(b, sdl, sdl_api, target, versions)
     else
-        linkSdl(b, sdl, sdl_linkage, versions);
+        linkSdl(b, sdl, sdl_api, sdl_linkage, versions);
 
     const agent_exe = b.addExecutable(.{
         .name = "flashbackz-agent",
@@ -158,17 +165,33 @@ pub fn build(b: *std.Build) void {
     ).dependOn(b.getInstallStep());
 }
 
-/// Links SDL2 into `m`, and records the SDL2 version that pkg-config reports as the `sdl` build
-/// option. Static linkage uses the archive that pkg-config names and the system libraries of its
-/// static link line. Those libraries stay dynamic, because static builds of X11, Wayland or
-/// PulseAudio are not practical. Dynamic linkage uses the shared library.
+/// Links SDL2 into `m`, translates the headers that pkg-config names for `api`, and records the
+/// SDL2 version that pkg-config reports as the `sdl` build option. Static linkage uses the archive
+/// that pkg-config names and the system libraries of its static link line. Those libraries stay
+/// dynamic, because static builds of X11, Wayland or PulseAudio are not practical. Dynamic linkage
+/// uses the shared library.
 fn linkSdl(
     b: *std.Build,
     m: *std.Build.Module,
+    api: *std.Build.Step.TranslateC,
     linkage: SdlLinkage,
     versions: *std.Build.Step.Options,
 ) void {
     var code: u8 = 0;
+    const include_out = b.runAllowFail(
+        &.{ "pkg-config", "--cflags-only-I", "sdl2" },
+        &code,
+        .ignore,
+    ) catch {
+        std.log.err("the SDL host needs pkg-config to locate SDL2's headers", .{});
+        std.process.exit(1);
+    };
+    var include_flags = std.mem.tokenizeAny(u8, include_out, " \t\r\n");
+    while (include_flags.next()) |flag| {
+        if (std.mem.startsWith(u8, flag, "-I"))
+            api.addSystemIncludePath(.{ .cwd_relative = b.dupe(flag[2..]) });
+    }
+
     if (b.runAllowFail(&.{ "pkg-config", "--modversion", "sdl2" }, &code, .ignore)) |out| {
         const found = std.mem.trim(u8, out, " \t\r\n");
         versions.addOption([]const u8, "sdl", found);
@@ -222,12 +245,13 @@ fn linkSdl(
 }
 
 /// A Windows build: SDL2 compiled from source by Zig for the target (the `sdl2` package), linked
-/// statically with the Windows libraries that it needs. The package is fetched on the first Windows
-/// build; Linux builds never fetch it. SDL is optimised whatever the game's mode, as the system
-/// library of a Linux build is.
+/// statically with the Windows libraries that it needs, and `api` translated from the package's
+/// headers. The package is fetched on the first Windows build; Linux builds never fetch it. SDL
+/// is optimised whatever the game's mode, as the system library of a Linux build is.
 fn linkPackagedSdl(
     b: *std.Build,
     m: *std.Build.Module,
+    api: *std.Build.Step.TranslateC,
     target: std.Build.ResolvedTarget,
     versions: *std.Build.Step.Options,
 ) void {
@@ -237,4 +261,8 @@ fn linkPackagedSdl(
         .{ .target = target, .optimize = .ReleaseFast },
     ) orelse return;
     m.linkLibrary(dep.artifact("SDL2"));
+    // The package's own header directories: the library's emitted include tree comes out empty
+    // with Zig 0.17.0 (flashback-re docs/tool-defects.md, 2026-10-09).
+    api.addIncludePath(dep.path("include-pregen"));
+    api.addIncludePath(dep.path("include"));
 }
