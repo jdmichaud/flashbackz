@@ -207,6 +207,12 @@ pub const Game = struct {
     loads_done: u32 = 0,
     audio: ?platform.AudioFormat = null,
     preferences: game_options.Settings = .{},
+    /// P's toggle, which only films read: they hold their picture while it is set.
+    films_paused: bool = false,
+    /// The music volume keypad + and - step, 0 to 63, for notes started afterwards.
+    music_volume: u8 = 48,
+    /// J was pressed: the joystick option turns on at the next frame of play outside a demo.
+    joystick_requested: bool = false,
     /// The samples of the current click still to queue, and the phase of its square wave.
     click_left: u32 = 0,
     click_phase: u32 = 0,
@@ -365,7 +371,11 @@ pub const Game = struct {
         if (self.scene == .ending) {
             const ending = &self.scene.ending;
             ending.music_enabled = self.preferences.music;
-            if (ending.music) |*music| music.volume = self.preferences.volume;
+            if (ending.music) |*music| {
+                music.volume = self.preferences.volume;
+                music.player.master_volume = self.music_volume;
+            }
+            ending.setPaused(self.films_paused, p.nowNs());
             try ending.update(p);
             if (ending.finished) {
                 const next = try self.titleMenu();
@@ -382,6 +392,8 @@ pub const Game = struct {
             front.music_enabled = self.preferences.music;
             front.volume = self.preferences.volume;
             front.joystick = self.preferences.joystick;
+            front.films_paused = self.films_paused;
+            front.music_volume = self.music_volume;
             if (front.stage == .quit) {
                 front.stopAudio(p);
                 self.phase = .finished;
@@ -495,7 +507,11 @@ pub const Game = struct {
             }
             const story = &self.story.?;
             story.music_enabled = self.preferences.music;
-            if (story.music) |*music| music.volume = self.preferences.volume;
+            if (story.music) |*music| {
+                music.volume = self.preferences.volume;
+                music.player.master_volume = self.music_volume;
+            }
+            story.player.setPaused(self.films_paused, now);
             if (!try story.update(p)) {
                 try self.present(p);
                 return true;
@@ -505,6 +521,11 @@ pub const Game = struct {
             story.deinit();
             self.story = null;
             try scene.finishFilm(now, paused);
+        }
+        // J's request is served at the next frame of play, outside a demo.
+        if (self.joystick_requested and scene.demo == null) {
+            self.joystick_requested = false;
+            self.setJoystick(true);
         }
         try scene.update(now);
         self.applyPreferences(scene.settings);
@@ -600,6 +621,7 @@ pub const Game = struct {
             if (n == 0) break;
             for (buf[0..n]) |event| {
                 self.events_consumed += 1;
+                self.globalKey(event);
                 if (self.story) |*story| {
                     if (event.payload == .quit) {
                         self.phase = .finished;
@@ -636,6 +658,51 @@ pub const Game = struct {
                     else => {},
                 }
             }
+        }
+    }
+
+    /// The keys the original's keyboard interrupt acts on whatever the screen: P, the keypad's
+    /// + and -, S, J and K. The event still goes on to the scene: a code being typed may
+    /// contain these letters.
+    fn globalKey(self: *Game, event: platform.Event) void {
+        const press = switch (event.payload) {
+            .key_down => |key| key,
+            else => return,
+        };
+        switch (press.key) {
+            .p => if (!press.repeat) {
+                self.films_paused = !self.films_paused;
+            },
+            .keypad_plus => if (!press.repeat and self.music_volume < 63) {
+                self.music_volume += 1;
+            },
+            .keypad_minus => if (!press.repeat and self.music_volume > 0) {
+                self.music_volume -= 1;
+            },
+            // Films, the inventory, messages, the continue screen and the title refuse it.
+            .s => if (!press.repeat and self.story == null and self.scene == .level) {
+                const level = &self.scene.level;
+                if (level.inPlay()) {
+                    level.settings.sound_fx = !level.settings.sound_fx;
+                    if (level.options) |*options| options.menu.settings.sound_fx = level.settings.sound_fx;
+                }
+            },
+            .j => self.joystick_requested = true,
+            .k => self.setJoystick(false),
+            else => {},
+        }
+    }
+
+    /// The joystick option wherever it is kept: the preferences, a level in progress or
+    /// waiting behind the continue screen, its options dialog and its film.
+    fn setJoystick(self: *Game, on: bool) void {
+        self.preferences.joystick = on;
+        if (self.story) |*story| story.joystick = on;
+        if (self.suspended_level) |*level| level.settings.joystick = on;
+        if (self.scene == .level) {
+            const level = &self.scene.level;
+            level.settings.joystick = on;
+            if (level.options) |*options| options.menu.settings.joystick = on;
         }
     }
 

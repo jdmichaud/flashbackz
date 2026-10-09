@@ -158,7 +158,7 @@ pub fn main(init: std.process.Init) !void {
         const scene = &game.scene.level;
         const conrad = scene.world.characters[0];
         try w.interface.print(
-            "{{\"scene\":\"level\",\"level\":\"{s}\",\"difficulty\":\"{s}\",\"room\":{d},\"x\":{d},\"y\":{d},\"score\":{d},\"catch_up_walks\":{d},\"film\":{}}}\n",
+            "{{\"scene\":\"level\",\"level\":\"{s}\",\"difficulty\":\"{s}\",\"room\":{d},\"x\":{d},\"y\":{d},\"score\":{d},\"catch_up_walks\":{d},\"film\":{},\"sound_fx\":{},\"joystick\":{}}}\n",
             .{
                 @tagName(scene.level),
                 @tagName(game.difficulty),
@@ -168,6 +168,8 @@ pub fn main(init: std.process.Init) !void {
                 scene.world.score,
                 scene.catch_up_walks,
                 game.isStoryPlaying(),
+                scene.settings.sound_fx,
+                scene.settings.joystick,
             },
         );
     } else if (game.scene == .menu) {

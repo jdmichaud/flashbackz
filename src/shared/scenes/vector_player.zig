@@ -55,7 +55,7 @@ pub const Player = struct {
     cadence: Cadence,
     origin_ns: ?u64 = null,
     confirmed: bool = false,
-    /// When P paused the pictures; the time paused does not count.
+    /// Since when P holds the pictures; the time held does not count.
     paused_at: ?u64 = null,
     pub fn interactive(self: *const Player) bool {
         for (self.movie.frames) |frame| if (frame.input_loop_start != null) return true;
@@ -76,8 +76,10 @@ pub const Player = struct {
         if (self.awaitingInput()) self.confirmed = true;
     }
 
-    /// P stops the pictures, and P again resumes them; the music plays on.
-    pub fn togglePause(self: *Player, now_ns: u64) void {
+    /// While P's toggle is set the pictures stop, and they resume where they stopped; the
+    /// music plays on.
+    pub fn setPaused(self: *Player, paused: bool, now_ns: u64) void {
+        if (paused == (self.paused_at != null)) return;
         if (self.paused_at) |at| {
             if (self.origin_ns) |*origin| origin.* +|= now_ns -| at;
             self.paused_at = null;
@@ -208,11 +210,12 @@ test "a paused film keeps its picture and resumes where it stopped" {
     defer player.deinit();
     try player.cadence.hold(frames[0].hold_ticks);
     const due = player.cadence.deadline_ns;
-    player.togglePause(due - 1);
+    player.setPaused(true, due - 1);
+    player.setPaused(true, due);
     try std.testing.expect(!player.needsCatchup(due + std.time.ns_per_s));
     _ = try player.update(due + std.time.ns_per_s);
     try std.testing.expectEqual(@as(usize, 0), player.playback.frame);
-    player.togglePause(due + std.time.ns_per_s);
+    player.setPaused(false, due + std.time.ns_per_s);
     try std.testing.expect(!player.needsCatchup(due + std.time.ns_per_s - 2));
     try std.testing.expect(player.needsCatchup(due + std.time.ns_per_s + 1));
     _ = try player.update(due + std.time.ns_per_s + 1);

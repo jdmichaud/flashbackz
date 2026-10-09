@@ -44,6 +44,8 @@ pub const Story = struct {
         }
     }
     pub fn update(self: *Story, p: *platform.Platform) !bool {
+        // A held film does not look at its keys.
+        if (self.player.paused_at != null) self.skip = false;
         if (self.skip or try self.player.update(p.nowNs())) return true;
         if (!self.music_enabled or self.music == null) {
             self.stopAudio(p);
@@ -60,8 +62,8 @@ pub const Story = struct {
         try self.music.?.pump(p);
         return false;
     }
-    /// The film's keys: Backspace or Tab skips it, Enter, Space or Shift turns an interactive
-    /// page and P pauses the pictures. True when the film took the event.
+    /// The film's keys: Backspace or Tab skips it, and Enter, Space or Shift turns an
+    /// interactive page. True when the film took the event.
     pub fn event(self: *Story, input: platform.Event) bool {
         if (vector.skips(input.payload, self.joystick)) {
             self.skip = true;
@@ -70,7 +72,6 @@ pub const Story = struct {
         switch (input.payload) {
             .key_down => |press| switch (press.key) {
                 .enter, .space, .left_shift, .right_shift => if (!press.repeat) self.player.confirm(),
-                .p => if (!press.repeat) self.player.togglePause(input.time_ns),
                 .tab, .backspace => {},
                 else => return false,
             },

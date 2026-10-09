@@ -410,6 +410,13 @@ pub const Scene = struct {
         try self.afterMessage(deadline);
     }
 
+    /// Play proper: no film, inventory, message or end of the level. The options dialog does
+    /// not count; the original lets S through while it is open.
+    pub fn inPlay(self: *const Scene) bool {
+        return self.outcome == .playing and self.film == null and self.inventory == null and
+            self.message_clock == null;
+    }
+
     pub fn needsCatchup(self: *const Scene, now_ns: u64) bool {
         if (self.outcome != .playing or self.film != null) return false;
         return if (self.nextDeadline()) |time| now_ns >= time else false;

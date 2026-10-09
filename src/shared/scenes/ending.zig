@@ -57,6 +57,8 @@ pub const Ending = struct {
     /// The ending's own clock: presents wait for their timer ticks, then a display refresh.
     cadence: vector.Cadence = .{},
     origin_ns: ?u64 = null,
+    /// Since when P holds the films; the time held does not count.
+    paused_at: ?u64 = null,
     /// Timer ticks the last present lasted, which the next credits step sees elapsed.
     elapsed_ticks: u32 = 0,
 
@@ -147,7 +149,19 @@ pub const Ending = struct {
         }
     }
 
+    /// While P's toggle is set the films stop, and they resume where they stopped; the music
+    /// plays on.
+    pub fn setPaused(self: *Ending, paused: bool, now_ns: u64) void {
+        if (self.player) |*player| player.setPaused(paused, now_ns);
+        if (paused == (self.paused_at != null)) return;
+        if (self.paused_at) |at| {
+            if (self.origin_ns) |*origin| origin.* +|= now_ns -| at;
+            self.paused_at = null;
+        } else self.paused_at = now_ns;
+    }
+
     fn due(self: *const Ending, now_ns: u64) bool {
+        if (self.paused_at != null) return false;
         const origin = self.origin_ns orelse return true;
         return now_ns -| origin >= self.cadence.deadline_ns;
     }
@@ -233,7 +247,8 @@ pub const Ending = struct {
                 if (key.repeat or self.held.contains(key.key)) return;
                 self.held.insert(key.key);
                 switch (self.stage) {
-                    .films => if (key.key == .tab or key.key == .backspace) {
+                    // A held film does not look at its keys.
+                    .films => if ((key.key == .tab or key.key == .backspace) and self.paused_at == null) {
                         // Skipping the ending film leaves the list to play; skipping in the
                         // list ends it.
                         if (self.film_index != 0) self.film_index = self.film_count - 1;

@@ -42,6 +42,10 @@ pub const Scene = struct {
     skip_requested: bool = false,
     /// The joystick option: the joystick's inventory button skips films too.
     joystick: bool = false,
+    /// P's toggle: films hold their picture while it is set.
+    films_paused: bool = false,
+    /// The music volume keypad + and - step, 0 to 63.
+    music_volume: u8 = 48,
     stage: Stage = .menu,
     view: View = .main,
     difficulty: Difficulty = .normal,
@@ -141,6 +145,7 @@ pub const Scene = struct {
         }
         if (self.music) |*music| {
             music.volume = self.volume;
+            music.player.master_volume = self.music_volume;
             try music.pump(p);
         }
     }
@@ -167,6 +172,9 @@ pub const Scene = struct {
 
     pub fn update(self: *Scene, p: *platform.Platform) !void {
         if (self.player) |*player| {
+            player.setPaused(self.films_paused, p.nowNs());
+            // A held film does not look at its keys.
+            if (player.paused_at != null) self.skip_requested = false;
             const skipped = self.skip_requested;
             if (skipped or try player.update(p.nowNs())) {
                 if (self.stage == .game_over) {
@@ -238,10 +246,7 @@ pub const Scene = struct {
         if (input.payload != .key_down) return;
         const press = input.payload.key_down;
         const key = press.key;
-        if (self.player) |*player| {
-            if (key == .p and !press.repeat) player.togglePause(input.time_ns);
-            return;
-        }
+        if (self.player != null) return;
         const confirm = key == .enter or key == .space or key == .left_shift or key == .right_shift;
         if (self.stage != .menu) return;
         switch (self.view) {
