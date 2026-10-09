@@ -94,6 +94,10 @@ const Builder = struct {
     wait_presents: u32 = 0,
     /// A new background since the last present.
     new_background: bool = false,
+    /// The two display pages, and which of them holds the caption's bottom row (see
+    /// `film.Frame.caption_tail`).
+    back_page: u1 = 0,
+    page_tail: [2]bool = .{ true, true },
     vertices: usize = 0,
     references: usize = 0,
 
@@ -121,6 +125,10 @@ const Builder = struct {
         previous.held_presents += self.wait_presents;
         self.wait_ticks = 0;
         self.wait_presents = 0;
+        // A hold copies the shown page onto the one it presents.
+        if (replay == .hold) self.page_tail[self.back_page] = self.page_tail[self.back_page ^ 1];
+        const caption_tail = self.page_tail[self.back_page];
+        self.back_page ^= 1;
         self.visible = try self.snapshot(self.working.items);
         try self.frames.append(
             self.allocator,
@@ -133,6 +141,7 @@ const Builder = struct {
                 .present_ticks = @intCast(ticks),
                 .replay_present = replay,
                 .ends_hold = self.new_background,
+                .caption_tail = caption_tail,
             },
         );
         self.new_background = false;
@@ -149,6 +158,10 @@ const Builder = struct {
     }
     fn caption(self: *Builder, reference: u16) !void {
         self.caption_band = true;
+        // The band is cleared on every page; the text goes onto the back page (and the saved
+        // background, from which the other page gets all of it but its bottom row).
+        self.page_tail = .{ false, false };
+        self.page_tail[self.back_page] = true;
         self.captions = if (reference == 0xffff) &.{} else try (try self.textAssets()).layout(
             self.allocator,
             reference,

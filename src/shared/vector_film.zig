@@ -35,6 +35,10 @@ pub const Frame = struct {
     replay_present: ReplayPresent = .picture,
     /// A new background before this frame ends the hold of the picture.
     ends_hold: bool = false,
+    /// Whether this present shows the caption's bottom row. Each frame restores the picture and
+    /// eight rows per caption line from a saved page, one row short of the caption's last, so
+    /// that row shows only on the display page the caption was drawn on.
+    caption_tail: bool = true,
 };
 
 /// How a frame's own present treats the ending's credits in replay mode.
@@ -100,7 +104,7 @@ pub const View = struct {
                 ellipse.radius_y,
                 drawing.ink,
             ),
-            .text => |run| if (self.texts) try self.drawText(pixels, run),
+            .text => |run| if (self.texts) try self.drawText(pixels, self.height, run),
         };
         if (!self.texts) return palette.writeRgba(pixels, &frame.colors, rgba);
         if (frame.caption_band) {
@@ -108,15 +112,21 @@ pub const View = struct {
             const end = @min(pixels.len, @as(usize, self.width) * 203);
             @memset(pixels[start..end], 0xc0);
         }
-        for (frame.captions) |run| try self.drawText(pixels, run);
+        const caption_rows: usize = if (frame.caption_tail)
+            self.height
+        else
+            @min(self.height, 178 + 8 * frame.captions.len);
+        for (frame.captions) |run| {
+            try self.drawText(pixels[0 .. caption_rows * self.width], @intCast(caption_rows), run);
+        }
         try palette.writeRgba(pixels, &frame.colors, rgba);
     }
-    fn drawText(self: View, pixels: []u8, run: TextRun) !void {
+    fn drawText(self: View, pixels: []u8, rows: u16, run: TextRun) !void {
         const font = self.font orelse return error.MissingCinematicFont;
         try text_renderer.draw(
             pixels,
             self.width,
-            self.height,
+            rows,
             &font,
             run.text,
             run.x,
