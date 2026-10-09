@@ -210,6 +210,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   of each page (flashback-re capture) match flashbackz's.
   - 2026-10-09, flashback-re docs/title-menu.md: 33 of 33 steps identical after the Skill page's
     wrap and the code entry's blinking cursor (`7711cc1`).
+- [ ] One program fewer (user decision, 2026-10-09): `--extract DIR` on the SDL and agent hosts
+  writes the data set and exits (with `--names FILE`; playing options are refused with it), and
+  the separate `flashbackz-extract` goes. The research regression extracts with the agent.
+  Gate: the extracted files equal the old extractor's, both hosts' `--help`, the regression.
 - [x] Command lines from one table (user decision, 2026-10-09): bring zig-utils' `clap.zig` (MIT,
   JD Michaud) into the native module, ported to Zig 0.17 with repeated options, a variable
   number of positional arguments, `--`, `--name=value`, errors returned instead of exiting,
