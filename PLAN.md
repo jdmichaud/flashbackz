@@ -192,6 +192,14 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
       (the level's opening film); their sessions end in a defeat or a level exit, which the
       regression now respects. With the spaceport's own start, 269 captures and 38,086 updates
       match.
+- [ ] The original's other keys (flashback-re engine-presentation 6.1, engine-music 9; key
+  handlers 0x7b60-0x7c5c). P is a global toggle that only films read, so a P pressed during play
+  holds the next film until P is pressed again; keypad + and - change the music volume one step
+  per press (0..63 from 48, for notes started afterwards) for the session; S switches the sound
+  effects on or off, as the options row does, during play only (not in films, the inventory,
+  messages, the continue screen or the title); J turns the joystick option on at the next
+  gameplay frame (not in a demo), K turns it off at once. The calibration dialog J shows for an
+  analog joystick is left out: SDL controllers need none. Gate: agent runs.
 - [x] The ending: scene 61's film list under END31, the final score screen (scene 73) and the
   return to the title. Gate: compared with an original capture of the ending.
   - 2026-10-09, flashback-re `tools/compare_ending.py` (engine-ending-zoom 12.5): the credits
