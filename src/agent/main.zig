@@ -133,7 +133,11 @@ pub fn main(init: std.process.Init) !void {
     var storage = memory_storage.storage();
     if (options.assets != null or options.saves != null) {
         providers.open(gpa, io, init.environ_map, options) catch |err| {
-            std.log.err("cannot open the providers: {s}", .{@errorName(err)});
+            var buffer: [256]u8 = undefined;
+            var stderr = std.Io.File.stderr().writerStreaming(io, &buffer);
+            stderr.interface.writeAll("flashbackz-agent: ") catch {};
+            providers.writeFailure(err, &stderr.interface) catch {};
+            stderr.interface.flush() catch {};
             std.process.exit(2);
         };
         assets = providers.assetSource() orelse assets;

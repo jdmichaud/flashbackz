@@ -106,13 +106,21 @@ pub fn extractCommand(gpa: std.mem.Allocator, io: std.Io, program: []const u8, o
     var arena_state: std.heap.ArenaAllocator = .init(gpa);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
-    const report = writeDataSet(gpa, arena, io, options) catch |err| {
+    var providers: Providers = .empty;
+    defer providers.deinit();
+    const report = writeDataSet(gpa, arena, io, options, &providers) catch |err| {
         var buffer: [256]u8 = undefined;
         var stderr = std.Io.File.stderr().writerStreaming(io, &buffer);
-        const written = switch (err) {
-            error.OutputNotEmpty => stderr.interface.print("{s}: {s} must be a new or empty directory\n", .{ program, options.extract.? }),
-            else => stderr.interface.print("{s}: extraction failed: {s}\n", .{ program, @errorName(err) }),
-        };
+        const out = &stderr.interface;
+        const written = if (err == error.OutputNotEmpty)
+            out.print("{s}: {s} must be a new or empty directory\n", .{
+                program,
+                options.extract.?,
+            })
+        else if (openError(err)) |failure| written: {
+            out.print("{s}: ", .{program}) catch {};
+            break :written providers.writeFailure(failure, out);
+        } else out.print("{s}: extraction failed: {s}\n", .{ program, @errorName(err) });
         written catch {};
         stderr.interface.flush() catch {};
         return 1;
@@ -122,9 +130,21 @@ pub fn extractCommand(gpa: std.mem.Allocator, io: std.Io, program: []const u8, o
     return 0;
 }
 
-fn writeDataSet(gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, options: Options) ![]const u8 {
-    var providers: Providers = .empty;
-    defer providers.deinit();
+/// `err` as one of the providers' errors, if it is one.
+fn openError(err: anyerror) ?OpenError {
+    inline for (@typeInfo(OpenError).error_set.error_names.?) |name| {
+        if (err == @field(anyerror, name)) return @field(OpenError, name);
+    }
+    return null;
+}
+
+fn writeDataSet(
+    gpa: std.mem.Allocator,
+    arena: std.mem.Allocator,
+    io: std.Io,
+    options: Options,
+    providers: *Providers,
+) ![]const u8 {
     var paths: [2][]const u8 = undefined;
     try providers.openAssets(gpa, io, options.assetPaths(&paths));
     const names: [:0]const u8 = if (options.names) |path|
@@ -207,8 +227,45 @@ pub const Providers = struct {
     /// The data set, when original files are open: read from `--data` or extracted from them.
     data_arena: ?*std.heap.ArenaAllocator = null,
     data: ?flashbackz.behavior.data_set.Files = null,
+    /// What `open` or `openAssets` was opening when it failed, for `writeFailure`.
+    failed: Failure = .{},
 
     pub const empty: Providers = .{};
+
+    /// A path the user gave (borrowed from the options) and what it was for; no path for the
+    /// default save directory or the disks' archives.
+    pub const Failure = struct {
+        what: []const u8 = "",
+        path: []const u8 = "",
+    };
+
+    /// The user's message for a failed `open` or `openAssets`: what could not be opened and why,
+    /// on one line ("cannot open the disk disk1.img: not found").
+    pub fn writeFailure(
+        self: *const Providers,
+        err: OpenError,
+        w: *std.Io.Writer,
+    ) std.Io.Writer.Error!void {
+        const why = switch (err) {
+            error.NotFound => "not found",
+            error.NotADirectory => "not a directory",
+            error.InvalidImage => "not a floppy image of the game, nor a directory from one",
+            error.ConflictingAsset => "a file differs from the other disk's (two editions?)",
+            error.AccessDenied => "permission denied",
+            error.NoApplicationDirectory => "no per-user data directory here; give --saves DIR",
+            error.Io => "read error",
+            error.Canceled => "canceled",
+            error.OutOfMemory => "out of memory",
+            error.InvalidDataSet => "not a data set written by --extract",
+            error.UnsupportedCartridge => "not the cartridge Flashback (Europe) (En,Fr)",
+        };
+        if (self.failed.path.len == 0) {
+            try w.print("cannot open the {s}: {s}\n", .{ self.failed.what, why });
+        } else {
+            const failed = self.failed;
+            try w.print("cannot open the {s} {s}: {s}\n", .{ failed.what, failed.path, why });
+        }
+    }
 
     /// Opens the save directory, and creates it if it does not exist. If the options give an
     /// asset path, also opens the asset source at that path.
@@ -221,18 +278,28 @@ pub const Providers = struct {
     ) OpenError!void {
         self.allocator = allocator;
         errdefer self.deinit();
+        self.failed = .{ .what = "save directory", .path = options.saves orelse "" };
         self.saves_path = if (options.saves) |path|
             try allocator.dupe(u8, path)
         else
             try defaultSaveDirectory(allocator, environ);
         self.saves = try mapOpen(DirectoryStorage.open(allocator, io, self.saves_path, true));
-        const path = options.assets orelse return;
+        const path = options.assets orelse {
+            self.failed = .{};
+            return;
+        };
         self.content = Pack.init(allocator);
         try self.importPath(io, path);
         if (options.second_assets) |second| try self.importPath(io, second);
+        self.failed = .{ .what = "disks' archives" };
         flashbackz.content.archive.expandAll(&self.content.?) catch |err| return mapImportError(err);
-        if (options.megadrive) |file| try self.importCartridge(io, file);
+        if (options.megadrive) |file| {
+            self.failed = .{ .what = "Mega Drive cartridge", .path = file };
+            try self.importCartridge(io, file);
+        }
+        self.failed = .{ .what = "data set", .path = options.data orelse "" };
         try self.openDataSet(io, options.data);
+        self.failed = .{};
     }
 
     /// Adds the Mega Drive cartridge to the asset source, once it is known to be the accepted one.
@@ -283,10 +350,13 @@ pub const Providers = struct {
         errdefer self.deinit();
         self.content = Pack.init(allocator);
         for (paths) |path| try self.importPath(io, path);
+        self.failed = .{ .what = "disks' archives" };
         flashbackz.content.archive.expandAll(&self.content.?) catch |err| return mapImportError(err);
+        self.failed = .{};
     }
 
     fn importPath(self: *Providers, io: std.Io, path: []const u8) OpenError!void {
+        self.failed = .{ .what = "disk", .path = path };
         const allocator = self.allocator;
         const kind: AssetKind = if (DirectoryAssetSource.open(allocator, io, path)) |opened| directory: {
             var directory = opened;
@@ -346,7 +416,7 @@ pub const Providers = struct {
         if (self.content) |*content| content.deinit();
         if (self.saves) |*s| s.deinit();
         self.allocator.free(self.saves_path);
-        self.* = .empty;
+        self.* = .{ .failed = self.failed };
     }
 
     /// The bound asset source. Null when the host has no asset path and uses its own assets.
@@ -505,10 +575,19 @@ test "the options open a game directory, or none" {
         var providers: Providers = .empty;
         const missing = try std.fmt.allocPrint(allocator, "{s}/absent", .{base});
         defer allocator.free(missing);
-        try std.testing.expectError(
-            error.NotFound,
-            providers.open(allocator, io, &env, .{ .assets = missing, .saves = paths[1] }),
+        const options: Options = .{ .assets = missing, .saves = paths[1] };
+        const failed = providers.open(allocator, io, &env, options);
+        try std.testing.expectError(error.NotFound, failed);
+        var message: std.Io.Writer.Allocating = .init(allocator);
+        defer message.deinit();
+        try providers.writeFailure(error.NotFound, &message.writer);
+        const expected = try std.fmt.allocPrint(
+            allocator,
+            "cannot open the disk {s}: not found\n",
+            .{missing},
         );
+        defer allocator.free(expected);
+        try std.testing.expectEqualStrings(expected, message.written());
         const not_a_directory = try std.fmt.allocPrint(allocator, "{s}/game/game.cfg", .{base});
         defer allocator.free(not_a_directory);
         try std.testing.expectError(

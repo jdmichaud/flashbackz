@@ -89,7 +89,9 @@ pub fn run(
     var providers: native.cli.Providers = .empty;
     defer providers.deinit();
     providers.open(gpa, io, environ, options.providers) catch |e| {
-        std.log.err("cannot open the providers: {s}", .{@errorName(e)});
+        try err.print("{s}: ", .{name});
+        try providers.writeFailure(e, err);
+        try err.flush();
         return 1;
     };
     try err.print(
