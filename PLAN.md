@@ -66,11 +66,20 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   the gameplay imports.
 - [x] Persist master volume across application restarts. Load before startup audio and save
   applied changes through the shared storage interface; check a native close/relaunch.
-- [ ] Game Options: pause/resume, original settings and abort flow, host free memory in MB,
+- [x] Game Options: pause/resume, original settings and abort flow, host free memory in MB,
   plus user-requested master volume (0–100%). Gate: native menu input, pause behavior and
   both music/effect output levels are verified; original-only settings retain measured semantics.
   - The level scene opens it on Esc after the update's walk and abandons to the continue
     screen, as the original does.
+  - 2026-10-09: the pause is part of the zoom captures, which open the dialog during play and
+    match the original on every update. Agent host, keyboard input, recorded output
+    (`--pcm`): 50% volume halves every sample of title music, film music and level effects
+    (it is saved and restored); Sound FX off silences the effects that follow, Music off the
+    title music after abandoning; Abort leads to the continue screen and the title. Zoom is
+    compared with the original (zoom captures). The Joystick row keeps its value; there is no
+    joystick input yet (next item). Earlier native SDL/XTEST runs covered the dialog itself.
+- [ ] Joystick input: the original reads a joystick when the Joystick option is on. Gate: a
+  host joystick or gamepad drives Conrad as the keys do, under that option.
 - [x] Extend the existing native development scene shortcut to named levels so later-level
   mechanisms can be checked in the actual executable without remapping original assets.
 - [x] Title-menu level codes: match the supplied edition’s codes, select their level and
