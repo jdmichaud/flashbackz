@@ -192,12 +192,16 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
       (the level's opening film); their sessions end in a defeat or a level exit, which the
       regression now respects. With the spaceport's own start, 269 captures and 38,086 updates
       match.
-- [ ] The title menu's idle demo: after 2,400 film timer ticks on the main menu without Up or
+- [x] The title menu's idle demo: after 2,400 film timer ticks on the main menu without Up or
   Down the original chooses Demo (flashback-re docs/title-menu.md). Gate: the original's delay
   measured, and an agent run.
-- [ ] The title menu's pages frame for frame: the main menu with each item selected, Skill,
+  - 2026-10-09: measured 34.38 s from the menu's start to its Demo choice; flashbackz starts
+    the demo 34.4 s after the menu appears and restarts the wait on Up or Down.
+- [x] The title menu's pages frame for frame: the main menu with each item selected, Skill,
   Info and the password page while a code is typed, and their keys. Gate: the original's frames
   of each page (flashback-re capture) match flashbackz's.
+  - 2026-10-09, flashback-re docs/title-menu.md: 33 of 33 steps identical after the Skill page's
+    wrap and the code entry's blinking cursor (`7711cc1`).
 - [x] The original's other keys (flashback-re engine-presentation 6.1, engine-music 9; key
   handlers 0x7b60-0x7c5c). P is a global toggle that only films read, so a P pressed during play
   holds the next film until P is pressed again; keypad + and - change the music volume one step
