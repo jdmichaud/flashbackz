@@ -1,7 +1,8 @@
 # Flashbackz design
 
 Initial design, 2026-10-03; revised 2026-10-08 with the user's approval: character behavior and
-level content are data (sections 3, 4 and 7). This is an independently organized game, verified against the supplied
+level content are data (sections 3, 4 and 7); the architecture as built, with Conrad on his
+behavior table, approved by the user on 2026-10-09. This is an independently organized game, verified against the supplied
 Flashback DOS floppy edition. The implementation goal authorizes this initial design. Changes to the
 established contracts require the user's approval; measured content and port maps evolve with
 the research. Unknown original behavior is not replaced by guessed rules.

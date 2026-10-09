@@ -45,6 +45,7 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     INTRO2): the original's clock measures 69.94 Hz over 44 s of plain presents, the model
     uses 70.09 Hz. Open: whether to calibrate to the emulator's beat (DOSBox's refresh is not
     real VGA's 70 Hz), and the input comparison.
+  - User decision 2026-10-09: keep the current timing (no calibration to the emulator's beat).
 - [x] Import Flashback MIDI/PRF/INS music into named parts, instruments and scheduled events;
   verify malformed inputs, profile bindings, loops and note adjustments without game fixtures.
   - `content/music.zig` imports profiles, instruments and tracks into an immutable score; its
@@ -199,11 +200,15 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     pixel), ending 4,794/4,799, and every shape of VOYAGE and MEMO matches in normal mode.
     Open: five ending presents, four of them the first after a held picture (replay-mode page
     handling), and the stale-span pixel.
+  - User decision 2026-10-09: accept and document these remaining differences.
 - [x] The zoom view option (flashback-re engine-presentation 4.3), including the automatic
   combat zoom. Gate: original frames with the option on.
   - flashback-re `docs/rules/engine-ending-zoom.md`; all 816 frames of four zoom captures match.
 - [ ] Catch-up walks: when a frame is late the original repeats the walk without presenting.
   Decide with the user whether the modern cadence should reproduce it; record the decision.
+  - User decision 2026-10-09: reproduce it. A late frame runs one more walk (input read
+    again, countdowns not decremented, no scene check) before the next present, and the next
+    frame waits three ticks instead of two (flashback-re engine-update 1.2 steps 11 and 19).
 
 ## Historical CD implementation/research milestones
 
