@@ -322,8 +322,9 @@ flashback-re MD1–MD3.
 - [ ] **MD-B — The cartridge as an input** — An option naming the user's cartridge, read at run
   time and validated; nothing of it committed. Gate: tests; without the option the agent
   session keeps its hashes.
-- [ ] **MD-C — GEMS player** — Plays a tune of the cartridge through the chips. Gate: its writes
-  equal the cartridge's for every tune (flashback-re MD2).
+- [ ] **MD-C — The tunes' player** — Plays the cartridge's tunes 68–75 (its 3-channel FM
+  tracker) through the chips. Gate: its writes equal the cartridge's for every tune
+  (flashback-re MD2).
 - [ ] **MD-D — Music during play** — The tunes start, stop and fade where the cartridge plays them
   (flashback-re MD3), with the effects and the films' music. Gate: a played route in the SDL
   build where each tune starts where the cartridge starts it.
