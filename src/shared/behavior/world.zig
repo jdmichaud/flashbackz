@@ -90,6 +90,9 @@ pub const Requests = struct {
     level: ?u8 = null,
     sounds: [16]Sound = undefined,
     sound_count: u8 = 0,
+    /// Characters hit this update (hit messages that reached them), for the zoom view.
+    hits: [16]u16 = undefined,
+    hit_count: u8 = 0,
 
     pub fn addSound(self: *Requests, sound: Sound) void {
         if (self.sound_count == self.sounds.len) return;
@@ -789,6 +792,10 @@ pub const World = struct {
         if (message.isHit()) {
             if (to.room != self.characters[sender].room) return;
             if (recipient == 0 and self.protection != 0) return;
+            if (self.requests.hit_count < self.requests.hits.len) {
+                self.requests.hits[self.requests.hit_count] = recipient;
+                self.requests.hit_count += 1;
+            }
         }
         const slot = self.free_letter orelse return;
         self.free_letter = self.letters[slot].next;

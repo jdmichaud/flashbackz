@@ -23,9 +23,11 @@ const World = behavior.world.World;
 const data_set = behavior.data_set;
 const contacts = behavior.contacts;
 
-pub const width = 256;
-pub const height = 224;
-const pixel_count = width * height;
+const level_screen = @import("level_screen.zig");
+pub const Screen = level_screen.Screen;
+pub const width = level_screen.width;
+pub const height = level_screen.height;
+const pixel_count = level_screen.pixel_count;
 
 /// How a level ends, for the game to act on.
 pub const Outcome = union(enum) {
@@ -67,6 +69,10 @@ pub const Scene = struct {
     /// inventory closes.
     inventory_delay: u8 = 4,
     inventory: ?Inventory = null,
+    inventory_left_zoom: bool = false,
+    /// The input byte of the update whose frame waits for its flip behind a message, the
+    /// options dialog or the inventory.
+    frame_controls: u8 = 0,
     /// The scene the last update requested: it plays at the start of the next one.
     requested_scene: ?i16 = null,
     /// A film the game must play now; the update waits for it with its input latched.
@@ -241,7 +247,12 @@ pub const Scene = struct {
 
     /// Runs the updates due by `now_ns`, at the original's cadence.
     pub fn update(self: *Scene, now_ns: u64) !void {
-        if (self.clock == null) self.clock = try step_clock.Clock.init(step_clock.jungle, now_ns);
+        if (self.clock == null) {
+            self.clock = try step_clock.Clock.init(step_clock.jungle, now_ns);
+            // The automatic zoom option lasts for the program run; a permanent zoom does not
+            // survive a new game or a continue.
+            self.screen.zoom.automatic = self.settings.zoom == .auto;
+        }
         var work: usize = 0;
         while (self.outcome == .playing and self.film == null and self.needsCatchup(now_ns) and
             work < 8) : (work += 1)
@@ -249,7 +260,7 @@ pub const Scene = struct {
             if (self.options) |*options| {
                 const deadline = options.clock.deadline();
                 options.clock.consume();
-                self.pollOptions(deadline);
+                try self.pollOptions(deadline);
                 continue;
             }
             if (self.inventory) |*inventory| {
@@ -268,36 +279,48 @@ pub const Scene = struct {
             self.clock.?.consume();
             const controls = try self.step(deadline);
             if (self.film != null) return;
-            try self.afterFrame(controls, deadline);
+            try self.finishFrame(controls, deadline);
         }
     }
 
-    /// After a presented frame: a world message opens, else Esc opens the options (it ends a
-    /// demo), else the inventory key is checked.
-    fn afterFrame(self: *Scene, controls: u8, now_ns: u64) !void {
-        if (self.screen.message != null) {
-            try self.openMessage(now_ns);
-        } else if (self.outcome != .playing) {
-            return;
-        } else if (self.keys.escape) {
+    /// After the walk and the draw, in the original's order: a world message, the zoom's
+    /// timers, Esc (the options dialog; it ends a demo), the inventory key, then the flip. A
+    /// modal screen holds the rest of the sequence until it closes.
+    fn finishFrame(self: *Scene, controls: u8, now_ns: u64) !void {
+        if (self.outcome != .playing) return;
+        self.frame_controls = controls;
+        if (self.screen.message != null) return self.openMessage(now_ns);
+        try self.afterMessage(now_ns);
+    }
+
+    fn afterMessage(self: *Scene, now_ns: u64) !void {
+        self.screen.afterDraw();
+        if (self.keys.escape) {
             self.keys.escape = false;
             if (self.demo != null) {
                 self.outcome = .aborted;
                 return;
             }
+            var settings_shown = self.settings;
+            settings_shown.zoom = @fromBackingInt(self.screen.zoom.row());
             self.options = .{
-                .menu = .{ .settings = self.settings },
+                .menu = .{ .settings = settings_shown },
                 .clock = try step_clock.Clock.init(step_clock.inventory, now_ns),
             };
             self.keys.release();
-        } else {
-            try self.checkInventoryKey(controls, now_ns);
+            return;
         }
+        try self.afterOptions(now_ns);
+    }
+
+    fn afterOptions(self: *Scene, now_ns: u64) !void {
+        if (try self.openInventory(self.frame_controls, now_ns)) return;
+        self.screen.flip(&self.pack, &self.world);
     }
 
     /// The options dialog takes key presses; resuming applies its settings, and abandoning the
     /// game leads to the continue screen, as a defeat does.
-    fn pollOptions(self: *Scene, deadline: u64) void {
+    fn pollOptions(self: *Scene, deadline: u64) !void {
         const options = &self.options.?;
         while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
             const event = self.pending.orderedRemove(0);
@@ -305,11 +328,16 @@ pub const Scene = struct {
         }
         const outcome = options.menu.outcome orelse return;
         self.settings = options.menu.settings;
+        self.screen.zoom.setRow(@backingInt(self.settings.zoom));
         const paused = deadline -| options.clock.origin_ns;
         self.options = null;
         self.keys.release();
         self.clock.?.origin_ns +|= paused;
-        if (outcome == .abort_game) self.outcome = .defeated;
+        if (outcome == .abort_game) {
+            self.outcome = .defeated;
+            return;
+        }
+        try self.afterOptions(deadline);
     }
 
     pub fn nextDeadline(self: *const Scene) ?u64 {
@@ -346,6 +374,7 @@ pub const Scene = struct {
         const paused = deadline -| self.message_clock.?.origin_ns;
         self.message_clock = null;
         self.clock.?.origin_ns +|= paused;
+        try self.afterMessage(deadline);
     }
 
     pub fn needsCatchup(self: *const Scene, now_ns: u64) bool {
@@ -400,6 +429,10 @@ pub const Scene = struct {
         self.screen.hud_icon = null;
         self.screen.message = null;
         self.screen.pending_message = null;
+        // The continue screen left the zoom.
+        self.screen.zoom.on = false;
+        self.screen.zoom.enter = false;
+        self.screen.zoom.leave = false;
         return true;
     }
 
@@ -412,8 +445,10 @@ pub const Scene = struct {
         self.inventory_delay = 10;
         self.keys.release();
         self.clock.?.origin_ns +|= paused_for;
+        // Films do not leave the zoom, but its pages are rebuilt.
+        if (self.screen.zoom.on) self.screen.zoom.enter = true;
         try self.walk(self.after_film);
-        try self.afterFrame(self.after_film, now_ns);
+        try self.finishFrame(self.after_film, now_ns);
     }
 
     fn walk(self: *Scene, controls: u8) !void {
@@ -427,7 +462,7 @@ pub const Scene = struct {
         switch (outcome) {
             .played => {
                 if (self.world.requests.scene) |scene| self.requested_scene = scene;
-                try self.screen.present(&self.pack, self.messages, &self.world);
+                try self.screen.draw(&self.pack, self.messages, &self.world);
             },
             // The defeat scene plays before the continue screen.
             .defeated => {
@@ -441,16 +476,17 @@ pub const Scene = struct {
         }
     }
 
-    /// After each presented frame, the inventory key opens the inventory once the delay has
-    /// run out. With no items, or Conrad without health, it closes at once.
-    fn checkInventoryKey(self: *Scene, controls: u8, deadline: u64) !void {
+    /// Once per frame, the inventory key opens the inventory when the delay has run out. With
+    /// no items, or Conrad without health, it closes at once. True when it opened; it leaves
+    /// the zoom while it is open.
+    fn openInventory(self: *Scene, controls: u8, deadline: u64) !bool {
         if (self.inventory_delay != 0) {
             self.inventory_delay -= 1;
-            return;
+            return false;
         }
-        if (controls & 0x80 == 0) return;
+        if (controls & 0x80 == 0) return false;
         self.keys.release();
-        if (self.world.characters[0].health <= 0) return;
+        if (self.world.characters[0].health <= 0) return false;
         var inventory: Inventory = .{
             .menu = undefined,
             .clock = try step_clock.Clock.init(step_clock.inventory, deadline),
@@ -460,7 +496,7 @@ pub const Scene = struct {
         while (next) |item| : (next = self.world.characters[item].next_item) {
             if (count == Inventory.max_items) break;
             const definition = self.data.characters[item];
-            const icon = iconFrame(&self.pack, definition.inventory_icon) orelse continue;
+            const icon = level_screen.iconFrame(&self.pack, definition.inventory_icon) orelse continue;
             inventory.items[count] = item;
             inventory.entries[count] = .{
                 .icon = icon,
@@ -473,14 +509,17 @@ pub const Scene = struct {
             };
             count += 1;
         }
-        inventory.menu = inventory_menu.Menu.init(count) catch return;
+        inventory.menu = inventory_menu.Menu.init(count) catch return false;
         self.inventory = inventory;
+        self.inventory_left_zoom = self.screen.leaveZoomFor();
+        return true;
     }
 
     /// One poll of the inventory: directions move, a button shows the score, the inventory key
     /// closes it and selects the item shown.
     fn pollInventory(self: *Scene, deadline: u64) !void {
         const inventory = &self.inventory.?;
+        self.screen.countPasswordFrame();
         while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
             const event = self.pending.orderedRemove(0);
             switch (event.payload) {
@@ -517,6 +556,11 @@ pub const Scene = struct {
                 self.inventory_delay = 10;
                 self.keys.release();
                 self.clock.?.origin_ns +|= paused;
+                if (self.inventory_left_zoom) {
+                    self.inventory_left_zoom = false;
+                    self.screen.returnToZoom();
+                }
+                self.screen.flip(&self.pack, &self.world);
             },
         }
     }
@@ -562,7 +606,7 @@ pub const Scene = struct {
     }
 
     pub fn draw(self: *const Scene, indices: []u8, rgba: []u8) !void {
-        var picture = self.screen.picture;
+        var picture = self.screen.displayed;
         if (self.inventory) |inventory| try inventory.menu.draw(
             self.pack.inventory.artwork(),
             inventory.entries[0..inventory.menu.count],
@@ -685,542 +729,4 @@ test "diagonals keep the last single direction with the current buttons" {
     try std.testing.expectEqual(@as(u8, 0x48), keys.collapse(0x49));
     try std.testing.expectEqual(@as(u8, 0x03), keys.collapse(0x03));
     try std.testing.expectEqual(@as(u8, 0x23), keys.collapse(0x25));
-}
-
-/// What the screen keeps between updates.
-pub const Screen = struct {
-    /// The background page: the view room, with the HUD icon painted into it.
-    background: [pixel_count]u8 = @splat(0),
-    /// Background pixels that hide sprites: the room's foreground and the HUD icon.
-    foreground: [pixel_count]bool = @splat(false),
-    /// The picture on display and the colors it is shown with.
-    picture: [pixel_count]u8 = @splat(0),
-    colors: palette.Palette = @splat(.{ .r = 0, .g = 0, .b = 0 }),
-    /// Room loads already shown.
-    room_loads: u32 = 0,
-    /// After a room load, the screen keeps the old picture for two updates and shows the new
-    /// room, with its colors, on the third.
-    room_countdown: u8 = 0,
-    hud_icon: ?u8 = null,
-    /// The enemy library loaded, and the last rule group (here: behavior) resolved to one.
-    library: ?data_set.SpriteLibrary = null,
-    library_behavior: ?u16 = null,
-    /// Frames left showing the level's password; none in demos.
-    password_frames: u8,
-    checkpoint_saves: u32 = 0,
-    /// "COMPLETED" shows while Conrad touches the save terminal after saving.
-    completed: bool = false,
-    /// A world message waits until the room shows, then pages over the frame it froze.
-    pending_message: ?u16 = null,
-    message: ?ShownMessage = null,
-    /// The frame under the message.
-    under_message: [pixel_count]u8 = @splat(0),
-    /// Pages alternate between the two video pages. After each flip, the page about to be
-    /// drawn gets the texts and icons it showed earlier wiped with the background, which then
-    /// holds the frozen frame's message area (16, 26, 128x32).
-    pages: [2][pixel_count]u8 = undefined,
-    page_rects: [2]Rects = .{ .{}, .{} },
-    page_buffer: u1 = 0,
-    message_background: [pixel_count]u8 = undefined,
-    /// The rectangles of the texts and icons drawn this frame and the previous one.
-    frame_rects: Rects = .{},
-    previous_rects: Rects = .{},
-    /// A new HUD icon reaches the picture when it is flipped, after any message.
-    hud_unshown: bool = false,
-    /// The screen shake moves the displayed picture down by 0 to 3 rows. Each flip takes the
-    /// value computed after the previous one.
-    shake_rows: u2 = 0,
-    next_shake_rows: u2 = 0,
-    /// The icon beside the message: what Conrad touched while one was pending (it can be
-    /// stale, as in the original).
-    message_icon: u8 = 0,
-
-    pub const ShownMessage = struct { number: u16, page: usize = 0 };
-
-    const Rect = struct { x: i32, y: i32, w: i32, h: i32 };
-    const Rects = struct {
-        items: [16]Rect = undefined,
-        count: u8 = 0,
-
-        fn add(self: *Rects, rect: Rect) void {
-            if (self.count == self.items.len) return;
-            self.items[self.count] = rect;
-            self.count += 1;
-        }
-    };
-
-    pub fn init(demo: bool) Screen {
-        return .{ .password_frames = if (demo) 0 else 150 };
-    }
-
-    /// Presents the engine's state after an update.
-    pub fn present(
-        self: *Screen,
-        pack: *const level_pack.Pack,
-        messages: data_set.Messages,
-        world: *const World,
-    ) !void {
-        if (world.requests.world_message) |number| {
-            if (number >= 0) self.pending_message = @intCast(number);
-        }
-        if (world.room_loads != self.room_loads) {
-            self.room_loads = world.room_loads;
-            self.loadRoom(pack, world.view_room);
-        }
-        if (world.checkpoint_saves != self.checkpoint_saves) {
-            self.checkpoint_saves = world.checkpoint_saves;
-            self.completed = true;
-        }
-        if (self.room_countdown > 1) {
-            self.room_countdown -= 1;
-            return;
-        }
-        @memcpy(&self.picture, &self.background);
-        var lists: Lists = .{};
-        self.queueAll(pack, world, &lists);
-        try self.render(&lists, world);
-        self.frame_rects = .{};
-        try self.drawLabel(pack, world);
-        try self.drawPassword(pack);
-        try self.paintHudIcon(pack, world);
-        if (self.pending_message) |number| {
-            self.pending_message = null;
-            if (number < messages.len and messages[number].len != 0) {
-                try self.openMessage(pack, messages, number);
-            }
-        }
-        if (self.message == null) self.showHudIcon(pack);
-        self.previous_rects = self.frame_rects;
-        self.shake_rows = self.next_shake_rows;
-        self.next_shake_rows = @truncate(@as(u8, @bitCast(world.shake)));
-        if (self.room_countdown == 1) {
-            self.room_countdown = 0;
-            self.setRoomColors(pack, world.view_room);
-        }
-    }
-
-    /// Turns the message's page. False when it was the last: the frame shows without it.
-    pub fn nextMessagePage(
-        self: *Screen,
-        pack: *const level_pack.Pack,
-        messages: data_set.Messages,
-    ) !bool {
-        const shown = &(self.message orelse return false);
-        shown.page += 1;
-        if (shown.page < messages[shown.number].len) {
-            try self.drawMessagePage(pack, messages);
-            return true;
-        }
-        self.message = null;
-        @memcpy(&self.picture, &self.under_message);
-        self.showHudIcon(pack);
-        return false;
-    }
-
-    /// The message freezes the frame: the background takes its message area, and both video
-    /// pages hold it, each with the texts drawn into it in the last two frames.
-    fn openMessage(
-        self: *Screen,
-        pack: *const level_pack.Pack,
-        messages: data_set.Messages,
-        number: u16,
-    ) !void {
-        @memcpy(&self.under_message, &self.picture);
-        @memcpy(&self.message_background, &self.background);
-        for (26..58) |row| @memcpy(
-            self.message_background[row * width + 16 ..][0..128],
-            self.picture[row * width + 16 ..][0..128],
-        );
-        self.pages = .{ self.picture, self.picture };
-        self.page_rects = .{ self.frame_rects, self.previous_rects };
-        self.page_buffer = 0;
-        self.message = .{ .number = number };
-        try self.drawMessagePage(pack, messages);
-    }
-
-    /// The page's lines centered on x = 88 from y = 26, with the icon at (80, 8), drawn into
-    /// its video page, which is then shown; the other page is wiped for the next one.
-    fn drawMessagePage(
-        self: *Screen,
-        pack: *const level_pack.Pack,
-        messages: data_set.Messages,
-    ) !void {
-        const shown = self.message.?;
-        const target = &self.pages[self.page_buffer];
-        const rects = &self.page_rects[self.page_buffer];
-        if (iconFrame(pack, self.message_icon)) |frame| drawIcon(target, rects, frame, 80, 8);
-        for (messages[shown.number][shown.page], 0..) |line, row| {
-            const x = 88 - 4 * @as(i32, @intCast(line.text.len));
-            const y = 26 + 8 * @as(i32, @intCast(row));
-            try drawText(target, rects, pack, line.text, x, y, line.ink);
-        }
-        @memcpy(&self.picture, target);
-        self.page_buffer = ~self.page_buffer;
-        const other = &self.pages[self.page_buffer];
-        const old = &self.page_rects[self.page_buffer];
-        for (old.items[0..old.count]) |rect| restore(other, &self.message_background, rect);
-        old.* = .{};
-    }
-
-    pub fn writeRgba(self: *const Screen, rgba: []u8) !void {
-        var shown: [pixel_count]u8 = undefined;
-        self.display(&self.picture, &shown);
-        try palette.writeRgba(&shown, &self.colors, rgba);
-    }
-
-    /// What the display shows of `picture`: shaken down by the shake rows, the rows above
-    /// blank.
-    pub fn display(
-        self: *const Screen,
-        picture: *const [pixel_count]u8,
-        shown: *[pixel_count]u8,
-    ) void {
-        const offset = @as(usize, self.shake_rows) * width;
-        @memset(shown[0..offset], 0);
-        @memcpy(shown[offset..], picture[0 .. pixel_count - offset]);
-    }
-
-    fn loadRoom(self: *Screen, pack: *const level_pack.Pack, room: u8) void {
-        if (pack.room(room)) |art| {
-            @memcpy(&self.background, art.image.pixels);
-            @memcpy(&self.foreground, art.foreground);
-        } else {
-            @memset(&self.background, 0);
-            @memset(&self.foreground, false);
-        }
-        self.hud_icon = null;
-        self.room_countdown = 3;
-    }
-
-    /// The new room's colors, set after its first frame shows. The enemy library's block and
-    /// the film blocks are left as they are.
-    fn setRoomColors(self: *Screen, pack: *const level_pack.Pack, room: u8) void {
-        const art = pack.room(room) orelse return;
-        for ([_]usize{ 0, 1, 2, 3, 4, 8, 9, 10, 11, 14, 15 }) |block| {
-            @memcpy(self.colors[block * 16 ..][0..16], art.colors[block * 16 ..][0..16]);
-        }
-    }
-
-    /// The selected item's icon is painted into the background, where it hides sprites. It is
-    /// painted over the previous one without clearing, and stays when the inventory empties.
-    fn paintHudIcon(self: *Screen, pack: *const level_pack.Pack, world: *const World) !void {
-        const item = world.characters[0].first_item orelse return;
-        const icon = world.level.characters[item].inventory_icon;
-        if (self.hud_icon == icon) return;
-        self.hud_icon = icon;
-        const frame = iconFrame(pack, icon) orelse return;
-        for (0..16) |row| for (0..16) |column| {
-            const pixel = frame.image.pixels[row * 16 + column];
-            if (pixel == 0) continue;
-            const at = (8 + row) * width + 232 + column;
-            self.background[at] = 0xa0 | pixel;
-            self.foreground[at] = true;
-        };
-        self.hud_unshown = true;
-    }
-
-    /// The new HUD icon is drawn onto the picture just before it is flipped.
-    fn showHudIcon(self: *Screen, pack: *const level_pack.Pack) void {
-        if (!self.hud_unshown) return;
-        self.hud_unshown = false;
-        const frame = iconFrame(pack, self.hud_icon orelse return) orelse return;
-        var unrecorded: Rects = .{};
-        drawIcon(&self.picture, &unrecorded, frame, 232, 8);
-    }
-
-    // Characters --------------------------------------------------------------------------
-
-    const Layer = enum { behind, conrad, normal, overlay };
-
-    const Entry = struct {
-        frame: *const sprite.Frame,
-        x: i32,
-        y: i32,
-        mirrored: bool,
-        bank: u4,
-        character: u16,
-    };
-
-    const Lists = struct {
-        entries: [4][64]Entry = undefined,
-        counts: [4]u8 = @splat(0),
-
-        fn add(self: *Lists, layer: Layer, entry: Entry) void {
-            const list = @backingInt(layer);
-            if (self.counts[list] == self.entries[list].len) return;
-            self.entries[list][self.counts[list]] = entry;
-            self.counts[list] += 1;
-        }
-    };
-
-    /// The view room's characters, then those of the rooms above, below, left and right whose
-    /// position reaches into the view.
-    fn queueAll(
-        self: *Screen,
-        pack: *const level_pack.Pack,
-        world: *const World,
-        lists: *Lists,
-    ) void {
-        const view = world.view_room;
-        if (view >= 64) return;
-        self.queueRoom(pack, world, lists, view, .view);
-        self.queueRoom(pack, world, lists, world.grid.rawLink(view, .up), .up);
-        self.queueRoom(pack, world, lists, world.grid.rawLink(view, .down), .down);
-        self.queueRoom(pack, world, lists, world.grid.rawLink(view, .left), .left);
-        self.queueRoom(pack, world, lists, world.grid.rawLink(view, .right), .right);
-    }
-
-    const Strip = enum { view, up, down, left, right };
-
-    fn queueRoom(
-        self: *Screen,
-        pack: *const level_pack.Pack,
-        world: *const World,
-        lists: *Lists,
-        room: u8,
-        strip: Strip,
-    ) void {
-        if (room >= 64) return;
-        var next = world.room_lists[room];
-        while (next) |index| : (next = world.characters[index].next_in_room) {
-            const character = world.characters[index];
-            const offset: [2]i32 = switch (strip) {
-                .view => .{ 0, 0 },
-                .up => if (character.y > @as(i16, if (isEnemy(world, index)) 216 else 176))
-                    .{ 0, -216 }
-                else
-                    continue,
-                .down => if (character.y < 48) .{ 0, 216 } else continue,
-                .left => if (character.x > 224) .{ -256, 0 } else continue,
-                .right => if (character.x <= 32) .{ 256, 0 } else continue,
-            };
-            self.queue(pack, world, lists, index, offset[0], offset[1]);
-        }
-    }
-
-    fn queue(
-        self: *Screen,
-        pack: *const level_pack.Pack,
-        world: *const World,
-        lists: *Lists,
-        index: u16,
-        dx: i32,
-        dy: i32,
-    ) void {
-        const character = world.characters[index];
-        const definition = world.level.characters[index];
-        const look = character.look;
-        const key: character_art.Key = .{ .sprite = look.sprite, .composed = look.composed };
-        const x = @as(i32, character.x) + dx;
-        const y = @as(i32, character.y) + dy;
-        if (look.composed) {
-            // Composed object art: one of the room's four blocks, never culled here.
-            const frame = pack.characters.get(key) orelse return;
-            const layer: Layer = if (lowByte(definition.kind) == 11)
-                .overlay
-            else if (definition.behind_player) .behind else .normal;
-            lists.add(layer, .{
-                .frame = frame,
-                .x = x + 8,
-                .y = y + 2,
-                .mirrored = look.mirrored,
-                .bank = @intCast(definition.palette_bank & 3),
-                .character = index,
-            });
-            return;
-        }
-        if (index != 0 and !self.libraryReady(pack, world, index)) return;
-        const frame = pack.characters.get(key) orelse return;
-        const w: i32 = frame.image.width;
-        const left = if (look.mirrored) x + frame.origin_x - w else x - frame.origin_x;
-        const top = y - frame.origin_y + 2;
-        if (left <= -32 or left >= 256 or top <= -48 or top >= 224) return;
-        const layer: Layer = if (index == 0)
-            .conrad
-        else if (definition.behind_player) .behind else .normal;
-        lists.add(layer, .{
-            .frame = frame,
-            .x = x + 8,
-            .y = y + 2,
-            .mirrored = look.mirrored,
-            .bank = if (definition.palette_bank & 3 == 3) 5 else 4,
-            .character = index,
-        });
-    }
-
-    /// Enemies draw library sprites only once their library is loaded. The library follows the
-    /// enemies queued in the view room; elsewhere only the last group resolved is drawn.
-    fn libraryReady(
-        self: *Screen,
-        pack: *const level_pack.Pack,
-        world: *const World,
-        index: u16,
-    ) bool {
-        const definition = world.level.characters[index];
-        const library = definition.sprite_library orelse return true;
-        if (self.library_behavior == definition.behavior) return true;
-        if (world.characters[index].room != world.view_room) return false;
-        if (library == .none) return false;
-        self.library_behavior = definition.behavior;
-        if (self.library == library) return true;
-        self.library = library;
-        // The library's colors take effect at once.
-        @memcpy(self.colors[0x50..0x60], &pack.library_colors[@backingInt(library)]);
-        return true;
-    }
-
-    /// Bottom to top: the behind list, Conrad, the others, then overlay art. Within a list the
-    /// character queued first ends on top. Conrad blinks while his protection is odd.
-    fn render(self: *Screen, lists: *const Lists, world: *const World) !void {
-        for (std.enums.values(Layer)) |layer| {
-            const list = @backingInt(layer);
-            var k = lists.counts[list];
-            while (k > 0) {
-                k -= 1;
-                const entry = lists.entries[list][k];
-                if (layer == .conrad and world.protection & 1 != 0) continue;
-                try sprite_renderer.draw(
-                    &self.picture,
-                    width,
-                    height,
-                    entry.frame,
-                    entry.x,
-                    entry.y,
-                    .{
-                        .palette_bank = entry.bank,
-                        .facing = if (entry.mirrored) .mirrored else .original,
-                        .foreground = if (layer == .overlay) .overwrite else .respect,
-                        .occlusion = &self.foreground,
-                    },
-                );
-            }
-        }
-    }
-
-    // Texts --------------------------------------------------------------------------------
-
-    /// The icon and name of what Conrad touches: an item in his first cell, else a character
-    /// of kind 5 or 9. Touching anything ends the password display.
-    fn drawLabel(self: *Screen, pack: *const level_pack.Pack, world: *const World) !void {
-        const found = labelTarget(world) orelse {
-            self.completed = false;
-            return;
-        };
-        self.password_frames = 0;
-        if (self.pending_message != null) {
-            self.message_icon = found.icon - 1;
-            self.completed = false;
-            return;
-        }
-        const rects = &self.frame_rects;
-        if (iconFrame(pack, found.icon - 1)) |frame| drawIcon(&self.picture, rects, frame, 80, 8);
-        const name = world.level.characters[found.character].label;
-        const x = 88 - 4 * @as(i32, @intCast(name.len));
-        try drawText(&self.picture, rects, pack, name, x, 26, 0xe6);
-        if (found.icon != 3) {
-            self.completed = false;
-        } else if (self.completed) {
-            try drawText(&self.picture, rects, pack, "COMPLETED", 88 - 4 * 9, 34, 0xe6);
-        }
-    }
-
-    fn drawPassword(self: *Screen, pack: *const level_pack.Pack) !void {
-        if (self.password_frames == 0) return;
-        self.password_frames -= 1;
-        if (self.password_frames == 0) return;
-        const text = std.mem.sliceTo(&pack.password, 0);
-        const x = 128 - 4 * @as(i32, @intCast(text.len));
-        try drawText(&self.picture, &self.frame_rects, pack, text, x, 16, 0xe7);
-    }
-};
-
-/// Draws text and records its rectangle, as the original does for later restoring.
-fn drawText(
-    target: *[pixel_count]u8,
-    rects: *Screen.Rects,
-    pack: *const level_pack.Pack,
-    text: []const u8,
-    x: i32,
-    y: i32,
-    ink: u8,
-) !void {
-    try text_renderer.draw(target, width, height, &pack.font, text, x, y, .{
-        .foreground = ink,
-        .shadow = 0xe2,
-        .palette_bank = 14,
-    });
-    rects.add(.{ .x = x, .y = y, .w = 8 * @as(i32, @intCast(text.len)), .h = 8 });
-}
-
-/// Copies a rectangle from `source`, clipped to the screen.
-fn restore(target: *[pixel_count]u8, source: *const [pixel_count]u8, rect: Screen.Rect) void {
-    const x0: usize = @intCast(std.math.clamp(rect.x, 0, width));
-    const x1: usize = @intCast(std.math.clamp(rect.x + rect.w, 0, width));
-    const y0: usize = @intCast(std.math.clamp(rect.y, 0, height));
-    const y1: usize = @intCast(std.math.clamp(rect.y + rect.h, 0, height));
-    if (x1 <= x0) return;
-    for (y0..y1) |row| {
-        const line = row * width;
-        @memcpy(target[line + x0 .. line + x1], source[line + x0 .. line + x1]);
-    }
-}
-
-const Label = struct { icon: u8, character: u16 };
-
-/// The first search looks for an item (kind 3) among the characters in Conrad's first cell,
-/// newest first, Conrad included. If none has an icon, a second search for kinds 5 and 9 starts
-/// from the first cell of the last character the first search examined.
-fn labelTarget(world: *const World) ?Label {
-    var last: u16 = 0;
-    const item = search(world, 0, &.{ 3, 0xff }, &last);
-    if (item) |found| if (positive(found.icon)) return found;
-    const other = search(world, last, &.{ 0xff, 5, 9 }, &last);
-    if (other) |found| if (positive(found.icon)) return found;
-    return null;
-}
-
-/// Icons compare as signed bytes.
-fn positive(icon: u8) bool {
-    return @as(i8, @bitCast(icon)) > 0;
-}
-
-fn search(world: *const World, who: u16, kinds: []const u8, last: *u16) ?Label {
-    const slot = world.characters[who].contact;
-    if (slot == contacts.no_slot) return null;
-    var occupants = world.contacts.occupants(slot);
-    while (occupants.nextEntry()) |entry| {
-        last.* = entry.character;
-        const definition = world.level.characters[entry.character];
-        if (std.mem.indexOfScalar(u8, kinds, lowByte(definition.kind)) == null) continue;
-        return .{ .icon = definition.contact_icon, .character = entry.character };
-    }
-    return null;
-}
-
-fn isEnemy(world: *const World, index: u16) bool {
-    return lowByte(world.level.characters[index].kind) == 10;
-}
-
-fn lowByte(kind: behavior.vocabulary.Kind) u8 {
-    return @truncate(@as(u16, @bitCast(@backingInt(kind))));
-}
-
-fn iconFrame(pack: *const level_pack.Pack, icon: u8) ?*const sprite.Frame {
-    if (icon >= pack.icons.len) return null;
-    return &pack.icons[icon];
-}
-
-/// Icons draw their nonzero pixels with the icon colors, over anything.
-fn drawIcon(
-    picture: *[pixel_count]u8,
-    rects: *Screen.Rects,
-    frame: *const sprite.Frame,
-    x: usize,
-    y: usize,
-) void {
-    for (0..16) |row| for (0..16) |column| {
-        const pixel = frame.image.pixels[row * 16 + column];
-        if (pixel != 0) picture[(y + row) * width + x + column] = 0xa0 | pixel;
-    };
-    rects.add(.{ .x = @intCast(x), .y = @intCast(y), .w = 16, .h = 16 });
 }
