@@ -81,6 +81,12 @@ pub const Scene = struct {
     /// A film the game must play now; the update waits for it with its input latched.
     film: ?data_set.Film = null,
     after_film: u8 = 0,
+    /// The last frame ended late: this one walks the characters twice and draws once.
+    catch_up_due: bool = false,
+    /// This frame walked twice: it waits a tick longer.
+    caught_up: bool = false,
+    /// The catch-up walks run so far: how often the host fell behind.
+    catch_up_walks: u32 = 0,
 
     const Options = struct { menu: game_options.Menu, clock: step_clock.Clock };
 
@@ -286,11 +292,28 @@ pub const Scene = struct {
                 continue;
             }
             const deadline = self.clock.?.deadline();
-            self.clock.?.consume();
             const controls = try self.step(deadline);
             if (self.film != null) return;
             try self.finishFrame(controls, deadline);
+            self.frameWait();
+            try self.checkLate(now_ns);
         }
+    }
+
+    /// The original's frame wait: two ticks after the last frame, three after a catch-up walk.
+    fn frameWait(self: *Scene) void {
+        self.clock.?.consume();
+        if (self.caught_up) self.clock.?.advance(1);
+        self.caught_up = false;
+    }
+
+    /// A frame that ends a tick after its wait was due leaves a catch-up walk to the next
+    /// frame, which follows at once; the time lost is dropped. Modal screens and films do not
+    /// count: the original stops or restarts its tick counter for them.
+    fn checkLate(self: *Scene, now_ns: u64) !void {
+        if (!self.clock.?.behind(now_ns, 1)) return;
+        self.catch_up_due = true;
+        try self.clock.?.restart(now_ns);
     }
 
     /// After the walk and the draw, in the original's order: a world message, the zoom's
@@ -392,7 +415,7 @@ pub const Scene = struct {
         return if (self.nextDeadline()) |time| now_ns >= time else false;
     }
 
-    /// One update with the input held at `deadline`; returns the input byte it used.
+    /// One update with the input held at `deadline`; returns the input byte it used last.
     fn step(self: *Scene, deadline: u64) !u8 {
         const held = self.takeKeys(deadline);
         // Tab or Backspace ends a demo.
@@ -400,15 +423,7 @@ pub const Scene = struct {
             self.outcome = .aborted;
             return 0;
         }
-        const raw = if (self.demo) |*demo| byte: {
-            if (demo.cursor == demo.bytes.len) {
-                self.outcome = .aborted;
-                return 0;
-            }
-            demo.cursor += 1;
-            break :byte demo.bytes[demo.cursor - 1];
-        } else held;
-        const controls = self.keys.collapse(raw);
+        const controls = self.input(held) orelse return 0;
         // A scene requested by the last update plays before this update's walk.
         if (self.requested_scene) |scene| {
             self.requested_scene = null;
@@ -422,8 +437,34 @@ pub const Scene = struct {
                 return controls;
             }
         }
-        try self.walk(controls);
-        return controls;
+        return self.walks(controls, deadline);
+    }
+
+    /// The demo's next input byte, or the keys `held`. Null when the demo has ended.
+    fn input(self: *Scene, held: u8) ?u8 {
+        const raw = if (self.demo) |*demo| byte: {
+            if (demo.cursor == demo.bytes.len) {
+                self.outcome = .aborted;
+                return null;
+            }
+            demo.cursor += 1;
+            break :byte demo.bytes[demo.cursor - 1];
+        } else held;
+        return self.keys.collapse(raw);
+    }
+
+    /// The frame's walk, and after a late frame a catch-up walk with the input read again,
+    /// unless the inventory key is held. Returns the input byte read last.
+    fn walks(self: *Scene, controls: u8, deadline: u64) !u8 {
+        const twice = self.catch_up_due and controls & 0x80 == 0;
+        try self.walk(controls, if (twice) .first_of_two else .only);
+        if (!twice or self.outcome != .playing) return controls;
+        self.catch_up_due = false;
+        self.caught_up = true;
+        self.catch_up_walks += 1;
+        const again = self.input(self.takeKeys(deadline)) orelse return controls;
+        try self.walk(again, .catch_up);
+        return again;
     }
 
     /// The player chose to continue after a defeat: play resumes from the last checkpoint, at
@@ -461,12 +502,14 @@ pub const Scene = struct {
         self.clock.?.origin_ns +|= paused_for;
         // Films do not leave the zoom, but its pages are rebuilt.
         if (self.screen.zoom.on) self.screen.zoom.enter = true;
-        try self.walk(self.after_film);
-        try self.finishFrame(self.after_film, now_ns);
+        const controls = try self.walks(self.after_film, now_ns);
+        try self.finishFrame(controls, now_ns);
+        // The film restarted the tick counter: this frame is not late.
+        self.frameWait();
     }
 
-    fn walk(self: *Scene, controls: u8) !void {
-        const outcome = try self.world.update(@bitCast(controls), false);
+    fn walk(self: *Scene, controls: u8, kind: behavior.world.Walk) !void {
+        const outcome = try self.world.update(@bitCast(controls), kind);
         for (self.world.requests.sounds[0..self.world.requests.sound_count]) |sound| {
             if (self.settings.sound_fx) self.effects.submit(self.pack.sounds, .{
                 .sound = @fromBackingInt(sound.id),
@@ -476,7 +519,8 @@ pub const Scene = struct {
         switch (outcome) {
             .played => {
                 if (self.world.requests.scene) |scene| self.requested_scene = scene;
-                try self.screen.draw(&self.pack, self.messages, &self.world);
+                // The first of two walks is not drawn.
+                if (kind != .first_of_two) try self.screen.draw(&self.pack, self.messages, &self.world);
             },
             // The defeat scene plays before the continue screen.
             .defeated => {

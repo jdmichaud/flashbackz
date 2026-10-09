@@ -1,6 +1,6 @@
 //! Rational deadlines for discrete simulation. Host presentation rate never sets movement
-//! speed. The jungle development profile uses the observed display-counter cadence; full
-//! original loading/late-frame scheduling is a separate acceptance gate.
+//! speed. Gameplay follows the original's tick counter: a frame waits two ticks, and a frame
+//! that ends late restarts the clock (the level scene's catch-up walks).
 const std = @import("std");
 
 pub const Cadence = struct {
@@ -55,17 +55,28 @@ pub const Clock = struct {
     }
 
     pub fn consume(self: *Clock) void {
-        const gap = if (self.emitted == 0) self.cadence.initial_gap_ticks else self.cadence.regular_gap_ticks;
-        const numerator = @as(u64, gap) * self.cadence.units_per_tick * std.time.ns_per_s + self.remainder;
-        self.elapsed_ns +|= numerator / self.cadence.units_per_second;
-        self.remainder = numerator % self.cadence.units_per_second;
-        self.next_tick += gap;
+        self.advance(if (self.emitted == 0) self.cadence.initial_gap_ticks else self.cadence.regular_gap_ticks);
         self.emitted += 1;
     }
 
-    /// Resume at the current tick of the continuing clock, dropping time deliberately
-    /// spent paused. The next ordinary step retains the global interrupt phase.
-    pub fn resumeAfterPause(self: *Clock, now_ns: u64) !void {
+    /// Moves the deadline `ticks` ticks later.
+    pub fn advance(self: *Clock, ticks: u32) void {
+        const numerator = @as(u64, ticks) * self.cadence.units_per_tick * std.time.ns_per_s + self.remainder;
+        self.elapsed_ns +|= numerator / self.cadence.units_per_second;
+        self.remainder = numerator % self.cadence.units_per_second;
+        self.next_tick += ticks;
+    }
+
+    /// True when `ticks` more ticks have passed since the deadline by `now_ns`.
+    pub fn behind(self: Clock, now_ns: u64, ticks: u32) bool {
+        var later = self;
+        later.advance(ticks);
+        return later.due(now_ns);
+    }
+
+    /// Drops the time up to `now_ns`: the deadline becomes the tick in progress, and later
+    /// deadlines keep the interrupt phase.
+    pub fn restart(self: *Clock, now_ns: u64) !void {
         const elapsed = now_ns -| self.origin_ns;
         const rate = self.cadence.units_per_second;
         const whole = try std.math.mul(u64, elapsed / std.time.ns_per_s, rate);
@@ -79,15 +90,32 @@ pub const Clock = struct {
     }
 };
 
-test "resuming drops paused updates without shifting the continuing timer phase" {
+test "a restart drops the lost time without shifting the timer phase" {
     var clock = try Clock.init(jungle, 100);
     clock.consume();
-    try clock.resumeAfterPause(1_010_000_100);
+    try clock.restart(1_010_000_100);
     try std.testing.expect(clock.due(1_010_000_100));
     const tick = clock.next_tick;
     clock.consume();
     try std.testing.expectEqual(tick + 2, clock.next_tick);
     try std.testing.expect(!clock.due(1_010_000_100));
+}
+
+test "a frame is late once a tick has passed after its wait, and a restart drops the time lost" {
+    var clock = try Clock.init(jungle, 0);
+    clock.consume();
+    clock.consume();
+    var tick_later = clock;
+    tick_later.advance(1);
+    try std.testing.expect(!clock.behind(tick_later.deadline() - 1, 1));
+    try std.testing.expect(clock.behind(tick_later.deadline(), 1));
+    const now = tick_later.deadline() + 5 * std.time.ns_per_s;
+    try clock.restart(now);
+    try std.testing.expect(clock.due(now));
+    try std.testing.expect(!clock.behind(now, 1));
+    clock.advance(3);
+    try std.testing.expect(!clock.due(now));
+    try std.testing.expectEqual(tick_later.next_tick + 3 + 350, clock.next_tick);
 }
 
 test "deadlines preserve rational phase and first-step spacing without accumulated rounding" {

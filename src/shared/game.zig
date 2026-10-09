@@ -448,6 +448,7 @@ pub const Game = struct {
                             fresh.world.entry_score = level.world.entry_score;
                             fresh.world.random = level.world.random;
                             fresh.settings = level.settings;
+                            fresh.catch_up_due = level.catch_up_due;
                             self.retire(level);
                             level.* = fresh;
                         }
@@ -528,6 +529,7 @@ pub const Game = struct {
                 next.world.random = scene.world.random;
                 next.world.shake = scene.world.shake;
                 next.settings = scene.settings;
+                next.catch_up_due = scene.catch_up_due;
                 scene.stopAudio(p);
                 scene.deinit();
                 self.level = destination;

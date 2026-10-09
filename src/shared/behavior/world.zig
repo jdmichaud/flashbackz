@@ -110,6 +110,16 @@ pub const Outcome = enum {
     level_changed,
 };
 
+/// A frame walks the characters once, or twice when the frame before it ended late.
+pub const Walk = enum {
+    /// The frame's only walk.
+    only,
+    /// The first of two: the view follows Conrad only after the second.
+    first_of_two,
+    /// The catch-up walk: the countdowns do not advance.
+    catch_up,
+};
+
 // Terrain history and checkpoint (used by operations/carriers.zig) -------------------------
 
 /// The cells `make_solid`, `make_empty` and `make_low_passage` replaced, so that
@@ -360,11 +370,12 @@ pub const World = struct {
 
     // The update ---------------------------------------------------------------------------
 
-    /// One update: the defeat countdown, contacts, then every active character in order.
-    /// A catch-up update repeats the walk without advancing countdowns.
-    pub fn update(self: *World, controls: Controls, catch_up: bool) !Outcome {
+    /// One update: the defeat countdown, contacts, then every active character in order, and
+    /// the view follows Conrad into another room.
+    pub fn update(self: *World, controls: Controls, walk: Walk) !Outcome {
         self.controls = controls;
         self.requests = .{};
+        const catch_up = walk == .catch_up;
         if (!catch_up and self.protection != 0) self.protection -= 1;
         if (!catch_up and self.defeat_countdown & 0xff != 0) {
             self.defeat_countdown -%= 1;
@@ -382,7 +393,7 @@ pub const World = struct {
             try self.updateCharacter(index);
         }
         if (self.requests.level != null) return .level_changed;
-        if (self.view_dirty) {
+        if (self.view_dirty and walk != .first_of_two) {
             if (self.view_room == 0xff) {
                 self.requests.scene = 6;
                 self.defeat_countdown = 1;
