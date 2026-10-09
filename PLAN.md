@@ -192,10 +192,14 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
       (the level's opening film); their sessions end in a defeat or a level exit, which the
       regression now respects. With the spaceport's own start, 269 captures and 38,086 updates
       match.
-- [ ] Held directions under the key latch (flashback-re engine-presentation 6.1a; 0x7d5c-0x7d9c):
+- [x] Held directions under the key latch (flashback-re engine-presentation 6.1a; 0x7d5c-0x7d9c):
   on the title menu, the Skill page, the options dialog, the continue screen and the inventory a
   held direction registers again only on the keyboard's repeat, no sooner than 20 film timer
   ticks after the press and then every 12. Gate: agent runs holding a direction.
+  - 2026-10-09 (`a381a22`, `key_latch.zig`): Down held half a second with a repeat every
+    frame moves the title menu's selection three times (ungated it moved 31); the continue
+    screen's two choices are unaffected by repeats; the options dialog also stops taking
+    repeated Enter and arrows as new presses.
 - [x] The title menu's idle demo: after 2,400 film timer ticks on the main menu without Up or
   Down the original chooses Demo (flashback-re docs/title-menu.md). Gate: the original's delay
   measured, and an agent run.
