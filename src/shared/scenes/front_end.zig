@@ -53,6 +53,10 @@ pub const Scene = struct {
     pending_difficulty: Difficulty = .normal,
     password: [6]u8 = @splat(0),
     password_length: usize = 0,
+    /// The password's blinking cursor, an underscore after the typed characters, and when it
+    /// next changes.
+    cursor_shown: bool = true,
+    cursor_due_ns: ?u64 = null,
     notice: []const u8 = "",
 
     pub fn init(
@@ -171,6 +175,7 @@ pub const Scene = struct {
     }
 
     pub fn update(self: *Scene, p: *platform.Platform) !void {
+        if (self.view == .password) self.blinkCursor(p.nowNs());
         if (self.player) |*player| {
             player.setPaused(self.films_paused, p.nowNs());
             // A held film does not look at its keys.
@@ -203,6 +208,18 @@ pub const Scene = struct {
     }
     pub fn needsCatchup(self: *const Scene, now: u64) bool {
         return if (self.player) |*player| player.needsCatchup(now) else false;
+    }
+
+    /// The original's code entry counts passes of its keyboard loop: the cursor shows at once,
+    /// then changes every 3,000 passes, 66 ms at the reference speed (measured, 4.6 film timer
+    /// ticks). It blinks whatever is typed.
+    fn blinkCursor(self: *Scene, now_ns: u64) void {
+        const period = 66 * std.time.ns_per_ms;
+        const due = self.cursor_due_ns orelse now_ns + period;
+        if (now_ns >= due) {
+            self.cursor_shown = !self.cursor_shown;
+            self.cursor_due_ns = due + period;
+        } else self.cursor_due_ns = due;
     }
 
     fn show(self: *Scene, view: View, picture: []const u8) !void {
@@ -270,6 +287,8 @@ pub const Scene = struct {
                     .info => try self.show(.info, "INSTRU_E"),
                     .password => {
                         self.password_length = 0;
+                        self.cursor_shown = true;
+                        self.cursor_due_ns = null;
                         try self.show(.password, "MENU2");
                     },
                     .demo => self.stage = .demo_ready,
@@ -277,11 +296,10 @@ pub const Scene = struct {
                 };
             },
             .skill => {
+                // Up and Down wrap around the three difficulties.
                 const selected: u2 = @backingInt(self.pending_difficulty);
-                if (key == .up and
-                    selected != 0) self.pending_difficulty = @fromBackingInt(selected - 1);
-                if (key == .down and
-                    selected != 2) self.pending_difficulty = @fromBackingInt(selected + 1);
+                if (key == .up) self.pending_difficulty = @fromBackingInt(if (selected == 0) 2 else selected - 1);
+                if (key == .down) self.pending_difficulty = @fromBackingInt(if (selected == 2) 0 else selected + 1);
                 if (confirm and !press.repeat) {
                     self.difficulty = self.pending_difficulty;
                     self.mainMenu();
@@ -298,9 +316,19 @@ pub const Scene = struct {
                     try self.submitPassword();
                     return;
                 }
+                // Any printable character the keyboard gives, letters in capitals.
                 const code = @backingInt(key);
                 const character: ?u8 = if (code >= @backingInt(platform.Key.a) and
-                    code <= @backingInt(platform.Key.z)) @intCast('A' + code - @backingInt(platform.Key.a)) else if (key == .space) ' ' else null;
+                    code <= @backingInt(platform.Key.z))
+                    @intCast('A' + code - @backingInt(platform.Key.a))
+                else if (code >= @backingInt(platform.Key.digit_0) and code <= @backingInt(platform.Key.digit_9))
+                    @intCast('0' + code - @backingInt(platform.Key.digit_0))
+                else switch (key) {
+                    .space => ' ',
+                    .keypad_plus => '+',
+                    .keypad_minus => '-',
+                    else => null,
+                };
                 if (character) |value| if (self.password_length < self.password.len) {
                     self.password[self.password_length] = value;
                     self.password_length += 1;
@@ -387,6 +415,16 @@ pub const Scene = struct {
                     &assets.font,
                     self.password[0..self.password_length],
                     120,
+                    168,
+                    .{ .foreground = 2, .shadow = 0 },
+                );
+                if (self.cursor_shown) try text.draw(
+                    indices,
+                    256,
+                    224,
+                    &assets.font,
+                    "_",
+                    120 + 8 * @as(i32, @intCast(self.password_length)),
                     168,
                     .{ .foreground = 2, .shadow = 0 },
                 );
