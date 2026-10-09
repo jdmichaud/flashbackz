@@ -112,8 +112,54 @@ fn writeScenes(
         try w.line(".{{ {s} }}, // scene {d}", .{ fields.written(), number });
     }
     try w.close();
+    try writeEnding(&w, interface);
     try w.close();
     try sink.put(sink.context, "scenes.zon", text.written());
+}
+
+/// The scenes the ending plays after its first, and the credits typed over them: text (`|` starts
+/// a new line), holds in timer ticks, positions in 8-pixel cells, and block ends.
+fn writeEnding(
+    w: *zon.Writer,
+    interface: *const flashbackz.content.floppy_interface.Values,
+) !void {
+    try w.open("ending");
+    try w.open("scenes");
+    for (interface.ending_scenes[0..interface.ending_scene_count]) |scene| {
+        try w.line("{d},", .{scene});
+    }
+    try w.close();
+    try w.open("credits");
+    const stream = interface.credits[0..interface.credits_length];
+    var at: usize = 0;
+    while (at < stream.len) {
+        switch (stream[at]) {
+            0xff => break,
+            0xfe => {
+                try w.line(".{{ .hold = {d} }},", .{stream[at + 1]});
+                at += 2;
+            },
+            0x01 => {
+                try w.line(
+                    ".{{ .at = .{{ .column = {d}, .row = {d} }} }},",
+                    .{ stream[at + 1], stream[at + 2] },
+                );
+                at += 3;
+            },
+            0x00 => {
+                try w.line(".block_end,", .{});
+                at += 1;
+            },
+            else => {
+                const end = std.mem.indexOfAny(u8, stream[at..], &.{ 0x00, 0x01, 0xfe, 0xff }) orelse
+                    stream.len - at;
+                try w.line(".{{ .text = {f} }},", .{zon.string(stream[at..][0..end])});
+                at += end;
+            },
+        }
+    }
+    try w.close();
+    try w.close();
 }
 
 /// World messages, indexed as `show_message` refers to them.

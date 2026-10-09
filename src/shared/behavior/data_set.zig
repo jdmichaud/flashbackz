@@ -139,11 +139,27 @@ pub const Scenes = struct {
         alien_base: ?u8,
     },
     films: []const ?Film,
+    ending: Ending,
 
     pub fn film(self: Scenes, scene: i16) ?Film {
         if (scene < 0 or scene >= self.films.len) return null;
         return self.films[@intCast(scene)];
     }
+};
+
+/// What the ending plays after its first film, and the credits typed over the films.
+pub const Ending = struct {
+    scenes: []const u8,
+    credits: []const Credit,
+};
+
+/// One step of the credits: text typed one character per presented frame (`|` starts a new
+/// line), a hold in timer ticks, a position in 8-pixel cells, or the end of a block.
+pub const Credit = union(enum) {
+    text: []const u8,
+    hold: u8,
+    at: struct { column: u8, row: u8 },
+    block_end,
 };
 
 /// Loads `scenes.zon`. Results live in `arena`.

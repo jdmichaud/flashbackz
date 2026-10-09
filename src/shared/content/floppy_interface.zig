@@ -23,6 +23,13 @@ pub const Values = struct {
     scenes: [scene_count]SceneFilm,
     /// The scene each level requests when it starts, if any.
     level_scenes: [7]?u8,
+    /// The scenes the ending plays after its first film, and the credits typed over them.
+    ending_scenes: [16]u8,
+    ending_scene_count: u8,
+    credits: [4096]u8,
+    credits_length: u16,
+    /// The eighth level code, which starts the ending from the title.
+    ending_code: [7]u8,
 };
 
 pub const scene_count = 76;
@@ -210,6 +217,33 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
         const number = word(data, descriptor + 0x1d);
         scene.* = if (number < scene_count) @intCast(number) else null;
     }
+    var ending_scenes: [16]u8 = @splat(0);
+    var ending_scene_count: u8 = 0;
+    while (true) : (ending_scene_count += 1) {
+        const scene: i16 = @bitCast(word(data, 0x1294 + @as(usize, ending_scene_count) * 2));
+        if (scene < 0) break;
+        if (ending_scene_count == ending_scenes.len or scene >= scene_count) {
+            return error.InvalidEndingList;
+        }
+        ending_scenes[ending_scene_count] = @intCast(scene);
+    }
+    // The credits stream runs to its 0xff end mark; 0xfe and 0x01 carry operands.
+    var credits: [4096]u8 = undefined;
+    var credits_length: u16 = 0;
+    while (true) {
+        if (credits_length + 3 > credits.len) return error.InvalidCredits;
+        const byte = data[0x2326 + @as(usize, credits_length)];
+        const size: u16 = switch (byte) {
+            0xfe => 2,
+            0x01 => 3,
+            else => 1,
+        };
+        @memcpy(credits[credits_length..][0..size], data[0x2326 + @as(usize, credits_length) ..][0..size]);
+        credits_length += size;
+        if (byte == 0xff) break;
+    }
+    var ending_code: [7]u8 = undefined;
+    for (&ending_code, 0..) |*character, c| character.* = data[0x12ad + 21 * 7 + c] ^ 0x55;
     var passwords: [7][3][7]u8 = undefined;
     for (&passwords, 0..) |*level, l| for (level, 0..) |*code, d| {
         for (code, 0..) |*character, c| character.* = data[0x12ad + l * 21 + d * 7 + c] ^ 0x55;
@@ -239,6 +273,11 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
         .library_groups = library_groups,
         .scenes = scenes,
         .level_scenes = level_scenes,
+        .ending_scenes = ending_scenes,
+        .ending_scene_count = ending_scene_count,
+        .credits = credits,
+        .credits_length = credits_length,
+        .ending_code = ending_code,
     };
 }
 
