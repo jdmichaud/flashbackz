@@ -308,10 +308,11 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     catch-up; a 1 s stall gives one catch-up walk, two stalls two, and a stall during a film
     none.
 
-- [ ] Errors that name the file (user request, 2026-10-09): when a disk, the save or data
+- [x] Errors that name the file (user request, 2026-10-09): when a disk, the save or data
   directory or the Mega Drive cartridge cannot be opened, the hosts say which path, what it was
   for and why in words ("cannot open the disk disk1.img: not found"), not an error name. Gate:
   tests; each host's message for a missing disk.
+  - 2026-10-09: both hosts and --extract print "cannot open the disk disk1.img: not found".
 
 ## Mega Drive music during play — user decision, 2026-10-09
 
