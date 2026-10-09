@@ -33,7 +33,9 @@ pub const Keys = struct {
     enter: bool = false,
     tab: bool = false,
 
-    pub fn key(self: *Keys, code: platform.Key, down: bool) !void {
+    /// Other keys, P and the function keys included, do nothing here (P's film pause is the
+    /// game's).
+    pub fn key(self: *Keys, code: platform.Key, down: bool) void {
         switch (code) {
             .right => self.directions.right = down,
             .left => self.directions.left = down,
@@ -44,7 +46,6 @@ pub const Keys = struct {
             .space => self.space = down,
             .enter => self.enter = down,
             .tab => self.tab = down,
-            .p, .f1, .f2, .f3 => if (down) return error.UnimplementedInventoryControl,
             else => {},
         }
     }
@@ -267,25 +268,27 @@ test "centered score text retains the interface's four-pixel placement grid" {
 
 test "navigation consumes makes and mixed axes retain the preceding sample" {
     var keys: Keys = .{};
-    try keys.key(.right, true);
+    keys.key(.right, true);
     try std.testing.expect(keys.sample().right);
-    try keys.key(.left, true);
-    try keys.key(.up, true);
+    keys.key(.left, true);
+    keys.key(.up, true);
     try std.testing.expect(keys.sample().right);
-    try keys.key(.up, false);
+    keys.key(.up, false);
     try std.testing.expect(keys.sample().left);
     try std.testing.expect(!keys.sample().left);
     // An explicit repeated make re-arms navigation without needing a release.
-    try keys.key(.left, true);
+    keys.key(.left, true);
     try std.testing.expect(keys.sample().left);
-    try keys.key(.left_shift, true);
-    try keys.key(.right_shift, true);
-    try keys.key(.left_shift, false);
+    keys.key(.left_shift, true);
+    keys.key(.right_shift, true);
+    keys.key(.left_shift, false);
     try std.testing.expect(keys.sample().score);
-    try keys.key(.right_shift, false);
+    keys.key(.right_shift, false);
     try std.testing.expect(!keys.sample().score);
-    try keys.key(.left_ctrl, true);
+    keys.key(.left_ctrl, true);
     try std.testing.expect(!keys.sample().score);
-    try keys.key(.space, true);
+    keys.key(.space, true);
+    try std.testing.expect(keys.sample().score);
+    for ([_]platform.Key{ .p, .f1, .f2, .f3, .escape }) |code| keys.key(code, true);
     try std.testing.expect(keys.sample().score);
 }

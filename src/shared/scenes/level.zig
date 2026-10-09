@@ -588,8 +588,8 @@ pub const Scene = struct {
         while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
             const event = self.pending.orderedRemove(0);
             switch (event.payload) {
-                .key_down => |key| try inventory.keys.key(key.key, true),
-                .key_up => |key| try inventory.keys.key(key.key, false),
+                .key_down => |key| inventory.keys.key(key.key, true),
+                .key_up => |key| inventory.keys.key(key.key, false),
                 .focus_lost => inventory.keys = .{},
                 else => self.keys.controller(event.payload),
             }
