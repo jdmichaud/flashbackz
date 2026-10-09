@@ -41,8 +41,9 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   at gunfire. Keep missing world behavior and full movement coverage explicitly tracked.
   - Since 2026-10-09 casings are characters run from their tables, and every effect is the
     engine's sound request at the moment a rule fires (animation entry sounds and
-    `play_sound`), mixed by the shared effects player. Open: compare the request order and
-    timing with an original sound-request capture.
+    `play_sound`), mixed by the shared effects player. Every recorded request of the
+    captures matches by update, id and attenuation (engine regression); the mixer's output
+    timing is not compared yet.
 - [ ] Recover floppy music/effects sequencing and integrate AdLib plus PCM. Gate: exact event
   timing and sound comparisons against the pinned original execution profile.
 - [x] Import compact LEV/BNQ/SGD room descriptions directly into owned artwork for gameplay.
@@ -117,13 +118,19 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   - [x] Every character, every update: flashback-re `engine_regression.py` compares the whole
     world (state, position, room, cursor, health, counter, flags, sprite, inventory links)
     with every retained capture and the jungle demo, plus the recorded frames.
-  - [ ] Cover every level: capture the two other original demos (alien surface, tower) and a
+  - [x] Cover every level: capture the two other original demos (alien surface, tower) and a
     per-room sweep of all seven levels (enter each room through normal input), then add them
     to the regression. Gate: the regression reports every level and room against the original.
+    - 2026-10-09: both demos and 213 of the 219 rooms (Conrad placed in each room through the
+      capture tool's reported synthetic spawn; entering through normal input remains for
+      routes) match: 262 captures, 37,250 updates, every character, sound request and recorded
+      frame. Open: six rooms whose capture stops on a film the tool does not skip (city 28,
+      earth city 3, 44, 50, 51, spaceport 58).
 - [ ] The ending: scene 61's film list under END31, the final score screen (scene 73) and the
   return to the title. Gate: compared with an original capture of the ending.
-- [ ] The zoom view option (flashback-re engine-presentation 4.3), including the automatic
+- [x] The zoom view option (flashback-re engine-presentation 4.3), including the automatic
   combat zoom. Gate: original frames with the option on.
+  - flashback-re `docs/rules/engine-ending-zoom.md`; all 816 frames of four zoom captures match.
 - [ ] Catch-up walks: when a frame is late the original repeats the walk without presenting.
   Decide with the user whether the modern cadence should reproduce it; record the decision.
 
