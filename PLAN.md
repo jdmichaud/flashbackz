@@ -215,11 +215,13 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   Gate: tests, `--help`, a third path refused.
   - 2026-10-09: done; `flashbackz-sdl disk1.img disk2.img disk3.img` says "unexpected argument
     disk3.img".
-- [ ] Continuous effects play without gaps (user report, 2026-10-09: the fan in level 2's first
+- [x] Continuous effects play without gaps (user report, 2026-10-09: the fan in level 2's first
   room sounds weird). The effects queue kept at most 20 ms (882 frames at 44.1 kHz) ahead of a
   device that takes 1,024 frames a period, so SDL filled 142 frames of silence into every
   period: 670 gaps in 10.8 s of that room. Effects keep the same lead as music (50 ms), one
   value for both. Gate: the SDL host in that room, no gap in the effects output.
+  - 2026-10-09: `f7f7d3d`; in that room the SDL output had 670 gaps of 142 frames in 10.8 s,
+    and has none in 12.7 s after the change.
 - [x] SDL bindings from SDL's own headers (user decision, 2026-10-09): build.zig translates SDL2's
   headers (`b.addTranslateC`: the system headers on Linux, the `sdl2` package's for Windows)
   into the module the SDL host imports, and the hand-written `src/sdl/sdl.zig` with its layout
