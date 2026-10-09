@@ -31,6 +31,9 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
 - [ ] Reproduce title, vector introduction and original scene order. Gate: exact original
   presented-frame comparisons, palette changes, timing and input behavior. Small documented
   pixel differences may be accepted to avoid excessive renderer complexity (user decision).
+  - 2026-10-09, flashback-re `capture_cinematics.py` and `vector_cinematic_probe.zig`: LOGOS
+    153/153 and INTRO1 260/260 presented frames match the original exactly, INTRO2 362/380
+    (the rest differ on polygon edges, at most 33 pixels). Timing and input are not compared.
 - [ ] Import Flashback MIDI/PRF/INS music into named parts, instruments and scheduled events;
   verify malformed inputs, profile bindings, loops and note adjustments without game fixtures.
 - [ ] Compare the music driver's timed register output against the original, then connect
@@ -134,10 +137,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     and end on the same step. 4,479 of 4,799 film presents and all 142 score frames match; the
     rest differ on film polygon edges (next item). The agent host plays the ending from the
     title's eighth code and returns to the title; the level route (scene 61) was not played.
-- [ ] Film polygon edges: 320 of the ending's 4,799 presents differ from the original on polygon
-  edges or one- and two-point shapes (at most 337 pixels; FIN, MEMO, ESPIONS, VOYAGE). Gate: the
-  ending comparison reports every film present identical, or each remaining difference is
-  explained and accepted.
+- [ ] Film polygon edges: 320 of the ending's 4,799 presents and 18 of INTRO2's 380 frames differ
+  from the original on polygon edges or one- and two-point shapes (at most 337 pixels; FIN,
+  MEMO, ESPIONS, VOYAGE). Gate: the ending and introduction comparisons report every film
+  frame identical, or each remaining difference is explained and accepted.
 - [x] The zoom view option (flashback-re engine-presentation 4.3), including the automatic
   combat zoom. Gate: original frames with the option on.
   - flashback-re `docs/rules/engine-ending-zoom.md`; all 816 frames of four zoom captures match.
