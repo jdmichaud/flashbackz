@@ -226,6 +226,9 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   messages, the continue screen or the title); J turns the joystick option on at the next
   gameplay frame (not in a demo), K turns it off at once. The calibration dialog J shows for an
   analog joystick is left out: SDL controllers need none. Gate: agent runs.
+  - 2026-10-09: on the Password page these keys are only characters of the code, as in the
+    original (its code entry leaves the keyboard to the BIOS); a P in PICOLO had held the
+    city's opening film on a black screen (fixed).
   - 2026-10-09, agent (`b9e68c2`): S toggles the effects in play and is refused during the
     opening film; J at the title turns the joystick on in the level, K off; P at the title
     holds DEBUT at its first picture until the next P, then it plays on as if just started;
