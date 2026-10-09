@@ -296,8 +296,8 @@ test "the host options are parsed, bounded and defaulted" {
         "disk2.img",
     });
     try std.testing.expectEqualStrings("disk1.img", disks.providers.assets.?);
-    try std.testing.expectEqual(@as(usize, 1), disks.providers.additional_count);
-    try std.testing.expectEqualStrings("disk2.img", disks.providers.additional_assets[0]);
+    try std.testing.expectEqualStrings("disk2.img", disks.providers.second_assets.?);
+    try std.testing.expectError(error.TooManyArguments, testParse(&.{ "disk1.img", "disk2.img", "disk3.img" }));
     const jungle_options = try testParse(&.{
         "--scene",
         "jungle",

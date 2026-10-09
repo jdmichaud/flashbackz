@@ -55,10 +55,8 @@ pub const assets: clap.Positional = .{
     .name = "ASSET_PATH",
     .help = "a floppy image (IMG/IMA) or extracted directory; give both disks",
     .min = 0,
-    .max = 1 + max_additional_assets,
+    .max = 2,
 };
-
-const max_additional_assets = 7;
 
 /// The providers' options from a parse whose description includes `shared_options` and `assets`.
 pub fn fromArgs(args: anytype, diagnostic: *clap.Diagnostic) clap.Error!Options {
@@ -120,7 +118,7 @@ pub fn extractCommand(gpa: std.mem.Allocator, io: std.Io, program: []const u8, o
 fn writeDataSet(gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, options: Options) ![]const u8 {
     var providers: Providers = .empty;
     defer providers.deinit();
-    var paths: [1 + max_additional_assets][]const u8 = undefined;
+    var paths: [2][]const u8 = undefined;
     try providers.openAssets(gpa, io, options.assetPaths(&paths));
     const names: [:0]const u8 = if (options.names) |path|
         try std.Io.Dir.cwd().readFileAllocOptions(io, path, arena, .limited(1 << 20), .of(u8), 0)
@@ -142,9 +140,9 @@ fn sceneEntry(value: []const u8) ?flashbackz.game.Entry {
 }
 
 pub const Options = struct {
+    /// The game's files, each a floppy image or an extracted directory: usually the two disks.
     assets: ?[]const u8 = null,
-    additional_assets: [max_additional_assets][]const u8 = undefined,
-    additional_count: usize = 0,
+    second_assets: ?[]const u8 = null,
     saves: ?[]const u8 = null,
     data: ?[]const u8 = null,
     /// `--extract`: write the data set here instead of running the game.
@@ -154,22 +152,19 @@ pub const Options = struct {
     entry: flashbackz.game.Entry = .automatic,
 
     /// The asset paths in order, in `buffer`.
-    pub fn assetPaths(self: *const Options, buffer: *[1 + max_additional_assets][]const u8) []const []const u8 {
-        const first = self.assets orelse return buffer[0..0];
-        buffer[0] = first;
-        @memcpy(buffer[1..][0..self.additional_count], self.additional_assets[0..self.additional_count]);
-        return buffer[0 .. 1 + self.additional_count];
+    pub fn assetPaths(self: *const Options, buffer: *[2][]const u8) []const []const u8 {
+        buffer[0] = self.assets orelse return buffer[0..0];
+        buffer[1] = self.second_assets orelse return buffer[0..1];
+        return buffer;
     }
 
     pub fn addAsset(self: *Options, path: []const u8) error{ MissingValue, TooManyAssets }!void {
         if (path.len == 0) return error.MissingValue;
         if (self.assets == null) {
             self.assets = path;
-        } else {
-            if (self.additional_count >= self.additional_assets.len) return error.TooManyAssets;
-            self.additional_assets[self.additional_count] = path;
-            self.additional_count += 1;
-        }
+        } else if (self.second_assets == null) {
+            self.second_assets = path;
+        } else return error.TooManyAssets;
     }
 };
 
@@ -221,10 +216,9 @@ pub const Providers = struct {
             try defaultSaveDirectory(allocator, environ);
         self.saves = try mapOpen(DirectoryStorage.open(allocator, io, self.saves_path, true));
         const path = options.assets orelse return;
-        if (options.additional_count > options.additional_assets.len) return error.InvalidImage;
         self.content = Pack.init(allocator);
         try self.importPath(io, path);
-        for (options.additional_assets[0..options.additional_count]) |additional| try self.importPath(io, additional);
+        if (options.second_assets) |second| try self.importPath(io, second);
         flashbackz.content.archive.expandAll(&self.content.?) catch |err| return mapImportError(err);
         try self.openDataSet(io, options.data);
     }
@@ -562,11 +556,12 @@ test "multiple disks merge files and conflicting editions fail without partial p
         defer second.deinit();
         try std.testing.expectEqualSlices(u8, first.bytes, second.bytes);
     }
-    try options.addAsset(paths[2]);
+    var conflicting: Options = .{ .saves = paths[3] };
+    try conflicting.addAsset(paths[0]);
+    try conflicting.addAsset(paths[2]);
     var failed: Providers = .empty;
-    try std.testing.expectError(error.ConflictingAsset, failed.open(allocator, io, &env, options));
+    try std.testing.expectError(error.ConflictingAsset, failed.open(allocator, io, &env, conflicting));
     try std.testing.expect(failed.content == null and failed.saves == null);
-    var bounded: Options = .{};
-    for (0..8) |_| try bounded.addAsset("disk.img");
-    try std.testing.expectError(error.TooManyAssets, bounded.addAsset("extra.img"));
+    // The game's files are the two disks: a third path is refused.
+    try std.testing.expectError(error.TooManyAssets, options.addAsset("third.img"));
 }
