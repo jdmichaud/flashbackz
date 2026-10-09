@@ -73,9 +73,14 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     screen, as the original does.
 - [x] Extend the existing native development scene shortcut to named levels so later-level
   mechanisms can be checked in the actual executable without remapping original assets.
-- [ ] Title-menu level codes: match the supplied edition’s codes, select their level and
+- [x] Title-menu level codes: match the supplied edition’s codes, select their level and
   difficulty, play the appropriate entry sequence and let the user test all seven levels.
   Invalid codes return safely to the title; retry restarts the selected level.
+  - 2026-10-09, agent host with keyboard input at the title: all 21 codes (seven levels, three
+    difficulties, read from the user's FB.EXE) start their level at their difficulty, the
+    eighth starts the ending, an invalid code stays on the title, and Continue after a defeat
+    (spaceport, Conrad idle; the original also loses health there) restarts the level at the
+    same difficulty.
 - [x] Original temporary level-code display: import the level/difficulty codes and show
   the startup notice until its timer expires or a contact hint replaces it.
 - [x] **Behavior as data (user decision, 2026-10-08).** Replace hand-coded
