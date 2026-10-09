@@ -192,6 +192,9 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
       (the level's opening film); their sessions end in a defeat or a level exit, which the
       regression now respects. With the spaceport's own start, 269 captures and 38,086 updates
       match.
+- [ ] The title menu's pages frame for frame: the main menu with each item selected, Skill,
+  Info and the password page while a code is typed, and their keys. Gate: the original's frames
+  of each page (flashback-re capture) match flashbackz's.
 - [x] The original's other keys (flashback-re engine-presentation 6.1, engine-music 9; key
   handlers 0x7b60-0x7c5c). P is a global toggle that only films read, so a P pressed during play
   holds the next film until P is pressed again; keypad + and - change the music volume one step
