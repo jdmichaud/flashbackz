@@ -126,6 +126,7 @@ pub const Player = struct {
                 const ticks = self.movie.frames[start].hold_ticks;
                 self.playback.next_tick = try std.math.add(u64, self.playback.next_tick, ticks);
                 try self.cadence.hold(ticks);
+                self.rebase();
                 return;
             }
             if (self.staticInputWait()) self.origin_ns = now_ns -| self.cadence.deadline_ns;
@@ -135,6 +136,17 @@ pub const Player = struct {
             try self.cadence.hold(self.movie.frames[self.playback.frame].hold_ticks);
         }
     }
+    /// A page waits for its answer as long as the player does. After ten minutes the film's
+    /// time origin moves forward, its next deadline staying where it is, so that the cadence's
+    /// arithmetic stays within its bound.
+    fn rebase(self: *Player) void {
+        const origin = &(self.origin_ns orelse return);
+        if (self.cadence.deadline_ns < 600 * std.time.ns_per_s) return;
+        const shift = (self.cadence.deadline_ns / Cadence.refresh_ns - 1) * Cadence.refresh_ns;
+        self.cadence.deadline_ns -= shift;
+        origin.* += shift;
+    }
+
     pub fn needsCatchup(self: *const Player, now_ns: u64) bool {
         if (self.paused_at != null) return false;
         if (self.staticInputWait() and !self.confirmed) return false;
@@ -201,6 +213,33 @@ test "only a fresh press of the inventory key skips a film" {
     const y: platform.Event.ControllerButtonEvent = .{ .controller = @fromBackingInt(@intCast(0)), .button = .y };
     try std.testing.expect(!skips(.{ .controller_button_down = y }, false));
     try std.testing.expect(skips(.{ .controller_button_down = y }, true));
+}
+
+test "a page waiting for its answer can wait for hours" {
+    const allocator = std.testing.allocator;
+    const arena = try allocator.create(std.heap.ArenaAllocator);
+    arena.* = .init(allocator);
+    const colors: palette.Palette = @splat(.{ .r = 0, .g = 0, .b = 0 });
+    const frames = [_]film.Frame{
+        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4 },
+        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 8, .input_loop_start = 0 },
+        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4 },
+    };
+    var player: Player = .{
+        .movie = .{ .allocator = allocator, .arena = arena, .frames = &frames },
+        .playback = try film.Playback.init(.{ .frames = &frames }),
+        .cadence = .{},
+        .origin_ns = 0,
+    };
+    defer player.deinit();
+    try player.cadence.hold(frames[0].hold_ticks);
+    var now: u64 = 0;
+    while (now < 3 * 3600 * std.time.ns_per_s) : (now += 50 * std.time.ns_per_ms) {
+        try std.testing.expect(!try player.update(now));
+    }
+    try std.testing.expect(player.awaitingInput());
+    player.confirm();
+    while (!try player.update(now)) now += 50 * std.time.ns_per_ms;
 }
 
 test "P stops a film after its picture, and the next picture comes at once when P is pressed again" {
