@@ -194,10 +194,11 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   - 2026-10-09, flashback-re shape captures (`capture_polygons.py`, `--shapes`,
     `compare_shapes.py`; engine-ending-zoom 3.5, 3.6): polygons, lines and scaled ellipses
     rasterize exactly; rotated ellipses keep their column (fixed) and a caption's bottom row
-    follows the display page (fixed). Now: logo 153/153, INTRO1 260/260, INTRO2 378/380 (one
-    stale-span pixel), ending 4,780/4,799. Open: MEMO's polygons crossing the top edge (13
-    presents), four single presents (MEMO, GENEXP, PONT, VOYAGE) and the stale-span pixel;
-    MEMO and PONT play in the city and jungle, where `--shapes` captures can settle them.
+    follows the display page (fixed); a polygon cut by the top edge starts each side where the
+    original does (fixed). Now: logo 153/153, INTRO1 260/260, INTRO2 378/380 (one stale-span
+    pixel), ending 4,794/4,799, and every shape of VOYAGE and MEMO matches in normal mode.
+    Open: five ending presents, four of them the first after a held picture (replay-mode page
+    handling), and the stale-span pixel.
 - [x] The zoom view option (flashback-re engine-presentation 4.3), including the automatic
   combat zoom. Gate: original frames with the option on.
   - flashback-re `docs/rules/engine-ending-zoom.md`; all 816 frames of four zoom captures match.
