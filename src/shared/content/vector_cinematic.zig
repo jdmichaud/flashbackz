@@ -284,10 +284,11 @@ const Builder = struct {
                 drawing.geometry = .{ .polygon = try self.allocator.dupe(shapes.Point, points[0..used]) };
                 self.vertices += used;
             }
+            // A see-through shape brightens what is under it: it sets bit 3 of each pixel.
             const tintable = drawing.geometry == .ellipse or drawing.geometry.polygon.len >= 3;
             drawing.ink = if (vertex_ref & 0x4000 != 0 and
                 ink > 0xc7 and
-                tintable) .{ .mask = ink & 0xf8 } else .{ .color = ink };
+                tintable) .{ .mask = 0x08 } else .{ .color = ink };
             try self.working.append(self.allocator, drawing);
         }
         if (self.background_mode != 0) self.saved_background = try self.snapshot(self.working.items);
