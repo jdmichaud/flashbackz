@@ -69,11 +69,13 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     `compare_mix_blocks.py`: 271/271 blocks at the jungle start, 940/940 in a city fight with
     all four voices busy, attenuated effects included). A request is heard within about two
     11.6 ms blocks of the original's time; the host's buffering adds to that.
-- [ ] Recover floppy music/effects sequencing and integrate AdLib plus PCM. Gate: exact event
+- [x] Recover floppy music/effects sequencing and integrate AdLib plus PCM. Gate: exact event
   timing and sound comparisons against the pinned original execution profile.
   - 2026-10-09: effect requests match per update in every capture, the mixed effect blocks
-    match exactly, and the logo, introduction and menu cues match in every register write.
-    Open: the film cues (story films, the ending's END31) are not compared at register level.
+    match exactly, and nine music cues match in every tick, register and value: logo,
+    introduction, menu, RECHAGE3 and the five level openings (REVEIL3, CHUTE, VOYAGE, CAPTURE,
+    TELEPORT; flashback-re floppy-music.md). Other film cues use the same player and were not
+    captured one by one.
 - [x] Import compact LEV/BNQ/SGD room descriptions directly into owned artwork for gameplay.
   Gate: all decoded room pixels and palette selectors match the original installer’s five
   MAP outputs. Preserve compact content boundaries; reproducing the installer’s compression
