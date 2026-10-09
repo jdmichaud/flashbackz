@@ -188,7 +188,7 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     and end on the same step. 4,479 of 4,799 film presents and all 142 score frames match; the
     rest differ on film polygon edges (next item). The agent host plays the ending from the
     title's eighth code and returns to the title; the level route (scene 61) was not played.
-- [ ] Film polygon edges: 320 of the ending's 4,799 presents and 18 of INTRO2's 380 frames differ
+- [x] Film polygon edges: 320 of the ending's 4,799 presents and 18 of INTRO2's 380 frames differ
   from the original on polygon edges or one- and two-point shapes (at most 337 pixels; FIN,
   MEMO, ESPIONS, VOYAGE). Gate: the ending and introduction comparisons report every film
   frame identical, or each remaining difference is explained and accepted.
@@ -200,15 +200,22 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     pixel), ending 4,794/4,799, and every shape of VOYAGE and MEMO matches in normal mode.
     Open: five ending presents, four of them the first after a held picture (replay-mode page
     handling), and the stale-span pixel.
-  - User decision 2026-10-09: accept and document these remaining differences.
+  - User decision 2026-10-09: accept and document these remaining differences. Recorded in
+    flashback-re engine-ending-zoom 3.5 and 12.5.
 - [x] The zoom view option (flashback-re engine-presentation 4.3), including the automatic
   combat zoom. Gate: original frames with the option on.
   - flashback-re `docs/rules/engine-ending-zoom.md`; all 816 frames of four zoom captures match.
-- [ ] Catch-up walks: when a frame is late the original repeats the walk without presenting.
+- [x] Catch-up walks: when a frame is late the original repeats the walk without presenting.
   Decide with the user whether the modern cadence should reproduce it; record the decision.
   - User decision 2026-10-09: reproduce it. A late frame runs one more walk (input read
     again, countdowns not decremented, no scene check) before the next present, and the next
     frame waits three ticks instead of two (flashback-re engine-update 1.2 steps 11 and 19).
+  - 2026-10-09: implemented (`scenes/level.zig`, `World.update`'s walk kinds). Time in modal
+    screens and films does not count, as in the original (engine-update 1.3). The engine
+    regression still matches all captures, and an agent run with steady pacing gives the same
+    state and frame hashes as before. Agent `--stall`: a 20 ms stall is absorbed with no
+    catch-up; a 1 s stall gives one catch-up walk, two stalls two, and a stall during a film
+    none.
 
 ## Historical CD implementation/research milestones
 
@@ -262,8 +269,8 @@ gates. All runtime work uses the original as the reference; no approximate accep
     Broader gameplay, password/demo coverage and audio completeness remain separately tracked.
 - [ ] **04 — Whole local game** — Depends: 03, research 08 and 09.
   - Status 2026-10-09: every level, room and difficulty runs and is compared; the ending, the
-    score and the codes work. Waiting on the user playing the game through, and on the open
-    decisions (catch-up walks, film polygon edges).
+    score and the codes work; catch-up walks and the film differences are decided (2026-10-09).
+    Waiting on the user playing the game through.
   - All levels, difficulties, enemy and puzzle behaviors, menus, demos, cinematics, languages,
     sound modes, checkpoints/passwords and configuration.
   - Gate: exact behavior coverage is complete and the user can play the game through.

@@ -174,7 +174,10 @@ The scheduler separates simulation time, presentation time and audio sample time
 logic rate, cinematic rate, timer units, pauses and loading waits are measured requirements,
 not assumed to be the template host's 60 Hz. Updates perform bounded work; budgets may not
 change event ordering or simulation results. The agent's virtual clock makes replay independent
-of how long the test runner takes to think or execute.
+of how long the test runner takes to think or execute. A gameplay frame waits two ticks of the
+original's 70 Hz counter. When the host falls three ticks behind, the next frame walks the
+characters twice and draws once, and the lost time is dropped, as the original does (user
+decision, 2026-10-09).
 
 Simulation uses integer arithmetic with explicit precision, overflow and rounding where they
 affect observable outcomes. The imported motions and rules describe their measured units.
