@@ -20,6 +20,7 @@ const usage =
     \\  --scene menu     open the title preview while floppy startup is being recovered
     \\  ASSET_PATH       FAT12 images or extracted directories; repeat for all disks
     \\  --saves DIR      where saves are kept
+    \\  --pcm FILE       write the audio the game queued (interleaved 16-bit samples) to FILE
     \\
 ;
 
@@ -34,6 +35,7 @@ pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
     const io = init.io;
     var frames: u64 = 120;
+    var pcm_path: ?[]const u8 = null;
     var presses: std.ArrayList(Press) = .empty;
     defer presses.deinit(gpa);
     var options: native.cli.Options = .{};
@@ -49,6 +51,8 @@ pub fn main(init: std.process.Init) !void {
                 args.next() orelse return fail(io),
                 10,
             ) catch return fail(io);
+        } else if (std.mem.eql(u8, arg, "--pcm")) {
+            pcm_path = args.next() orelse return fail(io);
         } else if (std.mem.eql(u8, arg, "--key")) {
             try presses.append(
                 gpa,
@@ -84,6 +88,7 @@ pub fn main(init: std.process.Init) !void {
 
     var backend = agent.AgentBackend.init(gpa, .{});
     defer backend.deinit();
+    backend.audio.record = pcm_path != null;
     var game = try flashbackz.Game.initWithEntry(gpa, assets, storage, providers.dataSet(), options.entry);
     defer game.deinit();
     var p = backend.asPlatform();
@@ -101,6 +106,15 @@ pub fn main(init: std.process.Init) !void {
         };
         if (try game.update(&p) == .finished) break;
         backend.advance(frame_ns);
+    }
+
+    if (pcm_path) |path| {
+        const file = try std.Io.Dir.cwd().createFile(io, path, .{});
+        defer file.close(io);
+        var pcm_buffer: [4096]u8 = undefined;
+        var pcm = file.writerStreaming(io, &pcm_buffer);
+        for (backend.audio.pcm.items) |sample| try pcm.interface.writeInt(i16, sample, .little);
+        try pcm.interface.flush();
     }
 
     var buf: [512]u8 = undefined;
