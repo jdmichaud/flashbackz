@@ -210,9 +210,11 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   of each page (flashback-re capture) match flashbackz's.
   - 2026-10-09, flashback-re docs/title-menu.md: 33 of 33 steps identical after the Skill page's
     wrap and the code entry's blinking cursor (`7711cc1`).
-- [ ] At most two asset paths (user decision, 2026-10-09): the game's files are the two disks (or
+- [x] At most two asset paths (user decision, 2026-10-09): the game's files are the two disks (or
   directories extracted from them); the hosts accept one or two paths instead of up to eight.
   Gate: tests, `--help`, a third path refused.
+  - 2026-10-09: done; `flashbackz-sdl disk1.img disk2.img disk3.img` says "unexpected argument
+    disk3.img".
 - [x] One program fewer (user decision, 2026-10-09): `--extract DIR` on the SDL and agent hosts
   writes the data set and exits (with `--names FILE`; playing options are refused with it), and
   the separate `flashbackz-extract` goes. The research regression extracts with the agent.
