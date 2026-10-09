@@ -18,6 +18,7 @@ pub const behavior = @import("behavior/root.zig");
 pub const game = @import("game.zig");
 pub const Game = game.Game;
 pub const level_scene = @import("scenes/level.zig");
+pub const ending = @import("scenes/ending.zig");
 pub const front_end = @import("scenes/front_end.zig");
 pub const menu = @import("scenes/menu.zig");
 pub const continue_game = @import("scenes/continue_game.zig");

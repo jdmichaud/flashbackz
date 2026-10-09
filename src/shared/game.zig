@@ -8,6 +8,7 @@ const front_end = @import("scenes/front_end.zig");
 const continue_mod = @import("scenes/continue_game.zig");
 const story_mod = @import("scenes/story.zig");
 const level_scene = @import("scenes/level.zig");
+const ending_mod = @import("scenes/ending.zig");
 const data_set = @import("behavior/data_set.zig");
 const behavior_world = @import("behavior/world.zig");
 const content_level = @import("content/level.zig");
@@ -28,6 +29,7 @@ const Scene = union(enum) {
     /// A level, run from its behavior tables.
     level: level_scene.Scene,
     continue_game: continue_mod.Scene,
+    ending: ending_mod.Ending,
 };
 
 pub const page_width: u32 = 320;
@@ -294,6 +296,7 @@ pub const Game = struct {
             .menu => |*scene| scene.deinit(),
             .level => |*scene| scene.deinit(),
             .continue_game => |*scene| scene.deinit(),
+            .ending => |*scene| scene.deinit(),
         }
         self.allocator.free(self.page);
         self.allocator.free(self.rgba);
@@ -318,6 +321,7 @@ pub const Game = struct {
     pub fn needsCatchup(self: *const Game, now_ns: u64) bool {
         if (self.story) |*story| return story.player.needsCatchup(now_ns);
         if (self.scene == .level) return self.scene.level.needsCatchup(now_ns);
+        if (self.scene == .ending) return self.scene.ending.needsCatchup(now_ns);
         if (self.scene == .menu) return self.scene.menu.needsCatchup(now_ns);
         if (self.scene == .continue_game) return self.scene.continue_game.needsCatchup(now_ns);
         return false;
@@ -355,7 +359,19 @@ pub const Game = struct {
             if (self.audio != null) p.audioClose();
             if (self.scene == .menu) self.scene.menu.stopAudio(p);
             if (self.scene == .level) self.scene.level.stopAudio(p);
+            if (self.scene == .ending) self.scene.ending.stopMusic(p);
             return .finished;
+        }
+        if (self.scene == .ending) {
+            const ending = &self.scene.ending;
+            ending.music_enabled = self.preferences.music;
+            try ending.update(p);
+            if (ending.finished) {
+                const next = try self.titleMenu();
+                ending.stopMusic(p);
+                ending.deinit();
+                self.scene = .{ .menu = next };
+            }
         }
         if (self.scene == .level) {
             if (try self.updateLevel(p)) return .running;
@@ -387,6 +403,15 @@ pub const Game = struct {
                     self.scene = .{ .level = next };
                     self.demo_index += 1;
                 }
+            } else if (front.stage == .ending_ready) {
+                const next = try ending_mod.Ending.init(
+                    self.allocator,
+                    self.assets.?,
+                    self.data orelse return error.DataSetRequired,
+                    null,
+                );
+                front.deinit();
+                self.scene = .{ .ending = next };
             } else if (front.stage == .ready) {
                 var next = try level_scene.Scene.load(
                     self.allocator,
@@ -519,16 +544,32 @@ pub const Game = struct {
             },
             .aborted => {
                 scene.stopAudio(p);
-                const art = (try menu_art.load(self.allocator, self.assets.?)) orelse
-                    return error.MissingMenu;
-                var next = front_end.Scene.init(self.allocator, self.assets.?, art);
-                next.difficulty = self.difficulty;
-                next.music_enabled = self.preferences.music;
+                const next = try self.titleMenu();
                 self.retire(scene);
                 self.scene = .{ .menu = next };
             },
+            .ending => {
+                scene.stopAudio(p);
+                const next = try ending_mod.Ending.init(
+                    self.allocator,
+                    self.assets.?,
+                    self.data.?,
+                    scene.world.score,
+                );
+                self.retire(scene);
+                self.scene = .{ .ending = next };
+            },
         }
         return false;
+    }
+
+    fn titleMenu(self: *Game) !front_end.Scene {
+        const art = (try menu_art.load(self.allocator, self.assets.?)) orelse
+            return error.MissingMenu;
+        var next = front_end.Scene.init(self.allocator, self.assets.?, art);
+        next.difficulty = self.difficulty;
+        next.music_enabled = self.preferences.music;
+        return next;
     }
 
     /// Ends a level scene, keeping its records' flags for the next level.
@@ -565,6 +606,10 @@ pub const Game = struct {
                 }
                 if (self.scene == .level) {
                     if (event.payload == .quit) self.phase = .finished else try self.scene.level.enqueue(event);
+                    continue;
+                }
+                if (self.scene == .ending) {
+                    if (event.payload == .quit) self.phase = .finished else self.scene.ending.event(event);
                     continue;
                 }
                 if (self.scene == .continue_game) {
@@ -635,7 +680,7 @@ pub const Game = struct {
         return switch (self.scene) {
             .smoke => .{ .width = page_width, .height = page_height },
             .menu => |*front| front.resolution(),
-            .level, .continue_game => .{ .width = 256, .height = 224 },
+            .level, .continue_game, .ending => .{ .width = 256, .height = 224 },
         };
     }
 
@@ -655,6 +700,15 @@ pub const Game = struct {
             const indices = self.page[0..57344];
             const frame = self.rgba[0 .. 57344 * 4];
             try self.scene.level.draw(indices, frame);
+            self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
+            try p.present(.{ .width = 256, .height = 224, .stride = 256 * 4, .pixels = frame });
+            self.frames_presented += 1;
+            return;
+        }
+        if (self.scene == .ending) {
+            const indices = self.page[0..57344];
+            const frame = self.rgba[0 .. 57344 * 4];
+            try self.scene.ending.draw(indices, frame);
             self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
             try p.present(.{ .width = 256, .height = 224, .stride = 256 * 4, .pixels = frame });
             self.frames_presented += 1;

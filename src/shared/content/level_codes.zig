@@ -28,6 +28,17 @@ pub fn lookup(
     return match(values.passwords, input);
 }
 
+/// The eighth code starts the ending instead of a level.
+pub fn isEnding(
+    allocator: std.mem.Allocator,
+    source: platform.AssetSource,
+    input: []const u8,
+) !bool {
+    const values = try floppy_interface.load(allocator, source);
+    const code = std.mem.sliceTo(&values.ending_code, 0);
+    return input.len != 0 and std.ascii.eqlIgnoreCase(input, code);
+}
+
 test "level codes select their difficulty, retain spaces and reject partial input" {
     var codes: Table = @splat(@splat(@splat(0)));
     @memcpy(codes[1][1][0..4], "CITY");

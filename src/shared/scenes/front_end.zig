@@ -20,6 +20,8 @@ pub const Stage = enum {
     menu,
     ready,
     demo_ready,
+    /// The eighth level code was entered: the ending plays.
+    ending_ready,
     quit,
 };
 pub const View = enum { main, skill, info, password, unavailable };
@@ -320,6 +322,12 @@ pub const Scene = struct {
         if (destination) |entry| {
             self.difficulty = entry.difficulty;
             try self.startLevel(entry.level, key);
+        } else if (try level_codes.isEnding(
+            self.allocator,
+            self.source,
+            self.password[0..self.password_length],
+        )) {
+            self.stage = .ending_ready;
         }
     }
 

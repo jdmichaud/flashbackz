@@ -19,6 +19,7 @@ const settings = @import("../settings.zig");
 const audio_effects = @import("../audio/effects.zig");
 const inventory_menu = @import("inventory_menu.zig");
 const game_options = @import("game_options.zig");
+const ending_mod = @import("ending.zig");
 const World = behavior.world.World;
 const data_set = behavior.data_set;
 const contacts = behavior.contacts;
@@ -38,6 +39,8 @@ pub const Outcome = union(enum) {
     defeated,
     /// The player left, or the demo ended.
     aborted,
+    /// The game is finished: the ending plays.
+    ending,
 };
 
 /// A level being played: the engine, the screen, the player's keys and the sound effects.
@@ -402,6 +405,10 @@ pub const Scene = struct {
         // A scene requested by the last update plays before this update's walk.
         if (self.requested_scene) |scene| {
             self.requested_scene = null;
+            if (scene == ending_mod.ending_scene) {
+                self.outcome = .ending;
+                return controls;
+            }
             if (self.scenes.film(scene)) |film| {
                 self.film = film;
                 self.after_film = controls;
