@@ -298,7 +298,8 @@ pub const Scene = struct {
                     u3,
                     @intCast((index + 1) % menu_mod.action_count),
                 ));
-                if (key == .escape) self.stage = .quit;
+                // A held Escape that skipped the introduction does not quit as it repeats.
+                if (key == .escape and !press.repeat) self.stage = .quit;
                 if (confirm and !press.repeat) switch (self.menu.selected) {
                     .start => try self.start(),
                     .skill => {

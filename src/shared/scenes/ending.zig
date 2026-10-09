@@ -258,7 +258,10 @@ pub const Ending = struct {
                 self.held.insert(key.key);
                 switch (self.stage) {
                     // A held film does not look at its keys.
-                    .films => if ((key.key == .tab or key.key == .backspace) and self.paused_at == null) {
+                    // Escape too, unlike the original (user decision, 2026-10-09).
+                    .films => if ((key.key == .tab or key.key == .backspace or key.key == .escape) and
+                        self.paused_at == null)
+                    {
                         // Skipping the ending film leaves the list to play; skipping in the
                         // list ends it.
                         if (self.film_index != 0) self.film_index = self.film_count - 1;

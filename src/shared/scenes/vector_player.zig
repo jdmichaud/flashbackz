@@ -39,11 +39,12 @@ pub const Cadence = struct {
 };
 
 /// The original's film player ends a film when the inventory key is pressed while it plays:
-/// Backspace or Tab, or the joystick's inventory button with the joystick option. A key already
+/// Backspace or Tab, or the joystick's inventory button with the joystick option. Escape does
+/// too, although the original ignores it in films (user decision, 2026-10-09). A key already
 /// held when the film opened does not count, even as it repeats.
 pub fn skips(input: platform.Event.Payload, joystick: bool) bool {
     return switch (input) {
-        .key_down => |key| !key.repeat and (key.key == .tab or key.key == .backspace),
+        .key_down => |key| !key.repeat and (key.key == .tab or key.key == .backspace or key.key == .escape),
         .controller_button_down => |change| joystick and change.button == .y,
         else => false,
     };
@@ -203,11 +204,13 @@ test "confirmation loops keep animating and one confirmation cannot skip the nex
     try std.testing.expect(try player.update(player.cadence.deadline_ns));
 }
 
-test "only a fresh press of the inventory key skips a film" {
+test "only a fresh press of the inventory key or Escape skips a film" {
     try std.testing.expect(skips(.{ .key_down = .{ .key = .tab } }, false));
     try std.testing.expect(skips(.{ .key_down = .{ .key = .backspace } }, false));
+    try std.testing.expect(skips(.{ .key_down = .{ .key = .escape } }, false));
     try std.testing.expect(!skips(.{ .key_down = .{ .key = .tab, .repeat = true } }, false));
-    for ([_]platform.Key{ .escape, .enter, .space, .left_shift, .right_shift, .p }) |key| {
+    try std.testing.expect(!skips(.{ .key_down = .{ .key = .escape, .repeat = true } }, false));
+    for ([_]platform.Key{ .enter, .space, .left_shift, .right_shift, .p }) |key| {
         try std.testing.expect(!skips(.{ .key_down = .{ .key = key } }, false));
     }
     const y: platform.Event.ControllerButtonEvent = .{ .controller = @fromBackingInt(@intCast(0)), .button = .y };

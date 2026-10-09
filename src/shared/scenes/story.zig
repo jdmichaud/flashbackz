@@ -62,7 +62,7 @@ pub const Story = struct {
         try self.music.?.pump(p);
         return false;
     }
-    /// The film's keys: Backspace or Tab skips it, and Enter, Space or Shift turns an
+    /// The film's keys: Backspace, Tab or Escape skips it, and Enter, Space or Shift turns an
     /// interactive page. True when the film took the event.
     pub fn event(self: *Story, input: platform.Event) bool {
         if (vector.skips(input.payload, self.joystick)) {
@@ -72,7 +72,7 @@ pub const Story = struct {
         switch (input.payload) {
             .key_down => |press| switch (press.key) {
                 .enter, .space, .left_shift, .right_shift => if (!press.repeat) self.player.confirm(),
-                .tab, .backspace => {},
+                .tab, .backspace, .escape => {},
                 else => return false,
             },
             .controller_button_down => |change| switch (change.button) {
