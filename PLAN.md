@@ -316,9 +316,10 @@ permission, 2026-10-09); improvements found here go back to sor's agent. The car
 at run time from the user's file; without it the game is the DOS edition, unchanged. Research:
 flashback-re MD1–MD3.
 
-- [ ] **MD-A — Mega Drive sound chips** — sorz's YM2612 (its port of ymfm, with ymfm's BSD
+- [x] **MD-A — Mega Drive sound chips** — sorz's YM2612 (its port of ymfm, with ymfm's BSD
   notice), PSG, DAC player, model 1 output and resampling, as a module of their own.
   Gate: their tests pass here.
+  - 2026-10-09: src/shared/audio/megadrive, from sorz 6d634ee; 228/228 tests.
 - [ ] **MD-B — The cartridge as an input** — An option naming the user's cartridge, read at run
   time and validated; nothing of it committed. Gate: tests; without the option the agent
   session keeps its hashes.
