@@ -325,9 +325,11 @@ flashback-re MD1–MD3.
   session keeps its hashes.
   - 2026-10-09: `--megadrive FILE`; only Flashback (Europe) (En,Fr) is accepted (SHA-256); the
     reference session keeps d6536a1e9184b41f / c029ec16ed8214c5 with and without it.
-- [ ] **MD-C — The tunes' player** — Plays the cartridge's tunes 68–75 (its 3-channel FM
+- [x] **MD-C — The tunes' player** — Plays the cartridge's tunes 68–75 (its 3-channel FM
   tracker) through the chips. Gate: its writes equal the cartridge's for every tune
   (flashback-re MD2).
+  - 2026-10-09: `audio/megadrive_tunes.zig`; flashback-re `md_tune_model.py check --probe`:
+    identical writes for all eight tunes. The chips play them in MD-D.
 - [ ] **MD-D — Music during play** — The tunes start, stop and fade where the cartridge plays them
   (flashback-re MD3), with the effects and the films' music. Gate: a played route in the SDL
   build where each tune starts where the cartridge starts it.
