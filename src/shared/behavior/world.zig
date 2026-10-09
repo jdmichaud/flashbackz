@@ -753,6 +753,15 @@ pub const World = struct {
         self.requests.addSound(.{ .id = @intCast(id), .character = index, .distant = distant });
     }
 
+    /// A sound played straight away, whatever the character's room or activity (`play_sound`,
+    /// `play_sound_from`): the value's low byte is the sound, its high byte the attenuation.
+    pub fn playSoundAnywhere(self: *World, index: u16, value: i16) void {
+        const bits: u16 = @bitCast(value);
+        const id: u8 = @truncate(bits);
+        if (id >= 66) return;
+        self.requests.addSound(.{ .id = id, .character = index, .distant = bits >> 8 != 0 });
+    }
+
     /// A byte the original reads past the grid: the updating character's facing, column and
     /// tier sit there. Other addresses are counted, so a run that depends on them is visible.
     pub fn outsideByte(self: *World, address: u16) i8 {

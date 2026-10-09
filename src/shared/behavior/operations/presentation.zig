@@ -14,13 +14,15 @@ pub fn showMessage(world: *World, _: u16, message: i16) !bool {
     return true;
 }
 
+/// Plays the sound wherever the character is, awake or not.
 pub fn playSound(world: *World, actor: u16, sound: i16) !bool {
-    world.requestSound(actor, sound);
+    world.playSoundAnywhere(actor, sound);
     return true;
 }
 
+/// Plays the sound a placement number names, wherever the character is.
 pub fn playSoundFrom(world: *World, actor: u16, number: vocabulary.Number) !bool {
-    world.requestSound(actor, world.number(actor, number));
+    world.playSoundAnywhere(actor, world.number(actor, number));
     return true;
 }
 
