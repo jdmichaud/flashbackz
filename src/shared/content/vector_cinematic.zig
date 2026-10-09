@@ -254,7 +254,10 @@ const Builder = struct {
                 var rx = try vertices.signed();
                 var ry = try vertices.signed();
                 if (rx < 0 or ry < 0) return error.InvalidCinematicEllipse;
-                if (rotation) |projection| point = projection.point(point, scale.?.pivot);
+                // In a rotated shape an ellipse's centre moves only vertically: it takes the rotated
+                // point's row and keeps its own column (the original's shapes, flashback-re
+                // engine-ending-zoom 3.5).
+                if (rotation) |projection| point.y = projection.point(point, scale.?.pivot).y;
                 if (scale) |*transform| {
                     const center = transform.point(point);
                     const top = transform.point(.{ .x = point.x, .y = point.y -% ry });
