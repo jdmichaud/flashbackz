@@ -323,11 +323,17 @@ gates. All runtime work uses the original as the reference; no approximate accep
     (user decision, 2026-10-03). Reuse only generic chip code after review, with its tests and
     attribution; Flashback's audio engine is independently designed and verified.
 - [ ] **05 — Target acceptance** — Depends: 04.
-  - Status 2026-10-09: Linux builds and runs (SDL and agent hosts); Windows builds are deferred
-    and browser support is excluded by the user (2026-10-04).
+  - Status 2026-10-09: Linux builds and runs (SDL and agent hosts); Windows cross-builds (below);
+    browser support is excluded by the user (2026-10-04). Waits on item 04.
   - User decision 2026-10-09: cross-build Windows now (Linux gameplay works).
-  - [ ] Windows cross-build of both hosts (`zig build all -Dtarget=x86_64-windows-gnu`), with
+  - [x] Windows cross-build of both hosts (`zig build all -Dtarget=x86_64-windows-gnu`), with
     SDL2 from source; fix what fails. Gate: a successful build, recorded with its toolchain.
+    - 2026-10-09, Zig 0.17.0 on Linux, flashbackz `6647a46`, SDL 2.32.10 from the pinned
+      package: the SDL host, the agent host and the extractor build unchanged (54 s); they
+      import only Windows system DLLs and the universal C runtime. Under Wine the agent host
+      gives the Linux build's hashes for the smoke run and for a 2,600-frame session played
+      from both floppy images. The SDL host was not run (no Windows machine; the user accepts
+      Linux runtime checks plus the cross-build).
   - Linux, Windows and browser packaging, inputs, audio, storage, lifecycle and long sessions.
   - Gate: Linux runtime acceptance and a successful Windows cross-build suffice for Windows
     (user decision, 2026-10-03); browser acceptance still includes actual browser execution.

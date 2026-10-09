@@ -161,8 +161,10 @@ extractor or emulator is used by the game. Supplied content never enters version
 
 Build with Zig 0.17.0 and SDL2 2.32.4 on Linux. Foundation checks are `zig build test smoke
 verify` with scratch prefix/cache as above. Browser support is excluded.
-Windows builds are deferred until Linux gameplay is working; portable host boundaries remain.
-When that phase resumes, `zig build -Dtarget=x86_64-windows-gnu` uses pinned SDL2 sources.
+Windows: `zig build all -Dtarget=x86_64-windows-gnu -p OUT` cross-builds both hosts and the
+extractor from Linux, with SDL2 built from its pinned sources and linked statically; the
+executables need only Windows' own DLLs. Copy `flashbackz-sdl.exe` next to the disk images and
+run `flashbackz-sdl.exe disk1.img disk2.img`.
 Without content, the template smoke fixture remains available for platform testing.
 
 Independent scene, movement, terrain, inventory and rendering systems are retained for
