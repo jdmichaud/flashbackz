@@ -210,6 +210,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   of each page (flashback-re capture) match flashbackz's.
   - 2026-10-09, flashback-re docs/title-menu.md: 33 of 33 steps identical after the Skill page's
     wrap and the code entry's blinking cursor (`7711cc1`).
+- [ ] Escape skips films again (user decision, 2026-10-09): the Delphine Software logo, the
+  introduction, the start and game-over films, in-game films and the ending's films end on
+  Escape as on Backspace or Tab, although the original ignores Escape in films. A held Escape
+  that reaches the title menu as a key repeat does not choose Quit. Gate: agent runs.
 - [x] The original's other keys (flashback-re engine-presentation 6.1, engine-music 9; key
   handlers 0x7b60-0x7c5c). P is a global toggle that only films read, so a P pressed during play
   holds the next film until P is pressed again; keypad + and - change the music volume one step
