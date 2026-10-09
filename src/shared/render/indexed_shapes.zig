@@ -161,8 +161,13 @@ pub const Canvas = struct {
         }
         var left_storage: [64]Edge = undefined;
         var right_storage: [64]Edge = undefined;
-        const left_edges = try edges(points, top_index, bottom, true, &left_storage);
-        const right_edges = try edges(points, top_index, bottom, false, &right_storage);
+        // Above the viewport each side starts from its last vertex there, walking from the top
+        // vertex, so a notch that the clip row cuts off is skipped.
+        const clipped = top < self.clip.y;
+        const left_start = if (clipped) lastAbove(points, top_index, self.clip.y, true) else top_index;
+        const right_start = if (clipped) lastAbove(points, top_index, self.clip.y, false) else top_index;
+        const left_edges = try edges(points, left_start, bottom, true, &left_storage);
+        const right_edges = try edges(points, right_start, bottom, false, &right_storage);
         var left_index: usize = 0;
         var right_index: usize = 0;
         var y = @max(top, self.clip.y);
@@ -232,6 +237,17 @@ const Edge = struct {
         return x;
     }
 };
+
+/// The last vertex above `clip_top` on the walk from `first`, before one at or below it.
+fn lastAbove(points: []const Point, first: usize, clip_top: i32, reverse: bool) usize {
+    var index = first;
+    for (0..points.len) |_| {
+        const next = if (reverse) (index + points.len - 1) % points.len else (index + 1) % points.len;
+        if (points[next].y >= clip_top) return index;
+        index = next;
+    }
+    return first;
+}
 
 fn edges(
     points: []const Point,
