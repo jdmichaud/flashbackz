@@ -192,6 +192,9 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
       (the level's opening film); their sessions end in a defeat or a level exit, which the
       regression now respects. With the spaceport's own start, 269 captures and 38,086 updates
       match.
+- [ ] The title menu's idle demo: after 2,400 film timer ticks on the main menu without Up or
+  Down the original chooses Demo (flashback-re docs/title-menu.md). Gate: the original's delay
+  measured, and an agent run.
 - [ ] The title menu's pages frame for frame: the main menu with each item selected, Skill,
   Info and the password page while a code is typed, and their keys. Gate: the original's frames
   of each page (flashback-re capture) match flashbackz's.
