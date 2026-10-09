@@ -215,11 +215,13 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   Gate: tests, `--help`, a third path refused.
   - 2026-10-09: done; `flashbackz-sdl disk1.img disk2.img disk3.img` says "unexpected argument
     disk3.img".
-- [ ] SDL bindings from SDL's own headers (user decision, 2026-10-09): build.zig translates SDL2's
+- [x] SDL bindings from SDL's own headers (user decision, 2026-10-09): build.zig translates SDL2's
   headers (`b.addTranslateC`: the system headers on Linux, the `sdl2` package's for Windows)
   into the module the SDL host imports, and the hand-written `src/sdl/sdl.zig` with its layout
   test goes. SDL2 stays. Gate: tests, the Windows cross-build, and the SDL host starting,
   presenting and playing sound as before.
+  - 2026-10-09: `380f21e`; 195/195 tests, both Windows executables; old and new SDL hosts give
+    the same title-menu screenshot, byte-identical audio and the same events from real keys.
 - [x] One program fewer (user decision, 2026-10-09): `--extract DIR` on the SDL and agent hosts
   writes the data set and exits (with `--names FILE`; playing options are refused with it), and
   the separate `flashbackz-extract` goes. The research regression extracts with the agent.
