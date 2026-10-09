@@ -210,12 +210,15 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   of each page (flashback-re capture) match flashbackz's.
   - 2026-10-09, flashback-re docs/title-menu.md: 33 of 33 steps identical after the Skill page's
     wrap and the code entry's blinking cursor (`7711cc1`).
-- [ ] Command lines from one table (user decision, 2026-10-09): bring zig-utils' `clap.zig` (MIT,
+- [x] Command lines from one table (user decision, 2026-10-09): bring zig-utils' `clap.zig` (MIT,
   JD Michaud) into the native module, ported to Zig 0.17 with repeated options, a variable
   number of positional arguments, `--`, `--name=value`, errors returned instead of exiting,
   and help generated from the same description; the SDL host, the agent host and the
   extractor parse with it, so every option (`--data` included) appears in `--help`. Gate:
   synthetic parser tests, each program's `--help`, and the earlier agent runs unchanged.
+  - 2026-10-09: `src/native/clap.zig`; the three programs' `--help` list every option (`--data`
+    included, from the shared description); the agent session keeps its hashes, and reading
+    an extracted data set through `--data` gives the same.
 - [x] Escape skips films again (user decision, 2026-10-09): the Delphine Software logo, the
   introduction, the start and game-over films, in-game films and the ending's films end on
   Escape as on Backspace or Tab, although the original ignores Escape in films. A held Escape
