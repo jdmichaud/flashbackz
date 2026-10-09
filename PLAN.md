@@ -33,7 +33,7 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     rebuilds the installation from the images through this import: all 232 installed files
     other than FB.CFG (the user's configuration and a date) are identical, the five generated
     level maps included. The agent host plays levels of both disks from the images.
-- [ ] Reproduce title, vector introduction and original scene order. Gate: exact original
+- [x] Reproduce title, vector introduction and original scene order. Gate: exact original
   presented-frame comparisons, palette changes, timing and input behavior. Small documented
   pixel differences may be accepted to avoid excessive renderer complexity (user decision).
   - 2026-10-09, flashback-re `capture_cinematics.py` and `vector_cinematic_probe.zig`: LOGOS
@@ -46,13 +46,18 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     uses 70.09 Hz. Open: whether to calibrate to the emulator's beat (DOSBox's refresh is not
     real VGA's 70 Hz), and the input comparison.
   - User decision 2026-10-09: keep the current timing (no calibration to the emulator's beat).
-  - [ ] Film input as the original (flashback-re engine-presentation 6.1; the film player
-    tests DS:0xad6a & 0x80 after every command and while it waits, 0xc757 and 0xcfed): Backspace
-    and Tab skip a film while held, so a key still held when the next film starts skips it too;
-    P pauses the pictures while the music plays on (0xc750); Escape, Enter, Space and Shift do
-    not skip (Enter, Space and Shift still turn interactive pages). With the joystick option its
-    inventory button skips too. Gate: agent runs of the introduction and an in-game film with
-    each key.
+  - [x] Film input as the original (flashback-re engine-presentation 6.1a): a fresh press of
+    Backspace or Tab skips a film (films play with the key latch on, so a key held when a film
+    opens does not skip it); P pauses the pictures while the music plays on; Escape, Enter,
+    Space and Shift do not skip (Enter, Space and Shift still turn interactive pages). With the
+    joystick option its inventory button skips too. Gate: agent runs of the introduction and an
+    in-game film with each key.
+    - 2026-10-09, agent: on LOGOS, Tab or Backspace starts INTRO1 and a second press reaches the
+      menu without INTRO2; Escape, Enter, Space and Shift change nothing; Tab held across LOGOS's
+      end does not skip INTRO1; P stops the picture and P again resumes it 300 frames later at
+      the frame it would have shown. On the jungle's opening film: Tab or Backspace ends it,
+      the other keys and a held Tab do not; an 80-frame pause ends it 80 frames later; an Escape
+      tapped during it leaves the same state and picture as no key.
 - [x] Import Flashback MIDI/PRF/INS music into named parts, instruments and scheduled events;
   verify malformed inputs, profile bindings, loops and note adjustments without game fixtures.
   - `content/music.zig` imports profiles, instruments and tracks into an immutable score; its
