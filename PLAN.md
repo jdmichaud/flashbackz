@@ -320,9 +320,11 @@ flashback-re MD1–MD3.
   notice), PSG, DAC player, model 1 output and resampling, as a module of their own.
   Gate: their tests pass here.
   - 2026-10-09: src/shared/audio/megadrive, from sorz 6d634ee; 228/228 tests.
-- [ ] **MD-B — The cartridge as an input** — An option naming the user's cartridge, read at run
+- [x] **MD-B — The cartridge as an input** — An option naming the user's cartridge, read at run
   time and validated; nothing of it committed. Gate: tests; without the option the agent
   session keeps its hashes.
+  - 2026-10-09: `--megadrive FILE`; only Flashback (Europe) (En,Fr) is accepted (SHA-256); the
+    reference session keeps d6536a1e9184b41f / c029ec16ed8214c5 with and without it.
 - [ ] **MD-C — The tunes' player** — Plays the cartridge's tunes 68–75 (its 3-channel FM
   tracker) through the chips. Gate: its writes equal the cartridge's for every tune
   (flashback-re MD2).
