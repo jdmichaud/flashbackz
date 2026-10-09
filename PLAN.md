@@ -38,7 +38,13 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   pixel differences may be accepted to avoid excessive renderer complexity (user decision).
   - 2026-10-09, flashback-re `capture_cinematics.py` and `vector_cinematic_probe.zig`: LOGOS
     153/153 and INTRO1 260/260 presented frames match the original exactly, INTRO2 362/380
-    (the rest differ on polygon edges, at most 33 pixels). Timing and input are not compared.
+    (the rest differ on polygon edges, at most 33 pixels).
+  - Timing, same capture: each film's length is within 33 ms of the original's (12.2, 18.7 and
+    26.2 s), and presents fall in the same 50/66.7 ms rhythm of a 70 Hz clock against a
+    59.94 Hz display, but the beat slips by one display refresh at times (up to four in
+    INTRO2): the original's clock measures 69.94 Hz over 44 s of plain presents, the model
+    uses 70.09 Hz. Open: whether to calibrate to the emulator's beat (DOSBox's refresh is not
+    real VGA's 70 Hz), and the input comparison.
 - [x] Import Flashback MIDI/PRF/INS music into named parts, instruments and scheduled events;
   verify malformed inputs, profile bindings, loops and note adjustments without game fixtures.
   - `content/music.zig` imports profiles, instruments and tracks into an immutable score; its
