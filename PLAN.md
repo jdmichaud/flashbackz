@@ -56,7 +56,7 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     the logo, introduction and menu cues agree with the original in every musical tick,
     register and value (257, 12,550 and 3,901 writes). Startup and menu music play through the
     chip and the native PCM queue (agent `--pcm` recordings; earlier SDL device captures).
-- [ ] **Latest user priority: finish the casings, then complete gameplay sound throughout.**
+- [x] **Latest user priority: finish the casings, then complete gameplay sound throughout.**
   Include forest ambience, movement, switches, weapons and every other original effect; bind
   cues to original animation/interaction timing through one shared sound system. Do not stop
   at gunfire. Keep missing world behavior and full movement coverage explicitly tracked.
@@ -65,8 +65,15 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     `play_sound`), mixed by the shared effects player. Every recorded request of the
     captures matches by update, id and attenuation (engine regression); the mixer's output
     timing is not compared yet.
+  - 2026-10-09: the mixer's output matches the original block for block (flashback-re
+    `compare_mix_blocks.py`: 271/271 blocks at the jungle start, 940/940 in a city fight with
+    all four voices busy, attenuated effects included). A request is heard within about two
+    11.6 ms blocks of the original's time; the host's buffering adds to that.
 - [ ] Recover floppy music/effects sequencing and integrate AdLib plus PCM. Gate: exact event
   timing and sound comparisons against the pinned original execution profile.
+  - 2026-10-09: effect requests match per update in every capture, the mixed effect blocks
+    match exactly, and the logo, introduction and menu cues match in every register write.
+    Open: the film cues (story films, the ending's END31) are not compared at register level.
 - [x] Import compact LEV/BNQ/SGD room descriptions directly into owned artwork for gameplay.
   Gate: all decoded room pixels and palette selectors match the original installer’s five
   MAP outputs. Preserve compact content boundaries; reproducing the installer’s compression
