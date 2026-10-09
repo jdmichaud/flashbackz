@@ -26,6 +26,10 @@ pub const Stage = enum {
 };
 pub const View = enum { main, skill, info, password, unavailable };
 
+/// The original's main menu chooses Demo once its timer has counted past 2,400 since the page
+/// opened or the last Up or Down: 34.38 s, measured (flashback-re docs/title-menu.md).
+const idle_demo_ns: u64 = 34_380 * std.time.ns_per_ms;
+
 pub const Scene = struct {
     allocator: std.mem.Allocator,
     source: platform.AssetSource,
@@ -57,6 +61,8 @@ pub const Scene = struct {
     /// next changes.
     cursor_shown: bool = true,
     cursor_due_ns: ?u64 = null,
+    /// Since when the main page has seen no Up or Down: after `idle_demo_ns` it plays a demo.
+    idle_since_ns: ?u64 = null,
     notice: []const u8 = "",
 
     pub fn init(
@@ -176,6 +182,15 @@ pub const Scene = struct {
 
     pub fn update(self: *Scene, p: *platform.Platform) !void {
         if (self.view == .password) self.blinkCursor(p.nowNs());
+        if (self.stage == .menu and self.view == .main and self.player == null) {
+            const now = p.nowNs();
+            const since = self.idle_since_ns orelse now;
+            self.idle_since_ns = since;
+            if (now -| since >= idle_demo_ns) {
+                self.idle_since_ns = null;
+                self.stage = .demo_ready;
+            }
+        } else self.idle_since_ns = null;
         if (self.player) |*player| {
             player.setPaused(self.films_paused, p.nowNs());
             // A held film does not look at its keys.
@@ -268,6 +283,7 @@ pub const Scene = struct {
         if (self.stage != .menu) return;
         switch (self.view) {
             .main => {
+                if (key == .up or key == .down) self.idle_since_ns = input.time_ns;
                 const index: usize = @backingInt(self.menu.selected);
                 if (key == .up) self.menu.selected = @fromBackingInt(@as(
                     u3,
