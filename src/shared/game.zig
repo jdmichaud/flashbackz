@@ -365,6 +365,7 @@ pub const Game = struct {
         if (self.scene == .ending) {
             const ending = &self.scene.ending;
             ending.music_enabled = self.preferences.music;
+            if (ending.music) |*music| music.volume = self.preferences.volume;
             try ending.update(p);
             if (ending.finished) {
                 const next = try self.titleMenu();
@@ -492,6 +493,7 @@ pub const Game = struct {
             }
             const story = &self.story.?;
             story.music_enabled = self.preferences.music;
+            if (story.music) |*music| music.volume = self.preferences.volume;
             if (!try story.update(p)) {
                 try self.present(p);
                 return true;
