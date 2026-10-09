@@ -78,8 +78,11 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     title music after abandoning; Abort leads to the continue screen and the title. Zoom is
     compared with the original (zoom captures). The Joystick row keeps its value; there is no
     joystick input yet (next item). Earlier native SDL/XTEST runs covered the dialog itself.
-- [ ] Joystick input: the original reads a joystick when the Joystick option is on. Gate: a
+- [x] Joystick input: the original reads a joystick when the Joystick option is on. Gate: a
   host joystick or gamepad drives Conrad as the keys do, under that option.
+  - 2026-10-09: the level reads SDL controller events (stick, buttons, D-pad). Agent host:
+    gamepad runs reach the same position and state hash as the equivalent keyboard runs, and
+    do nothing with the option off. Not tried with a physical gamepad.
 - [x] Extend the existing native development scene shortcut to named levels so later-level
   mechanisms can be checked in the actual executable without remapping original assets.
 - [x] Title-menu level codes: match the supplied edition’s codes, select their level and
