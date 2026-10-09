@@ -21,6 +21,12 @@ pub fn main(init: std.process.Init) !void {
         try w.interface.flush();
         std.process.exit(2);
     };
+    // Extracting writes the data set without opening a window.
+    if (options.providers.extract != null) {
+        const status = native.cli.extractCommand(init.gpa, init.io, "flashbackz-sdl", options.providers);
+        if (status != 0) std.process.exit(status);
+        return;
+    }
     if (options.help) {
         var buf: [4096]u8 = undefined;
         var w = std.Io.File.stdout().writerStreaming(init.io, &buf);

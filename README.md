@@ -134,14 +134,13 @@ zig build --prefix /tmp/flashback/modern/out --cache-dir /tmp/flashback/modern/c
 
 ## Extracting the data set
 
-`flashbackz-extract` converts the user's disks into the readable data set that character
-behavior is moving to (DESIGN.md section 3). Per level it writes `characters.zon` and one
-`behaviors/<name>.zon` per behavior, plus `messages.zon`. Images and sound are not extracted.
-Write it outside Git, into a new or empty directory:
+`--extract DIR` (either host) converts the user's disks into the readable data set the game
+runs on (DESIGN.md section 3). Per level it writes `characters.zon` and one
+`behaviors/<name>.zon` per behavior, plus `messages.zon` and `scenes.zon`. Images and sound are
+not extracted. Write it outside Git, into a new or empty directory:
 
 ```sh
-zig build extract --prefix /tmp/flashback/modern/out --cache-dir /tmp/flashback/modern/cache
-/tmp/flashback/modern/out/bin/flashbackz-extract ~/flashback-data ../disk1.img ../disk2.img
+/tmp/flashback/modern/out/bin/flashbackz-sdl --extract ~/flashback-data ../disk1.img ../disk2.img
 ```
 
 Names come from the committed overlay `src/extract/names.zon`. Anything not named there keeps
@@ -151,7 +150,7 @@ dropped unreachable rules and anything the extractor could not name. The game bu
 data set in memory from the disks at startup; `--data DIR` makes it read an extracted one
 instead, an edited copy for example.
 
-Every program lists its options with `--help`: the help is generated from the same description
+Both programs list their options with `--help`: the help is generated from the same description
 the command line is parsed with (`src/native/clap.zig`).
 
 For development checks, `--scene` also accepts `city`, `tower`, `earth_city`, `spaceport`,
@@ -165,8 +164,7 @@ extractor or emulator is used by the game. Supplied content never enters version
 
 Build with Zig 0.17.0 and SDL2 2.32.4 on Linux. Foundation checks are `zig build test smoke
 verify` with scratch prefix/cache as above. Browser support is excluded.
-Windows: `zig build all -Dtarget=x86_64-windows-gnu -p OUT` cross-builds both hosts and the
-extractor from Linux, with SDL2 built from its pinned sources and linked statically; the
+Windows: `zig build all -Dtarget=x86_64-windows-gnu -p OUT` cross-builds both hosts from Linux, with SDL2 built from its pinned sources and linked statically; the
 executables need only Windows' own DLLs. Copy `flashbackz-sdl.exe` next to the disk images and
 run `flashbackz-sdl.exe disk1.img disk2.img`.
 Without content, the template smoke fixture remains available for platform testing.

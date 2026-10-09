@@ -1,5 +1,5 @@
 //! The command-line options that both native hosts take and open for the game: the asset paths,
-//! `--scene`, `--saves` and `--data`, described for `clap` once.
+//! `--scene`, `--saves` and `--data`, and `--extract` with `--names`, described for `clap` once.
 //!
 //! Each asset path is a directory or a FAT12 floppy image. `--saves` defaults to the per-user application data directory, which
 //! is created on first use. The result is a bound `AssetSource` and `Storage`. The game uses
@@ -15,6 +15,7 @@ const directory_mod = @import("directory.zig");
 const storage_mod = @import("storage.zig");
 const data_set = @import("data_set.zig");
 const clap = @import("clap.zig");
+const extract = @import("extract");
 
 /// The options that both hosts take; each host's description adds them to its own.
 pub const shared_options = [_]clap.Option{
@@ -33,8 +34,19 @@ pub const shared_options = [_]clap.Option{
     .{
         .long = "data",
         .value = "DIR",
-        .help = "read the data set from DIR, written by flashbackz-extract\n" ++
+        .help = "read the data set from DIR, written by --extract\n" ++
             "(default: extracted from the disks at startup)",
+    },
+    .{
+        .long = "extract",
+        .value = "DIR",
+        .help = "write the data set (characters, behaviors, messages) into DIR, a new or\n" ++
+            "empty directory outside any Git repository, and exit",
+    },
+    .{
+        .long = "names",
+        .value = "FILE",
+        .help = "with --extract: the naming overlay to use instead of the built-in one",
     },
 };
 
@@ -57,11 +69,64 @@ pub fn fromArgs(args: anytype, diagnostic: *clap.Diagnostic) clap.Error!Options 
     };
     if (args.value("saves")) |dir| result.saves = try nonEmpty("--saves", dir, diagnostic);
     if (args.value("data")) |dir| result.data = try nonEmpty("--data", dir, diagnostic);
+    if (args.value("extract")) |dir| result.extract = try nonEmpty("--extract", dir, diagnostic);
+    if (args.value("names")) |file| result.names = try nonEmpty("--names", file, diagnostic);
     for (args.positional("ASSET_PATH")) |path| result.addAsset(path) catch {
         diagnostic.* = .{ .argument = "ASSET_PATH", .value = path };
         return error.InvalidValue;
     };
+    if (result.names != null and result.extract == null) {
+        diagnostic.* = .{ .argument = "--names", .value = "--extract" };
+        return error.NeedsOption;
+    }
+    if (result.extract != null) {
+        // Extracting only writes the data set: the options of a game run do not apply.
+        const Args = @TypeOf(args);
+        for (args.given) |given| {
+            if (given.option == Args.index("extract") or given.option == Args.index("names")) continue;
+            diagnostic.* = .{ .argument = Args.flagName(given.option), .value = "--extract" };
+            return error.ExcludedOption;
+        }
+        if (result.assets == null) {
+            diagnostic.* = .{ .argument = "ASSET_PATH (--extract needs the disks)" };
+            return error.MissingArgument;
+        }
+    }
     return result;
+}
+
+/// `--extract`: writes the data set made from the options' disks into the chosen directory and
+/// prints the extraction report. Returns the exit status, after saying what failed if anything.
+pub fn extractCommand(gpa: std.mem.Allocator, io: std.Io, program: []const u8, options: Options) u8 {
+    var arena_state: std.heap.ArenaAllocator = .init(gpa);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const report = writeDataSet(gpa, arena, io, options) catch |err| {
+        var buffer: [256]u8 = undefined;
+        var stderr = std.Io.File.stderr().writerStreaming(io, &buffer);
+        const written = switch (err) {
+            error.OutputNotEmpty => stderr.interface.print("{s}: {s} must be a new or empty directory\n", .{ program, options.extract.? }),
+            else => stderr.interface.print("{s}: extraction failed: {s}\n", .{ program, @errorName(err) }),
+        };
+        written catch {};
+        stderr.interface.flush() catch {};
+        return 1;
+    };
+    var stdout = std.Io.File.stdout().writerStreaming(io, &.{});
+    stdout.interface.writeAll(report) catch return 1;
+    return 0;
+}
+
+fn writeDataSet(gpa: std.mem.Allocator, arena: std.mem.Allocator, io: std.Io, options: Options) ![]const u8 {
+    var providers: Providers = .empty;
+    defer providers.deinit();
+    var paths: [1 + max_additional_assets][]const u8 = undefined;
+    try providers.openAssets(gpa, io, options.assetPaths(&paths));
+    const names: [:0]const u8 = if (options.names) |path|
+        try std.Io.Dir.cwd().readFileAllocOptions(io, path, arena, .limited(1 << 20), .of(u8), 0)
+    else
+        extract.built_in_names;
+    return data_set.writeDirectory(gpa, arena, io, providers.assetSource().?, names, options.extract.?);
 }
 
 fn nonEmpty(comptime name: []const u8, value: []const u8, diagnostic: *clap.Diagnostic) clap.Error![]const u8 {
@@ -82,7 +147,19 @@ pub const Options = struct {
     additional_count: usize = 0,
     saves: ?[]const u8 = null,
     data: ?[]const u8 = null,
+    /// `--extract`: write the data set here instead of running the game.
+    extract: ?[]const u8 = null,
+    /// `--names`: the naming overlay for `--extract`.
+    names: ?[]const u8 = null,
     entry: flashbackz.game.Entry = .automatic,
+
+    /// The asset paths in order, in `buffer`.
+    pub fn assetPaths(self: *const Options, buffer: *[1 + max_additional_assets][]const u8) []const []const u8 {
+        const first = self.assets orelse return buffer[0..0];
+        buffer[0] = first;
+        @memcpy(buffer[1..][0..self.additional_count], self.additional_assets[0..self.additional_count]);
+        return buffer[0 .. 1 + self.additional_count];
+    }
 
     pub fn addAsset(self: *Options, path: []const u8) error{ MissingValue, TooManyAssets }!void {
         if (path.len == 0) return error.MissingValue;

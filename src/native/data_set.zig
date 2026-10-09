@@ -1,5 +1,6 @@
 //! The data set the game runs on (DESIGN.md section 3): read from a directory the user chose,
-//! or extracted in memory from the original files when no directory is given.
+//! or extracted in memory from the original files when no directory is given; `--extract`
+//! writes it into a directory.
 const std = @import("std");
 const flashbackz = @import("flashbackz");
 const extract = @import("extract");
@@ -43,6 +44,40 @@ pub fn extractInMemory(
     });
     return collector.files;
 }
+
+/// Extracts the data set from the original files into `path`, a new or empty directory, with the
+/// naming overlay `names` (ZON). Returns the extraction report, also written as `report.txt`.
+pub fn writeDirectory(
+    gpa: std.mem.Allocator,
+    arena: std.mem.Allocator,
+    io: std.Io,
+    source: flashbackz.platform.AssetSource,
+    names: [:0]const u8,
+    path: []const u8,
+) ![]const u8 {
+    try std.Io.Dir.cwd().createDirPath(io, path);
+    var dir = try std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true });
+    defer dir.close(io);
+    var entries = dir.iterate();
+    if (try entries.next(io) != null) return error.OutputNotEmpty;
+    var writer: DirectoryWriter = .{ .dir = dir, .io = io };
+    _ = try extract.extractAll(gpa, arena, source, names, .{
+        .context = &writer,
+        .put = DirectoryWriter.put,
+    });
+    return dir.readFileAlloc(io, "report.txt", arena, .limited(1 << 20));
+}
+
+const DirectoryWriter = struct {
+    dir: std.Io.Dir,
+    io: std.Io,
+
+    fn put(context: *anyopaque, path: []const u8, bytes: []const u8) anyerror!void {
+        const self: *DirectoryWriter = @ptrCast(@alignCast(context));
+        if (std.fs.path.dirname(path)) |parent| try self.dir.createDirPath(self.io, parent);
+        try self.dir.writeFile(self.io, .{ .sub_path = path, .data = bytes });
+    }
+};
 
 const Collector = struct {
     arena: std.mem.Allocator,

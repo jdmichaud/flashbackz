@@ -8,22 +8,22 @@
 //!
 //! ```zig
 //! const Args = clap.Parser(.{
-//!     .name = "flashbackz-extract",
-//!     .description = "Convert the user's disks into the readable data set.",
+//!     .name = "copy",
+//!     .description = "Copy the files to a directory.",
 //!     .options = &.{
-//!         .{ .long = "names", .value = "FILE", .help = "naming overlay to use" },
+//!         .{ .long = "mode", .value = "MODE", .help = "the copies' permissions" },
 //!     },
 //!     .positionals = &.{
-//!         .{ .name = "OUTPUT_DIRECTORY", .help = "a new or empty directory" },
-//!         .{ .name = "ASSET_PATH", .help = "the floppy images", .max = 8 },
+//!         .{ .name = "DIRECTORY", .help = "where to copy" },
+//!         .{ .name = "FILE", .help = "the files to copy", .max = 8 },
 //!     },
 //! });
 //! var diagnostic: clap.Diagnostic = .{};
 //! const args = Args.parse(arena, arguments_after_the_program_name, &diagnostic) catch |err|
 //!     return Args.writeError(stderr, err, diagnostic);
 //! if (args.help) return Args.writeHelp(stdout);
-//! const names = args.value("names"); // ?[]const u8; a misspelled name does not compile
-//! const assets = args.positional("ASSET_PATH"); // []const []const u8
+//! const mode = args.value("mode"); // ?[]const u8; a misspelled name does not compile
+//! const files = args.positional("FILE"); // []const []const u8
 //! ```
 const std = @import("std");
 
@@ -64,12 +64,16 @@ pub const Error = error{
     UnexpectedValue,
     RepeatedOption,
     InvalidValue,
+    /// For the program's own checks: `argument` needs `value`, or excludes it.
+    NeedsOption,
+    ExcludedOption,
     TooManyArguments,
     MissingArgument,
     OutOfMemory,
 };
 
-/// The argument at fault, or the name of a missing argument, for the error message.
+/// The argument at fault, or the name of a missing argument, for the error message; `value` is
+/// the value at fault, or the other option of `NeedsOption` and `ExcludedOption`.
 pub const Diagnostic = struct {
     argument: []const u8 = "",
     value: []const u8 = "",
@@ -330,6 +334,8 @@ pub fn Parser(comptime spec: Spec) type {
                 error.UnexpectedValue => try w.print("{s} takes no value\n", .{argument}),
                 error.RepeatedOption => try w.print("{s} may be given only once\n", .{argument}),
                 error.InvalidValue => try w.print("invalid value for {s}: {s}\n", .{ argument, diagnostic.value }),
+                error.NeedsOption => try w.print("{s} needs {s}\n", .{ argument, diagnostic.value }),
+                error.ExcludedOption => try w.print("{s} cannot be used with {s}\n", .{ argument, diagnostic.value }),
                 error.TooManyArguments => try w.print("unexpected argument {s}\n", .{argument}),
                 error.MissingArgument => try w.print("missing {s}\n", .{argument}),
                 error.OutOfMemory => try w.writeAll("out of memory\n"),
@@ -513,6 +519,9 @@ test "the help and the messages come from the description" {
         \\                              long
         \\
     , w.buffered());
+    w = .fixed(&buffer);
+    try Example.writeError(&w, error.ExcludedOption, .{ .argument = "--level", .value = "--verbose" });
+    try std.testing.expectStringStartsWith(w.buffered(), "example: --level cannot be used with --verbose\n");
     w = .fixed(&buffer);
     try Example.writeError(&w, error.MissingValue, .{ .argument = "--level" });
     try std.testing.expectEqualStrings(

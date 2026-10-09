@@ -3,7 +3,7 @@
 //! Targets:
 //!   flashbackz-agent  headless debugging host (shared game + AgentBackend), never links SDL
 //!   flashbackz-sdl    SDL interactive host (Linux, Windows)
-//!   flashbackz-extract  converts the user's game files into the readable data set
+//! Both hosts write the readable data set with `--extract DIR`.
 //! Steps: `zig build` installs both native hosts. `test` runs standalone unit tests;
 //! `smoke` exercises the headless host; `verify` checks that it has no SDL dependency.
 //! `all` installs both native hosts for the selected target.
@@ -114,25 +114,8 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    // Converts the user's game files into the readable data set; never links SDL.
-    const extract_module = b.createModule(.{
-        .root_source_file = b.path("src/extract/main.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "native", .module = native },
-            .{ .name = "extract", .module = extract_library },
-        },
-    });
-    const extract_exe = b.addExecutable(.{ .name = "flashbackz-extract", .root_module = extract_module });
-
     b.installArtifact(agent_exe);
     b.installArtifact(sdl_exe);
-    b.installArtifact(extract_exe);
-    b.step(
-        "extract",
-        "Build and install only the data-set extractor",
-    ).dependOn(&b.addInstallArtifact(extract_exe, .{}).step);
 
     b.step(
         "agent",
@@ -150,7 +133,6 @@ pub fn build(b: *std.Build) void {
         native,
         sdl,
         extract_library,
-        extract_module,
     };
     for (unit_modules) |m| {
         const t = b.addTest(.{ .root_module = m });

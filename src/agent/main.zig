@@ -80,6 +80,11 @@ pub fn main(init: std.process.Init) !void {
     const frames = (args.number(u64, "frames", 0, std.math.maxInt(u64), &diagnostic) catch |err|
         return fail(io, err, diagnostic)) orelse 120;
     const options = native.cli.fromArgs(args, &diagnostic) catch |err| return fail(io, err, diagnostic);
+    if (options.extract != null) {
+        const status = native.cli.extractCommand(gpa, io, "flashbackz-agent", options);
+        if (status != 0) std.process.exit(status);
+        return;
+    }
     if (options.entry == .level_development and options.assets == null) {
         return fail(io, error.MissingArgument, .{ .argument = "ASSET_PATH (--scene with a level needs the disks)" });
     }
