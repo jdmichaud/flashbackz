@@ -261,8 +261,9 @@ fn linkPackagedSdl(
         .{ .target = target, .optimize = .ReleaseFast },
     ) orelse return;
     m.linkLibrary(dep.artifact("SDL2"));
-    // The package's own header directories: the library's emitted include tree comes out empty
-    // with Zig 0.17.0 (flashback-re docs/tool-defects.md, 2026-10-09).
+    // The package's own header directories. The library's emitted include tree comes out empty
+    // on an sshfs checkout: Zig 0.17.0's directory walk reports each entry's kind as unknown
+    // there, and the copy into the tree skips it (flashback-re docs/tool-defects.md, 2026-10-09).
     api.addIncludePath(dep.path("include-pregen"));
     api.addIncludePath(dep.path("include"));
 }
