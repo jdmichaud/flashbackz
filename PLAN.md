@@ -126,8 +126,18 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
       routes) match: 262 captures, 37,250 updates, every character, sound request and recorded
       frame. Open: six rooms whose capture stops on a film the tool does not skip (city 28,
       earth city 3, 44, 50, 51, spaceport 58).
-- [ ] The ending: scene 61's film list under END31, the final score screen (scene 73) and the
+- [x] The ending: scene 61's film list under END31, the final score screen (scene 73) and the
   return to the title. Gate: compared with an original capture of the ending.
+  - 2026-10-09, flashback-re `tools/compare_ending.py` (engine-ending-zoom 12.5): the credits
+    follow the original's replay-mode rules and their state is exact at all 3,996 list presents
+    given the original's hold values; with the modern cadence they stay within a few characters
+    and end on the same step. 4,479 of 4,799 film presents and all 142 score frames match; the
+    rest differ on film polygon edges (next item). The agent host plays the ending from the
+    title's eighth code and returns to the title; the level route (scene 61) was not played.
+- [ ] Film polygon edges: 320 of the ending's 4,799 presents differ from the original on polygon
+  edges or one- and two-point shapes (at most 337 pixels; FIN, MEMO, ESPIONS, VOYAGE). Gate: the
+  ending comparison reports every film present identical, or each remaining difference is
+  explained and accepted.
 - [x] The zoom view option (flashback-re engine-presentation 4.3), including the automatic
   combat zoom. Gate: original frames with the option on.
   - flashback-re `docs/rules/engine-ending-zoom.md`; all 816 frames of four zoom captures match.
