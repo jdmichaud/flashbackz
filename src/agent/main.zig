@@ -112,8 +112,15 @@ pub fn main(init: std.process.Init) !void {
         const scene = &game.scene.level;
         const conrad = scene.world.characters[0];
         try w.interface.print(
-            "{{\"scene\":\"level\",\"level\":\"{s}\",\"room\":{d},\"x\":{d},\"y\":{d},\"score\":{d}}}\n",
-            .{ @tagName(scene.level), conrad.room, conrad.x, conrad.y, scene.world.score },
+            "{{\"scene\":\"level\",\"level\":\"{s}\",\"difficulty\":\"{s}\",\"room\":{d},\"x\":{d},\"y\":{d},\"score\":{d}}}\n",
+            .{
+                @tagName(scene.level),
+                @tagName(game.difficulty),
+                conrad.room,
+                conrad.x,
+                conrad.y,
+                scene.world.score,
+            },
         );
     } else {
         try w.interface.print("{{\"scene\":\"{s}\"}}\n", .{@tagName(game.sceneKind())});
