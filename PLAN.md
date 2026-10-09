@@ -43,8 +43,8 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   startup/menu sound to the existing chip and native PCM queue. Preserve scene stop/skip order.
   - 2026-10-09, flashback-re `capture_music.py` and `compare_music.py` on the current code:
     the logo, introduction and menu cues agree with the original in every musical tick,
-    register and value (257, 12,550 and 3,901 writes). The cues start and stop with their
-    scenes as engine-music.md describes (film music, the ending's one cue across the list).
+    register and value (257, 12,550 and 3,901 writes). Startup and menu music play through the
+    chip and the native PCM queue (agent `--pcm` recordings; earlier SDL device captures).
 - [ ] **Latest user priority: finish the casings, then complete gameplay sound throughout.**
   Include forest ambience, movement, switches, weapons and every other original effect; bind
   cues to original animation/interaction timing through one shared sound system. Do not stop
