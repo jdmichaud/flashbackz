@@ -215,7 +215,10 @@ gates. All runtime work uses the original as the reference; no approximate accep
     multiplayer. Write the initial design from measured Flashback requirements.
   - Gate: standalone synthetic build, tests, smoke, no-SDL headless verification and browser
     checks pass; placeholder output is explicitly labeled; toolchain versions are recorded.
-- [ ] **02 — Content sources and compatibility parsers** — Depends: 01, research 06.
+- [x] **02 — Content sources and compatibility parsers** — Depends: 01, research 06.
+  - Superseded by the floppy edition (2026-10-04 pivot): both images import through FAT12 and the
+    installation archives, rooms decode from the compact level files, and the extracted data
+    set is typed; the installation is reproduced byte for byte (installer item above).
   - Read the user's original CD or extracted directory into named, validated content; keep
     source layout and legacy scripting semantics at the compatibility boundary.
   - Gate: synthetic malformed-input cases pass; decoders agree with independent original
@@ -225,7 +228,9 @@ gates. All runtime work uses the original as the reference; no approximate accep
     asset argument, reading files directly through the same asset contract as a directory.
   - Gate: synthetic image and malformed-input tests pass; all original files read from the
     image match the inventory, and Linux/Windows hosts build without extraction dependencies.
-- [ ] **03 — Exact first playable room** — Depends: 02, research 05 and 07.
+- [x] **03 — Exact first playable room** — Depends: 02, research 05 and 07.
+  - Superseded by the floppy edition: every room of every level is compared with the original
+    (269 captures, systematic gap detection above), with frames, sounds and the mixer's blocks.
   - Scene flow, input, Conrad, collision, animation, inventory, drawing and sound through the
     shared simulation and the SDL/agent hosts.
   - Gate: exact state/events/timing/frame/audio comparisons pass, and the SDL build is played
@@ -243,6 +248,9 @@ gates. All runtime work uses the original as the reference; no approximate accep
     actual SDL executable; frames and movie data are checked against the supplied original.
     Broader gameplay, password/demo coverage and audio completeness remain separately tracked.
 - [ ] **04 — Whole local game** — Depends: 03, research 08 and 09.
+  - Status 2026-10-09: every level, room and difficulty runs and is compared; the ending, the
+    score and the codes work. Waiting on the user playing the game through, and on the open
+    decisions (catch-up walks, film polygon edges).
   - All levels, difficulties, enemy and puzzle behaviors, menus, demos, cinematics, languages,
     sound modes, checkpoints/passwords and configuration.
   - Gate: exact behavior coverage is complete and the user can play the game through.
@@ -250,6 +258,8 @@ gates. All runtime work uses the original as the reference; no approximate accep
     (user decision, 2026-10-03). Reuse only generic chip code after review, with its tests and
     attribution; Flashback's audio engine is independently designed and verified.
 - [ ] **05 — Target acceptance** — Depends: 04.
+  - Status 2026-10-09: Linux builds and runs (SDL and agent hosts); Windows builds are deferred
+    and browser support is excluded by the user (2026-10-04).
   - Linux, Windows and browser packaging, inputs, audio, storage, lifecycle and long sessions.
   - Gate: Linux runtime acceptance and a successful Windows cross-build suffice for Windows
     (user decision, 2026-10-03); browser acceptance still includes actual browser execution.
