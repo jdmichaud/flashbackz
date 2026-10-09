@@ -134,6 +134,10 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
       routes) match: 262 captures, 37,250 updates, every character, sound request and recorded
       frame. Open: six rooms whose capture stops on a film the tool does not skip (city 28,
       earth city 3, 44, 50, 51, spaceport 58).
+    - Later on 2026-10-09: all 219 rooms. Those six were cut short by the capture's time limit
+      (the level's opening film); their sessions end in a defeat or a level exit, which the
+      regression now respects. With the spaceport's own start, 269 captures and 38,086 updates
+      match.
 - [x] The ending: scene 61's film list under END31, the final score screen (scene 73) and the
   return to the title. Gate: compared with an original capture of the ending.
   - 2026-10-09, flashback-re `tools/compare_ending.py` (engine-ending-zoom 12.5): the credits
