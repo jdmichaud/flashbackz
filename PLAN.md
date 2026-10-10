@@ -752,7 +752,7 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
   `audio/output.zig`. Gate: tests; in a Debug build with SDL's real-time disk driver, the
   queue never runs dry during the title's music and films (11.5 s) nor the city's opening film
   (15 s).
-- [ ] **P3** Minor waste. Fixed: a frame converts its colors through a 256-entry table; a level
+- [x] **P3** Minor waste. Fixed: a frame converts its colors through a 256-entry table; a level
   frame with nothing drawn over its picture no longer copies it; a level reads its icons once
   and decodes its first room once; the ending draws its pictures without a throwaway RGBA frame
   (and its 229 KB stack buffers). Kept: the per-pixel foreground flags (3.6 MB a level, the
