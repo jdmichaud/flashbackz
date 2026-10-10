@@ -21,29 +21,40 @@ pub const fallback_hz: u32 = 60;
 /// runs without files; a port whose game needs the original's files sets this to true.
 pub const assets_required = false;
 
-const program_name = "flashbackz-sdl";
-
-/// The command line, described once for parsing and for `--help`.
-pub const Args = clap.Parser(.{
-    .name = program_name,
-    .description = "Flashback, played from the original floppy disks.",
-    .options = &(native.cli.shared_options ++ [_]clap.Option{
-        .{ .long = "scale", .value = "N", .help = "window scale, 1 to 64 (default 3)" },
-        .{ .long = "no-vsync", .help = "do not ask for display-paced presentation" },
-        .{ .long = "software", .help = "force SDL's software renderer" },
-        .{
-            .long = "event-log",
-            .value = "SECONDS",
-            .help = "write every polled event to standard output as one JSON line, and quit\n" ++
-                "after that many seconds",
-        },
-        .{ .long = "run-for", .value = "SECONDS", .help = "quit after that many seconds, without the event log" },
-        .{ .long = "fps", .value = "N", .help = "the fallback pacer's rate, 1 to 1000 (default 60)" },
-    }),
-    .positionals = &.{native.cli.assets},
-});
+/// The command line, described once for parsing and for `--help`, under the executable's name:
+/// `flashback`, or `flashback-standalone` for the standalone build (DESIGN.md 3).
+pub fn Args(comptime program: []const u8) type {
+    return clap.Parser(.{
+        .name = program,
+        .description = "Flashback, played from the original floppy disks.",
+        .options = &(native.cli.shared_options ++ [_]clap.Option{
+            .{ .long = "scale", .value = "N", .help = "window scale, 1 to 64 (default 3)" },
+            .{ .long = "no-vsync", .help = "do not ask for display-paced presentation" },
+            .{ .long = "software", .help = "force SDL's software renderer" },
+            .{
+                .long = "event-log",
+                .value = "SECONDS",
+                .help = "write every polled event to standard output as one JSON line, and " ++
+                    "quit\nafter that many seconds",
+            },
+            .{
+                .long = "run-for",
+                .value = "SECONDS",
+                .help = "quit after that many seconds, without the event log",
+            },
+            .{
+                .long = "fps",
+                .value = "N",
+                .help = "the fallback pacer's rate, 1 to 1000 (default 60)",
+            },
+        }),
+        .positionals = &.{native.cli.assets},
+    });
+}
 
 pub const Options = struct {
+    /// The executable's name, for its messages.
+    program: []const u8 = "flashback",
     help: bool = false,
     scale: ?u32 = null,
     /// `--no-vsync` sets it to false.
@@ -77,7 +88,7 @@ pub fn run(
     var err_buf: [1024]u8 = undefined;
     var err_writer = std.Io.File.stderr().writerStreaming(io, &err_buf);
     const err = &err_writer.interface;
-    const name = program_name;
+    const name = options.program;
 
     var ver_buf: [32]u8 = undefined;
     const check = version.checkVersion(&ver_buf);
@@ -226,15 +237,17 @@ pub const ArgError = clap.Error || error{MissingAssets};
 /// Parses `args`, the arguments after the program's name; the options point into them.
 /// `built_in` are the standalone build's files, which stand in for paths not given.
 pub fn parseArgs(
+    comptime program: []const u8,
     allocator: std.mem.Allocator,
     args: []const []const u8,
     diagnostic: *clap.Diagnostic,
     built_in: native.cli.BuiltIn,
 ) ArgError!Options {
-    var parsed = try Args.parse(allocator, args, diagnostic);
+    var parsed = try Args(program).parse(allocator, args, diagnostic);
     defer parsed.deinit(allocator);
-    if (parsed.help) return .{ .help = true };
+    if (parsed.help) return .{ .program = program, .help = true };
     var options: Options = .{
+        .program = program,
         .scale = try parsed.number(u32, "scale", 1, SdlBackend.max_window_scale, diagnostic),
         .vsync = if (parsed.flag("no-vsync")) false else null,
         .software = parsed.flag("software"),
@@ -250,14 +263,19 @@ pub fn parseArgs(
 }
 
 /// A positive number of seconds, at most a day, in nanoseconds.
-fn seconds(parsed: Args, comptime long: []const u8, diagnostic: *clap.Diagnostic) clap.Error!?u64 {
-    const s = try parsed.number(f64, long, std.math.floatMin(f64), 86_400, diagnostic) orelse return null;
+fn seconds(
+    parsed: anytype,
+    comptime long: []const u8,
+    diagnostic: *clap.Diagnostic,
+) clap.Error!?u64 {
+    const smallest = std.math.floatMin(f64);
+    const s = try parsed.number(f64, long, smallest, 86_400, diagnostic) orelse return null;
     return @intFromFloat(s * std.time.ns_per_s);
 }
 
 fn testParse(args: []const []const u8) ArgError!Options {
     var diagnostic: clap.Diagnostic = .{};
-    return parseArgs(std.testing.allocator, args, &diagnostic, .{});
+    return parseArgs("flashback", std.testing.allocator, args, &diagnostic, .{});
 }
 
 test "the host options are parsed, bounded and defaulted" {

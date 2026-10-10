@@ -1,6 +1,6 @@
 //! The standalone build's check of the user's files (DESIGN.md 3), run by build.zig before it
-//! builds them into flashbackz-sdl: each disk must be a floppy image the game reads, the cartridge
-//! the accepted Mega Drive cartridge. Usage: bundle_check (disk PATH | megadrive PATH)...
+//! builds them into flashback-standalone: each disk must be a floppy image the game reads, the
+//! cartridge the accepted Mega Drive cartridge. Usage: bundle_check (disk PATH | megadrive PATH)...
 const std = @import("std");
 const flashbackz = @import("flashbackz");
 

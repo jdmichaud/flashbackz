@@ -128,7 +128,7 @@ failures in `../flashback-re/docs/floppy-demo.md`.
 
 ```sh
 zig build --prefix /tmp/flashback/modern/out --cache-dir /tmp/flashback/modern/cache
-/tmp/flashback/modern/out/bin/flashbackz-sdl ../disk1.img ../disk2.img
+/tmp/flashback/modern/out/bin/flashback ../disk1.img ../disk2.img
 /tmp/flashback/modern/out/bin/flashbackz-agent --scene menu --frames 120 ../disk1.img ../disk2.img
 ```
 
@@ -140,7 +140,7 @@ runs on (DESIGN.md section 3). Per level it writes `characters.zon` and one
 not extracted. Write it outside Git, into a new or empty directory:
 
 ```sh
-/tmp/flashback/modern/out/bin/flashbackz-sdl --extract ~/flashback-data ../disk1.img ../disk2.img
+/tmp/flashback/modern/out/bin/flashback --extract ~/flashback-data ../disk1.img ../disk2.img
 ```
 
 Names come from the committed overlay `src/extract/names.zon`. Anything not named there keeps
@@ -161,12 +161,13 @@ nothing of the cartridge is in the repository. Without the option the game is th
 
 ## Standalone build
 
-`zig build -Ddisk1=PATH -Ddisk2=PATH [-Dmegadrive=PATH]` checks the user's files and builds them
-into `flashbackz-sdl`, which then plays with no argument (with the Mega Drive tunes when the
-cartridge is built in); paths on its command line still take precedence. A wrong file stops the
-build and says which. For Windows add `-Dtarget=x86_64-windows-gnu`: one executable to copy.
-Such an executable holds the original game: it is for the user's own machines, never committed
-nor distributed. The agent host never has the files built in.
+The game is `flashback`. `zig build -Ddisk1=PATH -Ddisk2=PATH [-Dmegadrive=PATH]` also checks the
+user's files and builds them into a second executable, `flashback-standalone`, which plays with
+no argument (with the Mega Drive tunes when the cartridge is built in); paths on its command line
+still take precedence. A wrong file stops the build and says which. For Windows add
+`-Dtarget=x86_64-windows-gnu`: one executable to copy. `flashback-standalone` holds the original
+game: it is for the user's own machines, never committed nor distributed. `flashback` and the
+agent host never have the files built in.
 
 Both programs list their options with `--help`: the help is generated from the same description
 the command line is parsed with (`src/native/clap.zig`).
@@ -183,8 +184,8 @@ extractor or emulator is used by the game. Supplied content never enters version
 Build with Zig 0.17.0 and SDL2 2.32.4 on Linux. Foundation checks are `zig build test smoke
 verify` with scratch prefix/cache as above. Browser support is excluded.
 Windows: `zig build all -Dtarget=x86_64-windows-gnu -p OUT` cross-builds both hosts from Linux, with SDL2 built from its pinned sources and linked statically; the
-executables need only Windows' own DLLs. Copy `flashbackz-sdl.exe` next to the disk images and
-run `flashbackz-sdl.exe disk1.img disk2.img`.
+executables need only Windows' own DLLs. Copy `flashback.exe` next to the disk images and run
+`flashback.exe disk1.img disk2.img`, or copy only `flashback-standalone.exe`.
 Without content, the template smoke fixture remains available for platform testing.
 
 Independent scene, movement, terrain, inventory and rendering systems are retained for

@@ -1,9 +1,11 @@
 //! flashbackz build graph.
 //!
 //! Targets:
-//!   flashbackz-agent  headless debugging host (shared game + AgentBackend), never links SDL
-//!   flashbackz-sdl    SDL interactive host (Linux, Windows)
-//! Both hosts write the readable data set with `--extract DIR`.
+//!   flashbackz-agent      headless debugging host (shared game + AgentBackend), never links SDL
+//!   flashback             the game: the SDL interactive host (Linux, Windows)
+//!   flashback-standalone  the game with the user's files built in, only with -Ddisk1, -Ddisk2
+//!                         and -Dmegadrive (DESIGN.md 3)
+//! The hosts write the readable data set with `--extract DIR`.
 //! Steps: `zig build` installs both native hosts. `test` runs standalone unit tests;
 //! `smoke` exercises the headless host; `verify` checks that it has no SDL dependency.
 //! `all` installs both native hosts for the selected target.
@@ -76,15 +78,16 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    // The standalone build (DESIGN.md 3): the user's files, checked, then built into the SDL host.
-    const built_in = builtInFiles(b, versions, .{
+    // The standalone build's files (DESIGN.md 3), built into flashback-standalone only.
+    const disks = [2]?[]const u8{
         b.option([]const u8, "disk1", "Standalone build: the first floppy image, built in"),
         b.option([]const u8, "disk2", "Standalone build: the second floppy image, built in"),
-    }, b.option(
+    };
+    const cartridge = b.option(
         []const u8,
         "megadrive",
         "Standalone build: the Mega Drive cartridge Flashback (Europe) (En,Fr), built in",
-    ));
+    );
     const sdl = b.addModule("sdl", .{
         .root_source_file = b.path("src/sdl/root.zig"),
         .target = target,
@@ -115,33 +118,36 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
-    const sdl_exe = b.addExecutable(.{
-        .name = "flashbackz-sdl",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/sdl/main.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-            .imports = &.{
-                .{ .name = "flashbackz", .module = shared },
-                .{ .name = "sdl", .module = sdl },
-                .{ .name = "native", .module = native },
-                .{ .name = "built_in", .module = built_in },
-            },
-        }),
-    });
+    // The game, and the standalone build when its files are given.
+    const game: Game = .{
+        .target = target,
+        .optimize = optimize,
+        .shared = shared,
+        .sdl = sdl,
+        .native = native,
+    };
+    const no_files = builtInFiles(b, versions, "flashback", .{ null, null }, null);
+    const sdl_exe = game.executable(b, "flashback", no_files);
+    const any_file = disks[0] != null or disks[1] != null or cartridge != null;
+    const standalone_exe = if (any_file) standalone: {
+        const files = builtInFiles(b, versions, "flashback-standalone", disks, cartridge);
+        break :standalone game.executable(b, "flashback-standalone", files);
+    } else null;
 
     b.installArtifact(agent_exe);
     b.installArtifact(sdl_exe);
+    if (standalone_exe) |exe| b.installArtifact(exe);
 
     b.step(
         "agent",
         "Build and install only the headless agent host",
     ).dependOn(&b.addInstallArtifact(agent_exe, .{}).step);
-    b.step(
+    const sdl_step = b.step(
         "sdl",
-        "Build and install only the SDL host",
-    ).dependOn(&b.addInstallArtifact(sdl_exe, .{}).step);
+        "Build and install only the SDL game (and its standalone build with the -D options)",
+    );
+    sdl_step.dependOn(&b.addInstallArtifact(sdl_exe, .{}).step);
+    if (standalone_exe) |exe| sdl_step.dependOn(&b.addInstallArtifact(exe, .{}).step);
     // Unit tests of every module. The tests of the SDL module link SDL2 as the host does.
     const test_step = b.step("test", "Run the unit tests of every module");
     const unit_modules = [_]*std.Build.Module{
@@ -175,12 +181,45 @@ pub fn build(b: *std.Build) void {
     ).dependOn(b.getInstallStep());
 }
 
-/// The standalone build's module (DESIGN.md 3): the user's disks and cartridge embedded, once
-/// `bundle_check` has accepted them; empty without the options. It is generated in the cache and
-/// holds original files: it never enters the repository.
+/// The SDL game's modules, from which `flashback` and `flashback-standalone` are built.
+const Game = struct {
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    shared: *std.Build.Module,
+    sdl: *std.Build.Module,
+    native: *std.Build.Module,
+
+    fn executable(
+        game: Game,
+        b: *std.Build,
+        name: []const u8,
+        built_in: *std.Build.Module,
+    ) *std.Build.Step.Compile {
+        return b.addExecutable(.{
+            .name = name,
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/sdl/main.zig"),
+                .target = game.target,
+                .optimize = game.optimize,
+                .link_libc = true,
+                .imports = &.{
+                    .{ .name = "flashbackz", .module = game.shared },
+                    .{ .name = "sdl", .module = game.sdl },
+                    .{ .name = "native", .module = game.native },
+                    .{ .name = "built_in", .module = built_in },
+                },
+            }),
+        });
+    }
+};
+
+/// An executable's name and built-in files (DESIGN.md 3): the user's disks and cartridge
+/// embedded, once `bundle_check` has accepted them; none without them. The module is generated in
+/// the cache and holds original files: it never enters the repository.
 fn builtInFiles(
     b: *std.Build,
     versions: *std.Build.Step.Options,
+    program: []const u8,
     disks: [2]?[]const u8,
     cartridge: ?[]const u8,
 ) *std.Build.Module {
@@ -216,11 +255,13 @@ fn builtInFiles(
         files.step.dependOn(&check.step);
     }
     const source = files.add("built_in.zig", b.fmt(
-        \\//! Generated by build.zig from the user's files (the standalone build). Never commit.
+        \\//! Generated by build.zig: the executable's name, and the user's files it holds (the
+        \\//! standalone build). Never commit.
+        \\pub const program = "{s}";
         \\pub const disks: []const []const u8 = &.{{ {s}}};
         \\pub const megadrive: ?[]const u8 = {s};
         \\
-    , .{ embeds, if (cartridge != null) "@embedFile(\"megadrive.md\")" else "null" }));
+    , .{ program, embeds, if (cartridge != null) "@embedFile(\"megadrive.md\")" else "null" }));
     return b.createModule(.{ .root_source_file = source });
 }
 
