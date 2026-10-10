@@ -717,7 +717,12 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
   kinds 5, 9 and 12 explained; the fall scene, the protection after a hit and `Room.nowhere` are
   named; the instrument file's fields, the profile's timing fields and the executable's data
   segment are named. Gate: audio, traces and sessions unchanged.
-- [ ] **R2** Behavior tables' readability: state names, signs of the terrain arguments.
+- [ ] **R2** Behavior tables' readability: state names, signs of the terrain arguments. The eight
+  terrain checks that took the original's backward offset (`ledge_above_*`, `floor_edge_*`,
+  `grab_edge_ahead`, `wall_beyond_gap`, `wall_starts`, `wall_ends`) now take cells ahead, like
+  the others: the extractor writes them negated and the engine reads them so. The extraction
+  report counts the states the overlay names (56 of 4,555); naming more is overlay work, not
+  code. Gate: traces of all seven levels and the sessions unchanged.
 - [x] **R3** Dead code: the title's unused notice page, `Player.interactive`,
   `Screen.writeRgba`, `contacts.Registration`, the unreachable Retry to the title, and
   `unused_parameters` (accepted, no longer kept). `placement` stays, documented: it is the
