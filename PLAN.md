@@ -414,12 +414,15 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     on one row a cell apart, no letters; its map 5120 px wide. The other levels are
     pixel-identical (Earth's glow shifts by at most 1 of 255 at their edges). Poster 7584x12648.
 
-- [ ] Atlas: every map glows (user report, 2026-10-10: "Looking at the level 2 borders for
+- [x] Atlas: every map glows (user report, 2026-10-10: "Looking at the level 2 borders for
   example, I don't see any glow"). The glow borrowed each map's light at one strength, so dark
   maps barely glowed: just outside its rooms the city's light was 28 of 255 and the tower's 20,
   where the jungle's was 49. Each map's light is scaled so that just outside its rooms its
   brightest channel averages one level, the jungle's, in the map's own colors. Gate: tests; on
   the poster the city and the tower glow at their borders like the jungle.
+  - 2026-10-10: 14 atlas tests (a dark map glows as brightly at its edges as a bright one).
+    Every map's light averages 48 just outside its rooms (it was 20 to 49); the jungle's is
+    within 2% of before; the maps themselves are unchanged.
 
 ## Mega Drive music during play — user decision, 2026-10-09
 
