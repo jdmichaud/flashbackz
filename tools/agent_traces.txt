@@ -1,0 +1,7 @@
+jungle: 1401 lines, a96328b914a2bad8
+city: 781 lines, dfd4d0d30aab99d3
+tower: 1278 lines, 8cda4fef4f387670
+earth_city: 1401 lines, 7de35fd43c2cdf65
+spaceport: 736 lines, fca388fbd1e43fc9
+alien_surface: 908 lines, 79b494782ee4695b
+alien_base: 1278 lines, 7e33e0729a25df31
