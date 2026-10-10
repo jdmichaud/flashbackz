@@ -2,8 +2,9 @@
 //! them on a grid of room cells from the start room. The game's rooms do not always lie flat: a
 //! link may lead to a room whose cell another link has taken (the tower's floors wrap around), and
 //! some areas are reached only by a transport. Those links and transports are the map's joins; the
-//! poster tags both ends of each. A ring of links may also be a transit line rather than ground
-//! (the city's subway stations): its stations lie apart, and the poster draws the level along it.
+//! poster tags both ends of each join between two pieces. A ring of links may also be a transit
+//! line rather than ground (the city's subway stations): its stations lie apart, and the poster
+//! draws the level along it.
 const std = @import("std");
 const flashbackz = @import("flashbackz");
 const grid = flashbackz.behavior.grid;

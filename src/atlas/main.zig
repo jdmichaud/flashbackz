@@ -134,14 +134,11 @@ pub fn main(init: std.process.Init) !u8 {
             }
             rooms[room] = rgb;
         }
-        // A level drawn along its transit line carries no tags; the others' joins are tagged.
         const line = map.transitLine(&links, owned, &rooms);
         const skipped: map.Skipped = if (line) |*l| l.skipped(&links) else @splat(@splat(false));
         const level_map = map.lay(&links, owned, start, &skipped);
-        if (line == null) {
-            try map.cutLinks(gpa, &links, &level_map, &joins[i]);
-            try map.transports(gpa, &data[i], &level_map, &joins[i]);
-        }
+        try map.cutLinks(gpa, &links, &level_map, &joins[i]);
+        try map.transports(gpa, &data[i], &level_map, &joins[i]);
         const look = design(id);
         levels[i] = .{
             .name = look.name,
