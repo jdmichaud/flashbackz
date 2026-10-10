@@ -475,7 +475,17 @@ LOAD dialog in the in game menu is awkward").
     the one typed; START skips the opening film. The title, continue and ending screens keep
     their keyboard rules; pad presses reach them as actions. The eleven keyboard sessions keep
     their hashes (the pad one now walks: its D-pad turns the option on).
-  - [ ] With the user's pad in the SDL game: play, pause, a level code; the buttons' places.
+  - [x] With the user's pad in the SDL game: play, pause, a level code (user, 2026-10-10: "The
+    gamepad works. The button mapping is not good though").
+- [ ] **GS-3a — Pad buttons remapped** (user decision, 2026-10-10: "Remapping now"). The
+  platform names each pad's model (SDL's GUID) and whether it has the generic mapping; the
+  settings keep, per model, the pad button for ACTION, GUN, USE, ITEMS and PAUSE, and the game
+  applies them to the pad's button events before any screen sees them. On the CONTROLS page the
+  D-pad picks a row and the pad button pressed there becomes its action's (the one it had swaps
+  places); DEFAULT restores the layout, BACK leaves. Generic pads show their buttons by number.
+  The settings record's version becomes 2. Gate: tests; the agent binds ACTION to another button
+  and that button acts; with the user's pad, its layout chosen in the game is there after a
+  restart.
 - [ ] **GS-4 — The save** — A save holds the level, difficulty, score, random generator, what is
   carried between levels, the world (every character, the terrain, contacts, mailboxes, the
   save terminal's checkpoint) and the level's play state; art, sound and pictures are reloaded
