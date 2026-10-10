@@ -424,6 +424,44 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     Every map's light averages 48 just outside its rooms (it was 20 to 49); the jungle's is
     within 2% of before; the maps themselves are unchanged.
 
+## Gamepads and save anywhere — user decisions, 2026-10-10
+
+Additions to the DOS edition. The user's pad is a 6-button Mega Drive controller that SDL2 lists
+as "not a gamepad" (GUID 03001a0da30c00002400000011010000, 3 axes, 10 buttons); sorz met the
+same and gives such joysticks a generic mapping (sorz `src/sdl/backend.zig`, reused with the
+user's permission). Decisions: the first pad press turns the Joystick option on; fixed layouts
+now, remapping later; eight save slots and a quick slot (F5/F9); a save from another version
+is listed and refused; SAVE GAME in the pause dialog, LOAD GAME on the title menu ("having the
+LOAD dialog in the in game menu is awkward").
+
+- [ ] **GS-1 — One input tracker** — Every platform event reaches one tracker, whatever screen
+  is open (code review B3, B6, D3). From keys and pad buttons it gives the game's eight actions
+  (the input byte, unchanged) and the menu actions (move, confirm, back, pause); screens read
+  actions, not keys. Gate: tests; a key released in the options dialog or the inventory and
+  pressed again acts at once; a tap of Escape opens the options; the inventory closes with the
+  key that opens it.
+- [ ] **GS-2 — Settings in one place** — Sound effects, music, volume, joystick and zoom are one
+  value the game owns, read where they are used, saved as one record that replaces VOLUME; a
+  record of another version is refused and the defaults apply. Gate: tests; a setting changed
+  in the options is there after a restart.
+- [ ] **GS-3 — Gamepads everywhere** — A joystick SDL has no gamepad mapping for opens with a
+  generic one; the first pad press turns the Joystick option on; every screen answers the pad
+  (D-pad or stick to move, A to confirm, B to go back, Start to pause); level codes are entered
+  with it (up and down change the letter, left and right move); each pad holds its own buttons;
+  a CONTROLS page lists each action's key and button. Gate: tests (SDL's virtual joystick, the
+  agent's axis events); with the user's pad, the SDL game plays, pauses and takes a level code.
+- [ ] **GS-4 — The save** — A save holds the level, difficulty, score, random generator, what is
+  carried between levels, the world (every character, the terrain, contacts, mailboxes, the
+  save terminal's checkpoint) and the level's play state; art, sound and pictures are reloaded
+  and redrawn. It is taken only while the pause dialog is open. A readable record with a version
+  and the data set's fingerprint; another version's save is refused. Gate: the agent plays,
+  saves and plays on, then loads and replays the same input: every character identical on every
+  update after.
+- [ ] **GS-5 — Save screens** — SAVE GAME in the pause dialog; LOAD GAME on the title menu; eight
+  slots, each with its level, play time, date and a picture of the moment; overwriting asks;
+  another version's save is shown, not loaded; F5 saves to the quick slot and F9 loads it during
+  play. Gate: in the SDL game, a save made in play loads from the title and plays on.
+
 ## Mega Drive music during play — user decision, 2026-10-09
 
 An addition to the DOS edition: the tunes the Mega Drive edition plays during play, sounding
