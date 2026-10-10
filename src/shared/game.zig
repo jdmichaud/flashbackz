@@ -20,6 +20,7 @@ const input = @import("input.zig");
 const save = @import("save.zig");
 const save_slots = @import("scenes/save_slots.zig");
 const megadrive = @import("content/megadrive.zig");
+const audio_output = @import("audio/output.zig");
 pub const Entry = union(enum) {
     automatic,
     menu_development,
@@ -95,6 +96,8 @@ pub const Game = struct {
     /// The character records' flags as the last level left them; the next level's characters
     /// that it does not place keep them, as in the original.
     inherited: [256]behavior_world.Inherited = @splat(.{}),
+    /// The one audio output, which plays the scene's sound.
+    sound: audio_output.Output = .{},
     /// The Mega Drive edition's tunes, when the user gave its cartridge (PLAN MD-D), read once
     /// for every level; on the heap so that the levels' pointers outlive moves of the game.
     tunes: ?*megadrive.Tunes = null,
@@ -225,8 +228,31 @@ pub const Game = struct {
         return self.story != null;
     }
 
-    /// One frame: the input, one step of the state, the sound and the picture.
+    /// One frame: the input, one step of the state, the picture and the sound.
     pub fn update(self: *Game, p: *platform.Platform) !UpdateResult {
+        const result = try self.step(p);
+        if (result == .finished) {
+            self.sound.close(p);
+        } else {
+            self.sound.volume = self.settings.volume;
+            self.sound.pump(p, self.soundSources());
+        }
+        return result;
+    }
+
+    /// What plays: a film's music, else the scene's.
+    fn soundSources(self: *Game) audio_output.Sources {
+        if (self.story) |*story| return .{ .music = story.sound() };
+        return switch (self.scene) {
+            .menu => |*front| .{ .music = front.sound() },
+            .ending => |*ending| .{ .music = ending.sound() },
+            .level => |*level| .{ .level = level.sound(self.settings) },
+            .continue_game => .{},
+        };
+    }
+
+    /// The input, one step of the state and the picture.
+    fn step(self: *Game, p: *platform.Platform) !UpdateResult {
         if (self.phase == .finished) return .finished;
         self.update_count += 1;
         // What the last update changed: the options dialog, S, J and K.
@@ -243,24 +269,16 @@ pub const Game = struct {
         }
         if (self.phase == .finished) {
             self.keepSettings();
-            if (self.story) |*story| story.stopAudio(p);
-            if (self.scene == .menu) self.scene.menu.stopAudio(p);
-            if (self.scene == .level) self.scene.level.stopAudio(p);
-            if (self.scene == .ending) self.scene.ending.stopMusic(p);
             return .finished;
         }
         if (self.scene == .ending) {
             const ending = &self.scene.ending;
             ending.music_enabled = self.settings.music;
-            if (ending.music) |*music| {
-                music.volume = self.settings.volume;
-                music.player.master_volume = self.music_volume;
-            }
+            if (ending.music) |*music| music.player.master_volume = self.music_volume;
             ending.setPaused(self.films_paused, p.nowNs());
             try ending.update(p);
             if (ending.finished) {
                 const next = try self.titleMenu();
-                ending.stopMusic(p);
                 ending.deinit();
                 self.scene = .{ .menu = next };
             }
@@ -271,7 +289,6 @@ pub const Game = struct {
         if (self.scene == .menu) {
             const front = &self.scene.menu;
             front.music_enabled = self.settings.music;
-            front.volume = self.settings.volume;
             front.joystick = self.settings.joystick;
             front.films_paused = self.films_paused;
             front.music_volume = self.music_volume;
@@ -282,7 +299,7 @@ pub const Game = struct {
                     front.load_page.outcome = null;
                     var name: [8]u8 = undefined;
                     // Loading replaces the title: nothing of it is used after.
-                    self.loadGame(p, save_slots.slotName(outcome.chosen, &name)) catch |err| {
+                    self.loadGame(save_slots.slotName(outcome.chosen, &name)) catch |err| {
                         std.log.err("the game could not be loaded: {s}", .{@errorName(err)});
                     };
                     if (self.scene != .menu) {
@@ -292,7 +309,6 @@ pub const Game = struct {
                 };
             }
             if (front.stage == .quit) {
-                front.stopAudio(p);
                 self.phase = .finished;
                 return .finished;
             }
@@ -397,7 +413,7 @@ pub const Game = struct {
         const now = p.nowNs();
         if (scene.film) |film| {
             if (self.story == null) {
-                scene.stopAudio(p);
+                scene.stopSound();
                 self.story = try story_mod.Story.openFilm(
                     self.allocator,
                     self.assets.?,
@@ -409,17 +425,13 @@ pub const Game = struct {
             }
             const story = &self.story.?;
             story.music_enabled = self.settings.music;
-            if (story.music) |*music| {
-                music.volume = self.settings.volume;
-                music.player.master_volume = self.music_volume;
-            }
+            if (story.music) |*music| music.player.master_volume = self.music_volume;
             story.player.setPaused(self.films_paused, now);
-            if (!try story.update(p)) {
+            if (!try story.update(now)) {
                 try self.present(p);
                 return true;
             }
             const paused = now - story.started_ns;
-            story.stopAudio(p);
             story.deinit();
             self.story = null;
             try scene.finishFilm(now, paused, &self.settings);
@@ -461,10 +473,7 @@ pub const Game = struct {
             }
         }
         switch (scene.outcome) {
-            .playing => {
-                try scene.pumpAudio(p, self.settings);
-                return scene.needsCatchup(now);
-            },
+            .playing => return scene.needsCatchup(now),
             .level => |destination| {
                 self.play_walks += scene.walk_count;
                 scene.world.inheritance(&self.inherited);
@@ -484,14 +493,13 @@ pub const Game = struct {
                 next.world.random = scene.world.random;
                 next.world.shake = scene.world.shake;
                 next.catch_up_due = scene.catch_up_due;
-                scene.stopAudio(p);
                 scene.deinit();
                 self.level = destination;
                 self.scene = .{ .level = next };
             },
             .defeated => {
                 if (scene.film != null) return false;
-                scene.stopAudio(p);
+                scene.stopSound();
                 const next = try continue_mod.Scene.init(
                     self.allocator,
                     self.assets.?,
@@ -501,13 +509,11 @@ pub const Game = struct {
                 self.scene = .{ .continue_game = next };
             },
             .aborted => {
-                scene.stopAudio(p);
                 const next = try self.titleMenu();
                 self.retire(scene);
                 self.scene = .{ .menu = next };
             },
             .ending => {
-                scene.stopAudio(p);
                 const next = try ending_mod.Ending.init(
                     self.allocator,
                     self.assets.?,
@@ -701,7 +707,7 @@ pub const Game = struct {
             };
             self.scene.level.screen.showNotice("GAME SAVED");
         } else {
-            self.loadGame(p, save.quick_slot) catch |err| {
+            self.loadGame(save.quick_slot) catch |err| {
                 if (err != error.NotFound) std.log.err("the game could not be loaded: {s}", .{@errorName(err)});
                 return true;
             };
@@ -817,7 +823,7 @@ pub const Game = struct {
 
     /// Loads the save in `slot`: its level, loaded again with its world put back, replaces
     /// whatever plays. A save of another version or data set is refused (`save.Error`).
-    pub fn loadGame(self: *Game, p: *platform.Platform, slot: []const u8) !void {
+    pub fn loadGame(self: *Game, slot: []const u8) !void {
         const storage = self.storage orelse return error.NoStorage;
         const files = self.data orelse return error.DataSetRequired;
         const assets = self.assets orelse return error.OriginalContentRequired;
@@ -837,7 +843,7 @@ pub const Game = struct {
         errdefer scene.deinit();
         try save.restoreWorld(&scene.world, record.world);
         scene.restoreState(record.scene);
-        self.endScene(p);
+        self.endScene();
         self.inherited = inherited;
         self.level = record.level;
         self.difficulty = record.difficulty;
@@ -847,9 +853,8 @@ pub const Game = struct {
 
     /// Ends whatever plays, its film and a level waiting behind the continue screen included,
     /// with their sound.
-    fn endScene(self: *Game, p: *platform.Platform) void {
+    fn endScene(self: *Game) void {
         if (self.story) |*story| {
-            story.stopAudio(p);
             story.deinit();
             self.story = null;
         }
@@ -858,19 +863,7 @@ pub const Game = struct {
             self.suspended_level = null;
         }
         switch (self.scene) {
-            .menu => |*scene| {
-                scene.stopAudio(p);
-                scene.deinit();
-            },
-            .level => |*scene| {
-                scene.stopAudio(p);
-                scene.deinit();
-            },
-            .continue_game => |*scene| scene.deinit(),
-            .ending => |*scene| {
-                scene.stopMusic(p);
-                scene.deinit();
-            },
+            inline else => |*scene| scene.deinit(),
         }
     }
 

@@ -1,13 +1,13 @@
-//! Four digital effect voices, mixed in short source blocks and resampled for the host.
-//! The simulation submits entry events; device queueing never changes game movement.
+//! Four digital effect voices, mixed in short source blocks and resampled to the output's rate.
+//! The simulation submits entry events; the sound never changes game movement.
 const std = @import("std");
-const platform = @import("../platform.zig");
 const sounds = @import("../content/sound_effects.zig");
 const megadrive = @import("../content/megadrive.zig");
 const megadrive_tunes = @import("megadrive_tunes.zig");
+const audio_output = @import("output.zig");
+
 /// A sample of the effects bank.
 pub const SoundId = enum(u16) { _ };
-const output_gain = @import("output_gain.zig");
 pub const Event = struct { sound: SoundId, attenuation: u2 = 0 };
 const Voice = struct { sound: SoundId, cursor: usize = 0, attenuation: u2 };
 pub const Mixer = struct {
@@ -75,78 +75,66 @@ pub const Mixer = struct {
         }
     }
 };
-pub const Output = struct {
-    mixer: Mixer = .{},
-    opened: bool = false,
-    started: bool = false,
-    rate: u32 = 44100,
-    volume: u8 = 100,
-    pending: [2048]i16 = undefined,
-    begin: usize = 0,
-    end: usize = 0,
-    /// The Mega Drive edition's tunes, when the user gave its cartridge (PLAN MD-D): its effects
-    /// 68-75, which the DOS bank lacks, play them instead of being dropped.
-    tunes: ?*const megadrive.Tunes = null,
-    /// Their sound, made when the device opens at its rate, and a tune asked for before that.
-    music: ?megadrive_tunes.Output = null,
-    tune_due: ?usize = null,
+/// What a level's sound plays, from the options: the effects with SOUND FX, and the Mega Drive
+/// tunes with MUSIC, since they are its music.
+pub const Enabled = struct { effects: bool, tunes: bool };
 
-    pub fn submit(self: *Output, bank: sounds.Bank, event: Event) void {
-        self.started = true;
+/// A level's sound: four effect voices and, when the user gave the Mega Drive cartridge (PLAN
+/// MD-D), its tunes, which its effects 68-75 play where the DOS bank has no sample.
+pub const Player = struct {
+    mixer: Mixer = .{},
+    /// The tunes on the cartridge's chips.
+    tunes: ?megadrive_tunes.Output = null,
+    /// What the options last let play.
+    enabled: Enabled = .{ .effects = true, .tunes = true },
+    /// Whether anything played since the last stop: the sound starts with its first effect.
+    started: bool = false,
+
+    pub fn init(tunes: ?*const megadrive.Tunes) Player {
+        return .{ .tunes = if (tunes) |t| .init(t, audio_output.format.sample_rate) else null };
+    }
+
+    /// Plays `event`, an effect or a tune, if what it is is enabled.
+    pub fn submit(self: *Player, bank: sounds.Bank, event: Event, enabled: Enabled) void {
         const id = @backingInt(event.sound);
-        if (self.tunes != null and id >= megadrive.first_tune and
-            id < megadrive.first_tune + megadrive.tune_count)
-        {
+        if (self.tunes) |*tunes| if (id >= megadrive.first_tune and id < megadrive.first_tune + megadrive.tune_count) {
             // As in the cartridge, a tune asked for restarts the tunes' player with it.
-            const index = id - megadrive.first_tune;
-            if (self.music) |*music| music.player.start(index) else self.tune_due = index;
+            if (!enabled.tunes) return;
+            tunes.player.start(id - megadrive.first_tune);
+            self.started = true;
             return;
-        }
+        };
+        if (!enabled.effects) return;
         self.mixer.start(bank, event);
+        self.started = true;
     }
-    pub fn pump(self: *Output, bank: sounds.Bank, p: *platform.Platform) !void {
-        if (!self.started) return;
-        if (!self.opened) {
-            const format = try p.audioOpen(.{ .sample_rate = self.rate, .channels = 2 });
-            if (format.channels != 2) {
-                p.audioClose();
-                return error.UnsupportedEffectsAudioFormat;
-            }
-            self.rate = format.sample_rate;
-            self.opened = true;
-            if (self.tunes) |tunes| {
-                self.music = .init(tunes, self.rate);
-                if (self.tune_due) |index| self.music.?.player.start(index);
-                self.tune_due = null;
-            }
-        }
-        const ahead = output_gain.leadFrames(self.rate);
-        for (0..8) |_| {
-            const status = p.audioStatus();
-            if (!status.running or status.suspended or status.queued_frames >= ahead) return;
-            if (self.begin == self.end) {
-                const frames: usize = @intCast(@min(
-                    self.pending.len / 2,
-                    ahead - status.queued_frames,
-                ));
-                self.begin = 0;
-                self.end = frames * 2;
-                self.mixer.render(bank, self.pending[0..self.end], self.rate);
-                if (self.music) |*music| music.mixInto(self.pending[0..self.end]);
-            }
-            const accepted = try output_gain.queue(
-                p,
-                self.pending[self.begin..self.end],
-                self.volume,
-            );
-            self.begin += accepted * 2;
-            if (accepted == 0) return;
-        }
+
+    /// The next `out.len / 2` stereo frames at the output's rate.
+    pub fn render(self: *Player, bank: sounds.Bank, out: []i16) void {
+        self.mixer.render(bank, out, audio_output.format.sample_rate);
+        if (self.tunes) |*tunes| tunes.mixInto(out);
     }
-    /// Stops the sound, a tune playing included, as a film does in the cartridge.
-    pub fn stop(self: *Output, p: *platform.Platform) void {
-        if (self.opened) p.audioClose();
-        self.* = .{ .tunes = self.tunes };
+
+    /// Stops what the options turned off; everything when both are off.
+    pub fn enable(self: *Player, enabled: Enabled) void {
+        if (!enabled.effects and !enabled.tunes) {
+            self.stop();
+        } else {
+            if (self.enabled.effects and !enabled.effects) self.mixer = .{};
+            if (self.enabled.tunes and !enabled.tunes) self.stopTunes();
+        }
+        self.enabled = enabled;
+    }
+
+    /// Stops everything, as a film does in the cartridge.
+    pub fn stop(self: *Player) void {
+        self.mixer = .{};
+        self.stopTunes();
+        self.started = false;
+    }
+
+    fn stopTunes(self: *Player) void {
+        if (self.tunes) |*tunes| tunes.* = .init(tunes.player.tunes, audio_output.format.sample_rate);
     }
 };
 
@@ -175,4 +163,26 @@ test "a short initial effect holds the original decoder's final available amplit
     try std.testing.expectEqualSlices(i8, &.{ 117, 117, 118, 120 }, block[0..4]);
     for (block[4..]) |value| try std.testing.expectEqual(@as(i8, 120), value);
     try std.testing.expect(mixer.voices[0] == null);
+}
+
+test "SOUND FX starts the effects and MUSIC the Mega Drive tunes; turned off, they stop" {
+    const tunes = megadrive_tunes.testTunes(&.{.{ 1, 1, 0, 0, 0, 0 }}, 5, 0);
+    var pcm: [72]i8 = @splat(100);
+    var samples = [_]sounds.Sample{.{ .pcm = &pcm }};
+    const bank: sounds.Bank = .{ .allocator = std.testing.allocator, .samples = &samples };
+    const tune: Event = .{ .sound = @fromBackingInt(megadrive.first_tune + 2) };
+    const effect: Event = .{ .sound = @fromBackingInt(0) };
+    var player: Player = .init(&tunes);
+    player.submit(bank, tune, .{ .effects = true, .tunes = false });
+    player.submit(bank, effect, .{ .effects = false, .tunes = true });
+    try std.testing.expect(!player.started);
+    try std.testing.expect(!player.tunes.?.player.playing() and player.mixer.voices[0] == null);
+    player.submit(bank, tune, .{ .effects = false, .tunes = true });
+    try std.testing.expect(player.started and player.tunes.?.player.playing());
+    player.submit(bank, effect, .{ .effects = true, .tunes = false });
+    try std.testing.expect(player.mixer.voices[0] != null);
+    player.enable(.{ .effects = true, .tunes = false });
+    try std.testing.expect(!player.tunes.?.player.playing() and player.mixer.voices[0] != null);
+    player.enable(.{ .effects = false, .tunes = false });
+    try std.testing.expect(!player.started and player.mixer.voices[0] == null);
 }

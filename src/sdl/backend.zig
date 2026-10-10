@@ -699,21 +699,19 @@ pub const SdlBackend = struct {
 
     // --- audio -------------------------------------------------------------------------------
 
-    fn audioOpen(
-        ctx: *anyopaque,
-        requested: platform.AudioFormat,
-    ) platform.PlatformError!platform.AudioFormat {
+    /// SDL converts the samples to the device's own format (no change of format is allowed).
+    fn audioOpen(ctx: *anyopaque, format: platform.AudioFormat) platform.PlatformError!void {
         const self = cast(ctx);
         if (!self.started) return error.NotStarted;
         if (!self.capabilities.audio) return error.Unsupported;
-        if (requested.channels == 0 or
-            requested.sample_rate == 0 or
-            requested.sample_rate > std.math.maxInt(c_int)) return error.Unsupported;
+        if (format.channels == 0 or
+            format.sample_rate == 0 or
+            format.sample_rate > std.math.maxInt(c_int)) return error.Unsupported;
         self.closeAudio();
         const desired: c.SDL_AudioSpec = .{
-            .freq = @intCast(requested.sample_rate),
+            .freq = @intCast(format.sample_rate),
             .format = c.AUDIO_S16SYS,
-            .channels = requested.channels,
+            .channels = format.channels,
             .silence = 0,
             .samples = 1024,
             .padding = 0,
@@ -721,34 +719,18 @@ pub const SdlBackend = struct {
             .callback = null,
             .userdata = null,
         };
-        var obtained: c.SDL_AudioSpec = undefined;
-        const device = c.SDL_OpenAudioDevice(
-            null,
-            0,
-            &desired,
-            &obtained,
-            c.SDL_AUDIO_ALLOW_FREQUENCY_CHANGE | c.SDL_AUDIO_ALLOW_CHANNELS_CHANGE,
-        );
+        const device = c.SDL_OpenAudioDevice(null, 0, &desired, null, 0);
         if (device == 0) {
             std.log.err("SDL_OpenAudioDevice failed: {s}", .{c.SDL_GetError()});
             return error.DeviceFailure;
         }
-        if (obtained.format != c.AUDIO_S16SYS or obtained.channels == 0 or obtained.freq <= 0) {
-            c.SDL_CloseAudioDevice(device);
-            return error.Unsupported;
-        }
-        const format: platform.AudioFormat = .{
-            .channels = obtained.channels,
-            .sample_rate = @intCast(obtained.freq),
-        };
         self.audio = .{
             .device = device,
             .format = format,
-            .bytes_per_frame = @as(u32, obtained.channels) * @sizeOf(i16),
+            .bytes_per_frame = @as(u32, format.channels) * @sizeOf(i16),
             .capacity_frames = if (self.audio_capacity_frames != 0) self.audio_capacity_frames else format.sample_rate,
         };
         c.SDL_PauseAudioDevice(device, 0);
-        return format;
     }
 
     fn queuedFrames(self: *const SdlBackend) u64 {
@@ -1272,9 +1254,7 @@ test "audio: open, bounded queue with partial acceptance, status, clear, close" 
     const caps = try p.start();
     try std.testing.expect(caps.audio);
     backend.audio_capacity_frames = 1000;
-    const fmt = try p.audioOpen(.{ .channels = 2, .sample_rate = 8000 });
-    try std.testing.expectEqual(@as(u8, 2), fmt.channels);
-    try std.testing.expectEqual(@as(u32, 8000), fmt.sample_rate);
+    try p.audioOpen(.{ .channels = 2, .sample_rate = 8000 });
     // Pause the device, so the dummy driver does not drain the queue during the count.
     c.SDL_PauseAudioDevice(backend.audio.device, 1);
     try std.testing.expect(p.audioStatus().suspended);

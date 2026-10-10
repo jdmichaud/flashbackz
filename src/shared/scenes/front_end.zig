@@ -28,6 +28,7 @@ pub const Stage = enum {
     quit,
 };
 pub const View = enum { main, skill, info, password, load, unavailable };
+const MusicCue = enum { branding, introduction, game_over, menu };
 
 /// The original's main menu chooses Demo once its timer has counted past 2,400 since the page
 /// opened or the last Up or Down: 34.38 s, measured (flashback-re docs/title-menu.md).
@@ -41,10 +42,8 @@ pub const Scene = struct {
     menu: menu_mod.Menu = .{},
     player: ?vector_player.Player = null,
     music: ?soundtrack.Soundtrack = null,
-    music_cue: ?enum { branding, introduction, game_over, menu } = null,
-    music_rate: ?u32 = null,
+    music_cue: ?MusicCue = null,
     music_enabled: bool = true,
-    volume: u8 = 100,
     introduction_part: enum { first, second } = .first,
     skip_requested: bool = false,
     /// The joystick option: the joystick's inventory button skips films too.
@@ -112,60 +111,39 @@ pub const Scene = struct {
         self.* = undefined;
     }
 
-    pub fn stopAudio(self: *Scene, p: *platform.Platform) void {
-        if (self.music_rate != null) {
-            p.audioClear();
-            p.audioClose();
-            self.music_rate = null;
-        }
-    }
-
-    fn updateMusic(self: *Scene, p: *platform.Platform) !void {
-        if (!self.music_enabled) {
-            self.stopAudio(p);
-            return;
-        }
-        const cue: @TypeOf(self.music_cue) = switch (self.stage) {
-            .branding => .branding,
-            .introduction => .introduction,
-            .game_over => .game_over,
-            .menu => .menu,
-            else => {
-                self.stopAudio(p);
-                return;
-            },
-        };
-        if (self.music_rate == null) {
-            const format = try p.audioOpen(.{ .channels = 2, .sample_rate = 44100 });
-            if (format.channels != 2) {
-                p.audioClose();
-                return error.UnsupportedAudioFormat;
-            }
-            self.music_rate = format.sample_rate;
-        }
-        if (cue != self.music_cue) {
-            const name: []const u8 = switch (cue.?) {
+    /// The music of the stage shown: a cue changed starts its music from the beginning.
+    fn updateMusic(self: *Scene) !void {
+        if (!self.music_enabled) return;
+        const wanted = self.cue() orelse return;
+        if (wanted != self.music_cue) {
+            const name: []const u8 = switch (wanted) {
                 .branding => "PRESENT3",
                 .introduction => "INTROL3",
                 .game_over => "GAMEOVE3",
                 .menu => "OPTION3",
             };
-            const replacement = try soundtrack.Soundtrack.open(
-                self.allocator,
-                self.source,
-                name,
-                self.music_rate.?,
-            );
-            p.audioClear();
+            const replacement = try soundtrack.Soundtrack.open(self.allocator, self.source, name);
             if (self.music) |*previous| previous.deinit();
             self.music = replacement;
-            self.music_cue = cue;
+            self.music_cue = wanted;
         }
-        if (self.music) |*music| {
-            music.volume = self.volume;
-            music.player.master_volume = self.music_volume;
-            try music.pump(p);
-        }
+        if (self.music) |*music| music.player.master_volume = self.music_volume;
+    }
+
+    fn cue(self: *const Scene) ?MusicCue {
+        return switch (self.stage) {
+            .branding => .branding,
+            .introduction => .introduction,
+            .game_over => .game_over,
+            .menu => .menu,
+            else => null,
+        };
+    }
+
+    /// The stage's music, with the MUSIC option.
+    pub fn sound(self: *Scene) ?*soundtrack.Soundtrack {
+        if (!self.music_enabled or self.cue() == null) return null;
+        return if (self.music) |*music| music else null;
     }
 
     pub fn stateHash(self: *const Scene) u64 {
@@ -223,7 +201,7 @@ pub const Scene = struct {
                 }
             }
         }
-        try self.updateMusic(p);
+        try self.updateMusic();
     }
     pub fn needsCatchup(self: *const Scene, now: u64) bool {
         return if (self.player) |*player| player.needsCatchup(now) else false;

@@ -25,9 +25,11 @@ pub const AgentBackend = struct {
     calls: Calls = .{},
 
     pub const Audio = struct {
+        /// Whether the host has sound; without it, opening the device is `error.Unsupported`.
+        available: bool = true,
         open: bool = false,
         format: platform.AudioFormat = .{},
-        /// The queue capacity in sample frames: one second at the negotiated rate.
+        /// The queue capacity in sample frames: one second at the device's rate.
         capacity_frames: u64 = 0,
         queued_frames: u64 = 0,
         played_frames: u64 = 0,
@@ -191,20 +193,16 @@ pub const AgentBackend = struct {
         return self.clock_ns;
     }
 
-    fn audioOpen(
-        ctx: *anyopaque,
-        requested: platform.AudioFormat,
-    ) platform.PlatformError!platform.AudioFormat {
+    fn audioOpen(ctx: *anyopaque, format: platform.AudioFormat) platform.PlatformError!void {
         const self = cast(ctx);
         if (!self.started) return error.NotStarted;
-        if (requested.channels == 0 or requested.sample_rate == 0) return error.Unsupported;
+        if (!self.audio.available or format.channels == 0 or format.sample_rate == 0) return error.Unsupported;
         self.audio.open = true;
-        self.audio.format = requested;
-        self.audio.capacity_frames = requested.sample_rate;
+        self.audio.format = format;
+        self.audio.capacity_frames = format.sample_rate;
         self.audio.queued_frames = 0;
         self.audio.played_frames = 0;
         self.audio.carry_ns = 0;
-        return requested;
     }
 
     fn audioQueue(ctx: *anyopaque, samples: []const i16) platform.PlatformError!usize {
@@ -294,8 +292,7 @@ test "audio queue is bounded and consumed by controlled time" {
     defer backend.deinit();
     var p = backend.asPlatform();
     _ = try p.start();
-    const fmt = try p.audioOpen(.{ .channels = 2, .sample_rate = 1000 });
-    try std.testing.expectEqual(@as(u32, 1000), fmt.sample_rate);
+    try p.audioOpen(.{ .channels = 2, .sample_rate = 1000 });
     const samples: [2400]i16 = @splat(0); // 1200 frames offered, 1000 fit
     try std.testing.expectEqual(@as(usize, 1000), try p.audioQueue(&samples));
     try std.testing.expectEqual(@as(usize, 0), try p.audioQueue(&samples));

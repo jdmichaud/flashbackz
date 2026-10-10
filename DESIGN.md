@@ -226,17 +226,21 @@ colors in the display. It owns indexed pixels and palettes, then converts to an 
 the host. It does not emulate VGA registers, but it keeps the original's observable timing: two
 hidden updates after a room load, a HUD icon and shake that reach the picture at the flip, and
 message pages alternating between two video pages. The game content is 256 by 224 pixels;
-films have their own measured dimensions and pacing. Music plays only with films, chosen per
-scene (`docs/rules/engine-music.md`); effects follow the engine's sound requests.
+films have their own measured dimensions and pacing. Music plays with films and on the title
+screens, chosen per scene (`docs/rules/engine-music.md`), and, with the Mega Drive cartridge, its
+tunes during play; effects follow the engine's sound requests. The MUSIC option controls the
+music and the tunes, SOUND FX the effects.
 
 Audio sequencing and sample decoding are Flashback subsystems with measured priorities and
 timing. A generic OPL2/OPL3 synthesizer is reused from vpoolz after its code, tests and
 attribution were reviewed. Virtual Pool's sequencer, driver, voice ownership and memory layout
 are not reused. The Mega Drive sound chips (YM2612, PSG, DAC player) are vendored whole from
 sorz (`src/shared/audio/megadrive`, user permission, 2026-10-09), parts the game does not call
-included, so that changes go back to sorz unaltered. AdLib output and game PCM are mixed on a
-sample clock into bounded interleaved samples; the host only plays them. Renderer refresh rate
-cannot set music tempo.
+included, so that changes go back to sorz unaltered. One audio output, owned by the game,
+opens the device once for 44,100 Hz stereo, which the host converts to what the device plays,
+and mixes the sources of the moment (a music; a level's effects and tunes) on that sample clock
+into a short bounded queue; the host only plays it. A device that fails leaves the game silent.
+Renderer refresh rate cannot set music tempo.
 
 ## 7. Extension examples and architecture gate
 

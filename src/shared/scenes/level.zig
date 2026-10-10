@@ -20,6 +20,7 @@ const save = @import("../save.zig");
 const settings_mod = @import("../settings.zig");
 const Settings = settings_mod.Settings;
 const audio_effects = @import("../audio/effects.zig");
+const audio_output = @import("../audio/output.zig");
 const megadrive = @import("../content/megadrive.zig");
 const inventory_menu = @import("inventory_menu.zig");
 const game_options = @import("game_options.zig");
@@ -67,7 +68,7 @@ pub const Scene = struct {
     /// world waits.
     message_clock: ?step_clock.Clock = null,
     pending: std.ArrayList(platform.Event) = .empty,
-    effects: audio_effects.Output = .{},
+    effects: audio_effects.Player,
     outcome: Outcome = .playing,
     /// The options dialog, opened with Esc; the world waits while it is open.
     options: ?Options = null,
@@ -243,7 +244,7 @@ pub const Scene = struct {
             .pack = pack,
             .world = world,
             .screen = screen,
-            .effects = .{ .tunes = setup.tunes },
+            .effects = .init(setup.tunes),
         };
     }
 
@@ -490,13 +491,13 @@ pub const Scene = struct {
     /// unless the inventory key is held. Returns the input byte read last.
     fn walks(self: *Scene, controls: u8, deadline: u64, settings: Settings) !u8 {
         const twice = self.catch_up_due and controls & 0x80 == 0;
-        try self.walk(controls, if (twice) .first_of_two else .only, settings.sound_fx);
+        try self.walk(controls, if (twice) .first_of_two else .only, self.soundEnabled(settings));
         if (!twice or self.outcome != .playing) return controls;
         self.catch_up_due = false;
         self.caught_up = true;
         self.catch_up_walks += 1;
         const again = self.input(self.takeKeys(deadline, settings.joystick)) orelse return controls;
-        try self.walk(again, .catch_up, settings.sound_fx);
+        try self.walk(again, .catch_up, self.soundEnabled(settings));
         return again;
     }
 
@@ -543,14 +544,14 @@ pub const Scene = struct {
         self.frameWait();
     }
 
-    fn walk(self: *Scene, controls: u8, kind: behavior.world.Walk, sound_fx: bool) !void {
+    fn walk(self: *Scene, controls: u8, kind: behavior.world.Walk, enabled: audio_effects.Enabled) !void {
         const outcome = try self.world.update(@bitCast(controls), kind);
         self.walk_count += 1;
-        for (self.world.requests.sounds[0..self.world.requests.sound_count]) |sound| {
-            if (sound_fx) self.effects.submit(self.pack.sounds, .{
-                .sound = @fromBackingInt(sound.id),
-                .attenuation = @intFromBool(sound.distant),
-            });
+        for (self.world.requests.sounds[0..self.world.requests.sound_count]) |request| {
+            self.effects.submit(self.pack.sounds, .{
+                .sound = @fromBackingInt(request.id),
+                .attenuation = @intFromBool(request.distant),
+            }, enabled);
         }
         switch (outcome) {
             .played => {
@@ -755,14 +756,24 @@ pub const Scene = struct {
         try palette.writeRgba(indices, &self.screen.colors, rgba);
     }
 
-    pub fn pumpAudio(self: *Scene, p: *platform.Platform, settings: Settings) !void {
-        self.effects.volume = settings.volume;
-        if (self.options != null or !settings.sound_fx) return self.effects.stop(p);
-        try self.effects.pump(self.pack.sounds, p);
+    /// The level's sound, as the options have it: the dialog open stops it all, SOUND FX off
+    /// the effects, MUSIC off the Mega Drive tunes.
+    pub fn sound(self: *Scene, settings: Settings) ?audio_output.Sources.Level {
+        self.effects.enable(self.soundEnabled(settings));
+        if (!self.effects.started) return null;
+        return .{ .sound = &self.effects, .bank = self.pack.sounds };
     }
 
-    pub fn stopAudio(self: *Scene, p: *platform.Platform) void {
-        self.effects.stop(p);
+    fn soundEnabled(self: *const Scene, settings: Settings) audio_effects.Enabled {
+        return .{
+            .effects = self.options == null and settings.sound_fx,
+            .tunes = self.options == null and settings.music and self.effects.tunes != null,
+        };
+    }
+
+    /// Stops the sound playing, as a film does in the cartridge.
+    pub fn stopSound(self: *Scene) void {
+        self.effects.stop();
     }
 };
 

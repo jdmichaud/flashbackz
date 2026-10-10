@@ -245,7 +245,7 @@ pub const Platform = struct {
         present: *const fn (*anyopaque, RgbaFrame) PlatformError!void,
         poll_events: *const fn (*anyopaque, []Event) usize,
         now_ns: *const fn (*anyopaque) u64,
-        audio_open: *const fn (*anyopaque, AudioFormat) PlatformError!AudioFormat,
+        audio_open: *const fn (*anyopaque, AudioFormat) PlatformError!void,
         audio_queue: *const fn (*anyopaque, []const i16) PlatformError!usize,
         audio_status: *const fn (*anyopaque) AudioStatus,
         audio_clear: *const fn (*anyopaque) void,
@@ -285,8 +285,10 @@ pub const Platform = struct {
         return if (p.vtable.controller_model) |query| query(p.context, id) else null;
     }
 
-    pub fn audioOpen(p: *Platform, requested: AudioFormat) PlatformError!AudioFormat {
-        return p.vtable.audio_open(p.context, requested);
+    /// Opens the device for samples in `format`, which the host converts to what the device
+    /// plays; a device already open closes first. `error.Unsupported`: the host has no sound.
+    pub fn audioOpen(p: *Platform, format: AudioFormat) PlatformError!void {
+        return p.vtable.audio_open(p.context, format);
     }
     /// Copies samples into the bounded queue. Returns the number of sample frames accepted.
     pub fn audioQueue(p: *Platform, samples: []const i16) PlatformError!usize {

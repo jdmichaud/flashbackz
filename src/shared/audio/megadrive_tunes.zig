@@ -211,7 +211,9 @@ const Coupling = struct {
 
 // ----- tests: synthetic tunes, no cartridge
 
-fn testTunes(rows: []const megadrive.Row, frames_per_row: u16, length: u8) megadrive.Tunes {
+/// Eight copies of one synthetic tune, for tests: `rows` of an instrument whose bytes are their
+/// indices, its release after `length` frames.
+pub fn testTunes(rows: []const megadrive.Row, frames_per_row: u16, length: u8) megadrive.Tunes {
     var instrument: megadrive.Instrument = undefined;
     for (&instrument, 0..) |*byte, i| byte.* = @intCast(i);
     instrument[33] = length;

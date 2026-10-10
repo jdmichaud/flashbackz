@@ -36,7 +36,8 @@ pub const music_player = @import("audio/music_player.zig");
 pub const score = @import("audio/score.zig");
 pub const opl = @import("audio/opl.zig");
 pub const sound_effects_player = @import("audio/effects.zig");
-pub const output_gain = @import("audio/output_gain.zig");
+pub const audio_output = @import("audio/output.zig");
+pub const soundtrack = @import("audio/soundtrack.zig");
 pub const megadrive = @import("audio/megadrive/root.zig");
 pub const megadrive_tunes = @import("audio/megadrive_tunes.zig");
 

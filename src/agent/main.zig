@@ -241,7 +241,7 @@ pub fn main(init: std.process.Init) !void {
             std.debug.print("{{\"frame\":{d},\"walks\":{d},\"state_hash\":\"{x:0>16}\"}}\n", .{ frame, traced_walks, game.scene.level.stateHash() });
         }
         for (saves.items) |action| if (action.frame == frame) {
-            const result = if (action.load) game.loadGame(&p, action.slot) else game.saveGame(&p, action.slot);
+            const result = if (action.load) game.loadGame(action.slot) else game.saveGame(&p, action.slot);
             result catch |err| std.debug.print("flashbackz-agent: {s} {s}: {s}\n", .{
                 if (action.load) "load" else "save",
                 action.slot,

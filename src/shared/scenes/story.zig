@@ -1,4 +1,4 @@
-//! A film with its music, which owns presentation and audio while the world waits.
+//! A film with its music, shown while the world waits.
 const std = @import("std");
 const platform = @import("../platform.zig");
 const vector = @import("vector_player.zig");
@@ -7,7 +7,6 @@ pub const Story = struct {
     player: vector.Player,
     music: ?audio.Soundtrack,
     started_ns: u64,
-    audio_open: bool = false,
     music_enabled: bool = true,
     skip: bool = false,
 
@@ -24,7 +23,7 @@ pub const Story = struct {
         errdefer player.deinit();
         return .{
             .player = player,
-            .music = if (music) |name| try audio.Soundtrack.open(allocator, source, name, 44100) else null,
+            .music = if (music) |name| try audio.Soundtrack.open(allocator, source, name) else null,
             .started_ns = now,
         };
     }
@@ -34,31 +33,16 @@ pub const Story = struct {
         if (self.music) |*music| music.deinit();
         self.* = undefined;
     }
-    pub fn stopAudio(self: *Story, p: *platform.Platform) void {
-        if (self.audio_open) {
-            p.audioClear();
-            p.audioClose();
-            self.audio_open = false;
-        }
-    }
-    pub fn update(self: *Story, p: *platform.Platform) !bool {
+    /// True when the film is over or skipped.
+    pub fn update(self: *Story, now_ns: u64) !bool {
         // A held film does not look at its keys.
         if (self.player.paused_at != null) self.skip = false;
-        if (self.skip or try self.player.update(p.nowNs())) return true;
-        if (!self.music_enabled or self.music == null) {
-            self.stopAudio(p);
-            return false;
-        }
-        if (!self.audio_open) {
-            const format = try p.audioOpen(.{ .channels = 2, .sample_rate = 44100 });
-            if (format.channels != 2 or format.sample_rate != 44100) {
-                p.audioClose();
-                return error.UnsupportedAudioFormat;
-            }
-            self.audio_open = true;
-        }
-        try self.music.?.pump(p);
-        return false;
+        return self.skip or try self.player.update(now_ns);
+    }
+    /// The film's music, with the MUSIC option.
+    pub fn sound(self: *Story) ?*audio.Soundtrack {
+        if (!self.music_enabled) return null;
+        return if (self.music) |*music| music else null;
     }
     /// The film's keys: Backspace, Tab or Escape skips it, and Enter, Space or Shift turns an
     /// interactive page; with the `joystick` option, the joystick's buttons do as the keys do.

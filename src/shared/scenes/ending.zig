@@ -33,7 +33,6 @@ pub const Ending = struct {
     film_index: usize = 0,
     player: ?vector.Player = null,
     music: ?soundtrack.Soundtrack = null,
-    audio_open: bool = false,
     music_enabled: bool = true,
     credits: Credits,
     /// Finishing the game shows the final score; the title's code does not.
@@ -101,7 +100,7 @@ pub const Ending = struct {
         for (scenes.ending.scenes) |scene| if (scenes.film(scene)) |film| ending.add(film);
         // One music plays from the first film to the end of the list.
         if (ending.films[0].music) |name| {
-            ending.music = try soundtrack.Soundtrack.open(allocator, assets, name, 44100);
+            ending.music = try soundtrack.Soundtrack.open(allocator, assets, name);
         }
         errdefer if (ending.music) |*music| music.deinit();
         try ending.openFilm(0);
@@ -140,17 +139,16 @@ pub const Ending = struct {
                 if (self.paused_at == null and self.origin_ns == null) self.origin_ns = now;
                 var work: usize = 0;
                 while (self.stage == .films and self.due(now) and work < 16) : (work += 1) {
-                    if (!try self.present()) try self.nextFilm(p);
+                    if (!try self.present()) try self.nextFilm();
                     if (self.pause_requested) {
                         self.paused_at = now;
                         break;
                     }
                 }
-                if (self.stage == .films) try self.pumpMusic(p);
             },
             .score_film => {
                 const player = &self.player.?;
-                if (try player.update(now)) try self.nextFilm(p);
+                if (try player.update(now)) try self.nextFilm();
             },
             .score => {},
         }
@@ -209,13 +207,12 @@ pub const Ending = struct {
     }
 
     /// After a film: the next of the list, or scene 73 and the score, or the end.
-    fn nextFilm(self: *Ending, p: *platform.Platform) !void {
+    fn nextFilm(self: *Ending) !void {
         self.keepPicture();
         if (self.stage == .films and self.film_index + 1 < self.film_count) {
             return self.openFilm(self.film_index + 1);
         }
         if (self.stage == .films) {
-            self.stopMusic(p);
             if (self.score == null) {
                 self.finished = true;
                 return;
@@ -341,25 +338,10 @@ pub const Ending = struct {
         };
     }
 
-    fn pumpMusic(self: *Ending, p: *platform.Platform) !void {
-        const music = &(self.music orelse return);
-        if (!self.music_enabled) return self.stopMusic(p);
-        if (!self.audio_open) {
-            const format = try p.audioOpen(.{ .channels = 2, .sample_rate = 44100 });
-            if (format.channels != 2 or format.sample_rate != 44100) {
-                p.audioClose();
-                return error.UnsupportedAudioFormat;
-            }
-            self.audio_open = true;
-        }
-        try music.pump(p);
-    }
-
-    pub fn stopMusic(self: *Ending, p: *platform.Platform) void {
-        if (!self.audio_open) return;
-        p.audioClear();
-        p.audioClose();
-        self.audio_open = false;
+    /// The music, from the first film to the end of the list, with the MUSIC option.
+    pub fn sound(self: *Ending) ?*soundtrack.Soundtrack {
+        if (self.stage != .films or !self.music_enabled) return null;
+        return if (self.music) |*music| music else null;
     }
 };
 

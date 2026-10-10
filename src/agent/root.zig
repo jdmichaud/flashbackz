@@ -4,9 +4,11 @@
 pub const AgentBackend = backend.AgentBackend;
 const backend = @import("backend.zig");
 const startup_test = @import("startup_test.zig");
+const audio_test = @import("audio_test.zig");
 const std = @import("std");
 
 test {
     _ = startup_test;
+    _ = audio_test;
     std.testing.refAllDecls(@This());
 }
