@@ -2,6 +2,7 @@
 //! (flashback-re docs/rules/engine-presentation.md, engine-ending-zoom.md).
 const std = @import("std");
 const behavior = @import("../behavior/root.zig");
+const Kind = behavior.vocabulary.Kind;
 const level_pack = @import("../content/level_pack.zig");
 const character_art = @import("../content/character_art.zig");
 const sprite = @import("../content/sprite.zig");
@@ -258,12 +259,6 @@ pub const Screen = struct {
         old.* = .{};
     }
 
-    pub fn writeRgba(self: *const Screen, rgba: []u8) !void {
-        var shown: [pixel_count]u8 = undefined;
-        self.display(&self.displayed, &shown);
-        try palette.writeRgba(&shown, &self.colors, rgba);
-    }
-
     /// What the display shows of `picture`: shaken down by the shake rows, the rows above
     /// blank.
     pub fn display(
@@ -415,7 +410,7 @@ pub const Screen = struct {
         if (look.composed) {
             // Composed object art: one of the room's four blocks, never culled here.
             const frame = pack.characters.get(key) orelse return;
-            const layer: Layer = if (lowByte(definition.kind) == 11)
+            const layer: Layer = if (definition.kind.matches(.overlay))
                 .overlay
             else if (definition.behind_player) .behind else .normal;
             lists.add(layer, .{
@@ -589,9 +584,9 @@ const Label = struct { icon: u8, character: u16 };
 /// from the first cell of the last character the first search examined.
 fn labelTarget(world: *const World) ?Label {
     var last: u16 = 0;
-    const item = search(world, 0, &.{ 3, 0xff }, &last);
+    const item = search(world, 0, &.{ .interactive, .any }, &last);
     if (item) |found| if (positive(found.icon)) return found;
-    const other = search(world, last, &.{ 0xff, 5, 9 }, &last);
+    const other = search(world, last, &.{ .any, @fromBackingInt(5), @fromBackingInt(9) }, &last);
     if (other) |found| if (positive(found.icon)) return found;
     return null;
 }
@@ -601,25 +596,23 @@ fn positive(icon: u8) bool {
     return @as(i8, @bitCast(icon)) > 0;
 }
 
-fn search(world: *const World, who: u16, kinds: []const u8, last: *u16) ?Label {
+fn search(world: *const World, who: u16, kinds: []const Kind, last: *u16) ?Label {
     const slot = world.characters[who].contact;
     if (slot == contacts.no_slot) return null;
     var occupants = world.contacts.occupants(slot);
     while (occupants.nextEntry()) |entry| {
         last.* = entry.character;
         const definition = world.level.characters[entry.character];
-        if (std.mem.indexOfScalar(u8, kinds, lowByte(definition.kind)) == null) continue;
+        for (kinds) |kind| {
+            if (definition.kind.matches(kind)) break;
+        } else continue;
         return .{ .icon = definition.contact_icon, .character = entry.character };
     }
     return null;
 }
 
 fn isEnemy(world: *const World, index: u16) bool {
-    return lowByte(world.level.characters[index].kind) == 10;
-}
-
-fn lowByte(kind: behavior.vocabulary.Kind) u8 {
-    return @truncate(@as(u16, @bitCast(@backingInt(kind))));
+    return world.level.characters[index].kind.matches(.enemy);
 }
 
 pub fn iconFrame(pack: *const level_pack.Pack, icon: u8) ?*const sprite.Frame {
@@ -703,8 +696,8 @@ pub const Zoom = struct {
     fn hits(self: *Zoom, world: *const World) void {
         for (world.requests.hits[0..world.requests.hit_count]) |recipient| {
             if (self.automatic) {
-                const kind = lowByte(world.level.characters[recipient].kind);
-                if (kind != 1 and kind != 10) continue;
+                const kind = world.level.characters[recipient].kind;
+                if (!kind.matches(.player) and !kind.matches(.enemy)) continue;
                 if (!self.on) self.enter = true;
                 self.leave_timer = 40;
             }

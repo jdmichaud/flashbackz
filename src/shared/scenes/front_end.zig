@@ -27,7 +27,7 @@ pub const Stage = enum {
     ending_ready,
     quit,
 };
-pub const View = enum { main, skill, info, password, load, unavailable };
+pub const View = enum { main, skill, info, password, load };
 const MusicCue = enum { branding, introduction, game_over, menu };
 
 /// The original's main menu chooses Demo once its timer has counted past 2,400 since the page
@@ -72,7 +72,6 @@ pub const Scene = struct {
     idle_since_ns: ?u64 = null,
     /// When a held direction may move the selection again.
     direction_repeat: key_latch.DirectionRepeat = .{},
-    notice: []const u8 = "",
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -292,7 +291,7 @@ pub const Scene = struct {
                 }
                 if (key == .escape) self.mainMenu();
             },
-            .info, .unavailable => if (confirm or key == .escape or key == .tab) self.mainMenu(),
+            .info => if (confirm or key == .escape or key == .tab) self.mainMenu(),
             .load => if (input_mod.keyAction(key)) |action| {
                 if (!press.repeat or action.isDirection()) self.pressLoad(action);
             },
@@ -384,7 +383,7 @@ pub const Scene = struct {
                 if (choose_it) self.difficulty = self.pending_difficulty;
                 if (choose_it or back) self.mainMenu();
             },
-            .info, .unavailable => if (choose_it or back) self.mainMenu(),
+            .info => if (choose_it or back) self.mainMenu(),
             .load => self.pressLoad(change.action),
             .password => try self.padCode(change.action, choose_it, back),
         }
@@ -554,29 +553,6 @@ pub const Scene = struct {
                     "_",
                     120 + 8 * @as(i32, @intCast(self.password_length)),
                     168,
-                    .{ .foreground = 2, .shadow = 0 },
-                );
-            },
-            .unavailable => {
-                const x = @divTrunc(256 - @as(i32, @intCast(self.notice.len)) * 8, 2);
-                try text.draw(
-                    indices,
-                    256,
-                    224,
-                    &assets.font,
-                    self.notice,
-                    x,
-                    120,
-                    .{ .foreground = 2, .shadow = 0 },
-                );
-                try text.draw(
-                    indices,
-                    256,
-                    224,
-                    &assets.font,
-                    "PRESS ENTER TO RETURN",
-                    44,
-                    152,
                     .{ .foreground = 2, .shadow = 0 },
                 );
             },

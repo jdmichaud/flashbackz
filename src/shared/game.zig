@@ -401,7 +401,8 @@ pub const Game = struct {
                 var next = front_end.Scene.init(self.allocator, self.assets.?, art);
                 errdefer next.deinit();
                 next.difficulty = self.difficulty;
-                if (choice == .retry) next.startLevel(self.level) else try next.gameOver();
+                // Abandoned (Retry always finds the defeated level above).
+                try next.gameOver();
                 dialog.deinit();
                 self.scene = .{ .menu = next };
             }
@@ -435,10 +436,10 @@ pub const Game = struct {
                 try self.present(p);
                 return true;
             }
-            const paused = now - story.started_ns;
+            const film_lasted = now - story.started_ns;
             story.deinit();
             self.story = null;
-            try scene.finishFilm(now, paused, &self.settings);
+            try scene.finishFilm(now, film_lasted, &self.settings);
         }
         // J's request is served at the next frame of play, outside a demo.
         if (self.joystick_requested and scene.demo == null) {

@@ -1,5 +1,6 @@
 //! Immutable musical content. Parts retain their authored order for simultaneous notes.
 const std = @import("std");
+const step_clock = @import("../step_clock.zig");
 
 pub const Percussion = enum(u8) { bass_drum = 6, snare = 7, tom = 8, cymbal = 9, hi_hat = 10 };
 pub const Operator = struct {
@@ -29,7 +30,7 @@ pub const Score = struct {
     restart_after_ticks: ?u32,
 
     pub fn sampleAt(self: Score, tick: u64, rate: u32) u64 {
-        return tick * self.tick_pit_cycles * rate / 1_193_182;
+        return tick * self.tick_pit_cycles * rate / step_clock.timer_hz;
     }
 };
 pub const Owned = struct {

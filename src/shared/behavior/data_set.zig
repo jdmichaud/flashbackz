@@ -23,6 +23,8 @@ pub const SpriteLibrary = enum { junky, mercenai, replican, glue, none };
 
 pub const Character = struct {
     name: []const u8,
+    /// The original's placement number: the character's identity when comparing with the
+    /// original. The engine goes by the character's index.
     placement: u16,
     label: []const u8 = "",
     /// The label's number in the level's text.
@@ -57,8 +59,6 @@ pub const Character = struct {
     links: [4]?vocabulary.Character = @splat(null),
     /// By position in the behavior's `numbers`.
     numbers: [4]i16 = @splat(0),
-    /// Placement numbers no rule uses, by original parameter slot.
-    unused_parameters: [4]i16 = @splat(0),
 };
 
 pub const Level = struct {
@@ -828,8 +828,8 @@ const Loader = struct {
             const value: i16 = @intCast(given);
             if (slot(vocabulary.Number, behavior.numbers, number)) |position| {
                 character.numbers[@backingInt(position)] = value;
-            } else if (unusedParameter(number)) |parameter| {
-                character.unused_parameters[parameter] = value;
+            } else if (unusedParameter(number)) {
+                // A placement number no rule uses: accepted, not kept.
             } else return fail(
                 self.diagnostic,
                 "{s}: behavior has no number {s}",
@@ -925,12 +925,8 @@ const Fields = struct {
 };
 
 /// `parameter_0` to `parameter_3`: a placement number no rule uses.
-fn unusedParameter(name: []const u8) ?u2 {
-    if (name.len != 11 or !std.mem.startsWith(u8, name, "parameter_")) return null;
-    return switch (name[10]) {
-        '0'...'3' => @intCast(name[10] - '0'),
-        else => null,
-    };
+fn unusedParameter(name: []const u8) bool {
+    return name.len == 11 and std.mem.startsWith(u8, name, "parameter_") and name[10] >= '0' and name[10] <= '3';
 }
 
 fn slot(comptime T: type, names: []const []const u8, name: []const u8) ?T {
@@ -1036,7 +1032,6 @@ test "a behavior and its characters load with every name resolved" {
     try std.testing.expectEqual(@as(?u8, null), visitor.room);
     try std.testing.expectEqual(@as(?vocabulary.Character, @fromBackingInt(0)), visitor.links[0]);
     try std.testing.expectEqual(@as(i16, 19), visitor.numbers[0]);
-    try std.testing.expectEqual(@as(i16, 7), visitor.unused_parameters[3]);
     try std.testing.expectEqualStrings(
         "call",
         level.message_names[@backingInt(guest.states[0].rules[0].when[0].received)],

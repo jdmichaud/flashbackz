@@ -280,7 +280,7 @@ pub const Scene = struct {
     /// (the options dialog changes them).
     pub fn update(self: *Scene, now_ns: u64, settings: *Settings) !void {
         if (self.clock == null) {
-            self.clock = try step_clock.Clock.init(step_clock.jungle, now_ns);
+            self.clock = try step_clock.Clock.init(step_clock.level, now_ns);
             // The automatic zoom option lasts for the program run; a permanent zoom does not
             // survive a new game or a continue.
             self.screen.zoom.automatic = settings.zoom == .auto;

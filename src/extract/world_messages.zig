@@ -100,7 +100,8 @@ pub fn decode(allocator: std.mem.Allocator, table: []const u8) !Assets {
 pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Assets {
     const image = try floppy_interface.loadImage(allocator, source);
     defer allocator.free(image);
-    return decode(allocator, image[0x1bcc0 + 0x13e9 ..]);
+    // The message table sits at DS:0x13e9.
+    return decode(allocator, image[floppy_interface.data_segment + 0x13e9 ..]);
 }
 test "message pages retain ink changes and reject truncated escapes" {
     const a = std.testing.allocator;

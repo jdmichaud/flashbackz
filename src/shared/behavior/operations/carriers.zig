@@ -161,18 +161,12 @@ fn firstTouching(world: *World, actor: u16, kind: vocabulary.Kind) ?u16 {
     while (occupants.nextEntry()) |entry| {
         if (entry.character == actor) continue;
         const other = world.level.characters[entry.character].kind;
-        if (kind == .any or kindByte(other) == kindByte(kind)) return entry.character;
+        if (kind == .any or other.matches(kind)) return entry.character;
     }
     return null;
 }
 
-fn kindByte(kind: vocabulary.Kind) u8 {
-    return lowByte(@backingInt(kind));
-}
-
-fn lowByte(value: i16) u8 {
-    return @truncate(@as(u16, @bitCast(value)));
-}
+const lowByte = vocabulary.lowByte;
 
 // Transport ---------------------------------------------------------------------------------
 

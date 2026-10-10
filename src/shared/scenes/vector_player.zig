@@ -5,13 +5,14 @@ const platform = @import("../platform.zig");
 const content = @import("../content/vector_cinematic.zig");
 const film = @import("../vector_film.zig");
 const palette = @import("../content/palette.zig");
+const step_clock = @import("../step_clock.zig");
 
 /// When a film presents: a present waits for its timer ticks, then for the next display refresh.
 pub const Cadence = struct {
     // English reference profile: calibrated hold ticks and the measured video cadence.
-    const timer_numerator: u64 = 17_024 * std.time.ns_per_s;
-    const timer_denominator: u64 = 1_193_182;
-    const refresh_ns: u64 = 16_683_217;
+    const timer_numerator: u64 = step_clock.counts_per_tick * std.time.ns_per_s;
+    const timer_denominator: u64 = step_clock.timer_hz;
+    const refresh_ns = step_clock.vga_frame_ns;
     deadline_ns: u64 = 0,
 
     /// Timer ticks elapsed at the deadline.
@@ -61,10 +62,6 @@ pub const Player = struct {
     pause_requested: bool = false,
     /// Since when the film stands still for P.
     paused_at: ?u64 = null,
-    pub fn interactive(self: *const Player) bool {
-        for (self.movie.frames) |frame| if (frame.input_loop_start != null or frame.confirm_ends) return true;
-        return false;
-    }
     pub fn awaitingInput(self: *const Player) bool {
         if (self.playback.finished or self.confirmed) return false;
         if (self.movie.frames[self.playback.frame].confirm_ends) return true;

@@ -2,7 +2,7 @@
 //! Binary layouts, track bindings and DOS filename truncation end here.
 const std = @import("std");
 const platform = @import("../platform.zig");
-const music = @import("score.zig");
+const score = @import("score.zig");
 
 fn word(bytes: []const u8, at: usize) u16 {
     return std.mem.readInt(u16, bytes[at..][0..2], .little);
@@ -29,28 +29,55 @@ fn read(
         else => err,
     };
 }
-fn operator(bytes: []const u8, waveform: u16) music.Operator {
+/// An operator in an instrument file (the AdLib INS layout): thirteen words, at these offsets.
+const OperatorField = enum(u5) {
+    key_scale_level = 0,
+    multiple = 2,
+    feedback = 4,
+    attack = 6,
+    sustain_level = 8,
+    sustaining = 10,
+    decay = 12,
+    release = 14,
+    total_level = 16,
+    tremolo = 18,
+    vibrato = 20,
+    envelope_scaling = 22,
+    connection = 24,
+};
+
+fn field(bytes: []const u8, which: OperatorField) u16 {
+    return word(bytes, @intFromEnum(which));
+}
+
+fn operator(bytes: []const u8, waveform: u16) score.Operator {
     return .{
-        .characteristics = @as(u8, if (word(bytes, 18) != 0) 0x80 else 0) |
-            @as(u8, if (word(bytes, 20) != 0) 0x40 else 0) |
-            @as(u8, if (word(bytes, 10) != 0) 0x20 else 0) |
-            @as(u8, if (word(bytes, 22) != 0) 0x10 else 0) | @as(u8, @intCast(word(bytes, 2) & 15)),
-        .key_scale = @truncate(word(bytes, 0) << 6),
-        .attenuation = @intCast(word(bytes, 16) & 63),
-        .attack_decay = @truncate((word(bytes, 6) << 4) | (word(bytes, 12) & 15)),
-        .sustain_release = @truncate((word(bytes, 8) << 4) | (word(bytes, 14) & 15)),
+        .characteristics = @as(u8, if (field(bytes, .tremolo) != 0) 0x80 else 0) |
+            @as(u8, if (field(bytes, .vibrato) != 0) 0x40 else 0) |
+            @as(u8, if (field(bytes, .sustaining) != 0) 0x20 else 0) |
+            @as(u8, if (field(bytes, .envelope_scaling) != 0) 0x10 else 0) |
+            @as(u8, @intCast(field(bytes, .multiple) & 15)),
+        .key_scale = @truncate(field(bytes, .key_scale_level) << 6),
+        .attenuation = @intCast(field(bytes, .total_level) & 63),
+        .attack_decay = @truncate((field(bytes, .attack) << 4) | (field(bytes, .decay) & 15)),
+        .sustain_release = @truncate((field(bytes, .sustain_level) << 4) | (field(bytes, .release) & 15)),
         .waveform = @truncate(waveform),
     };
 }
-pub fn instrument(bytes: []const u8) !music.Instrument {
+
+/// An instrument file: the percussion mode and voice, the modulator, the carrier, then their
+/// waveforms at bytes 74 and 76.
+pub fn instrument(bytes: []const u8) !score.Instrument {
     if (bytes.len != 80) return error.InvalidInstrumentSize;
-    const percussion: ?music.Percussion = if (bytes[0] == 0) null else std.enums.fromInt(music.Percussion, bytes[1]) orelse return error.InvalidPercussionInstrument;
+    const percussion: ?score.Percussion = if (bytes[0] == 0) null else std.enums.fromInt(score.Percussion, bytes[1]) orelse return error.InvalidPercussionInstrument;
+    const modulator = bytes[2..28];
     return .{
         .percussion = percussion,
-        .modulator = operator(bytes[2..28], word(bytes, 74)),
+        .modulator = operator(modulator, word(bytes, 74)),
         .carrier = operator(bytes[28..54], word(bytes, 76)),
-        .feedback_connection = @truncate((word(bytes, 6) << 1) | @as(u16, if (word(bytes, 26) == 0) 1 else 0)),
-        .scale_modulator = bytes[26] == 0,
+        .feedback_connection = @truncate((field(modulator, .feedback) << 1) |
+            @as(u16, if (field(modulator, .connection) == 0) 1 else 0)),
+        .scale_modulator = modulator[@intFromEnum(OperatorField.connection)] == 0,
     };
 }
 
@@ -86,11 +113,16 @@ pub const Profile = struct {
     interval: u16,
     bar_ticks: u16,
     limit: i32,
+    // The timing fields of a profile file; its other bytes are not read.
+    const interval_at = 544;
+    const bar_ticks_at = 548;
+    const limit_at = 748;
+
     pub fn parse(bytes: []const u8) !Profile {
         if (bytes.len != 752 and bytes.len != 753) return error.InvalidMusicProfileSize;
-        const interval = word(bytes, 544);
-        const bar_ticks = word(bytes, 548);
-        const limit = std.mem.readInt(i32, bytes[748..752], .little);
+        const interval = word(bytes, interval_at);
+        const bar_ticks = word(bytes, bar_ticks_at);
+        const limit = std.mem.readInt(i32, bytes[limit_at..][0..4], .little);
         if (interval == 0 or
             interval > 1000 or
             bar_ticks == 0 or
@@ -104,8 +136,8 @@ fn importPart(
     bytes: []const u8,
     profile: Profile,
     part: usize,
-) !music.Part {
-    var events: std.ArrayList(music.Event) = .empty;
+) !score.Part {
+    var events: std.ArrayList(score.Event) = .empty;
     var reader: Reader = .{ .bytes = bytes };
     var tick: u32 = 1; // The first callback advances the score clock before handling tracks.
     var binding: usize = part;
@@ -145,7 +177,7 @@ fn importPart(
             127,
             second +% @as(u8, @truncate(word(profile.bytes, 512 + adjustment * 2))),
         );
-        const action: ?music.Action = switch (kind) {
+        const action: ?score.Action = switch (kind) {
             0x8 => .{ .release = pitch },
             0x9 => if (second == 0) .{ .release = pitch } else .{ .play = .{
                 .instrument = @intCast(binding),
@@ -176,15 +208,15 @@ pub fn decode(
     allocator: std.mem.Allocator,
     midi: []const u8,
     profile: Profile,
-    instruments: [16]?music.Instrument,
-) !music.Score {
+    instruments: [16]?score.Instrument,
+) !score.Score {
     var reader: Reader = .{ .bytes = midi };
     const header = try reader.chunk("MThd");
     if (header.len != 6 or
         std.mem.readInt(u16, header[0..2], .big) > 1) return error.InvalidMidiHeader;
     const count = std.mem.readInt(u16, header[2..4], .big);
     if (count == 0 or count > 16) return error.TooManyMusicParts;
-    const parts = try allocator.alloc(music.Part, count);
+    const parts = try allocator.alloc(score.Part, count);
     var done: usize = 0;
     errdefer {
         for (parts[0..done]) |part| allocator.free(part.events);
@@ -209,7 +241,7 @@ pub fn load(
     allocator: std.mem.Allocator,
     source: platform.AssetSource,
     name: []const u8,
-) !music.Owned {
+) !score.Owned {
     const arena = try allocator.create(std.heap.ArenaAllocator);
     arena.* = std.heap.ArenaAllocator.init(allocator);
     errdefer {
@@ -221,7 +253,7 @@ pub fn load(
     const profile = try Profile.parse(file.bytes);
     var midi = try read(source, try terminated(file.bytes[550..570]), "", 1024 * 1024);
     defer midi.deinit();
-    var instruments: [16]?music.Instrument = @splat(null);
+    var instruments: [16]?score.Instrument = @splat(null);
     for (&instruments, 0..) |*destination, i| {
         const full_name = try terminated(file.bytes[i * 30 ..][0..30]);
         if (full_name.len == 0) continue;
@@ -248,7 +280,7 @@ test "music profile rejects truncated and impossible timing; instruments require
     ins[1] = 3;
     try t.expectError(error.InvalidPercussionInstrument, instrument(&ins));
     ins[1] = 9;
-    try t.expectEqual(music.Percussion.cymbal, (try instrument(&ins)).percussion.?);
+    try t.expectEqual(score.Percussion.cymbal, (try instrument(&ins)).percussion.?);
 }
 
 test "track import preserves adjustment wrap, zero-velocity release, order and loop alignment" {

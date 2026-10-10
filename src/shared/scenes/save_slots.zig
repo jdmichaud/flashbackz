@@ -8,6 +8,7 @@ const save = @import("../save.zig");
 const font = @import("../content/font.zig");
 const text = @import("../render/text.zig");
 const content_level = @import("../content/level.zig");
+const step_clock = @import("../step_clock.zig");
 
 pub const Mode = enum { save, load };
 /// The quick slot, then the eight others.
@@ -134,7 +135,7 @@ pub fn levelName(level: content_level.Id) []const u8 {
 
 /// Play time as hours, minutes and seconds: a walk takes two ticks of the original's timer.
 pub fn playTime(walks: u64, buffer: *[16]u8) []const u8 {
-    const seconds = walks * 2 * 17_024 / 1_193_182;
+    const seconds = walks * 2 * step_clock.counts_per_tick / step_clock.timer_hz;
     return std.fmt.bufPrint(buffer, "{d}:{d:0>2}:{d:0>2}", .{ seconds / 3600, seconds / 60 % 60, seconds % 60 }) catch unreachable;
 }
 

@@ -126,10 +126,13 @@ pub fn loadImage(allocator: std.mem.Allocator, source: platform.AssetSource) ![]
     );
 }
 
+/// Where the executable's data segment starts in its unpacked image.
+pub const data_segment = 0x1bcc0;
+
 pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values {
     const image = try loadImage(allocator, source);
     defer allocator.free(image);
-    const data = image[0x1bcc0..];
+    const data = image[data_segment..];
     var interface_colors: palette.Bank = undefined;
     for (&interface_colors, 0..) |*color, i| color.* = .{
         .r = palette.expandComponent(data[0xf91 + i * 3]),

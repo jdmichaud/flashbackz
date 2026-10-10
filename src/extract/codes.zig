@@ -290,6 +290,7 @@ pub fn kindName(buffer: []u8, kind: i16) []const u8 {
         1 => "player",
         3 => "interactive",
         10 => "enemy",
+        11 => "overlay",
         else => std.fmt.bufPrint(buffer, "kind_{d}", .{kind}) catch unreachable,
     };
 }

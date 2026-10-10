@@ -185,9 +185,8 @@ pub fn touchingPickup(world: *World, actor: u16, icon: i16) !bool {
         var occupants = world.contacts.occupants(first);
         while (occupants.nextEntry()) |entry| {
             const placement = world.level.characters[entry.character];
-            // Kind 255 is accepted too: the original searches for kind 3 or kind -1 (as a byte).
-            const kind = lowByte(@backingInt(placement.kind));
-            if (kind != 3 and kind != 0xff) continue;
+            // The original searches for kind 3 or kind -1, as bytes: kind 255 matches too.
+            if (!placement.kind.matches(.interactive) and !placement.kind.matches(.any)) continue;
             shown = placement.contact_icon;
             break;
         }
@@ -270,12 +269,7 @@ fn firstCellMate(world: *const World, who: u16, kind: vocabulary.Kind) ?u16 {
 }
 
 fn isKind(world: *const World, character: u16, kind: vocabulary.Kind) bool {
-    const own = world.level.characters[character].kind;
-    return lowByte(@backingInt(own)) == lowByte(@backingInt(kind));
-}
-
-fn lowByte(value: i16) u8 {
-    return @truncate(@as(u16, @bitCast(value)));
+    return world.level.characters[character].kind.matches(kind);
 }
 
 fn facingSame(world: *const World, a: u16, b: u16) bool {
@@ -285,7 +279,7 @@ fn facingSame(world: *const World, a: u16, b: u16) bool {
 /// The pose tag of the character's current animation is the low byte of `pose`.
 fn inPose(world: *const World, character: u16, pose: i16) !bool {
     const animation = world.animationOf(character) catch return error.InvalidAnimation;
-    return animation.pose == lowByte(pose);
+    return animation.pose == vocabulary.lowByte(pose);
 }
 
 // Tests ------------------------------------------------------------------------------------

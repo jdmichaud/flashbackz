@@ -159,10 +159,6 @@ pub fn backturnedTargetUnhittable(
 
 const Facing = enum { opposite, same };
 
-fn lowByte(kind: Kind) u8 {
-    return @truncate(@as(u16, @bitCast(@backingInt(kind))));
-}
-
 /// Counts the awake characters of `kind` facing the way `facing` says relative to the actor
 /// and not waiting for `message`, from its own cell to `range` cells (positive: ahead). A cell
 /// with any terrain at body height ends the count after its characters. Only the count's low
@@ -209,9 +205,7 @@ fn unhittableTargets(
             while (in_cell.nextEntry()) |entry| {
                 const target = entry.character;
                 if (target == actor or !world.characters[target].active) continue;
-                // The kinds' low bytes are compared.
-                const target_kind = world.level.characters[target].kind;
-                if (lowByte(target_kind) != lowByte(kind)) continue;
+                if (!world.level.characters[target].kind.matches(kind)) continue;
                 const same = world.characters[target].facing_right == observer.facing_right;
                 if (same != (facing == .same)) continue;
                 if (!waitsFor(world, target, message)) count +%= 1;
@@ -568,7 +562,6 @@ fn sampled(world: *World, actor: u16, ahead: i16) i8 {
 fn gridByte(world: *World, room: u8, row: i32, column: i32) i8 {
     return original_memory.read(world, world.grid.cell(room, row, column));
 }
-
 
 /// The column the sight and wall scans start from: `(x + 8) >> 4` with a logical shift, so a
 /// position just left of the room gives a column far to the right.

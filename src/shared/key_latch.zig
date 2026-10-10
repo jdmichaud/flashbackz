@@ -4,9 +4,10 @@
 //! engine-presentation 6.1a). Other keys register once per press.
 const std = @import("std");
 const input = @import("input.zig");
+const step_clock = @import("step_clock.zig");
 
 /// One tick of the original's timer, in nanoseconds (rounded down).
-const tick_ns: u64 = 17_024 * std.time.ns_per_s / 1_193_182;
+const tick_ns = step_clock.tick_ns;
 
 pub const DirectionRepeat = struct {
     /// When a repeated direction may register again.

@@ -1,5 +1,7 @@
 //! Whether a character is in the world, on screen and awake.
+const std = @import("std");
 const vocabulary = @import("../vocabulary.zig");
+const grid = @import("../grid.zig");
 const world_module = @import("../world.zig");
 const World = world_module.World;
 const Room = world_module.Room;
@@ -51,6 +53,3 @@ pub fn reveal(world: *World, actor: u16, number: vocabulary.Number) !bool {
     world.showFrame(actor) catch return error.InvalidAnimation;
     return true;
 }
-
-const std = @import("std");
-const grid = @import("../grid.zig");

@@ -29,7 +29,15 @@ pub const Room = struct {
     pub const outside: u8 = 64;
     pub const removed: u8 = 0xfe;
     pub const carried: u8 = 0xff;
+    /// Where a missing neighbor leads: the same byte as `carried`, as in the original.
+    pub const nowhere: u8 = 0xff;
 };
+
+/// Conrad leaving the world through a missing neighbor plays this scene, his fall, then the
+/// defeat (flashback-re engine-update 1, step 12).
+const fall_scene = 6;
+/// Updates of protection from hits once Conrad recovers from one.
+const protection_after_hit = 60;
 
 /// What a character shows: the sprite of the last frame applied to it.
 pub const Look = struct {
@@ -433,8 +441,8 @@ pub const World = struct {
         }
         if (self.requests.level != null) return .level_changed;
         if (self.view_dirty and walk != .first_of_two) {
-            if (self.view_room == 0xff) {
-                self.requests.scene = 6;
+            if (self.view_room == Room.nowhere) {
+                self.requests.scene = fall_scene;
                 self.defeat_countdown = 1;
             } else {
                 self.view_room = self.characters[0].room;
@@ -647,7 +655,7 @@ pub const World = struct {
         character.y +%= rule.down;
         // Protection starts once Conrad is in a state that listens for hits again.
         if (self.hurt and kind == .player and listensForHits(self.stateOf(index))) {
-            self.protection = 60;
+            self.protection = protection_after_hit;
             self.hurt = false;
         }
     }
@@ -680,7 +688,7 @@ pub const World = struct {
             break :blk .down;
         } else null;
         if (side) |s| {
-            // A missing neighbor stores 0xff, as in the original.
+            // A missing neighbor stores `Room.nowhere`, as in the original.
             if (character.room < 0x80) character.room = self.grid.rawLink(character.room, s);
             if (self.level.characters[index].kind == .player) self.followConrad(character.room);
         }

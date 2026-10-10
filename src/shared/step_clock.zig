@@ -3,6 +3,25 @@
 //! that ends late restarts the clock (the level scene's catch-up walks).
 const std = @import("std");
 
+/// The PC's interval timer counts at 1,193,182 Hz, and the original has it interrupt every
+/// 17,024 counts: the game's tick, about 70.09 a second.
+pub const timer_hz = 1_193_182;
+pub const counts_per_tick = 17_024;
+/// A tick, rounded down to the nanosecond.
+pub const tick_ns: u64 = counts_per_tick * std.time.ns_per_s / timer_hz;
+
+/// The VGA's 25.175 MHz dot clock draws 800 by 525 dots a frame: 59.94 frames a second.
+pub const vga_dots_per_second = 25_175_000;
+pub const vga_dots_per_frame = 800 * 525;
+/// A VGA frame, rounded down to the nanosecond.
+pub const vga_frame_ns: u64 = vga_dots_per_frame * std.time.ns_per_s / vga_dots_per_second;
+
+/// Whole timer ticks in `ns` nanoseconds.
+pub fn ticksIn(ns: u64) u64 {
+    const counts = ns / std.time.ns_per_s * timer_hz + ns % std.time.ns_per_s * timer_hz / std.time.ns_per_s;
+    return counts / counts_per_tick;
+}
+
 pub const Cadence = struct {
     units_per_second: u32,
     units_per_tick: u32,
@@ -10,17 +29,18 @@ pub const Cadence = struct {
     regular_gap_ticks: u32,
 };
 
-pub const jungle: Cadence = .{
-    .units_per_second = 1193182,
-    .units_per_tick = 17024,
+/// Every level's: two ticks a frame, three before the first.
+pub const level: Cadence = .{
+    .units_per_second = timer_hz,
+    .units_per_tick = counts_per_tick,
     .initial_gap_ticks = 3,
     .regular_gap_ticks = 2,
 };
 // Inventory polls follow the VGA refresh rather than the gameplay interrupt cadence.
 // Entry/exit work and its phase relative to gameplay remain part of scheduler acceptance.
 pub const inventory: Cadence = .{
-    .units_per_second = 25175000,
-    .units_per_tick = 420000,
+    .units_per_second = vga_dots_per_second,
+    .units_per_tick = vga_dots_per_frame,
     .initial_gap_ticks = 1,
     .regular_gap_ticks = 1,
 };
@@ -91,7 +111,7 @@ pub const Clock = struct {
 };
 
 test "a restart drops the lost time without shifting the timer phase" {
-    var clock = try Clock.init(jungle, 100);
+    var clock = try Clock.init(level, 100);
     clock.consume();
     try clock.restart(1_010_000_100);
     try std.testing.expect(clock.due(1_010_000_100));
@@ -102,7 +122,7 @@ test "a restart drops the lost time without shifting the timer phase" {
 }
 
 test "a frame is late once a tick has passed after its wait, and a restart drops the time lost" {
-    var clock = try Clock.init(jungle, 0);
+    var clock = try Clock.init(level, 0);
     clock.consume();
     clock.consume();
     var tick_later = clock;
@@ -119,7 +139,7 @@ test "a frame is late once a tick has passed after its wait, and a restart drops
 }
 
 test "deadlines preserve rational phase and first-step spacing without accumulated rounding" {
-    var clock = try Clock.init(jungle, 50);
+    var clock = try Clock.init(level, 50);
     try std.testing.expectEqual(@as(u64, 50), clock.deadline());
     clock.consume();
     try std.testing.expectEqual(@as(u64, 3), clock.next_tick);
@@ -130,10 +150,10 @@ test "deadlines preserve rational phase and first-step spacing without accumulat
     try std.testing.expectEqual(@as(u64, 20003), clock.next_tick);
     const expected: u64 = 50 + @as(
         u64,
-        @intCast((@as(u128, 20003) * 17024 * std.time.ns_per_s + 1193181) / 1193182),
+        @intCast((@as(u128, 20003) * counts_per_tick * std.time.ns_per_s + timer_hz - 1) / timer_hz),
     );
     try std.testing.expectEqual(expected, clock.deadline());
-    var invalid = jungle;
+    var invalid = level;
     invalid.units_per_second = 0;
     try std.testing.expectError(error.InvalidCadence, Clock.init(invalid, 0));
 }

@@ -77,13 +77,6 @@ pub const Contacts = struct {
         return @intCast(@as(i32, room) * 64 + band * 16 + column);
     }
 
-    pub const Registration = struct {
-        /// The character's first slot, or `no_slot`.
-        first_slot: u8,
-        /// Characters whose cells this registration shared, for wake-on-contact.
-        shared_with: ?u16 = null,
-    };
-
     /// Registers `width` cells from `x` (at most a room's columns, as the data-set loader
     /// checks), adding to `shared` the characters that meet in a cell. Returns the first slot,
     /// or null when the pool is full before the first cell (the original then keeps the

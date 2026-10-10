@@ -32,8 +32,28 @@ pub const Link = enum(u2) { _ };
 pub const Number = enum(u2) { _ };
 /// A character of the level, by placement order.
 pub const Character = enum(u16) { _ };
-/// A character kind. Named kinds are the ones the engine distinguishes.
-pub const Kind = enum(i16) { any = -1, player = 1, interactive = 3, enemy = 10, _ };
+/// A character kind. The engine also tells apart kinds the data set leaves unnamed: 5 and 9,
+/// which a touch prefers after `interactive` (`send_to_touching_device`), and 12, which shots
+/// hit as they hit the player and enemies.
+pub const Kind = enum(i16) {
+    any = -1,
+    player = 1,
+    interactive = 3,
+    enemy = 10,
+    /// Its composed art draws over the room's foreground (flashback-re engine-presentation 4).
+    overlay = 11,
+    _,
+
+    /// Whether the kinds match as the original compares them: by their low byte.
+    pub fn matches(self: Kind, other: Kind) bool {
+        return lowByte(@backingInt(self)) == lowByte(@backingInt(other));
+    }
+};
+
+/// The low byte of a value, which the original compares where it reads a byte.
+pub fn lowByte(value: i16) u8 {
+    return @truncate(@as(u16, @bitCast(value)));
+}
 pub const Button = enum { shift, enter, space };
 pub const HitSide = enum {
     from_behind,
