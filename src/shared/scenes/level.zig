@@ -371,11 +371,19 @@ pub const Scene = struct {
         while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
             const event = self.pending.orderedRemove(0);
             const changes = self.keys.apply(event.payload);
-            // The original's dialog reads only the keyboard.
             for (changes.slice()) |change| {
-                if (change.pad or !change.down) continue;
+                if (!change.down) continue;
+                // The original's dialog reads only the keyboard; a pad's B or START resumes
+                // (PLAN GS-3).
+                if (change.pad and (change.action == .gun or change.action == .pause)) {
+                    options.menu.back();
+                    continue;
+                }
                 if (options.direction_repeat.registers(change, event.time_ns)) options.menu.press(change.action, settings);
             }
+        }
+        if (self.keys.pads.repeat()) |held| {
+            if (options.direction_repeat.registers(held, deadline)) options.menu.press(held.action, settings);
         }
         const outcome = options.menu.outcome orelse return;
         self.screen.zoom.setRow(@backingInt(settings.zoom));
@@ -616,6 +624,9 @@ pub const Scene = struct {
                 inventory.keys.action(change.action, change.down);
             }
         }
+        if (joystick) if (self.keys.pads.repeat()) |held| {
+            if (inventory.direction_repeat.accept(true, deadline)) inventory.keys.action(held.action, true);
+        };
         if (self.demo) |*demo| {
             if (demo.cursor == demo.bytes.len) {
                 self.outcome = .aborted;

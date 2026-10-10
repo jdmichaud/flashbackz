@@ -46,8 +46,8 @@ pub fn keyAction(key: platform.Key) ?Action {
     };
 }
 
-/// The gamepad's layout: the D-pad's directions, and the original joystick's four buttons
-/// (fire, Space, Return and the inventory) on A, B, X and Y.
+/// The gamepad's layout: the D-pad's directions, the original joystick's four buttons (fire,
+/// Space, Return and the inventory) on A, B, X and Y, and START for pause (PLAN GS-3).
 pub fn buttonAction(button: platform.ControllerButton) ?Action {
     return switch (button) {
         .dpad_up => .up,
@@ -58,6 +58,7 @@ pub fn buttonAction(button: platform.ControllerButton) ?Action {
         .b => .gun,
         .x => .use,
         .y => .inventory,
+        .start => .pause,
         else => null,
     };
 }
@@ -97,6 +98,16 @@ pub const Pads = struct {
         var bits: u8 = 0;
         for (self.stick, self.buttons) |stick, buttons| bits |= stick | buttons;
         return bits;
+    }
+
+    /// A direction the pads hold, as a repeated press: the menus repeat it as the keyboard
+    /// repeats a held arrow, which the original's latch then counts (engine-presentation 6.4).
+    pub fn repeat(self: *const Pads) ?Change {
+        const bits = self.held();
+        for ([_]Action{ .up, .down, .left, .right }) |action| {
+            if (bits & action.bit() != 0) return .{ .action = action, .down = true, .repeat = true, .pad = true };
+        }
+        return null;
     }
 
     /// Applies a pad's event, and returns the changes of the actions it holds.

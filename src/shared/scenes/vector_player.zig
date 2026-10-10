@@ -40,12 +40,13 @@ pub const Cadence = struct {
 
 /// The original's film player ends a film when the inventory key is pressed while it plays:
 /// Backspace or Tab, or the joystick's inventory button with the joystick option. Escape does
-/// too, although the original ignores it in films (user decision, 2026-10-09). A key already
-/// held when the film opened does not count, even as it repeats.
+/// too, although the original ignores it in films (user decision, 2026-10-09), and so does a
+/// pad's START (PLAN GS-3). A key already held when the film opened does not count, even as it
+/// repeats.
 pub fn skips(input: platform.Event.Payload, joystick: bool) bool {
     return switch (input) {
         .key_down => |key| !key.repeat and (key.key == .tab or key.key == .backspace or key.key == .escape),
-        .controller_button_down => |change| joystick and change.button == .y,
+        .controller_button_down => |change| (joystick and change.button == .y) or change.button == .start,
         else => false,
     };
 }

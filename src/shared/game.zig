@@ -16,6 +16,7 @@ const game_options = @import("scenes/game_options.zig");
 const memory = @import("memory.zig");
 const settings_mod = @import("settings.zig");
 const step_clock = @import("step_clock.zig");
+const input = @import("input.zig");
 const megadrive = @import("content/megadrive.zig");
 pub const Entry = union(enum) {
     automatic,
@@ -210,6 +211,8 @@ pub const Game = struct {
     settings: settings_mod.Settings = .{},
     /// The settings as storage last kept them.
     kept_settings: settings_mod.Settings = .{},
+    /// What the pads hold, for the screens outside a level (a level tracks its own).
+    pads: input.Pads = .{},
     /// P's toggle, which only films read: they hold their picture while it is set.
     films_paused: bool = false,
     /// The music volume keypad + and - step, 0 to 63, for notes started afterwards.
@@ -428,6 +431,7 @@ pub const Game = struct {
             front.joystick = self.settings.joystick;
             front.films_paused = self.films_paused;
             front.music_volume = self.music_volume;
+            if (self.pads.repeat()) |held| try front.pad(held, p.nowNs());
             if (front.stage == .quit) {
                 front.stopAudio(p);
                 self.phase = .finished;
@@ -662,6 +666,12 @@ pub const Game = struct {
             for (buf[0..n]) |event| {
                 self.events_consumed += 1;
                 self.globalKey(event);
+                // A pad's press, of a button or the stick, turns the Joystick option on (PLAN
+                // GS-3).
+                const pad = self.pads.apply(event.payload);
+                for (pad.slice()) |change| {
+                    if (change.down) self.settings.joystick = true;
+                }
                 if (self.story) |*story| {
                     if (event.payload == .quit) {
                         self.phase = .finished;
@@ -677,14 +687,17 @@ pub const Game = struct {
                 }
                 if (self.scene == .ending) {
                     if (event.payload == .quit) self.phase = .finished else self.scene.ending.event(event);
+                    for (pad.slice()) |change| self.scene.ending.pad(change);
                     continue;
                 }
                 if (self.scene == .continue_game) {
                     if (event.payload == .quit) self.phase = .finished else try self.scene.continue_game.event(event);
+                    for (pad.slice()) |change| try self.scene.continue_game.pad(change, event.time_ns);
                     continue;
                 }
                 if (self.scene == .menu) {
                     try self.scene.menu.event(event);
+                    for (pad.slice()) |change| try self.scene.menu.pad(change, event.time_ns);
                     continue;
                 }
                 switch (event.payload) {

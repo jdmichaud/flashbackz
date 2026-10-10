@@ -41,6 +41,13 @@ const Args = clap.Parser(.{
         },
         .{ .long = "button-up", .value = "F:BUTTON", .repeats = true, .help = "release a gamepad button at host frame F" },
         .{
+            .long = "axis",
+            .value = "F:AXIS:VALUE",
+            .repeats = true,
+            .help = "move a gamepad axis (a platform.ControllerAxis, as left_x) to VALUE\n" ++
+                "(-32768 to 32767) at host frame F",
+        },
+        .{
             .long = "stall",
             .value = "F:MS",
             .repeats = true,
@@ -65,6 +72,11 @@ const ButtonPress = struct {
     frame: u64,
     button: flashbackz.platform.ControllerButton,
     down: bool,
+};
+const AxisMove = struct {
+    frame: u64,
+    axis: flashbackz.platform.ControllerAxis,
+    value: i16,
 };
 const Stall = struct { frame: u64, ns: u64 };
 
@@ -93,6 +105,8 @@ pub fn main(init: std.process.Init) !void {
     defer presses.deinit(gpa);
     var buttons: std.ArrayList(ButtonPress) = .empty;
     defer buttons.deinit(gpa);
+    var axes: std.ArrayList(AxisMove) = .empty;
+    defer axes.deinit(gpa);
     var stalls: std.ArrayList(Stall) = .empty;
     defer stalls.deinit(gpa);
     // In command-line order: the order of the events at one frame matters.
@@ -114,6 +128,10 @@ pub fn main(init: std.process.Init) !void {
                 button.down = given.option == Args.index("button-down");
                 try buttons.append(gpa, button);
             },
+            Args.index("axis") => try axes.append(
+                gpa,
+                parseAxis(given.value) orelse return fail(io, error.InvalidValue, bad),
+            ),
             Args.index("stall") => try stalls.append(
                 gpa,
                 parseStall(given.value) orelse return fail(io, error.InvalidValue, bad),
@@ -172,6 +190,14 @@ pub fn main(init: std.process.Init) !void {
                 .payload = if (press.down) .{ .controller_button_down = change } else .{ .controller_button_up = change },
             });
         };
+        for (axes.items) |move| if (move.frame == frame) try backend.inject(.{
+            .time_ns = backend.clock_ns,
+            .payload = .{ .controller_axis = .{
+                .controller = @fromBackingInt(@intCast(0)),
+                .axis = move.axis,
+                .value = move.value,
+            } },
+        });
         for (stalls.items) |stall| if (stall.frame == frame) backend.advance(stall.ns);
         if (try game.update(&p) == .finished) break;
         backend.advance(frame_ns);
@@ -247,6 +273,16 @@ fn parseButton(text: []const u8) ?ButtonPress {
         text[colon + 1 ..],
     ) orelse return null;
     return .{ .frame = frame, .button = button, .down = true };
+}
+
+/// `FRAME:AXIS:VALUE`, as `30:left_x:-32768`.
+fn parseAxis(text: []const u8) ?AxisMove {
+    var parts = std.mem.splitScalar(u8, text, ':');
+    const frame = std.fmt.parseInt(u64, parts.next() orelse return null, 10) catch return null;
+    const axis = std.meta.stringToEnum(flashbackz.platform.ControllerAxis, parts.next() orelse return null) orelse return null;
+    const value = std.fmt.parseInt(i16, parts.next() orelse return null, 10) catch return null;
+    if (parts.next() != null) return null;
+    return .{ .frame = frame, .axis = axis, .value = value };
 }
 
 fn fail(io: std.Io, err: clap.Error, diagnostic: clap.Diagnostic) !void {

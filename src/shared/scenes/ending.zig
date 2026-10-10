@@ -9,6 +9,7 @@ const palette = @import("../content/palette.zig");
 const font_mod = @import("../content/font.zig");
 const text_renderer = @import("../render/text.zig");
 const vector = @import("vector_player.zig");
+const input_mod = @import("../input.zig");
 const film_mod = @import("../vector_film.zig");
 const soundtrack = @import("../audio/soundtrack.zig");
 
@@ -257,16 +258,8 @@ pub const Ending = struct {
                 if (key.repeat or self.held.contains(key.key)) return;
                 self.held.insert(key.key);
                 switch (self.stage) {
-                    // A held film does not look at its keys.
                     // Escape too, unlike the original (user decision, 2026-10-09).
-                    .films => if ((key.key == .tab or key.key == .backspace or key.key == .escape) and
-                        self.paused_at == null)
-                    {
-                        // Skipping the ending film leaves the list to play; skipping in the
-                        // list ends it.
-                        if (self.film_index != 0) self.film_index = self.film_count - 1;
-                        self.replay.finished = true;
-                    },
+                    .films => if (key.key == .tab or key.key == .backspace or key.key == .escape) self.skipFilm(),
                     .score_film => {},
                     .score => switch (key.key) {
                         .enter, .space, .left_shift, .right_shift, .backspace, .tab => {
@@ -278,6 +271,26 @@ pub const Ending = struct {
             },
             else => {},
         }
+    }
+
+    /// A pad's press (PLAN GS-3): Y or START skips a film, a button ends the score screen.
+    pub fn pad(self: *Ending, change: input_mod.Change) void {
+        if (!change.down or change.repeat) return;
+        switch (self.stage) {
+            .films => if (change.action == .inventory or change.action == .pause) self.skipFilm(),
+            .score_film => {},
+            .score => if (!change.action.isDirection()) {
+                self.finished = true;
+            },
+        }
+    }
+
+    /// Skipping the ending film leaves the list to play; skipping in the list ends it. A held
+    /// film does not look at its keys.
+    fn skipFilm(self: *Ending) void {
+        if (self.paused_at != null) return;
+        if (self.film_index != 0) self.film_index = self.film_count - 1;
+        self.replay.finished = true;
     }
 
     pub fn draw(self: *const Ending, indices: []u8, rgba: []u8) !void {

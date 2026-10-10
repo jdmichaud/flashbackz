@@ -5,6 +5,7 @@ const artwork = @import("../content/continue_artwork.zig");
 const palette = @import("../content/palette.zig");
 const text = @import("../render/text.zig");
 const timing = @import("../step_clock.zig");
+const input = @import("../input.zig");
 const confirm_keys = [_]platform.Key{
     .enter,
     .space,
@@ -40,13 +41,27 @@ pub const Menu = struct {
         self.events.deinit(self.allocator);
         self.* = undefined;
     }
-    pub fn event(self: *Menu, input: platform.Event) !void {
-        switch (input.payload) {
+    pub fn event(self: *Menu, event_in: platform.Event) !void {
+        switch (event_in.payload) {
             .key_up, .key_down, .focus_lost => {},
             else => return,
         }
         if (self.events.items.len == 128) return error.InputQueueFull;
-        try self.events.append(self.allocator, input);
+        try self.events.append(self.allocator, event_in);
+    }
+    /// A pad's press or release (PLAN GS-3), as the keyboard's: its D-pad the arrows, its
+    /// buttons Return, as the original's joystick buttons confirm here.
+    pub fn pad(self: *Menu, change: input.Change, time_ns: u64) !void {
+        const key: platform.Key = switch (change.action) {
+            .up => .up,
+            .down => .down,
+            .left, .right => return,
+            .use, .gun, .act, .inventory, .pause => .enter,
+        };
+        try self.event(.{
+            .time_ns = time_ns,
+            .payload = if (change.down) .{ .key_down = .{ .key = key } } else .{ .key_up = .{ .key = key } },
+        });
     }
     pub fn update(self: *Menu, now: u64) !void {
         if (self.clock == null) self.clock = try timing.Clock.init(timing.inventory, now);
@@ -54,10 +69,10 @@ pub const Menu = struct {
         while (self.clock.?.due(now) and self.outcome == null and work < 8) : (work += 1) {
             const deadline = self.clock.?.deadline();
             while (self.events.items.len != 0 and self.events.items[0].time_ns <= deadline) {
-                const input = self.events.orderedRemove(0);
-                switch (input.payload) {
+                const queued = self.events.orderedRemove(0);
+                switch (queued.payload) {
                     .key_down, .key_up => |key| {
-                        const pressed = input.payload == .key_down;
+                        const pressed = queued.payload == .key_down;
                         if (key.key == .escape) self.cancel_pending = pressed;
                         if (key.key == .up) self.up_pending = pressed;
                         if (key.key == .down) self.down_pending = pressed;
@@ -135,13 +150,13 @@ pub const Menu = struct {
             if (self.outcome) |choice| @backingInt(choice) else 0,
         });
         const origin = if (self.clock) |clock| clock.origin_ns else 0;
-        for (self.events.items) |input| {
-            hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, input.time_ns -| origin)));
+        for (self.events.items) |queued| {
+            hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, queued.time_ns -| origin)));
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(
                 u32,
-                @backingInt(std.meta.activeTag(input.payload)),
+                @backingInt(std.meta.activeTag(queued.payload)),
             )));
-            const key: u16 = switch (input.payload) {
+            const key: u16 = switch (queued.payload) {
                 .key_down, .key_up => |press| @backingInt(press.key),
                 else => 0,
             };
@@ -164,8 +179,11 @@ pub const Scene = struct {
         self.assets.deinit();
         self.* = undefined;
     }
-    pub fn event(self: *Scene, input: platform.Event) !void {
-        try self.menu.event(input);
+    pub fn event(self: *Scene, event_in: platform.Event) !void {
+        try self.menu.event(event_in);
+    }
+    pub fn pad(self: *Scene, change: input.Change, time_ns: u64) !void {
+        try self.menu.pad(change, time_ns);
     }
     pub fn update(self: *Scene, now: u64) !void {
         try self.menu.update(now);

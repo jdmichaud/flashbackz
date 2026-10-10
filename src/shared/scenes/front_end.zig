@@ -58,6 +58,8 @@ pub const Scene = struct {
     pending_difficulty: Difficulty = .normal,
     password: [6]u8 = @splat(0),
     password_length: usize = 0,
+    /// The character a pad is choosing after the typed ones (PLAN GS-3).
+    pad_character: ?u8 = null,
     /// The password's blinking cursor, an underscore after the typed characters, and when it
     /// next changes.
     cursor_shown: bool = true,
@@ -294,22 +296,7 @@ pub const Scene = struct {
                 ));
                 // A held Escape that skipped the introduction does not quit as it repeats.
                 if (key == .escape and !press.repeat) self.stage = .quit;
-                if (confirm and !press.repeat) switch (self.menu.selected) {
-                    .start => self.start(),
-                    .skill => {
-                        self.pending_difficulty = self.difficulty;
-                        try self.show(.skill, "MENU3");
-                    },
-                    .info => try self.show(.info, "INSTRU_E"),
-                    .password => {
-                        self.password_length = 0;
-                        self.cursor_shown = true;
-                        self.cursor_due_ns = null;
-                        try self.show(.password, "MENU2");
-                    },
-                    .demo => self.stage = .demo_ready,
-                    .quit => self.stage = .quit,
-                };
+                if (confirm and !press.repeat) try self.choose();
             },
             .skill => {
                 // Up and Down wrap around the three difficulties.
@@ -325,7 +312,7 @@ pub const Scene = struct {
             .info, .unavailable => if (confirm or key == .escape or key == .tab) self.mainMenu(),
             .password => {
                 if (key == .backspace) {
-                    self.password_length -|= 1;
+                    if (self.pad_character != null) self.pad_character = null else self.password_length -|= 1;
                     return;
                 }
                 if (key == .enter) {
@@ -345,10 +332,106 @@ pub const Scene = struct {
                     .keypad_minus => '-',
                     else => null,
                 };
-                if (character) |value| if (self.password_length < self.password.len) {
-                    self.password[self.password_length] = value;
-                    self.password_length += 1;
-                };
+                if (character) |value| {
+                    self.pad_character = null;
+                    self.addCharacter(value);
+                }
+            },
+        }
+    }
+
+    /// The main page's selected item, chosen.
+    fn choose(self: *Scene) !void {
+        switch (self.menu.selected) {
+            .start => self.start(),
+            .skill => {
+                self.pending_difficulty = self.difficulty;
+                try self.show(.skill, "MENU3");
+            },
+            .info => try self.show(.info, "INSTRU_E"),
+            .password => {
+                self.password_length = 0;
+                self.pad_character = null;
+                self.cursor_shown = true;
+                self.cursor_due_ns = null;
+                try self.show(.password, "MENU2");
+            },
+            .demo => self.stage = .demo_ready,
+            .quit => self.stage = .quit,
+        }
+    }
+
+    fn addCharacter(self: *Scene, character: u8) void {
+        if (self.password_length == self.password.len) return;
+        self.password[self.password_length] = character;
+        self.password_length += 1;
+    }
+
+    /// A pad's press on the pages (PLAN GS-3): the D-pad moves, A, X or START chooses, B goes
+    /// back; B on the main page does not quit. Films take the pad's buttons as raw events.
+    pub fn pad(self: *Scene, change: input_mod.Change, time_ns: u64) !void {
+        if (!change.down or self.player != null or self.stage != .menu) return;
+        if (change.action.isDirection()) {
+            if (!self.direction_repeat.accept(change.repeat, time_ns)) return;
+        } else if (change.repeat) return;
+        const choose_it = change.action == .act or change.action == .use or change.action == .pause;
+        const back = change.action == .gun;
+        switch (self.view) {
+            .main => switch (change.action) {
+                .up, .down => {
+                    self.idle_since_ns = time_ns;
+                    const index: usize = @backingInt(self.menu.selected);
+                    const step: usize = if (change.action == .up) menu_mod.action_count - 1 else 1;
+                    self.menu.selected = @fromBackingInt(@as(u3, @intCast((index + step) % menu_mod.action_count)));
+                },
+                else => if (choose_it) try self.choose(),
+            },
+            .skill => {
+                const selected: u2 = @backingInt(self.pending_difficulty);
+                if (change.action == .up) self.pending_difficulty = @fromBackingInt(if (selected == 0) 2 else selected - 1);
+                if (change.action == .down) self.pending_difficulty = @fromBackingInt(if (selected == 2) 0 else selected + 1);
+                if (choose_it) self.difficulty = self.pending_difficulty;
+                if (choose_it or back) self.mainMenu();
+            },
+            .info, .unavailable => if (choose_it or back) self.mainMenu(),
+            .password => try self.padCode(change.action, choose_it, back),
+        }
+    }
+
+    /// The characters a pad goes through, in order.
+    const pad_characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+    /// The code with a pad: up and down change the character being chosen, right keeps it,
+    /// left drops it or erases the last one, A, X or START enters the code, B erases (or goes
+    /// back from an empty code).
+    fn padCode(self: *Scene, action: input_mod.Action, enter: bool, back: bool) !void {
+        switch (action) {
+            .up, .down => {
+                const at = if (self.pad_character) |c| std.mem.indexOfScalar(u8, pad_characters, c).? else if (action == .up) pad_characters.len - 1 else 0;
+                const step: usize = if (action == .up) 1 else pad_characters.len - 1;
+                self.pad_character = pad_characters[(at + step) % pad_characters.len];
+            },
+            .right => if (self.pad_character) |c| {
+                self.addCharacter(c);
+                self.pad_character = null;
+            },
+            .left => if (self.pad_character != null) {
+                self.pad_character = null;
+            } else {
+                self.password_length -|= 1;
+            },
+            else => if (enter) {
+                if (self.pad_character) |c| self.addCharacter(c);
+                self.pad_character = null;
+                try self.submitPassword();
+            } else if (back) {
+                if (self.pad_character != null) {
+                    self.pad_character = null;
+                } else if (self.password_length == 0) {
+                    self.mainMenu();
+                } else {
+                    self.password_length -= 1;
+                }
             },
         }
     }
@@ -433,6 +516,17 @@ pub const Scene = struct {
                     120,
                     168,
                     .{ .foreground = 2, .shadow = 0 },
+                );
+                // The character a pad is choosing, in the selected color, the cursor under it.
+                if (self.pad_character) |c| try text.draw(
+                    indices,
+                    256,
+                    224,
+                    &assets.font,
+                    &.{c},
+                    120 + 8 * @as(i32, @intCast(self.password_length)),
+                    168,
+                    .{ .foreground = 1, .shadow = 0 },
                 );
                 if (self.cursor_shown) try text.draw(
                     indices,
