@@ -288,7 +288,11 @@ pub fn main(init: std.process.Init) !void {
         );
     } else if (game.scene == .menu) {
         const front = &game.scene.menu;
-        try w.interface.print("{{\"scene\":\"menu\",\"stage\":\"{s}\",\"selected\":\"{s}\",\"film_frame\":", .{ @tagName(front.stage), @tagName(front.menu.selected) });
+        try w.interface.print("{{\"scene\":\"menu\",\"stage\":\"{s}\",\"page\":\"{s}\",\"selected\":\"{s}\",\"film_frame\":", .{
+            @tagName(front.stage),
+            @tagName(front.view),
+            @tagName(front.menu.selected),
+        });
         if (front.player) |player| try w.interface.print("{d}}}\n", .{player.playback.frame}) else try w.interface.print("null}}\n", .{});
     } else {
         try w.interface.print("{{\"scene\":\"{s}\"}}\n", .{@tagName(game.sceneKind())});
