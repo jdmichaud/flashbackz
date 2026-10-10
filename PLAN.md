@@ -615,8 +615,13 @@ load and fails loudly there, devices are adapted to (D6).
   with the real data; the keyboard sessions keep their hashes.
   - 2026-10-10: done; 265 tests. All seven levels and the ending (12 films) load. The films'
     import at load and the whole data set checked at startup are D6's.
-- [ ] **B8** The agent without `--saves` uses and creates the user's real save directory.
-- [ ] **B9** Command-line options silently ignored, and standalone `--extract`.
+- [ ] **B8** The agent without `--saves` uses and creates the user's real save directory. It
+  saves in memory unless `--saves` is given. Gate: without `--saves` the agent creates no save
+  directory, and a settings record in the user's directory changes nothing.
+- [ ] **B9** Command-line options silently ignored, and standalone `--extract`. `--megadrive`
+  and `--data` without disks already stop with the missing-files message (B4). `--extract`
+  reads the built-in disks of the standalone build, says that it needs the disks otherwise, and
+  names the data set directory or the names file it cannot open. Gate: each case by hand.
 - [ ] **B10** Sprite decode errors are swallowed.
 - [ ] **B11** The continue screen ends the game when 128 key events are queued.
 - [ ] **B12** The Mega Drive cartridge reader is not overflow-safe; its checksum check can be
