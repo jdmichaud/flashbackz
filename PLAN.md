@@ -434,7 +434,7 @@ now, remapping later; eight save slots and a quick slot (F5/F9); a save from ano
 is listed and refused; SAVE GAME in the pause dialog, LOAD GAME on the title menu ("having the
 LOAD dialog in the in game menu is awkward").
 
-- [ ] **GS-1 — One input tracker** — In a level, every event reaches one tracker, whatever is
+- [x] **GS-1 — One input tracker** — In a level, every event reaches one tracker, whatever is
   open: play, the options dialog, the inventory, a message or a film (code review B3, D3). The
   fixed layouts turn keys and pad buttons into the game's eight actions (the input byte,
   unchanged) and pause; the options dialog and the inventory read actions, not keys; each pad
@@ -446,6 +446,12 @@ LOAD dialog in the in game menu is awkward").
   title, continue and ending screens move to actions with GS-3. Gate: tests; the agent sessions
   of keyboard play, options, inventory, pad, title and continue keep their hashes, except where
   these rules change them.
+  - 2026-10-10: 253 tests. Eleven agent sessions (walk and run, options, options with keys held,
+    inventory, pad, pad off, title, code entry, abort and retry twice, the city) keep their
+    state and frame hashes. Changed as the original: Right released in the options dialog then
+    held again walks (x 48 before, 96 now); Backspace closes the inventory; Right pressed during
+    the opening film and held after it waits for a fresh press; with J, the pad's Y opens and
+    closes the inventory and its D-pad walks after.
 - [ ] **GS-2 — Settings in one place** — Sound effects, music, volume, joystick and zoom are one
   value the game owns, read where they are used, saved as one record that replaces VOLUME; a
   record of another version is refused and the defaults apply. Gate: tests; a setting changed
