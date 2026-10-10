@@ -323,10 +323,11 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   - 2026-10-10: built-in files read when no path is given; the SDL game starts with none and
     plays the built-in cartridge's tune in level 2; wrong files stop the build.
 
-- [ ] The game's names (user request, 2026-10-10): the SDL game is `flashback` (never with
+- [x] The game's names (user request, 2026-10-10): the SDL game is `flashback` (never with
   files inside) and the standalone build is a second executable, `flashback-standalone`, built
   only with the -D options; each says its own name in its help and messages. Gate: both builds
   and their names; the standalone starts with no argument, `flashback` as before.
+  - 2026-10-10: done; on Windows flashback.exe and flashback-standalone.exe.
 
 ## Mega Drive music during play — user decision, 2026-10-09
 
