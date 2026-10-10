@@ -695,7 +695,10 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
 - [ ] **D7** Smaller design issues (the review's list).
 - [ ] **R1-R5** Readability: unnamed magic numbers, behavior tables' readability, dead code, tests
   missing or not testing their name, style.
-- [ ] **P1-P3** Performance: the documented build is Debug, audio latency, minor waste.
+- [x] **P1** The documented build is Debug. Kept (user, 2026-10-10: "Default build is debug."):
+  the default build stays Debug, and `--release` keeps Zig's own default.
+- [ ] **P2** Audio latency.
+- [ ] **P3** Minor waste.
 - [ ] **Documentation**: the wrong or stale claims of the review's section 5, in DESIGN.md,
   README.md, docs and code comments. The user granted (2026-10-10) correcting DESIGN.md's
   statements of fact so they describe what exists; changes to its rules still need approval.
