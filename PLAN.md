@@ -653,7 +653,7 @@ load and fails loudly there, devices are adapted to (D6).
   notes on data not understood (unknown operations, unexpected arguments, those start states)
   are logged when the game extracts at startup. Gate: tests; the real extraction is unchanged.
   - 2026-10-10: done; 272 tests.
-- [ ] **B14** Smaller confirmed defects (the review's list). Fixed: the ending's state hash
+- [x] **B14** Smaller confirmed defects (the review's list). Fixed: the ending's state hash
   (every scene now has one, by construction); a `--stall` beyond an hour is refused and the
   agent's audio clock cannot overflow; a closed stderr no longer stops the SDL game; the SDL
   backend's overflow queue, which could drop a key-up and could no longer fill, is gone; a
@@ -663,6 +663,7 @@ load and fails loudly there, devices are adapted to (D6).
   before it runs stay allocated (engine-update, message delivery). Kept, two formats: MBK and
   BNQ mark raw banks differently, each as its original routine reads it; both decoders now say
   so. Gate: the keyboard sessions keep their hashes; each fix checked by hand.
+  - 2026-10-10: done.
 - [x] **D1** The engine models the original's memory layout in places. Decided (user,
   2026-10-10: "My rules was that we produce a modern maintainable code base. Make things
   coherent, easy to read and modify. Use your common sense."): each quirk becomes a named game
