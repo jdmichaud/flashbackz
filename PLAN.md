@@ -452,10 +452,15 @@ LOAD dialog in the in game menu is awkward").
     held again walks (x 48 before, 96 now); Backspace closes the inventory; Right pressed during
     the opening film and held after it waits for a fresh press; with J, the pad's Y opens and
     closes the inventory and its D-pad walks after.
-- [ ] **GS-2 — Settings in one place** — Sound effects, music, volume, joystick and zoom are one
+- [x] **GS-2 — Settings in one place** — Sound effects, music, volume, joystick and zoom are one
   value the game owns, read where they are used, saved as one record that replaces VOLUME; a
   record of another version is refused and the defaults apply. Gate: tests; a setting changed
   in the options is there after a restart.
+  - 2026-10-10: 254 tests (round trip; another version, a volume past 100, a missing or unknown
+    field and the old VOLUME record give the defaults). Agent: SOUND FX turned off in the options
+    is off in the next run with the same save directory; the record reads `.{ .version = 1,
+    .volume = 100, .sound_fx = false, ... }`. The eleven GS-1 sessions keep their hashes, each with
+    its own save directory now that J's joystick lasts between runs.
 - [ ] **GS-3 — Gamepads everywhere** — A joystick SDL has no gamepad mapping for opens with a
   generic one; the first pad press turns the Joystick option on; every screen answers the pad
   (D-pad or stick to move, A to confirm, B to go back, Start to pause); level codes are entered
