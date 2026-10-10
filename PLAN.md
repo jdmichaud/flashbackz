@@ -335,6 +335,13 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   each command in the README run as written.
   - 2026-10-10: done; every command run in a worktree beside the user's files.
 
+- [ ] Sound starts without `SDL_AUDIODRIVER=pipewire` (user report, 2026-10-10: on Ubuntu 24.04
+  with SDL2 2.30.0 the audio start hangs; the variable works around it). SDL 2 tries its
+  PulseAudio driver before PipeWire. On Linux, when the user has not chosen a driver, the game
+  uses PipeWire if PipeWire lists output devices (it then serves the sound), and SDL's own order
+  otherwise (PulseAudio owning the sound, PipeWire absent). Gate: tests; the user's machine
+  starts with sound and no variable; a machine without PipeWire keeps SDL's choice.
+
 ## Mega Drive music during play — user decision, 2026-10-09
 
 An addition to the DOS edition: the tunes the Mega Drive edition plays during play, sounding
