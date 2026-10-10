@@ -600,7 +600,7 @@ load and fails loudly there, devices are adapted to (D6).
   original keeps them).
 - [x] **B6** Escape in a level reacts to auto-repeat and a quick tap is lost. Kept: the original
   polls Escape the same way (GS-1).
-- [ ] **B7** The data-set loader accepts data the engine cannot run. It refuses, saying why: more
+- [x] **B7** The data-set loader accepts data the engine cannot run. It refuses, saying why: more
   than 256 characters (the original's table, now one named limit), a first character that is
   not the player, an unknown or misspelt character field, a flag that is not true or false, a
   footprint wider than 16 columns, a number (argument, placement number, position, a rule's
@@ -609,6 +609,8 @@ load and fails loudly there, devices are adapted to (D6).
   files and that the font has its messages' and labels' characters; the ending, that it has a
   film and the font its credits. Gate: a unit test per refusal; every level and the ending load
   with the real data; the keyboard sessions keep their hashes.
+  - 2026-10-10: done; 265 tests. All seven levels and the ending (12 films) load. The films'
+    import at load and the whole data set checked at startup are D6's.
 - [ ] **B8** The agent without `--saves` uses and creates the user's real save directory.
 - [ ] **B9** Command-line options silently ignored, and standalone `--extract`.
 - [ ] **B10** Sprite decode errors are swallowed.
