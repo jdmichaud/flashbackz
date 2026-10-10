@@ -722,7 +722,16 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
   `Screen.writeRgba`, `contacts.Registration`, the unreachable Retry to the title, and
   `unused_parameters` (accepted, no longer kept). `placement` stays, documented: it is the
   character's identity when comparing with the original. Gate: as R1.
-- [ ] **R4** Tests missing, and tests that don't test their name.
+- [ ] **R4** Tests missing, and tests that don't test their name. Added: `World.update`'s first
+  tests (a message reaches a later recipient in the same update and an earlier one in the next,
+  an awaited message ends the animation; a catch-up walk keeps the message, B5), the interactive
+  pages (B1), the output and the options' sounds (B2). Fixed: the string table's alias test
+  reads the alias; the startup test's name says what it checks; the OPL reference test embeds
+  its data instead of reading it from the working directory. Kept elsewhere: scene transitions
+  need the original's files, which tests may not have; `tools/agent_sessions.sh` covers them
+  against the user's disks. The YM2612 differential test needs a hook in the vendored sorz code
+  (DESIGN 6 keeps it unaltered): it belongs in sorz. The MBK raw-bank test asserts the format
+  the original's loader reads (B14). Gate: tests.
 - [x] **R5** Style: no inline `@import` (vendored sorz code excepted), `presence.zig`'s imports
   at the top, one meaning per alias (`score`, `music_player`), the film's duration named as such
   in `Game`. Gate: as R1.
