@@ -329,10 +329,11 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   and their names; the standalone starts with no argument, `flashback` as before.
   - 2026-10-10: done; on Windows flashback.exe and flashback-standalone.exe.
 
-- [ ] A short README and a licence (user request, 2026-10-10): the README from scratch, with
+- [x] A short README and a licence (user request, 2026-10-10): the README from scratch, with
   only what the repository is, how to start the game, how to build it and the licence; the
   repository's own code under MIT (user's choice), the third-party parts under theirs. Gate:
   each command in the README run as written.
+  - 2026-10-10: done; every command run in a worktree beside the user's files.
 
 ## Mega Drive music during play — user decision, 2026-10-09
 
