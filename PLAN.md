@@ -467,6 +467,15 @@ LOAD dialog in the in game menu is awkward").
   with it (up and down change the letter, left and right move); each pad holds its own buttons;
   a CONTROLS page lists each action's key and button. Gate: tests (SDL's virtual joystick, the
   agent's axis events); with the user's pad, the SDL game plays, pauses and takes a level code.
+  - [x] 2026-10-10: 257 tests, among them SDL's virtual joystick of the user's pad (3 axes, 10
+    buttons) opened as a gamepad, START its tenth button. Agent: the stick alone walks (the
+    option turns on); START, the D-pad and B turn SOUND FX off and resume; B on ABORT GAME
+    resumes; A abandons and A retries on the continue screen; the title's D-pad and A choose
+    EXPERT and start; B on its main page does not quit; a code entered with the D-pad equals
+    the one typed; START skips the opening film. The title, continue and ending screens keep
+    their keyboard rules; pad presses reach them as actions. The eleven keyboard sessions keep
+    their hashes (the pad one now walks: its D-pad turns the option on).
+  - [ ] With the user's pad in the SDL game: play, pause, a level code; the buttons' places.
 - [ ] **GS-4 — The save** — A save holds the level, difficulty, score, random generator, what is
   carried between levels, the world (every character, the terrain, contacts, mailboxes, the
   save terminal's checkpoint) and the level's play state; art, sound and pictures are reloaded
