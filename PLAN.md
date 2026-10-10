@@ -505,13 +505,20 @@ LOAD dialog in the in game menu is awkward").
     released, and at once when the screen ends). Keyboard and pad sessions keep their hashes.
     No world message is near enough to a level's start for an agent session.
   - [ ] With the user's pad: one page per press when talking to someone.
-- [ ] **GS-4 — The save** — A save holds the level, difficulty, score, random generator, what is
+- [x] **GS-4 — The save** — A save holds the level, difficulty, score, random generator, what is
   carried between levels, the world (every character, the terrain, contacts, mailboxes, the
   save terminal's checkpoint) and the level's play state; art, sound and pictures are reloaded
   and redrawn. It is taken only while the pause dialog is open. A readable record with a version
   and the data set's fingerprint; another version's save is refused. Gate: the agent plays,
   saves and plays on, then loads and replays the same input: every character identical on every
   update after.
+  - 2026-10-10: 262 tests (a synthetic world saved, read back and run on with varying controls
+    and catch-up walks stays identical for 20 updates; another version, data set, a broken
+    record or a world of another size is refused). Agent: the state after a load equals the
+    state at the save; walk for walk after them, with no input, 286 jungle walks and 432 city
+    walks (252 distinct states) are identical. With input, the agent presses keys by host frame
+    and the loaded level's clock starts at the load, so the same frames meet other walks; the
+    walk-for-walk comparison is therefore made without input. A save is 218 KB of ZON.
 - [ ] **GS-5 — Save screens** — SAVE GAME in the pause dialog; LOAD GAME on the title menu; eight
   slots, each with its level, play time, date and a picture of the moment; overwriting asks;
   another version's save is shown, not loaded; F5 saves to the quick slot and F9 loads it during
