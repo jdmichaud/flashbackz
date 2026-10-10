@@ -66,6 +66,8 @@ pub const Tunes = struct {
             const base = try long(bytes, entry);
             if (try word(bytes, entry + 4) != 0xFFFF) return error.InvalidCartridge;
             const row_count = try word(bytes, base + 60);
+            // The player starts a tune at its first row.
+            if (row_count == 0) return error.InvalidCartridge;
             const frames_per_row = try word(bytes, base + 62);
             const rows_at = base + 94;
             const rows_end = rows_at + @as(usize, row_count) * @sizeOf(Row);
@@ -101,7 +103,9 @@ pub const Tunes = struct {
         return std.mem.readInt(u16, bytes[at..][0..2], .big);
     }
 
-    fn long(bytes: []const u8, at: usize) error{InvalidCartridge}!u32 {
+    /// A cartridge address: a 32-bit word, widened so that the offsets added to it cannot
+    /// overflow.
+    fn long(bytes: []const u8, at: usize) error{InvalidCartridge}!usize {
         if (at + 4 > bytes.len) return error.InvalidCartridge;
         return std.mem.readInt(u32, bytes[at..][0..4], .big);
     }
@@ -115,4 +119,11 @@ test "only the accepted cartridge is recognised" {
 
 test "a cartridge too short for its tables is refused" {
     try std.testing.expectError(error.InvalidCartridge, Tunes.read(std.testing.allocator, "short"));
+}
+
+test "addresses past the end are refused, not overflowed" {
+    const bytes = try std.testing.allocator.alloc(u8, size);
+    defer std.testing.allocator.free(bytes);
+    @memset(bytes, 0xFF);
+    try std.testing.expectError(error.InvalidCartridge, Tunes.read(std.testing.allocator, bytes));
 }

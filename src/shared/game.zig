@@ -177,6 +177,11 @@ pub const Game = struct {
             else => return err,
         };
         defer cartridge.deinit();
+        // Only the accepted cartridge, however the files gave it.
+        if (!megadrive.isCartridge(cartridge.bytes)) {
+            std.log.err("{s} is not the accepted Mega Drive cartridge", .{megadrive.asset});
+            return error.UnsupportedCartridge;
+        }
         const tunes = try allocator.create(megadrive.Tunes);
         errdefer allocator.destroy(tunes);
         tunes.* = try megadrive.Tunes.read(allocator, cartridge.bytes);
