@@ -16,7 +16,6 @@ const key_latch = @import("../key_latch.zig");
 pub const Stage = enum {
     branding,
     introduction,
-    awakening,
     game_over,
     menu,
     ready,
@@ -39,7 +38,7 @@ pub const Scene = struct {
     menu: menu_mod.Menu = .{},
     player: ?vector_player.Player = null,
     music: ?soundtrack.Soundtrack = null,
-    music_cue: ?enum { branding, introduction, awakening, game_over, menu } = null,
+    music_cue: ?enum { branding, introduction, game_over, menu } = null,
     music_rate: ?u32 = null,
     music_enabled: bool = true,
     volume: u8 = 100,
@@ -121,7 +120,6 @@ pub const Scene = struct {
         const cue: @TypeOf(self.music_cue) = switch (self.stage) {
             .branding => .branding,
             .introduction => .introduction,
-            .awakening => .awakening,
             .game_over => .game_over,
             .menu => .menu,
             else => {
@@ -141,7 +139,6 @@ pub const Scene = struct {
             const name: []const u8 = switch (cue.?) {
                 .branding => "PRESENT3",
                 .introduction => "INTROL3",
-                .awakening => "REVEIL3",
                 .game_over => "GAMEOVE3",
                 .menu => "OPTION3",
             };
@@ -204,10 +201,6 @@ pub const Scene = struct {
                     player.deinit();
                     self.player = null;
                     self.stage = .menu;
-                } else if (self.stage == .awakening) {
-                    player.deinit();
-                    self.player = null;
-                    self.stage = .ready;
                 } else if (self.stage == .branding) {
                     try self.play("INTRO1");
                     self.introduction_part = .first;
@@ -254,16 +247,15 @@ pub const Scene = struct {
         self.menu.selected = .start;
     }
 
-    pub fn start(self: *Scene) !void {
-        try self.startLevel(.jungle);
+    pub fn start(self: *Scene) void {
+        self.startLevel(.jungle);
     }
 
-    pub fn startLevel(self: *Scene, level: content_level.Id) !void {
+    /// The level loads at once: it opens with its own film, the jungle with DEBUT (the scene
+    /// table's level openings), so the title plays none.
+    pub fn startLevel(self: *Scene, level: content_level.Id) void {
         self.selected_level = level;
-        if (level == .jungle) {
-            try self.play("DEBUT");
-            self.stage = .awakening;
-        } else self.stage = .ready;
+        self.stage = .ready;
     }
 
     pub fn gameOver(self: *Scene) !void {
@@ -301,7 +293,7 @@ pub const Scene = struct {
                 // A held Escape that skipped the introduction does not quit as it repeats.
                 if (key == .escape and !press.repeat) self.stage = .quit;
                 if (confirm and !press.repeat) switch (self.menu.selected) {
-                    .start => try self.start(),
+                    .start => self.start(),
                     .skill => {
                         self.pending_difficulty = self.difficulty;
                         try self.show(.skill, "MENU3");
@@ -368,7 +360,7 @@ pub const Scene = struct {
         self.mainMenu();
         if (destination) |entry| {
             self.difficulty = entry.difficulty;
-            try self.startLevel(entry.level);
+            self.startLevel(entry.level);
         } else if (try level_codes.isEnding(
             self.allocator,
             self.source,

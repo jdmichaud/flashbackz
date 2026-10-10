@@ -513,7 +513,7 @@ pub const Game = struct {
                 var next = front_end.Scene.init(self.allocator, self.assets.?, art);
                 errdefer next.deinit();
                 next.difficulty = self.difficulty;
-                if (choice == .retry) try next.startLevel(self.level) else try next.gameOver();
+                if (choice == .retry) next.startLevel(self.level) else try next.gameOver();
                 dialog.deinit();
                 self.scene = .{ .menu = next };
             }

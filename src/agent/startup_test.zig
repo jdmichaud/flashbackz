@@ -3,7 +3,7 @@ const std = @import("std");
 const game = @import("flashbackz");
 const backend_mod = @import("backend.zig");
 
-test "floppy menu preview rejects missing introduction and wake-up resources" {
+test "floppy menu preview rejects a missing introduction; Start hands over to the level" {
     const allocator = std.testing.allocator;
     var source = game.memory.MemoryAssetSource.init(allocator);
     defer source.deinit();
@@ -37,7 +37,10 @@ test "floppy menu preview rejects missing introduction and wake-up resources" {
     try front.event(.{ .time_ns = 3, .payload = .{ .key_down = .{ .key = .enter } } });
     try std.testing.expectEqual(game.settings.Difficulty.easy, front.difficulty);
     try std.testing.expectEqual(game.front_end.View.main, front.view);
-    try std.testing.expectError(error.NotFound, front.start());
+    // Start plays no film: the jungle opens with its own, DEBUT.
+    front.start();
+    try std.testing.expectEqual(game.front_end.Stage.ready, front.stage);
+    try std.testing.expectEqual(game.content.level.Id.jungle, front.selected_level);
 }
 
 test "normal startup completes three vector chapters and skipping introduction reaches menu" {
