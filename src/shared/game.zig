@@ -210,10 +210,9 @@ pub const Game = struct {
     }
 
     pub fn stateHash(self: *const Game) u64 {
-        if (self.scene == .level) return self.scene.level.stateHash();
-        if (self.scene == .menu) return self.scene.menu.stateHash();
-        if (self.scene == .continue_game) return self.scene.continue_game.stateHash();
-        return 0;
+        return switch (self.scene) {
+            inline else => |*scene| scene.stateHash(),
+        };
     }
 
     pub fn sceneKind(self: *const Game) std.meta.Tag(Scene) {

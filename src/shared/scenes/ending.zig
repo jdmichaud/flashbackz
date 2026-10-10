@@ -343,6 +343,17 @@ pub const Ending = struct {
         });
     }
 
+    /// Where the ending is: its stage, film, picture and credits.
+    pub fn stateHash(self: *const Ending) u64 {
+        var hash = std.hash.Wyhash.init(0);
+        hash.update(&.{ @backingInt(self.stage), @intFromBool(self.finished) });
+        const film_frame: u64 = if (self.player) |player| player.playback.frame else std.math.maxInt(u64);
+        for ([_]u64{ self.film_index, film_frame, self.credits.step, self.credits.typed }) |value| {
+            hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        }
+        return hash.final();
+    }
+
     pub fn needsCatchup(self: *const Ending, now_ns: u64) bool {
         return switch (self.stage) {
             .films => self.due(now_ns),

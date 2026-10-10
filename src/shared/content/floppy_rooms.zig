@@ -84,6 +84,8 @@ pub const Archive = struct {
             const bank: usize = selection & 0x7fff;
             if (bank >= self.banks[0]) return error.InvalidArtBank;
             const offset = try big16(self.banks, bank * 6 + 2);
+            // A negative size marks a raw bank, as the original's BNQ routine reads it
+            // (flashback-re docs/floppy-gameplay-entry.md); MBK banks use a flag bit instead.
             const count: i16 = @bitCast(try big16(self.banks, bank * 6 + 4));
             const size = @as(usize, @abs(count)) * 32;
             if (count == 0 or size > 32768 or offset < directory) return error.InvalidArtBank;

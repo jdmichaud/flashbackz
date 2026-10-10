@@ -54,10 +54,6 @@ pub const SdlBackend = struct {
     software: bool = false,
     frames_presented: u64 = 0,
 
-    /// Events that did not fit in the destination of a poll. They come before new SDL events, so
-    /// the order stays correct.
-    pending: std.ArrayList(platform.Event) = .empty,
-    pending_next: usize = 0,
     renderer_name_buf: [32]u8 = @splat(0),
     renderer_name_len: usize = 0,
     controllers: std.ArrayList(*c.SDL_GameController) = .empty,
@@ -104,7 +100,6 @@ pub const SdlBackend = struct {
         self.controllers.deinit(self.allocator);
         self.destroyPresentation();
         if (self.subsystems != 0) c.SDL_QuitSubSystem(self.subsystems);
-        self.pending.deinit(self.allocator);
         self.allocator.free(self.title);
         self.* = undefined;
     }
@@ -536,32 +531,16 @@ pub const SdlBackend = struct {
         return n;
     }
 
+    /// An SDL event gives at most one of ours, so an event read always has room in `dst`.
     fn poll(self: *SdlBackend, dst: []platform.Event) usize {
+        if (!self.started) return 0;
         var n: usize = 0;
-        while (n < dst.len and
-            self.pending_next < self.pending.items.len) : (self.pending_next += 1)
-        {
-            dst[n] = self.pending.items[self.pending_next];
-            n += 1;
-        }
-        if (self.pending_next == self.pending.items.len and self.pending_next != 0) {
-            self.pending.clearRetainingCapacity();
-            self.pending_next = 0;
-        }
-        if (!self.started) return n;
         var ev: c.SDL_Event = undefined;
         while (n < dst.len and c.SDL_PollEvent(&ev) != 0) {
             var out: [max_events_per_sdl_event]platform.Event = undefined;
             const count = self.translate(&ev, &out);
-            for (out[0..count]) |e| {
-                if (n < dst.len) {
-                    dst[n] = e;
-                    n += 1;
-                } else {
-                    // Only a multi-event translation can overflow. Keep the rest in order.
-                    self.pending.append(self.allocator, e) catch {};
-                }
-            }
+            @memcpy(dst[n..][0..count], out[0..count]);
+            n += count;
         }
         return n;
     }

@@ -317,6 +317,8 @@ fn parseStall(text: []const u8) ?Stall {
     const colon = std.mem.indexOfScalar(u8, text, ':') orelse return null;
     const frame = std.fmt.parseInt(u64, text[0..colon], 10) catch return null;
     const ms = std.fmt.parseInt(u64, text[colon + 1 ..], 10) catch return null;
+    // An hour at most: longer tells nothing more.
+    if (ms > std.time.ms_per_hour) return null;
     return .{ .frame = frame, .ns = ms * std.time.ns_per_ms };
 }
 

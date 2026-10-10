@@ -99,9 +99,9 @@ pub const AgentBackend = struct {
 
     fn playAudio(self: *AgentBackend, ns: u64) void {
         if (!self.audio.open) return;
-        const total = self.audio.carry_ns + ns;
-        const frames = total * self.audio.format.sample_rate / std.time.ns_per_s;
-        self.audio.carry_ns = total - frames * std.time.ns_per_s / self.audio.format.sample_rate;
+        const total: u128 = @as(u128, self.audio.carry_ns) + ns;
+        const frames: u64 = @intCast(total * self.audio.format.sample_rate / std.time.ns_per_s);
+        self.audio.carry_ns = @intCast(total - @as(u128, frames) * std.time.ns_per_s / self.audio.format.sample_rate);
         const played = @min(frames, self.audio.queued_frames);
         self.audio.queued_frames -= played;
         self.audio.played_frames += played;

@@ -199,8 +199,9 @@ pub fn decode(
         .instruments = instruments,
         .parts = parts,
         .tick_pit_cycles = 532 * @as(u32, profile.interval),
-        .stop_after_ticks = if (profile.limit > 0) @intCast(profile.limit + 1) else null,
-        .restart_after_ticks = if (profile.limit < 0) @intCast(-profile.limit + 2) else null,
+        // Widened: a limit at either end of its range still gives a count of ticks.
+        .stop_after_ticks = if (profile.limit > 0) @intCast(@as(i64, profile.limit) + 1) else null,
+        .restart_after_ticks = if (profile.limit < 0) @intCast(-@as(i64, profile.limit) + 2) else null,
     };
 }
 

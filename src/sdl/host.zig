@@ -83,29 +83,30 @@ pub fn run(
 ) !u8 {
     var err_buf: [1024]u8 = undefined;
     var err_writer = std.Io.File.stderr().writerStreaming(io, &err_buf);
+    // Status lines for the person at the terminal: a closed stderr does not stop the game.
     const err = &err_writer.interface;
     const name = options.program;
 
     var ver_buf: [32]u8 = undefined;
     const check = version.checkVersion(&ver_buf);
-    try err.print("{s}: SDL2 {s} linked (pinned {s})\n", .{ name, check.linked, check.pinned });
-    try err.flush();
+    err.print("{s}: SDL2 {s} linked (pinned {s})\n", .{ name, check.linked, check.pinned }) catch {};
+    err.flush() catch {};
 
     // The providers: the save directory, and the game directory of the positional argument. They
     // outlive the game and the backend, which only borrow their interfaces.
     var providers: native.cli.Providers = .empty;
     defer providers.deinit();
     providers.open(gpa, io, environ, options.providers) catch |e| {
-        try err.print("{s}: ", .{name});
-        try providers.writeFailure(e, err);
-        try err.flush();
+        err.print("{s}: ", .{name}) catch {};
+        providers.writeFailure(e, err) catch {};
+        err.flush() catch {};
         return 1;
     };
-    try err.print(
+    err.print(
         "{s}: assets: {s}, saves: {s}\n",
         .{ name, @tagName(providers.kind), providers.saves_path },
-    );
-    try err.flush();
+    ) catch {};
+    err.flush() catch {};
 
     // The backend is made before the game and released after it.
     defer c.SDL_Quit();
@@ -150,7 +151,7 @@ pub fn run(
         const frames_before = game.frames_presented;
         const result = game.update(&p) catch |e| {
             std.log.err("game update failed: {s}", .{@errorName(e)});
-            try out.flush();
+            out.flush() catch {};
             return 1;
         };
         // A window that never painted looks the same as a window whose frames do not reach the
@@ -162,7 +163,7 @@ pub fn run(
             announced_first_frame = true;
             const size = backend.window_size;
             const line = "{s}: first frame after {d}ms in a {d}x{d} window, renderer {s}{s}, audio {s}\n";
-            try err.print(line, .{
+            err.print(line, .{
                 name,
                 (p.nowNs() - start_ns) / std.time.ns_per_ms,
                 size.width,
@@ -170,10 +171,10 @@ pub fn run(
                 if (backend.rendererName().len != 0) backend.rendererName() else "unknown",
                 if (backend.vsync) ", display-paced" else "",
                 if (backend.audioDriverName().len != 0) backend.audioDriverName() else "none",
-            });
-            try err.flush();
+            }) catch {};
+            err.flush() catch {};
         }
-        if (backend.event_log != null) try out.flush();
+        if (backend.event_log != null) out.flush() catch {};
         if (result == .finished) break;
         const now = p.nowNs();
         if (deadline_limit) |limit| {
@@ -187,14 +188,14 @@ pub fn run(
     }
 
     const audio = p.audioStatus();
-    try err.print("{s}: {d} updates, {d} frames presented, {d} events consumed, paced by {s}\n", .{
+    err.print("{s}: {d} updates, {d} frames presented, {d} events consumed, paced by {s}\n", .{
         name,
         game.update_count,
         game.frames_presented,
         game.events_consumed,
         if (backend.vsync) "the display" else "the fallback clock",
-    });
-    try err.print(
+    }) catch {};
+    err.print(
         "{s}: audio {s}, {d} frames played, {d} still queued\n",
         .{
             name,
@@ -202,9 +203,9 @@ pub fn run(
             audio.played_frames,
             audio.queued_frames,
         },
-    );
-    try err.flush();
-    try out.flush();
+    ) catch {};
+    err.flush() catch {};
+    out.flush() catch {};
     return 0;
 }
 

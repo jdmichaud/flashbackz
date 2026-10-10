@@ -1,5 +1,8 @@
 //! DOS MBK archive import. Packed banks end at their directory offset; raw banks begin
-//! there. Callers receive owned bytes and never depend on the original bank cache.
+//! there. Callers receive owned bytes and never depend on the original bank cache. A size's
+//! high bit marks a raw bank and the low 15 bits count its 32-byte units, as the original's MBK
+//! loader reads them (flashback-re docs/object-artwork-map.md); the room tiles' BNQ banks use a
+//! signed size instead (`floppy_rooms.zig`).
 const std = @import("std");
 const backward = @import("backward_stream.zig");
 
