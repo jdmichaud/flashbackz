@@ -434,12 +434,18 @@ now, remapping later; eight save slots and a quick slot (F5/F9); a save from ano
 is listed and refused; SAVE GAME in the pause dialog, LOAD GAME on the title menu ("having the
 LOAD dialog in the in game menu is awkward").
 
-- [ ] **GS-1 — One input tracker** — Every platform event reaches one tracker, whatever screen
-  is open (code review B3, B6, D3). From keys and pad buttons it gives the game's eight actions
-  (the input byte, unchanged) and the menu actions (move, confirm, back, pause); screens read
-  actions, not keys. Gate: tests; a key released in the options dialog or the inventory and
-  pressed again acts at once; a tap of Escape opens the options; the inventory closes with the
-  key that opens it.
+- [ ] **GS-1 — One input tracker** — In a level, every event reaches one tracker, whatever is
+  open: play, the options dialog, the inventory, a message or a film (code review B3, D3). The
+  fixed layouts turn keys and pad buttons into the game's eight actions (the input byte,
+  unchanged) and pause; the options dialog and the inventory read actions, not keys; each pad
+  holds its own buttons. As in the original (flashback-re engine-presentation 6.1, 6.4): a key
+  released during a modal screen is armed again; the inventory closes with Tab or Backspace, its
+  one bit; a key pressed during a film and held at its end counts only when pressed anew; with
+  the Joystick option the pad works in the inventory. Escape stays a held level, as the
+  original's (a press and release between two frames is lost there too; review B6 kept). The
+  title, continue and ending screens move to actions with GS-3. Gate: tests; the agent sessions
+  of keyboard play, options, inventory, pad, title and continue keep their hashes, except where
+  these rules change them.
 - [ ] **GS-2 — Settings in one place** — Sound effects, music, volume, joystick and zoom are one
   value the game owns, read where they are used, saved as one record that replaces VOLUME; a
   record of another version is refused and the defaults apply. Gate: tests; a setting changed
