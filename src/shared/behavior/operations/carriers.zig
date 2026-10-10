@@ -10,6 +10,7 @@ const vocabulary = @import("../vocabulary.zig");
 const world_module = @import("../world.zig");
 const grid = @import("../grid.zig");
 const contacts = @import("../contacts.zig");
+const original_memory = @import("../original_memory.zig");
 const World = world_module.World;
 const Room = world_module.Room;
 
@@ -86,9 +87,7 @@ pub fn releaseOn(world: *World, actor: u16, message: vocabulary.Message) !bool {
 /// Rides the first other character of that kind in its own first cell.
 pub fn boardTouching(world: *World, actor: u16, kind: vocabulary.Kind) !bool {
     const carrier = firstTouching(world, actor, kind) orelse return false;
-    // The original tests only the low byte of the carrier's record address, which is zero for
-    // placements 120 and 248: such a carrier counts as not found.
-    if (carrier & 0x7f == 120) return false;
+    if (!original_memory.findsCarrier(carrier)) return false;
     attach(world, carrier, actor);
     return true;
 }
@@ -241,20 +240,20 @@ pub fn makeLowPassage(world: *World, actor: u16, row: i16) !bool {
 pub fn restoreTerrain(world: *World, actor: u16, row: i16) !bool {
     const character = world.characters[actor];
     const offset = spanOffset(character, row);
-    const start = roomCell(character.room, offset);
+    const start = original_memory.roomCell(character.room, offset);
     const history = &world.terrain_history;
     if (history.change_count == 0) return lowByte(offset) != 0;
     // The original gives up after 256 changes; the pool never holds that many.
     if (history.find(start, false)) |change| {
         const saved = history.savedCells(change.*);
         for (0..change.width) |k| {
-            const cell = gridByte(world, start + @as(i32, @intCast(k))) orelse continue;
+            const cell = original_memory.gridByte(world, start + @as(i32, @intCast(k))) orelse continue;
             // A later write at this start made the change wider than what was saved; the
             // original then copies unrelated memory.
             if (k < saved.len) cell.* = saved[k] else world.unmodeled_reads += 1;
         }
     }
-    return addressLowByte(start) != 0;
+    return original_memory.addressLowByte(start) != 0;
 }
 
 /// The writer behind `make_solid`, `make_empty` and `make_low_passage`. Characters outside
@@ -268,20 +267,20 @@ fn changeTerrain(world: *World, actor: u16, row: i16, material: u8) void {
     const width = world.level.characters[actor].width;
     const facing_right = world.updating_facing_right;
     const behind: i32 = if (facing_right) @as(i32, width) - 1 else 0;
-    const start = roomCell(character.room, spanOffset(character, row)) - behind;
+    const start = original_memory.roomCell(character.room, spanOffset(character, row)) - behind;
     const history = &world.terrain_history;
     // The original's search ends after the newest change for a writer one cell wide facing
     // right, so such a writer can save a start a second time.
     if (history.find(start, facing_right and width == 1)) |change| {
         change.width = width;
         for (0..width) |k| {
-            if (gridByte(world, start + @as(i32, @intCast(k)))) |cell| cell.* = material;
+            if (original_memory.gridByte(world, start + @as(i32, @intCast(k)))) |cell| cell.* = material;
         }
         return;
     }
     if (!history.admitsMore()) return;
     for (history.add(start, width), 0..) |*saved, k| {
-        const cell = gridByte(world, start + @as(i32, @intCast(k))) orelse {
+        const cell = original_memory.gridByte(world, start + @as(i32, @intCast(k))) orelse {
             saved.* = 0;
             continue;
         };
@@ -296,27 +295,6 @@ fn changeTerrain(world: *World, actor: u16, row: i16, material: u8) void {
 fn spanOffset(character: world_module.Character, row: i16) i16 {
     const tier: i16 = @intCast((@as(u16, @bitCast(character.y)) / 36) & 0xfffe);
     return (tier +% row) *% grid.Grid.columns +% grid.columnOf(character.x);
-}
-
-/// The grid's layout starts with four 64-entry neighbor tables, then the rooms' cells.
-fn roomCell(room: u8, offset: i16) i32 {
-    const cells_per_room = grid.Grid.rows * grid.Grid.columns;
-    return 4 * 64 + @as(i32, room) * cells_per_room + offset;
-}
-
-/// A byte of the grid layout. The original reaches other memory outside the grid, which is
-/// not modeled: such an access is counted in `unmodeled_reads` and skipped.
-fn gridByte(world: *World, position: i32) ?*u8 {
-    if (position >= 0 and position < grid.Grid.layout_size) {
-        return &world.grid.bytes[@intCast(position)];
-    }
-    world.unmodeled_reads += 1;
-    return null;
-}
-
-/// The low byte of the memory address of a grid byte; the grid starts at DS:0x3d46.
-fn addressLowByte(position: i32) u8 {
-    return @truncate(@as(u32, @bitCast(position + 0x3d46)));
 }
 
 /// Remembers where a continue resumes: every character, the score, the grid and the terrain

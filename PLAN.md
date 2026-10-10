@@ -686,6 +686,9 @@ gates. All runtime work uses the original as the reference; no approximate accep
   - Gate: a concrete design explains ownership and extension points, demonstrates adding a room
     and actor behavior, and avoids translated machine state or legacy instruction dispatch in
     the engine. Review this independently of all fidelity comparisons.
+  - 2026-10-10 (review D1): the engine still reproduced the original's memory in four places
+    where play depends on it. They live in `behavior/original_memory.zig` only, the exception
+    the user decided; DESIGN 3 records it.
 
 - [x] **01 — Platform foundation and initial architecture** — Depends: 00.
   - Adapt the template's Zig skeleton and establish typed game/content boundaries, with no

@@ -3,6 +3,7 @@
 pub const vocabulary = @import("vocabulary.zig");
 pub const data_set = @import("data_set.zig");
 pub const grid = @import("grid.zig");
+pub const original_memory = @import("original_memory.zig");
 pub const animations = @import("animations.zig");
 pub const contacts = @import("contacts.zig");
 pub const world = @import("world.zig");

@@ -3,16 +3,14 @@
 //! slab, 1 the body layer, 2 the floor the character stands on, 4 the floor of the tier
 //! below, -1 the body layer of the tier above. Any nonzero cell is solid.
 const world_module = @import("../world.zig");
+const original_memory = @import("../original_memory.zig");
 const World = world_module.World;
 
 /// The cell on `row` of the character's tier, `ahead` columns ahead (negative: behind).
 pub fn cell(world: *World, actor: u16, row: i16, ahead: i16) i8 {
     const character = world.characters[actor];
     const column = world.column + if (character.facing_right) ahead else -ahead;
-    return switch (world.grid.probe(character.room, world.band + row, column)) {
-        .value => |v| v,
-        .outside => |address| world.outsideByte(address),
-    };
+    return original_memory.read(world, world.grid.probe(character.room, world.band + row, column));
 }
 
 fn solid(world: *World, actor: u16, row: i16, ahead: i16) bool {

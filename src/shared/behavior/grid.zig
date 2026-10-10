@@ -2,6 +2,7 @@
 //! their neighbors. Probes follow the original's addressing exactly, edge cases included
 //! (flashback-re `docs/rules/codes-001-033.md`, section B and C).
 const std = @import("std");
+const original_memory = @import("original_memory.zig");
 
 pub const Side = enum(u2) { up = 0, down = 1, right = 2, left = 3 };
 
@@ -29,8 +30,6 @@ pub const Grid = struct {
     pub const columns = 16;
     pub const rows = 7;
     const cells_per_room = rows * columns;
-    /// Data-segment address of the first neighbor table, for reads past the grid.
-    const base_address = 0x3d46;
 
     pub fn init(decoded: []const u8) !Grid {
         if (decoded.len != layout_size) return error.InvalidCollisionLayout;
@@ -49,7 +48,7 @@ pub const Grid = struct {
     /// columns outside the room continue into the bytes that follow or precede it.
     pub fn cell(self: *const Grid, room: u8, row: i32, column: i32) Read {
         const offset = 256 + @as(i32, room) * cells_per_room + row * columns + column;
-        const b = self.byte(offset) orelse return .{ .outside = address(offset) };
+        const b = self.byte(offset) orelse return .{ .outside = original_memory.gridAddress(offset) };
         return .{ .value = @bitCast(b) };
     }
 
@@ -64,7 +63,7 @@ pub const Grid = struct {
         if (column >= columns) {
             // The original tests the right link after zero-extending it, so a missing right
             // neighbor (0xff) is never noticed and the read lands past the grid.
-            const link = self.signedLink(room, .right) orelse return .{ .outside = address(0) };
+            const link = self.signedLink(room, .right) orelse return .{ .outside = original_memory.gridAddress(0) };
             const right: u8 = @bitCast(link);
             return self.cell(right, row, column - columns);
         }
@@ -101,10 +100,6 @@ pub const Grid = struct {
     fn byte(self: *const Grid, offset: i32) ?u8 {
         if (offset < 0 or offset >= layout_size) return null;
         return self.bytes[@intCast(offset)];
-    }
-
-    fn address(offset: i32) u16 {
-        return @truncate(@as(u32, @bitCast(base_address + offset)));
     }
 };
 

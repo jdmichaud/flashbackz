@@ -771,24 +771,6 @@ pub const World = struct {
         self.requests.addSound(.{ .id = id, .character = index, .distant = bits >> 8 != 0 });
     }
 
-    /// A byte the original reads past the grid: the updating character's facing, column and
-    /// tier sit there. Other addresses are counted, so a run that depends on them is visible.
-    pub fn outsideByte(self: *World, address: u16) i8 {
-        const facing: u16 = if (self.updating_facing_right) 0xffff else 0;
-        const word: ?u16 = switch (address & 0xfffe) {
-            0xae26 => facing,
-            0xae2a => @bitCast(self.column),
-            0xae2c => @bitCast(self.band),
-            else => null,
-        };
-        const value = word orelse {
-            self.unmodeled_reads += 1;
-            return 0;
-        };
-        const b: u8 = @truncate(if (address & 1 == 0) value else value >> 8);
-        return @bitCast(b);
-    }
-
     // Messages ---------------------------------------------------------------------------
 
     /// Every letter free, in order, and blank, so that a save writes defined values.

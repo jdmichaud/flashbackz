@@ -81,7 +81,10 @@ Two kinds of original content are used, in two different ways:
   is converted once by the **extractor** into a readable **data set** stored outside Git, in a
   directory the user chooses. The game loads only the data set plus the original images and
   sound. The extractor is the only code that understands the original's placement and rule
-  formats; addresses and record layouts never leave it.
+  formats; addresses and record layouts never leave it, with one exception, decided by the user
+(review D1, 2026-10-10): where play depends on how the original laid out its memory (reads past
+the collision grid, the leftward sight scan reading placement records, the boarding test on a
+record's address), `behavior/original_memory.zig` reproduces it exactly, and nothing else does.
 
 ```text
 disk images --extractor--> data set (outside Git)  --+

@@ -7,6 +7,7 @@ const vocabulary = @import("../vocabulary.zig");
 const world_module = @import("../world.zig");
 const contacts = @import("../contacts.zig");
 const grid = @import("../grid.zig");
+const original_memory = @import("../original_memory.zig");
 const World = world_module.World;
 const Kind = vocabulary.Kind;
 const Message = vocabulary.Message;
@@ -453,7 +454,8 @@ fn windowThird(world: *const World, room: u8) ?i32 {
 /// window strip. After it examines another awake character, the original keeps reading
 /// backward from the start of that character's placement record: each byte below 128 is
 /// taken as a contact slot (records are 32 bytes; before the first one lies the wake list,
-/// see `placementByte`). A room edge then moves back 32 bytes from the last cell read.
+/// see `original_memory.placementByte`). A room edge then moves back 32 bytes from the last
+/// cell read.
 const Cursor = union(enum) {
     strip: i32,
     placement: struct { record: u16, before: i32 },
@@ -472,7 +474,7 @@ fn cursorSlot(world: *World, cursor: Cursor) ?u8 {
     return switch (cursor) {
         .strip => |index| stripSlot(world, index),
         .placement => |at| {
-            const byte = placementByte(world, at.record, at.before) orelse {
+            const byte = original_memory.placementByte(world, at.record, at.before) orelse {
                 world.unmodeled_reads += 1;
                 return null;
             };
@@ -481,19 +483,12 @@ fn cursorSlot(world: *World, cursor: Cursor) ?u8 {
     };
 }
 
-/// The slot a strip position holds. Past the strip lie the mailboxes, one word per character,
-/// zero while empty; other places are not modeled.
+/// The slot a strip position holds. Past the strip lie the mailboxes.
 fn stripSlot(world: *World, index: i32) ?u8 {
     if (index >= 0 and index < strip_length) {
         return slotIn(world.contacts.window[@intCast(index)]);
     }
-    const mailbox = index - strip_length;
-    if (mailbox >= 0 and mailbox < 2 * 256) {
-        const owner: usize = @intCast(@divTrunc(mailbox, 2));
-        if (owner >= world.characters.len or world.inbox[owner] == null) return 0;
-    }
-    world.unmodeled_reads += 1;
-    return null;
+    return original_memory.mailboxSlot(world, index - strip_length);
 }
 
 /// Bytes of 128 and above (including the window's empty mark) name no slot.
@@ -510,52 +505,6 @@ fn occupants(world: *World, named: ?u8) ?contacts.Contacts.Occupants {
         return null;
     }
     return world.contacts.occupants(slot);
-}
-
-/// The byte `before` bytes ahead of a placement's record in the original's placement table
-/// (32 bytes per placement), rebuilt from the data set. Before the first record lies the wake
-/// list: a word per character, zero while it sleeps, else the address of its live record.
-/// Null for bytes 2-17, which a scan of 16 cells never reaches.
-fn placementByte(world: *const World, record: u16, before: i32) ?u8 {
-    const position = @as(i32, record) * 32 - before;
-    if (position >= 0) {
-        return recordByte(world, @intCast(@divTrunc(position, 32)), @intCast(@mod(position, 32)));
-    }
-    const wake_list = 2 * 256 + position;
-    if (wake_list < 0) return null;
-    const sleeper: u16 = @intCast(@divTrunc(wake_list, 2));
-    if (sleeper >= world.characters.len or !world.characters[sleeper].active) return 0;
-    const live_records = 0x6ad0;
-    const live_record_size = 26;
-    const address: u16 = @intCast(live_records + @as(u32, sleeper) * live_record_size);
-    return @truncate(if (@mod(wake_list, 2) == 0) address else address >> 8);
-}
-
-fn recordByte(world: *const World, index: u16, offset: u5) ?u8 {
-    const placement = world.level.characters[index];
-    const state = world.behaviorOf(index).states[placement.start].animation;
-    return switch (offset) {
-        0 => @truncate(state),
-        1 => @truncate(state >> 8),
-        18 => lowByte(placement.kind),
-        19 => placement.room orelse world_module.Room.outside,
-        20 => @intFromBool(placement.active),
-        21 => placement.palette_bank | @as(u8, @intFromBool(placement.behind_player)) << 3 |
-            placement.other_visual_flags,
-        22 => placement.contact_icon,
-        23 => placement.inventory_icon,
-        24 => placement.object,
-        25 => @backingInt(placement.minimum_difficulty),
-        26 => @intFromBool(placement.facing == .right),
-        27 => @as(u8, @intFromBool(placement.wakes_on_message)) |
-            @as(u8, @intFromBool(placement.wakes_on_contact)) << 1 |
-            @as(u8, @intFromBool(placement.wakes_when_near)) << 2 | placement.other_flags,
-        28 => placement.width,
-        29 => placement.unknown_byte_29,
-        30 => @truncate(placement.label_number),
-        31 => @truncate(placement.label_number >> 8),
-        else => null,
-    };
 }
 
 // Conrad's position --------------------------------------------------------------------------
@@ -625,18 +574,12 @@ fn playerToward(world: *World, actor: u16, cells: i16, right: bool, same_x_count
 fn sampled(world: *World, actor: u16, ahead: i16) i8 {
     const offset: i32 = if (world.updating_facing_right) ahead else -@as(i32, ahead);
     const room = world.characters[actor].room;
-    return switch (world.grid.probe(room, world.band + 1, world.column + offset)) {
-        .value => |v| v,
-        .outside => |address| world.outsideByte(address),
-    };
+    return original_memory.read(world, world.grid.probe(room, world.band + 1, world.column + offset));
 }
 
 /// A grid byte read directly; rows and columns outside the room run on into the next bytes.
 fn gridByte(world: *World, room: u8, row: i32, column: i32) i8 {
-    return switch (world.grid.cell(room, row, column)) {
-        .value => |v| v,
-        .outside => |address| world.outsideByte(address),
-    };
+    return original_memory.read(world, world.grid.cell(room, row, column));
 }
 
 /// The neighbor on that side, or null where the link is negative (no room).
