@@ -180,6 +180,9 @@ pub const ControllerModel = struct {
     pub const button_count = 15;
 };
 
+/// The user's local date and time, as their system keeps it.
+pub const LocalTime = struct { year: u16, month: u8, day: u8, hour: u8, minute: u8 };
+
 pub const ControllerAxis = enum(u8) {
     left_x,
     left_y,
@@ -269,6 +272,7 @@ pub const Platform = struct {
         set_relative_mouse: *const fn (*anyopaque, bool) PlatformError!void,
         available_memory: ?*const fn (*anyopaque) ?u64 = null,
         controller_model: ?*const fn (*anyopaque, ControllerId) ?ControllerModel = null,
+        local_time: ?*const fn (*anyopaque) ?LocalTime = null,
     };
 
     pub fn start(p: *Platform) PlatformError!Capabilities {
@@ -290,6 +294,11 @@ pub const Platform = struct {
     }
     pub fn availableMemory(p: *Platform) ?u64 {
         return if (p.vtable.available_memory) |query| query(p.context) else null;
+    }
+    /// The local date and time; null when the host does not tell it (the agent, for runs that
+    /// repeat).
+    pub fn localTime(p: *Platform) ?LocalTime {
+        return if (p.vtable.local_time) |query| query(p.context) else null;
     }
     /// The model of an open pad; null for a pad the host does not know or cannot name.
     pub fn controllerModel(p: *Platform, id: ControllerId) ?ControllerModel {

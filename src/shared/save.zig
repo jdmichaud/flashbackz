@@ -10,10 +10,11 @@ const data_set = @import("behavior/data_set.zig");
 const world_mod = @import("behavior/world.zig");
 const grid = @import("behavior/grid.zig");
 const contacts = @import("behavior/contacts.zig");
+const palette = @import("content/palette.zig");
 
 /// The record's format. Any change to it is a new version, and records of the others are
 /// refused.
-pub const version = 1;
+pub const version = 2;
 
 /// The quick slot (F5, F9) and the eight others, as storage names them.
 pub const quick_slot = "QUICK";
@@ -29,6 +30,8 @@ pub const Record = struct {
     data_set: []const u8,
     level: content_level.Id,
     difficulty: settings.Difficulty,
+    /// The walks played in the game so far, which its play time counts.
+    play_walks: u64,
     /// The flags the characters a level does not place keep from the levels before.
     inherited: []const world_mod.Inherited,
     scene: Scene,
@@ -98,6 +101,98 @@ pub const Record = struct {
 };
 
 pub const Error = error{ InvalidSave, OtherVersion, OtherDataSet, OutOfMemory };
+
+/// What a slot list shows of a save, kept beside it (`infoName`): small, so that a list reads
+/// fast.
+pub const Info = struct {
+    version: u32,
+    data_set: []const u8,
+    level: content_level.Id,
+    play_walks: u64,
+    /// The local date and time of the save, as the host gave it, or empty.
+    date: []const u8,
+    /// The picture of the moment, `picture_width` by `picture_height` RGB, in hexadecimal.
+    picture: []const u8,
+};
+
+pub const picture_width = 64;
+pub const picture_height = 56;
+pub const Picture = [picture_width * picture_height * 3]u8;
+
+/// The info record of save `slot`.
+pub fn infoName(slot: []const u8, buffer: *[16]u8) []const u8 {
+    return std.fmt.bufPrint(buffer, "{s}.INFO", .{slot}) catch unreachable;
+}
+
+/// The game's picture (`width` by `height` palette indices), a quarter of its size each way: each
+/// pixel the mean of the 4 by 4 it stands for.
+pub fn picture(indices: []const u8, width: usize, colors: *const palette.Palette, out: *Picture) void {
+    for (0..picture_height) |y| for (0..picture_width) |x| {
+        var sum: [3]u32 = @splat(0);
+        for (0..4) |dy| for (0..4) |dx| {
+            const color = colors[indices[(y * 4 + dy) * width + x * 4 + dx]];
+            sum[0] += color.r;
+            sum[1] += color.g;
+            sum[2] += color.b;
+        };
+        for (0..3) |c| out[(y * picture_width + x) * 3 + c] = @intCast(sum[c] / 16);
+    };
+}
+
+pub fn encodeInfo(allocator: std.mem.Allocator, info: Info) ![]u8 {
+    var out: std.Io.Writer.Allocating = .init(allocator);
+    defer out.deinit();
+    try std.zon.stringify.serialize(info, .{}, &out.writer);
+    try out.writer.writeByte('\n');
+    return out.toOwnedSlice();
+}
+
+/// What a slot holds, as its list shows it.
+pub const Slot = union(enum) {
+    empty,
+    /// A save of another version: shown, not loaded.
+    other_version,
+    /// A save that does not read.
+    broken,
+    /// A save, `loadable` unless it was made with another data set.
+    save: struct { level: content_level.Id, play_walks: u64, date: []const u8, picture: ?Picture, loadable: bool },
+};
+
+/// The slot of info record `bytes` (none: `empty`), its strings in `arena`.
+pub fn readSlot(gpa: std.mem.Allocator, arena: std.mem.Allocator, bytes: ?[]const u8, data_set_print: u64) !Slot {
+    const text = bytes orelse return .empty;
+    const source = try arena.dupeSentinel(u8, text, 0);
+    var diagnostics: std.zon.parse.Diagnostics = undefined;
+    const Versioned = struct { version: u32 };
+    const versioned = std.zon.parse.fromSlice(Versioned, .{
+        .gpa = gpa,
+        .arena = arena,
+        .source = source,
+        .diagnostics = &diagnostics,
+        .ignore_unknown_fields = true,
+    }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else .broken;
+    if (versioned.version != version) return .other_version;
+    const info = std.zon.parse.fromSlice(Info, .{
+        .gpa = gpa,
+        .arena = arena,
+        .source = source,
+        .diagnostics = &diagnostics,
+    }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else .broken;
+    var print_text: [16]u8 = undefined;
+    _ = std.fmt.bufPrint(&print_text, "{x:0>16}", .{data_set_print}) catch unreachable;
+    var shown: ?Picture = null;
+    if (info.picture.len == @sizeOf(Picture) * 2) {
+        var pixels: Picture = undefined;
+        if (std.fmt.hexToBytes(&pixels, info.picture)) |_| shown = pixels else |_| {}
+    }
+    return .{ .save = .{
+        .level = info.level,
+        .play_walks = info.play_walks,
+        .date = info.date,
+        .picture = shown,
+        .loadable = std.mem.eql(u8, info.data_set, &print_text),
+    } };
+}
 
 /// The data set's fingerprint: its files, in name order, hashed.
 pub fn fingerprint(files: *const data_set.Files) u64 {
@@ -234,7 +329,7 @@ fn restoreTerrain(history: *world_mod.TerrainHistory, record: Record.Terrain) Er
     try unhex(history.saved[0..history.saved_len], record.saved);
 }
 
-fn hex(arena: std.mem.Allocator, bytes: []const u8) ![]const u8 {
+pub fn hex(arena: std.mem.Allocator, bytes: []const u8) ![]const u8 {
     const text = try arena.alloc(u8, bytes.len * 2);
     const digits = "0123456789abcdef";
     for (bytes, 0..) |byte, i| {
@@ -347,6 +442,7 @@ const synthetic = struct {
             .data_set = "0000000000000000",
             .level = .jungle,
             .difficulty = .normal,
+            .play_walks = 0,
             .inherited = &.{},
             .scene = .{ .last_direction = 0, .inventory_delay = 0, .catch_up_due = false, .requested_scene = null },
             .world = try captureWorld(arena, w),
@@ -400,7 +496,7 @@ test "a save of another version or data set, or that does not read, is refused" 
     defer w.deinit();
     const saved = try synthetic.text(arena, &w);
     try std.testing.expectError(error.OtherDataSet, decode(std.testing.allocator, arena, saved, 1));
-    const other_version = try std.mem.replaceOwned(u8, arena, saved, ".version = 1,", ".version = 2,");
+    const other_version = try std.mem.replaceOwned(u8, arena, saved, ".version = 2,", ".version = 1,");
     try std.testing.expectError(error.OtherVersion, decode(std.testing.allocator, arena, other_version, 0));
     try std.testing.expectError(error.InvalidSave, decode(std.testing.allocator, arena, saved[0 .. saved.len / 2], 0));
     // A world of another size.
@@ -408,4 +504,43 @@ test "a save of another version or data set, or that does not read, is refused" 
     var shorter = record.world;
     shorter.characters = shorter.characters[0..2];
     try std.testing.expectError(error.InvalidSave, restoreWorld(&w, shorter));
+}
+
+test "a slot's info reads back; another version is shown, another data set not loadable" {
+    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var pixels: Picture = @splat(7);
+    const info = try encodeInfo(arena, .{
+        .version = version,
+        .data_set = "00000000000000ff",
+        .level = .city,
+        .play_walks = 3505,
+        .date = "2026-10-10 14:32",
+        .picture = try hex(arena, &pixels),
+    });
+    const shown = try readSlot(std.testing.allocator, arena, info, 0xff);
+    try std.testing.expect(shown.save.loadable);
+    try std.testing.expectEqual(content_level.Id.city, shown.save.level);
+    try std.testing.expectEqualStrings("2026-10-10 14:32", shown.save.date);
+    try std.testing.expectEqual(pixels, shown.save.picture.?);
+    try std.testing.expect(!(try readSlot(std.testing.allocator, arena, info, 1)).save.loadable);
+    try std.testing.expectEqual(Slot.empty, try readSlot(std.testing.allocator, arena, null, 0));
+    const old = try std.mem.replaceOwned(u8, arena, info, ".version = 2,", ".version = 1,");
+    try std.testing.expectEqual(Slot.other_version, try readSlot(std.testing.allocator, arena, old, 0xff));
+    try std.testing.expectEqual(Slot.broken, try readSlot(std.testing.allocator, arena, "nonsense", 0xff));
+}
+
+test "the picture is the game's, a quarter of its size, each pixel a 4 by 4 mean" {
+    var colors: palette.Palette = @splat(.{ .r = 0, .g = 0, .b = 0 });
+    colors[1] = .{ .r = 160, .g = 80, .b = 40 };
+    var indices: [256 * 224]u8 = @splat(0);
+    // The top-left 4 by 4: half in color 1.
+    for (0..4) |y| for (0..2) |x| {
+        indices[y * 256 + x] = 1;
+    };
+    var out: Picture = undefined;
+    picture(&indices, 256, &colors, &out);
+    try std.testing.expectEqualSlices(u8, &.{ 80, 40, 20 }, out[0..3]);
+    try std.testing.expectEqualSlices(u8, &.{ 0, 0, 0 }, out[3..6]);
 }

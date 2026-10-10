@@ -141,6 +141,20 @@ pub const SdlBackend = struct {
         return memory.availableBytes();
     }
 
+    /// The C library's local time: the system's clock and time zone.
+    fn localTime(_: *anyopaque) ?platform.LocalTime {
+        var tm: c_tm.Tm = undefined;
+        const now = c_tm.now();
+        if (!c_tm.local(&now, &tm)) return null;
+        return .{
+            .year = @intCast(tm.year + 1900),
+            .month = @intCast(tm.mon + 1),
+            .day = @intCast(tm.mday),
+            .hour = @intCast(tm.hour),
+            .minute = @intCast(tm.min),
+        };
+    }
+
     /// The pad's GUID, whether it has the generic mapping (`genericMapping` names it so), and the
     /// joystick button behind each gamepad button.
     fn controllerModel(_: *anyopaque, id: platform.ControllerId) ?platform.ControllerModel {
@@ -166,6 +180,7 @@ pub const SdlBackend = struct {
         .audio_open = audioOpen,
         .available_memory = availableMemory,
         .controller_model = controllerModel,
+        .local_time = localTime,
         .audio_queue = audioQueue,
         .audio_status = audioStatus,
         .audio_clear = audioClear,
@@ -1115,6 +1130,37 @@ fn useDummyDrivers() void {
     _ = c.SDL_SetHintWithPriority(c.SDL_HINT_AUDIODRIVER, "dummy", c.SDL_HINT_OVERRIDE);
 }
 
+/// The C library's clock and local time, `_time64` and `_localtime64_s` on Windows.
+const c_tm = struct {
+    const windows = builtin.os.tag == .windows;
+    /// `struct tm`'s first nine fields, the same on every C library.
+    const Tm = extern struct {
+        sec: c_int,
+        min: c_int,
+        hour: c_int,
+        mday: c_int,
+        mon: c_int,
+        year: c_int,
+        wday: c_int,
+        yday: c_int,
+        isdst: c_int,
+        /// glibc's tm_gmtoff and tm_zone, which Windows has not.
+        rest: [if (windows) 0 else 2]usize,
+    };
+    extern "c" fn time(t: ?*i64) i64;
+    extern "c" fn localtime_r(t: *const i64, result: *Tm) ?*Tm;
+    extern "c" fn _time64(t: ?*i64) i64;
+    extern "c" fn _localtime64_s(result: *Tm, t: *const i64) c_int;
+
+    fn now() i64 {
+        return if (windows) _time64(null) else time(null);
+    }
+
+    fn local(t: *const i64, result: *Tm) bool {
+        return if (windows) _localtime64_s(result, t) == 0 else localtime_r(t, result) != null;
+    }
+};
+
 /// The longest generic mapping: the GUID, the name, and each button's, axis' and hat's part.
 const max_mapping = 512;
 /// The generic mapping's name, which tells its pads apart.
@@ -1682,4 +1728,10 @@ test "a failed start leaves a backend that deinit cleans up" {
     _ = try p.start();
     backend.force_software_renderer = true;
     try p.setResolution(4, 4);
+}
+
+test "the local time is the system's" {
+    const now = SdlBackend.localTime(undefined) orelse return error.NoLocalTime;
+    try std.testing.expect(now.year >= 2024 and now.month >= 1 and now.month <= 12 and now.day >= 1 and now.day <= 31);
+    try std.testing.expect(now.hour < 24 and now.minute < 60);
 }

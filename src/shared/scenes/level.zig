@@ -735,6 +735,14 @@ pub const Scene = struct {
         return hash.final();
     }
 
+    /// The level's picture of the moment, without the options dialog or the inventory over it,
+    /// as palette indices, and the palette.
+    pub fn playPicture(self: *const Scene, indices: []u8) *const palette.Palette {
+        var shown = self.screen.displayed;
+        self.screen.display(&shown, indices[0..pixel_count]);
+        return &self.screen.colors;
+    }
+
     pub fn draw(self: *const Scene, indices: []u8, rgba: []u8, settings: Settings) !void {
         var picture = self.screen.displayed;
         if (self.inventory) |inventory| try inventory.menu.draw(

@@ -220,6 +220,8 @@ pub const Game = struct {
     pad_models: [8]?ConnectedPad = @splat(null),
     /// The pad that pressed last: the CONTROLS page shows and changes its layout.
     last_pad: ?platform.ControllerId = null,
+    /// The walks of this game's levels before the one in play, which its play time counts.
+    play_walks: u64 = 0,
     /// P's toggle, which only films read: they hold their picture while it is set.
     films_paused: bool = false,
     /// The music volume keypad + and - step, 0 to 63, for notes started afterwards.
@@ -471,6 +473,7 @@ pub const Game = struct {
                 front.deinit();
                 self.scene = .{ .ending = next };
             } else if (front.stage == .ready) {
+                self.play_walks = 0;
                 const next = try level_scene.Scene.load(
                     self.allocator,
                     self.assets.?,
@@ -512,6 +515,7 @@ pub const Game = struct {
                             fresh.world.entry_score = level.world.entry_score;
                             fresh.world.random = level.world.random;
                             fresh.catch_up_due = level.catch_up_due;
+                            self.play_walks += level.walk_count;
                             self.retire(level);
                             level.* = fresh;
                         }
@@ -597,6 +601,7 @@ pub const Game = struct {
                 return scene.needsCatchup(now);
             },
             .level => |destination| {
+                self.play_walks += scene.walk_count;
                 scene.world.inheritance(&self.inherited);
                 var next = try level_scene.Scene.load(
                     self.allocator,
@@ -835,8 +840,14 @@ pub const Game = struct {
         return self.scene == .level and self.story == null and self.scene.level.canSave();
     }
 
-    /// Saves the level in play into `slot` (`save.quick_slot`, or `save.slotName`).
-    pub fn saveGame(self: *Game, slot: []const u8) !void {
+    /// The walks played in this game, the level in play's included: its play time.
+    pub fn playedWalks(self: *const Game) u64 {
+        return self.play_walks + if (self.scene == .level) self.scene.level.walk_count else 0;
+    }
+
+    /// Saves the level in play into `slot` (`save.quick_slot`, or `save.slotName`), and beside
+    /// it what the slot list shows: the level, the play time, the date and the picture.
+    pub fn saveGame(self: *Game, p: *platform.Platform, slot: []const u8) !void {
         if (!self.canSave()) return error.NothingToSave;
         const storage = self.storage orelse return error.NoStorage;
         const files = self.data orelse return error.DataSetRequired;
@@ -845,16 +856,37 @@ pub const Game = struct {
         const arena = arena_state.allocator();
         const level = &self.scene.level;
         var print: [16]u8 = undefined;
+        const fingerprint = std.fmt.bufPrint(&print, "{x:0>16}", .{save.fingerprint(files)}) catch unreachable;
         const text = try save.encode(arena, .{
             .version = save.version,
-            .data_set = std.fmt.bufPrint(&print, "{x:0>16}", .{save.fingerprint(files)}) catch unreachable,
+            .data_set = fingerprint,
             .level = level.level,
             .difficulty = self.difficulty,
+            .play_walks = self.playedWalks(),
             .inherited = &self.inherited,
             .scene = level.saveState(),
             .world = try save.captureWorld(arena, &level.world),
         });
         try storage.save(slot, text);
+
+        const indices = try arena.alloc(u8, level_scene.width * level_scene.height);
+        const colors = level.playPicture(indices);
+        var pixels: save.Picture = undefined;
+        save.picture(indices, level_scene.width, colors, &pixels);
+        var date: [16]u8 = undefined;
+        const when: []const u8 = if (p.localTime()) |t| std.fmt.bufPrint(&date, "{d:0>4}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}", .{
+            t.year, t.month, t.day, t.hour, t.minute,
+        }) catch "" else "";
+        const info = try save.encodeInfo(arena, .{
+            .version = save.version,
+            .data_set = fingerprint,
+            .level = level.level,
+            .play_walks = self.playedWalks(),
+            .date = when,
+            .picture = try save.hex(arena, &pixels),
+        });
+        var name: [16]u8 = undefined;
+        try storage.save(save.infoName(slot, &name), info);
     }
 
     /// Loads the save in `slot`: its level, loaded again with its world put back, replaces
@@ -883,6 +915,7 @@ pub const Game = struct {
         self.inherited = inherited;
         self.level = record.level;
         self.difficulty = record.difficulty;
+        self.play_walks = record.play_walks;
         self.scene = .{ .level = scene };
     }
 
