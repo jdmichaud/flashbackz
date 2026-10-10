@@ -2,9 +2,10 @@
 //! them on a grid of room cells from the start room. The game's rooms do not always lie flat: a
 //! link may lead to a room whose cell another link has taken (the tower's floors wrap around), and
 //! some areas are reached only by a transport. Those links and transports are the map's joins; the
-//! poster tags both ends of each join between two pieces. A ring of links may also be a transit
-//! line rather than ground (the city's subway stations): its stations lie apart, and the poster
-//! draws the level along it.
+//! poster tags both ends of each join between two pieces. An area reached by a transport can
+//! stand beside the room the ride leaves from, a cell apart, as one piece with it. A ring of links
+//! may also be a transit line rather than ground (the city's subway stations): its stations lie
+//! apart, and the poster draws the level along it.
 const std = @import("std");
 const flashbackz = @import("flashbackz");
 const grid = flashbackz.behavior.grid;
@@ -102,7 +103,8 @@ fn touches(links: *const Links, room: u8, rooms: RoomSet) bool {
 /// A room's piece and its cell in the piece, counted from the piece's top-left room.
 pub const Cell = struct { piece: u8, x: i16, y: i16 };
 
-/// The rooms laid out as pieces: each piece is flat, its rooms where their links put them.
+/// The rooms laid out as pieces: each piece is flat, its rooms where their links put them (or
+/// beside a transport's room, `rideBeside`).
 pub const Map = struct {
     cells: [room_count]?Cell = @splat(null),
     piece_count: u8 = 0,
@@ -115,6 +117,69 @@ pub const Map = struct {
         const b = self.cells[to] orelse return false;
         const d = step(side);
         return a.piece == b.piece and b.x == a.x + d.x and b.y == a.y + d.y;
+    }
+
+    /// Lays the piece holding `to` beside `from`, on its row with one empty cell between them,
+    /// when every moved room keeps an empty cell all around from the rooms of `from`'s piece:
+    /// a transport's ride then reads across the gap. The two pieces become one, under the lower
+    /// of their numbers. Returns whether it did.
+    pub fn rideBeside(self: *Map, from: u8, to: u8) bool {
+        const a = self.cells[from] orelse return false;
+        const b = self.cells[to] orelse return false;
+        if (a.piece == b.piece) return false;
+        const dx = a.x + 2 - b.x;
+        const dy = a.y - b.y;
+        for (self.cells) |moving_cell| {
+            const moving = moving_cell orelse continue;
+            if (moving.piece != b.piece) continue;
+            for (self.cells) |staying_cell| {
+                const staying = staying_cell orelse continue;
+                if (staying.piece != a.piece) continue;
+                if (@abs(moving.x + dx - staying.x) <= 1 and @abs(moving.y + dy - staying.y) <= 1) return false;
+            }
+        }
+        const kept = @min(a.piece, b.piece);
+        const gone = @max(a.piece, b.piece);
+        for (&self.cells) |*slot| {
+            if (slot.*) |*cell| {
+                if (cell.piece == b.piece) {
+                    cell.x += dx;
+                    cell.y += dy;
+                }
+                if (cell.piece == a.piece or cell.piece == b.piece) {
+                    cell.piece = kept;
+                } else if (cell.piece > gone) {
+                    cell.piece -= 1;
+                }
+            }
+        }
+        for (gone..self.piece_count - 1) |piece| self.sizes[piece] = self.sizes[piece + 1];
+        self.piece_count -= 1;
+        self.settle(kept);
+        return true;
+    }
+
+    /// Counts `piece`'s cells from its top-left room and sets its size.
+    fn settle(self: *Map, piece: u8) void {
+        var min_x: i16 = std.math.maxInt(i16);
+        var min_y: i16 = std.math.maxInt(i16);
+        var max_x: i16 = std.math.minInt(i16);
+        var max_y: i16 = std.math.minInt(i16);
+        for (self.cells) |slot| {
+            const cell = slot orelse continue;
+            if (cell.piece != piece) continue;
+            min_x = @min(min_x, cell.x);
+            min_y = @min(min_y, cell.y);
+            max_x = @max(max_x, cell.x);
+            max_y = @max(max_y, cell.y);
+        }
+        for (&self.cells) |*slot| {
+            if (slot.*) |*cell| if (cell.piece == piece) {
+                cell.x -= min_x;
+                cell.y -= min_y;
+            };
+        }
+        self.sizes[piece] = .{ .w = max_x - min_x + 1, .h = max_y - min_y + 1 };
     }
 };
 
@@ -162,23 +227,7 @@ pub fn lay(links: *const Links, rooms: RoomSet, start: u8, skipped: *const Skipp
                 count += 1;
             }
         }
-        // Count cells from the piece's top-left.
-        var min_x: i16 = 0;
-        var min_y: i16 = 0;
-        var max_x: i16 = 0;
-        var max_y: i16 = 0;
-        for (members[0..count]) |member| {
-            const cell = map.cells[member].?;
-            min_x = @min(min_x, cell.x);
-            min_y = @min(min_y, cell.y);
-            max_x = @max(max_x, cell.x);
-            max_y = @max(max_y, cell.y);
-        }
-        for (members[0..count]) |member| {
-            map.cells[member].?.x -= min_x;
-            map.cells[member].?.y -= min_y;
-        }
-        map.sizes[piece] = .{ .w = max_x - min_x + 1, .h = max_y - min_y + 1 };
+        map.settle(piece);
     }
     return map;
 }
@@ -519,6 +568,24 @@ test "a link into a taken cell starts a new piece, joined to the first" {
     try std.testing.expectEqual(@as(usize, 1), joins.items.len);
     try std.testing.expectEqual(@as(u8, 1), joins.items[0].link.room);
     try std.testing.expectEqual(Side.down, joins.items[0].link.side);
+}
+
+test "a transport's area stands beside the room the ride leaves from, a cell apart" {
+    // a b . d e, and c under b: the ride from c to d puts d two cells right of c, on its row.
+    const links = testLinks(&.{ "ab.de", ".c..." });
+    var map = lay(&links, links.present, 0, &no_skips);
+    try std.testing.expectEqual(@as(u8, 2), map.piece_count);
+    try std.testing.expect(map.rideBeside(2, 3));
+    try std.testing.expectEqual(@as(u8, 1), map.piece_count);
+    try std.testing.expectEqual(Cell{ .piece = 0, .x = 3, .y = 1 }, map.cells[3].?);
+    try std.testing.expectEqual(Cell{ .piece = 0, .x = 4, .y = 1 }, map.cells[4].?);
+    try std.testing.expectEqual(@as(i16, 5), map.sizes[0].w);
+    try std.testing.expectEqual(@as(i16, 2), map.sizes[0].h);
+
+    // From a, d would stand right next to b: the pieces stay apart.
+    var apart = lay(&links, links.present, 0, &no_skips);
+    try std.testing.expect(!apart.rideBeside(0, 3));
+    try std.testing.expectEqual(@as(u8, 2), apart.piece_count);
 }
 
 test "levels sharing a room file own their characters' rooms and the free rooms beside them" {

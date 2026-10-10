@@ -108,15 +108,16 @@ and is for the user's own machines: never committed, never distributed. The game
 
 **The level atlas** (user request, 2026-10-10) is the one tool that writes original art out:
 `flashbackz-atlas [-o FILE] disk1.img disk2.img` (built by `zig build atlas`; a release build,
-`-Doptimize=ReleaseFast`, takes seconds where a debug build takes a minute) draws every
-level's rooms into one PNG, placed by their links (`src/atlas`). Links between pieces that
-cannot lie flat and the transports between areas carry matching lettered tags; a floor that wraps
-around within one piece (the tower's) carries none. A level with a transit line (a ring of links
-whose pictures never continue and that alone joins parts of the level, like the city's subway)
-is drawn along it instead, without tags: its stations on one row, each under the room it leads
-up to (touching it where no other room is near), its districts above, closing in on each other
-without their rooms ever touching, the areas off the line below. The PNG is the user's, like
-the standalone executable: never committed, never distributed.
+`-Doptimize=ReleaseFast`, takes seconds where a debug build takes a minute) draws every level's
+rooms into one PNG, placed by their links (`src/atlas`). An area reached by a transport stands
+beside the room the ride leaves from, on its row a room's width away, where it fits (Earth's
+taxi). Links between pieces that cannot lie flat and the other transports carry matching
+lettered tags; a floor that wraps around within one piece (the tower's) carries none. A level
+with a transit line (a ring of links whose pictures never continue and that alone joins parts of
+the level, like the city's subway) is drawn along it instead, without tags: its stations on one
+row, each under the room it leads up to (touching it where no other room is near), its districts
+above, closing in on each other without their rooms ever touching, the areas off the line below.
+The PNG is the user's, like the standalone executable: never committed, never distributed.
 
 Unsupported content fails loudly. The extractor reports every condition or effect it cannot
 name, with level, character and state. The engine refuses a table that uses an unimplemented

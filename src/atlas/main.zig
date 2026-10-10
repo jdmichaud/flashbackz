@@ -136,9 +136,14 @@ pub fn main(init: std.process.Init) !u8 {
         }
         const line = map.transitLine(&links, owned, &rooms);
         const skipped: map.Skipped = if (line) |*l| l.skipped(&links) else @splat(@splat(false));
-        const level_map = map.lay(&links, owned, start, &skipped);
+        var level_map = map.lay(&links, owned, start, &skipped);
         try map.cutLinks(gpa, &links, &level_map, &joins[i]);
         try map.transports(gpa, &data[i], &level_map, &joins[i]);
+        // Off a transit line, a ride's two areas stand side by side.
+        if (line == null) for (joins[i].items) |join| switch (join) {
+            .transport => |t| _ = level_map.rideBeside(t.from.room, t.to.room),
+            .link => {},
+        };
         const look = design(id);
         levels[i] = .{
             .name = look.name,
