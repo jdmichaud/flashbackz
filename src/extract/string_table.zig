@@ -1,4 +1,5 @@
-//! Offset-indexed DOS labels become owned byte strings for the imported game font.
+//! A level's labels file (offset-indexed strings) read for the extractor: each label an owned
+//! byte string.
 const std = @import("std");
 
 pub fn copy(allocator: std.mem.Allocator, file: []const u8, index: u16) ![]u8 {
@@ -19,6 +20,10 @@ test "labels support aliases and empty text while rejecting missing terminators"
     const a = try copy(allocator, &file, 1);
     defer allocator.free(a);
     try std.testing.expectEqualStrings("AB", a);
+    // Entry 2 points at entry 1's text.
+    const alias = try copy(allocator, &file, 2);
+    defer allocator.free(alias);
+    try std.testing.expectEqualStrings("AB", alias);
     const empty = try copy(allocator, &file, 0);
     defer allocator.free(empty);
     try std.testing.expectEqual(@as(usize, 0), empty.len);

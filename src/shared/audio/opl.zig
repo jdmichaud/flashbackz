@@ -1447,22 +1447,12 @@ fn obsNumber(obs: []const Observation, name: []const u8) !u64 {
     return std.fmt.parseInt(u64, try obsText(obs, name), 10);
 }
 
+// The emulator's own renders of a script of register writes: vpoolz's oracle, a modified DOSBox
+// 0.73, made them.
 test "the translation is the same chip as the emulator it came from" {
     const gpa = testing.allocator;
-    const script = try std.Io.Dir.cwd().readFileAlloc(
-        std.testing.io,
-        "tests/reference/data/opl-script.txt",
-        gpa,
-        .limited(1 << 20),
-    );
-    defer gpa.free(script);
-    const text = try std.Io.Dir.cwd().readFileAlloc(
-        std.testing.io,
-        "tests/reference/data/opl-render.obs.json",
-        gpa,
-        .limited(1 << 20),
-    );
-    defer gpa.free(text);
+    const script = @embedFile("opl_reference/opl-script.txt");
+    const text = @embedFile("opl_reference/opl-render.obs.json");
     const parsed = try std.json.parseFromSlice(
         ValueFile,
         gpa,

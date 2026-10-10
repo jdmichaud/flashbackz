@@ -919,3 +919,77 @@ test "a catch-up walk keeps the world message the first walk asked for, until th
     _ = try world.update(.{}, .only);
     try std.testing.expectEqual(@as(?i16, null), world.requests.world_message);
 }
+
+test "a message reaches a later recipient in the same update, an earlier one in the next; an awaited one ends the animation" {
+    const call: vocabulary.Message = @fromBackingInt(300);
+    const idle_states = [_]vocabulary.State{.{ .name = "idle", .animation = 0, .rules = &.{} }};
+    const listen_rules = [_]vocabulary.Rule{.{ .when = &.{.{ .received = call }}, .next = 1 }};
+    const listen_states = [_]vocabulary.State{
+        .{ .name = "wait", .animation = 1, .rules = &listen_rules },
+        .{ .name = "got", .animation = 0, .rules = &.{} },
+    };
+    const call_checks = [_]vocabulary.Operation{
+        .{ .send = .{ .to = @fromBackingInt(0), .message = call } },
+        .{ .send = .{ .to = @fromBackingInt(1), .message = call } },
+    };
+    const call_rules = [_]vocabulary.Rule{.{ .when = &call_checks, .next = 0 }};
+    const call_states = [_]vocabulary.State{.{ .name = "call", .animation = 0, .rules = &call_rules }};
+    const behaviors = [_]vocabulary.Behavior{
+        .{ .name = "idle", .links = &.{}, .numbers = &.{}, .states = &idle_states },
+        .{ .name = "listen", .links = &.{}, .numbers = &.{}, .states = &listen_states },
+        .{ .name = "call", .links = &.{ "a", "b" }, .numbers = &.{}, .states = &call_states },
+    };
+    // Animation 0: one frame. Animation 1: three frames moving 2 each.
+    const animation_bytes = [_]u8{ 2, 0, 4, 0, 14, 0 } ++
+        [_]u8{ 1, 0, 0, 0, 0, 0, 1, 0, 0, 0 } ++
+        [_]u8{ 3, 0, 0, 0, 0, 0, 1, 0, 2, 0, 1, 0, 2, 0, 1, 0, 2, 0 };
+    const Make = struct {
+        fn character(kind: vocabulary.Kind, behavior: u16) data_set.Character {
+            return .{
+                .name = "c",
+                .placement = 0,
+                .kind = kind,
+                .behavior = behavior,
+                .start = 0,
+                .room = 0,
+                .x = 100,
+                .y = 214,
+                .facing = .left,
+                .health = 1,
+                .width = 1,
+                .active = true,
+                .minimum_difficulty = .easy,
+            };
+        }
+    };
+    // The caller (2) signals listener 1, before it, and listener 3, after it.
+    var characters = [_]data_set.Character{
+        Make.character(.player, 0),
+        Make.character(.enemy, 1),
+        Make.character(.enemy, 2),
+        Make.character(.enemy, 1),
+    };
+    characters[2].links = .{ @fromBackingInt(1), @fromBackingInt(3), null, null };
+    const level: data_set.Level = .{ .behaviors = &behaviors, .characters = &characters, .message_names = &.{} };
+    var layout: [grid.Grid.layout_size]u8 = @splat(0);
+    @memset(layout[0..256], 0xff);
+    var world = try World.init(
+        std.testing.allocator,
+        &level,
+        try animations.Animations.init(&animation_bytes),
+        try grid.Grid.init(&layout),
+        .{},
+    );
+    defer world.deinit();
+    _ = try world.update(.{}, .only);
+    try std.testing.expectEqual(@as(i16, 102), world.characters[3].x);
+    _ = try world.update(.{}, .only);
+    // Listener 3 got the call in the update it was sent: its animation ended early, its
+    // remaining movement applied at once, and its rule fired.
+    try std.testing.expectEqual(@as(u16, 1), world.characters[3].state);
+    try std.testing.expectEqual(@as(i16, 106), world.characters[3].x);
+    // Listener 1 had already run: it gets the call in the next update.
+    try std.testing.expectEqual(@as(u16, 0), world.characters[1].state);
+    _ = try world.update(.{}, .only);
+    try std.testing.expectEqual(@as(u16, 1), world.characters[1].state);
+}

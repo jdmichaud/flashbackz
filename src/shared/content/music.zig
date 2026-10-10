@@ -47,7 +47,7 @@ const OperatorField = enum(u5) {
 };
 
 fn field(bytes: []const u8, which: OperatorField) u16 {
-    return word(bytes, @intFromEnum(which));
+    return word(bytes, @backingInt(which));
 }
 
 fn operator(bytes: []const u8, waveform: u16) score.Operator {
@@ -77,7 +77,7 @@ pub fn instrument(bytes: []const u8) !score.Instrument {
         .carrier = operator(bytes[28..54], word(bytes, 76)),
         .feedback_connection = @truncate((field(modulator, .feedback) << 1) |
             @as(u16, if (field(modulator, .connection) == 0) 1 else 0)),
-        .scale_modulator = modulator[@intFromEnum(OperatorField.connection)] == 0,
+        .scale_modulator = modulator[@backingInt(OperatorField.connection)] == 0,
     };
 }
 

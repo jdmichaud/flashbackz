@@ -3,7 +3,7 @@ const std = @import("std");
 const game = @import("flashbackz");
 const backend_mod = @import("backend.zig");
 
-test "floppy menu preview rejects a missing introduction; Start hands over to the level" {
+test "floppy menu preview rejects a missing introduction; Start readies the jungle" {
     const allocator = std.testing.allocator;
     var source = game.memory.MemoryAssetSource.init(allocator);
     defer source.deinit();
