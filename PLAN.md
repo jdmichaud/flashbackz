@@ -691,7 +691,7 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
   `continueAfterDefeat`, `redrawView`). Gate: tests; per-walk traces of all seven levels and
   the keyboard sessions unchanged.
   - 2026-10-10: done; 272 tests.
-- [ ] **D6** Every runtime error is fatal, and validation is deferred to first use. As decided,
+- [x] **D6** Every runtime error is fatal, and validation is deferred to first use. As decided,
   content fails loudly at load and devices are adapted to. Done earlier: the level's data,
   animations and glyphs at level load and the ending's at its start (B7), the audio device (B2),
   the continue screen's queue (B11). Now the game imports every film the scenes name when it
@@ -700,6 +700,7 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
   is a bug and still ends the game. Gate: a data set naming a missing film stops the game at
   startup; startup costs 0.2 s more in Debug, 30 ms in ReleaseFast; the sessions keep their
   hashes.
+  - 2026-10-10: done.
 - [ ] **D7** Smaller design issues (the review's list).
 - [ ] **R1-R5** Readability: unnamed magic numbers, behavior tables' readability, dead code, tests
   missing or not testing their name, style.
