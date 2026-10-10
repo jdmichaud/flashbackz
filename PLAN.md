@@ -388,7 +388,7 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     district last; no tags. The other levels' maps are pixel-identical to the previous poster
     (only the city's glow tail differs, by at most 2 of 255). Poster 9120x11824.
 
-- [ ] Atlas: the city's districts close in (user request, 2026-10-10: "connect the america
+- [x] Atlas: the city's districts close in (user request, 2026-10-10: "connect the america
   station to its room up and realign all the subway stations to it", "bring the four space
   closer together", "move the "red" zone below", "remove the letters in death tower level"). A
   station with no other room of its district near the spot right under its room stands there,
@@ -398,6 +398,11 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   none. Gate: tests; on the poster America's station touches its room and the four stations
   share its row, the districts stand closer than before with no unlinked rooms touching, the red
   district is below; the tower has no letters, Earth and the alien base keep theirs.
+  - 2026-10-10: 13 atlas tests. City: America's station touches its room and the four stations
+    share its row; every other pair of rooms from different pieces is at least 128 px apart; the
+    map is 4224 px wide (was 6656), the red district below, under Europa's district. The tower
+    has no letters (its 12 tag spots are its only change), Earth and the alien base keep theirs,
+    the other levels are pixel-identical. Poster 6688x12432.
 
 ## Mega Drive music during play — user decision, 2026-10-09
 
