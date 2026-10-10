@@ -793,10 +793,13 @@ pub const World = struct {
 
     // Messages ---------------------------------------------------------------------------
 
+    /// Every letter free, in order, and blank, so that a save writes defined values.
     fn resetLetters(self: *World) void {
-        for (&self.letters, 0..) |*letter, i| {
-            letter.next = if (i + 1 < letter_capacity) @intCast(i + 1) else null;
-        }
+        for (&self.letters, 0..) |*letter, i| letter.* = .{
+            .sender = 0,
+            .message = @fromBackingInt(0),
+            .next = if (i + 1 < letter_capacity) @intCast(i + 1) else null,
+        };
         self.free_letter = 0;
     }
 

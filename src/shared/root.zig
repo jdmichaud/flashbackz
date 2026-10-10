@@ -8,6 +8,7 @@ pub const version = @import("version.zig");
 pub const floppy = @import("floppy.zig");
 pub const asset_pack = @import("asset_pack.zig");
 pub const settings = @import("settings.zig");
+pub const save = @import("save.zig");
 pub const random = @import("random.zig");
 pub const step_clock = @import("step_clock.zig");
 pub const key_latch = @import("key_latch.zig");
