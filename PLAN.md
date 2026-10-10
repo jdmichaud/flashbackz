@@ -576,8 +576,18 @@ load and fails loudly there, devices are adapted to (D6).
   Gate: the script's output reproduces; each session ends where its comment says.
   - 2026-10-10: done; 23 sessions. The menu sessions now start an expert game, open LOAD GAME
     and the code page; B on ABORT GAME abandons, as A does.
-- [ ] **B2** An audio device granting another format ends the game or overruns a buffer. High on
-  Windows. With D2.
+- [ ] **B2 and D2 — One audio output.** B2: an audio device granting another format ends the
+  game or overruns a buffer (high on Windows). D2: five owners of the device, no mixer. The game
+  owns one output: it opens the device once for 44,100 Hz stereo, which the host converts (SDL
+  may no longer change the format), and mixes the sources of the moment (the title's, a film's or
+  the ending's music; a level's effects and Mega Drive tunes) into one short queue. A source that
+  stops takes its queue with it; a new music replaces what was queued. A device that fails
+  leaves the game silent. The MUSIC option controls the Mega Drive tunes, SOUND FX the effects.
+  The contract says that opening closes a device already open. Gate: tests (the output opens at
+  the first sound, keeps its lead, cuts a stopped source, goes on silent without a device; MUSIC
+  and SOUND FX start and stop the tunes and the effects); the agent's queued audio is the build
+  before's for the title, the startup, films and levels, but for the queue's timing at scene
+  changes; the SDL game plays sound.
 - [x] **B3** A key released in the options dialog or the inventory is ignored when pressed again.
   Fixed by GS-1.
 - [x] **B4** Missing or partial game files start the template's placeholder game instead of
@@ -600,7 +610,7 @@ load and fails loudly there, devices are adapted to (D6).
   coherent, easy to read and modify. Use your common sense."): each quirk becomes a named game
   rule where it holds; what truly depends on how the original laid out its data stays exact in
   one small, explained module.
-- [ ] **D2** One audio device, five owners, no mixer. With B2.
+- [ ] **D2** One audio device, five owners, no mixer. With B2: "One audio output" above.
 - [x] **D3** Input state updated in one path only; settings in hand-synchronised copies. Fixed by
   GS-1 and GS-2.
 - [x] **D4** The template's placeholder (the bouncing ball) and unused template code are still in
