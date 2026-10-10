@@ -23,6 +23,13 @@ pub const Frame = struct {
     hold_ticks: u32,
     /// At this frame, repeat the named frame range until the viewer confirms.
     input_loop_start: ?usize = null,
+    /// Unconfirmed, how long this frame shows before the loop shows its first frame again;
+    /// `hold_ticks` is how long it shows before the next frame once confirmed.
+    loop_ticks: u32 = 0,
+    /// A confirmation pending once this frame has been shown ends the film: the original
+    /// checks the keys after the present and branches to the film's end (the city's map
+    /// terminals, MAP entries 0 to 3, between the blinks of their marker).
+    confirm_ends: bool = false,
     background: u8 = 0xc0,
     captions: []const TextRun = &.{},
     caption_band: bool = false,
@@ -68,9 +75,8 @@ pub const View = struct {
             self.height == 0) return error.InvalidFilm;
         for (self.frames, 0..) |frame, end| if (frame.input_loop_start) |start| {
             if (start > end) return error.InvalidFilmInputLoop;
-            var timed = false;
-            for (self.frames[start .. end + 1]) |loop_frame| timed = timed or
-                loop_frame.hold_ticks != 0;
+            var timed = frame.loop_ticks != 0;
+            for (self.frames[start..end]) |loop_frame| timed = timed or loop_frame.hold_ticks != 0;
             if (!timed and start != end) return error.UnboundedFilmInputLoop;
         };
     }

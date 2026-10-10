@@ -358,12 +358,14 @@ fn compileFrom(
         content,
         .{ .drawings = &.{}, .colors = builder.colors, .hold_ticks = 0, .presented = false },
     );
-    var command_frames: std.AutoHashMap(usize, usize) = .init(allocator);
-    defer command_frames.deinit();
+    // At each command reached: the frame its next present adds, and the wait due before it.
+    const Reached = struct { frame: usize, wait_ticks: u32 };
+    var reached: std.AutoHashMap(usize, Reached) = .init(allocator);
+    defer reached.deinit();
     var finished = false;
     for (0..100000) |_| {
         const command_offset = reader.at;
-        try command_frames.put(command_offset, builder.frames.items.len);
+        try reached.put(command_offset, .{ .frame = builder.frames.items.len, .wait_ticks = builder.wait_ticks });
         const encoded = try reader.byte();
         if (encoded & 128 != 0) {
             finished = true;
@@ -432,11 +434,24 @@ fn compileFrom(
                     idle_target > command_offset)
                 {
                     reader.at = idle_target; // Release loop; the following page awaits confirmation.
+                } else if (destination < 0 and idle_target > command_offset) {
+                    // A confirmation ends the film here; without one, it goes on.
+                    builder.frames.items[builder.frames.items.len - 1].confirm_ends = true;
+                    reader.at = idle_target;
                 } else if (idle_target <= command_offset and (destination < 0 or start + @as(usize, @intCast(destination)) > command_offset)) {
-                    const first_output = command_frames.get(idle_target) orelse return error.UnsupportedCinematicInteraction;
+                    const target = reached.get(idle_target) orelse return error.UnsupportedCinematicInteraction;
+                    const frames = builder.frames.items;
+                    const last = &frames[frames.len - 1];
+                    // Looping back costs the waits left after this picture, then those from the
+                    // loop's target to the present of its first picture, and that present's own.
                     // A branch-only self-loop waits on the picture already presented.
-                    const loop_start = @min(first_output, builder.frames.items.len - 1);
-                    builder.frames.items[builder.frames.items.len - 1].input_loop_start = loop_start;
+                    const back = if (target.frame < frames.len)
+                        try std.math.add(u32, builder.wait_ticks, frames[target.frame - 1].hold_ticks)
+                    else
+                        builder.wait_ticks;
+                    last.loop_ticks = std.math.sub(u32, back, target.wait_ticks) catch
+                        return error.UnsupportedCinematicInteraction;
+                    last.input_loop_start = @min(target.frame, frames.len - 1);
                     if (destination < 0) {
                         finished = true;
                         break;
@@ -513,6 +528,54 @@ test "imported pictures retain backgrounds without retaining prior moving drawin
     try std.testing.expectEqual(@as(u32, 4), content.frames[0].hold_ticks);
     try std.testing.expectEqual(@as(u32, 4), content.frames[1].hold_ticks);
     try std.testing.expectEqual(@as(u32, 0), content.frames[2].hold_ticks);
+}
+
+test "page loops: a confirmation may end the film between pictures, a loop back costs its waits and presents" {
+    const allocator = std.testing.allocator;
+    const geometry = testGeometry();
+    // The city's map terminals (MAP entries 0 to 3): the marker on, then two checks that end the
+    // film on a confirmation and else go on; the marker off, then the same, the last check looping
+    // back. Offsets count from the commands' start, after the entry table.
+    const blink = [_]u8{
+        0, 0, // no entry table
+        0, // 0: present
+        36, 128, 0xff, 0xfe, 0, 0, 9, 255, // 1: present; confirmed, the end, else on to 9
+        56, 128, 0xff, 0xfe, 0, 0, 17, 255, // 9: confirmed, the end, else on to 17
+        36, 128, 0xff, 0xfe, 0, 0, 25, 255, // 17: present; confirmed, the end, else on to 25
+        56, 128, 0xff, 0xfe, 0, 0, 1, 255, // 25: confirmed, the end, else back to 1
+    };
+    var map = try compile(allocator, &blink, &geometry, 0);
+    defer map.deinit();
+    const marker = map.frames[map.frames.len - 2];
+    const dark = map.frames[map.frames.len - 1];
+    try std.testing.expect(marker.confirm_ends and marker.input_loop_start == null);
+    try std.testing.expect(dark.confirm_ends);
+    try std.testing.expectEqual(@as(?usize, map.frames.len - 2), dark.input_loop_start);
+    // Each picture shows for one present: the dark one until the loop presents the marker again.
+    try std.testing.expectEqual(@as(u32, 4), marker.hold_ticks);
+    try std.testing.expectEqual(@as(u32, 4), dark.loop_ticks);
+
+    // A loop back through a hold (the city's log, LOG entry 0), then a page that waits on itself
+    // for a confirmation, which ends the film.
+    const log = [_]u8{
+        0, 0,
+        0, // 0: present
+        8, 1, // 1: hold for 4 ticks
+        0, // 3: present
+        56, 128, 0, 12, 0, 0, 1, 255, // 4: confirmed, on to 12, else back to the hold
+        0, // 12: present
+        56, 128, 0xff, 0xfe, 0, 0, 13, 255, // 13: confirmed, the end, else wait here
+    };
+    var page = try compile(allocator, &log, &geometry, 0);
+    defer page.deinit();
+    const looping = page.frames[page.frames.len - 2];
+    try std.testing.expectEqual(@as(?usize, page.frames.len - 2), looping.input_loop_start);
+    try std.testing.expectEqual(@as(u32, 8), looping.loop_ticks);
+    try std.testing.expectEqual(@as(u32, 4), looping.hold_ticks);
+    const waiting = page.frames[page.frames.len - 1];
+    try std.testing.expectEqual(@as(?usize, page.frames.len - 1), waiting.input_loop_start);
+    try std.testing.expectEqual(@as(u32, 0), waiting.loop_ticks);
+    for (page.frames) |frame| try std.testing.expect(!frame.confirm_ends);
 }
 
 fn allocationExercise(allocator: std.mem.Allocator) !void {

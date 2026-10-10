@@ -62,11 +62,12 @@ pub const Player = struct {
     /// Since when the film stands still for P.
     paused_at: ?u64 = null,
     pub fn interactive(self: *const Player) bool {
-        for (self.movie.frames) |frame| if (frame.input_loop_start != null) return true;
+        for (self.movie.frames) |frame| if (frame.input_loop_start != null or frame.confirm_ends) return true;
         return false;
     }
     pub fn awaitingInput(self: *const Player) bool {
         if (self.playback.finished or self.confirmed) return false;
+        if (self.movie.frames[self.playback.frame].confirm_ends) return true;
         for (self.movie.frames, 0..) |frame, end| if (frame.input_loop_start) |start| {
             if (self.playback.frame >= start and self.playback.frame <= end) return true;
         };
@@ -74,7 +75,12 @@ pub const Player = struct {
     }
     fn staticInputWait(self: *const Player) bool {
         const frame = self.movie.frames[self.playback.frame];
-        return frame.input_loop_start == self.playback.frame and frame.hold_ticks == 0;
+        return frame.input_loop_start == self.playback.frame and frame.loop_ticks == 0;
+    }
+    /// How long the frame shown now stays: until its loop starts again while unconfirmed.
+    fn shownTicks(self: *const Player) u32 {
+        const frame = self.movie.frames[self.playback.frame];
+        return if (frame.input_loop_start != null and !self.confirmed) frame.loop_ticks else frame.hold_ticks;
     }
     pub fn confirm(self: *Player) void {
         if (self.awaitingInput()) self.confirmed = true;
@@ -122,10 +128,14 @@ pub const Player = struct {
     }
 
     fn present(self: *Player, now_ns: u64) !void {
+        if (self.movie.frames[self.playback.frame].confirm_ends and self.confirmed) {
+            self.playback.finished = true;
+            return;
+        }
         if (self.movie.frames[self.playback.frame].input_loop_start) |start| {
             if (!self.confirmed) {
                 self.playback.frame = start;
-                const ticks = self.movie.frames[start].hold_ticks;
+                const ticks = self.shownTicks();
                 self.playback.next_tick = try std.math.add(u64, self.playback.next_tick, ticks);
                 try self.cadence.hold(ticks);
                 self.rebase();
@@ -135,7 +145,7 @@ pub const Player = struct {
             self.confirmed = false;
         }
         if (try self.playback.advance(self.movie.view(), self.playback.next_tick)) {
-            try self.cadence.hold(self.movie.frames[self.playback.frame].hold_ticks);
+            try self.cadence.hold(self.shownTicks());
         }
     }
     /// A page waits for its answer as long as the player does. After ten minutes the film's
@@ -179,7 +189,7 @@ test "confirmation loops keep animating and one confirmation cannot skip the nex
     const colors: palette.Palette = @splat(.{ .r = 0, .g = 0, .b = 0 });
     const frames = [_]film.Frame{
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4 },
-        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 8, .input_loop_start = 0 },
+        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 8, .input_loop_start = 0, .loop_ticks = 8 },
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 0, .input_loop_start = 2 },
     };
     var player: Player = .{
@@ -205,6 +215,41 @@ test "confirmation loops keep animating and one confirmation cannot skip the nex
     try std.testing.expect(try player.update(player.cadence.deadline_ns));
 }
 
+test "a map terminal's blink repeats until a confirmation, which ends it after the picture shown" {
+    const allocator = std.testing.allocator;
+    const colors: palette.Palette = @splat(.{ .r = 0, .g = 0, .b = 0 });
+    // The marker on (a confirmation then ends the film), the marker off (the loop back, the
+    // film's last picture: nothing follows it once confirmed).
+    const frames = [_]film.Frame{
+        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4, .confirm_ends = true },
+        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 0, .input_loop_start = 0, .loop_ticks = 4 },
+    };
+    for ([_]usize{ 0, 1 }) |confirmed_on| {
+        const arena = try allocator.create(std.heap.ArenaAllocator);
+        arena.* = .init(allocator);
+        var player: Player = .{
+            .movie = .{ .allocator = allocator, .arena = arena, .frames = &frames },
+            .playback = try film.Playback.init(.{ .frames = &frames }),
+            .cadence = .{},
+            .origin_ns = 0,
+        };
+        defer player.deinit();
+        try player.cadence.hold(frames[0].hold_ticks);
+        // Unanswered, it blinks: 0, 1, 0, 1, each picture shown for a while.
+        for (0..4) |_| {
+            const shown = player.cadence.deadline_ns;
+            try std.testing.expect(!try player.update(shown));
+            try std.testing.expect(player.cadence.deadline_ns > shown);
+        }
+        try std.testing.expectEqual(@as(usize, 0), player.playback.frame);
+        if (confirmed_on == 1) try std.testing.expect(!try player.update(player.cadence.deadline_ns));
+        try std.testing.expectEqual(confirmed_on, player.playback.frame);
+        try std.testing.expect(player.awaitingInput());
+        player.confirm();
+        try std.testing.expect(try player.update(player.cadence.deadline_ns));
+    }
+}
+
 test "only a fresh press of the inventory key or Escape skips a film" {
     try std.testing.expect(skips(.{ .key_down = .{ .key = .tab } }, false));
     try std.testing.expect(skips(.{ .key_down = .{ .key = .backspace } }, false));
@@ -226,7 +271,7 @@ test "a page waiting for its answer can wait for hours" {
     const colors: palette.Palette = @splat(.{ .r = 0, .g = 0, .b = 0 });
     const frames = [_]film.Frame{
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4 },
-        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 8, .input_loop_start = 0 },
+        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 8, .input_loop_start = 0, .loop_ticks = 8 },
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4 },
     };
     var player: Player = .{
