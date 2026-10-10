@@ -372,8 +372,15 @@ pub const World = struct {
     /// the view follows Conrad into another room.
     pub fn update(self: *World, controls: Controls, walk: Walk) !Outcome {
         self.controls = controls;
-        self.requests = .{};
         const catch_up = walk == .catch_up;
+        // The frame draws once, after its last walk: a catch-up walk leaves the world message
+        // and the hits the first walk asked for, as the original clears its message only once
+        // shown (flashback-re engine-update 1, steps 11 and 13).
+        self.requests = if (catch_up) .{
+            .world_message = self.requests.world_message,
+            .hits = self.requests.hits,
+            .hit_count = self.requests.hit_count,
+        } else .{};
         if (!catch_up and self.protection != 0) self.protection -= 1;
         if (!catch_up and self.defeat_countdown & 0xff != 0) {
             self.defeat_countdown -%= 1;
@@ -834,3 +841,47 @@ pub const World = struct {
         }
     }
 };
+
+test "a catch-up walk keeps the world message the first walk asked for, until the draw" {
+    const rules = [_]vocabulary.Rule{.{ .then = .{ .show_message = 7 }, .next = 1 }};
+    const states = [_]vocabulary.State{
+        .{ .name = "say", .animation = 0, .rules = &rules },
+        .{ .name = "done", .animation = 0, .rules = &.{} },
+    };
+    const behaviors = [_]vocabulary.Behavior{.{ .name = "t", .links = &.{}, .numbers = &.{}, .states = &states }};
+    const characters = [_]data_set.Character{.{
+        .name = "c",
+        .placement = 0,
+        .kind = .player,
+        .behavior = 0,
+        .start = 0,
+        .room = 0,
+        .x = 100,
+        .y = 214,
+        .facing = .left,
+        .health = 1,
+        .width = 1,
+        .active = true,
+        .minimum_difficulty = .easy,
+    }};
+    const level: data_set.Level = .{ .behaviors = &behaviors, .characters = &characters, .message_names = &.{} };
+    var layout: [grid.Grid.layout_size]u8 = @splat(0);
+    @memset(layout[0..256], 0xff);
+    const animation_bytes = [_]u8{ 1, 0, 2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    var world = try World.init(
+        std.testing.allocator,
+        &level,
+        try animations.Animations.init(&animation_bytes),
+        try grid.Grid.init(&layout),
+        .{},
+    );
+    defer world.deinit();
+    // The rule fires at the second update.
+    _ = try world.update(.{}, .only);
+    _ = try world.update(.{}, .first_of_two);
+    try std.testing.expectEqual(@as(?i16, 7), world.requests.world_message);
+    _ = try world.update(.{}, .catch_up);
+    try std.testing.expectEqual(@as(?i16, 7), world.requests.world_message);
+    _ = try world.update(.{}, .only);
+    try std.testing.expectEqual(@as(?i16, null), world.requests.world_message);
+}
