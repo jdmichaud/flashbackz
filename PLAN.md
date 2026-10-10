@@ -348,7 +348,7 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
 - [x] The executables are `flashbackz` and `flashbackz-standalone` (user request, 2026-10-10,
   "add the z back"). Gate: both builds, their help and messages carry the names.
 
-- [ ] Each film plays once (user report, 2026-10-10: the jungle's opening plays twice). Since
+- [x] Each film plays once (user report, 2026-10-10: the jungle's opening plays twice). Since
   levels open with their scene (2026-10-09), the title menu's own DEBUT before the jungle (from
   2026-10-04: Start, a jungle password, Retry) repeats the level's opening. The title menu plays
   no level film. Gate: every way into a level opens its film once; no scene a behavior requests
