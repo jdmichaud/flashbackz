@@ -101,10 +101,10 @@ They may rename, add or replace data, and must not contain original content.
 **A standalone build** (approved by the user, 2026-10-10) is the one place where original files
 enter a binary: `zig build -Ddisk1=PATH -Ddisk2=PATH [-Dmegadrive=PATH]` checks the user's
 files, then copies them into a generated module from which a second build of the SDL game,
-`flashback-standalone`, is made (user's names, 2026-10-10); with no path on its command line it
+`flashbackz-standalone`, is made (user's names, 2026-10-10); with no path on its command line it
 reads them as it would read the same files given there. That executable holds the original game
 and is for the user's own machines: never committed, never distributed. The game itself,
-`flashback`, and the agent host never have files built in.
+`flashbackz`, and the agent host never have files built in.
 
 Unsupported content fails loudly. The extractor reports every condition or effect it cannot
 name, with level, character and state. The engine refuses a table that uses an unimplemented

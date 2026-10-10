@@ -1,4 +1,4 @@
-//! flashback, and flashback-standalone with the user's files built in (DESIGN.md 3): the
+//! flashbackz, and flashbackz-standalone with the user's files built in (DESIGN.md 3): the
 //! interactive SDL host. The entry point only creates the process resources and
 //! gives them to `sdl.host.run`. That function owns the backend, the providers, the game and the
 //! outer loop.

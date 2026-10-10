@@ -2,8 +2,8 @@
 //!
 //! Targets:
 //!   flashbackz-agent      headless debugging host (shared game + AgentBackend), never links SDL
-//!   flashback             the game: the SDL interactive host (Linux, Windows)
-//!   flashback-standalone  the game with the user's files built in, only with -Ddisk1, -Ddisk2
+//!   flashbackz            the game: the SDL interactive host (Linux, Windows)
+//!   flashbackz-standalone the game with the user's files built in, only with -Ddisk1, -Ddisk2
 //!                         and -Dmegadrive (DESIGN.md 3)
 //! The hosts write the readable data set with `--extract DIR`.
 //! Steps: `zig build` installs both native hosts. `test` runs standalone unit tests;
@@ -78,7 +78,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    // The standalone build's files (DESIGN.md 3), built into flashback-standalone only.
+    // The standalone build's files (DESIGN.md 3), built into flashbackz-standalone only.
     const disks = [2]?[]const u8{
         b.option([]const u8, "disk1", "Standalone build: the first floppy image, built in"),
         b.option([]const u8, "disk2", "Standalone build: the second floppy image, built in"),
@@ -126,12 +126,12 @@ pub fn build(b: *std.Build) void {
         .sdl = sdl,
         .native = native,
     };
-    const no_files = builtInFiles(b, versions, "flashback", .{ null, null }, null);
-    const sdl_exe = game.executable(b, "flashback", no_files);
+    const no_files = builtInFiles(b, versions, "flashbackz", .{ null, null }, null);
+    const sdl_exe = game.executable(b, "flashbackz", no_files);
     const any_file = disks[0] != null or disks[1] != null or cartridge != null;
     const standalone_exe = if (any_file) standalone: {
-        const files = builtInFiles(b, versions, "flashback-standalone", disks, cartridge);
-        break :standalone game.executable(b, "flashback-standalone", files);
+        const files = builtInFiles(b, versions, "flashbackz-standalone", disks, cartridge);
+        break :standalone game.executable(b, "flashbackz-standalone", files);
     } else null;
 
     b.installArtifact(agent_exe);
@@ -181,7 +181,7 @@ pub fn build(b: *std.Build) void {
     ).dependOn(b.getInstallStep());
 }
 
-/// The SDL game's modules, from which `flashback` and `flashback-standalone` are built.
+/// The SDL game's modules, from which `flashbackz` and `flashbackz-standalone` are built.
 const Game = struct {
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,

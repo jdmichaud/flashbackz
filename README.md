@@ -9,30 +9,30 @@ The game's files are not included: you need your own English floppy edition, `di
 `disk2.img`.
 
 ```sh
-flashback disk1.img disk2.img
+flashbackz disk1.img disk2.img
 ```
 
 One thing missing from the DOS version is the ambient short musical cue from the Megadrive version. If you provide your
 own flashback ROM to the built, you can have the best of both world: The DOS gameplay and the megadrive music.
 
 ```sh
-flashback --megadrive flashback.md disk1.img disk2.img
+flashbackz --megadrive flashback.md disk1.img disk2.img
 ```
 
-`flashback --help` lists the other options.
+`flashbackz --help` lists the other options.
 
 ## Build the game
 
 You need Zig 0.17.0, and on Linux SDL2 and pkg-config (Debian: `libsdl2-dev pkg-config`).
 
 ```sh
-zig build                                # zig-out/bin/flashback
+zig build                                # zig-out/bin/flashbackz
 zig build test
-zig build -Dtarget=x86_64-windows-gnu    # zig-out/bin/flashback.exe, SDL2 built in
+zig build -Dtarget=x86_64-windows-gnu    # zig-out/bin/flashbackz.exe, SDL2 built in
 ```
 
 You can build a standalone executable which will contain the DOS disk and the megadrive ROM for better portability.
-This generates a second executable, `flashback-standalone`, which then
+This generates a second executable, `flashbackz-standalone`, which then
 starts with no argument.
 
 ```sh

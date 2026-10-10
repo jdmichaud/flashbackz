@@ -22,7 +22,7 @@ pub const fallback_hz: u32 = 60;
 pub const assets_required = false;
 
 /// The command line, described once for parsing and for `--help`, under the executable's name:
-/// `flashback`, or `flashback-standalone` for the standalone build (DESIGN.md 3).
+/// `flashbackz`, or `flashbackz-standalone` for the standalone build (DESIGN.md 3).
 pub fn Args(comptime program: []const u8) type {
     return clap.Parser(.{
         .name = program,
@@ -54,7 +54,7 @@ pub fn Args(comptime program: []const u8) type {
 
 pub const Options = struct {
     /// The executable's name, for its messages.
-    program: []const u8 = "flashback",
+    program: []const u8 = "flashbackz",
     help: bool = false,
     scale: ?u32 = null,
     /// `--no-vsync` sets it to false.
@@ -277,7 +277,7 @@ fn seconds(
 
 fn testParse(args: []const []const u8) ArgError!Options {
     var diagnostic: clap.Diagnostic = .{};
-    return parseArgs("flashback", std.testing.allocator, args, &diagnostic, .{});
+    return parseArgs("flashbackz", std.testing.allocator, args, &diagnostic, .{});
 }
 
 test "the host options are parsed, bounded and defaulted" {
