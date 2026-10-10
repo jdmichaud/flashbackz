@@ -230,10 +230,13 @@ films have their own measured dimensions and pacing. Music plays only with films
 scene (`docs/rules/engine-music.md`); effects follow the engine's sound requests.
 
 Audio sequencing and sample decoding are Flashback subsystems with measured priorities and
-timing. A generic OPL2/OPL3 synthesizer may be reused from vpoolz after its code, tests and
-attribution are reviewed. Virtual Pool's sequencer, driver, voice ownership and memory layout
-are not reused. AdLib output and game PCM are mixed on a sample clock into bounded
-interleaved samples; the host only plays them. Renderer refresh rate cannot set music tempo.
+timing. A generic OPL2/OPL3 synthesizer is reused from vpoolz after its code, tests and
+attribution were reviewed. Virtual Pool's sequencer, driver, voice ownership and memory layout
+are not reused. The Mega Drive sound chips (YM2612, PSG, DAC player) are vendored whole from
+sorz (`src/shared/audio/megadrive`, user permission, 2026-10-09), parts the game does not call
+included, so that changes go back to sorz unaltered. AdLib output and game PCM are mixed on a
+sample clock into bounded interleaved samples; the host only plays them. Renderer refresh rate
+cannot set music tempo.
 
 ## 7. Extension examples and architecture gate
 

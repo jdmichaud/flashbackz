@@ -1,8 +1,8 @@
 //! `SdlBackend`: the Linux/SDL platform (DESIGN.md). It presents through a window,
 //! a renderer and one streaming RGBA32 texture. It translates SDL's event queue into the
 //! project's events, with monotonic nanosecond time stamps. The performance counter is the
-//! clock. SDL's queued-audio API implements the bounded PCM queue contract. An event reports the
-//! relative mouse capture. This file has no palette logic and no game knowledge.
+//! clock. SDL's queued-audio API implements the bounded PCM queue contract. This file has no palette logic
+//! and no game knowledge.
 //!
 //! `SDL_InitSubSystem` starts each subsystem, and each one is released separately, so several
 //! backends (or the tests) can exist in one process. `deinit` is valid after a successful or a
@@ -54,31 +54,10 @@ pub const SdlBackend = struct {
     software: bool = false,
     frames_presented: u64 = 0,
 
-    /// Events that the backend made itself (capture changes) or that did not fit in the
-    /// destination of a poll. They come before new SDL events, so the order stays correct.
+    /// Events that did not fit in the destination of a poll. They come before new SDL events, so
+    /// the order stays correct.
     pending: std.ArrayList(platform.Event) = .empty,
     pending_next: usize = 0,
-    /// Whether the game has the pointer. The game reads the mouse as a DOS driver reports it:
-    /// relative counts, with no desktop pointer. On a desktop the pointer must thus be captured,
-    /// else it leaves the window during a stroke and the window edge stops it. Escape is a game
-    /// key, so Ctrl+F10 (the DOSBox chord) releases the pointer. Focus loss also releases it,
-    /// and a click captures it again.
-    captured: bool = false,
-    /// Whether the game requested the pointer. If not, the desktop keeps the pointer, and a
-    /// click in the window is a normal click, not a capture.
-    relative_wanted: bool = false,
-    /// The button release of the click that captured the pointer belongs to the host, not to
-    /// the game.
-    swallow_button_up: bool = false,
-    /// Optional device calibration, independent of the video size and the window size.
-    mouse_scale_num: i64 = 1,
-    mouse_scale_den: i64 = 1,
-    scale_text: [32]u8 = @splat(0),
-    scale_text_len: usize = 0,
-    /// The remainder of the division from device counts to mickeys, one per axis, in device
-    /// counts times the scale numerator (see `pageMotion`).
-    motion_residue_x: i64 = 0,
-    motion_residue_y: i64 = 0,
     renderer_name_buf: [32]u8 = @splat(0),
     renderer_name_len: usize = 0,
     controllers: std.ArrayList(*c.SDL_GameController) = .empty,
@@ -101,11 +80,8 @@ pub const SdlBackend = struct {
     pub const max_dimension: u32 = 16384;
     /// The largest window scale. It keeps `resolution * scale` inside a `u32`.
     pub const max_window_scale: u32 = 64;
-    /// The maximum number of project events for one SDL event. Only text input splits. SDL
-    /// delivers at most 31 bytes, and each chunk except the last holds at least five bytes (a
-    /// chunk ends only when a code point of up to four bytes does not fit). Thus seven chunks is
-    /// the bound.
-    pub const max_events_per_sdl_event = 8;
+    /// The maximum number of project events for one SDL event.
+    pub const max_events_per_sdl_event = 1;
 
     pub fn init(allocator: std.mem.Allocator, options: platform.HostOptions) !SdlBackend {
         const title = try allocator.dupeSentinel(u8, options.title, 0);
@@ -185,7 +161,6 @@ pub const SdlBackend = struct {
         .audio_status = audioStatus,
         .audio_clear = audioClear,
         .audio_close = audioClose,
-        .set_relative_mouse = setRelativeMouse,
     };
 
     fn cast(ctx: *anyopaque) *SdlBackend {
@@ -232,7 +207,6 @@ pub const SdlBackend = struct {
         self.counter_base = c.SDL_GetPerformanceCounter();
         self.ticks_base_ms = c.SDL_GetTicks64();
         self.last_event_ns = 0;
-        c.SDL_StartTextInput();
         self.started = true;
         self.capabilities = .{ .video = true, .audio = audio, .controllers = controllers };
         return self.capabilities;
@@ -331,40 +305,6 @@ pub const SdlBackend = struct {
         );
         if (rect.w <= 0 or rect.h <= 0) return null;
         return .{ .rect = rect, .page = res };
-    }
-
-    /// One pointer motion, converted from device counts to mickeys by the `--mouse-scale`
-    /// fraction. The game reads the result as the counts of a DOS mouse driver.
-    ///
-    /// The window scale does not apply: a relative delta is not a window measurement. Each axis
-    /// keeps its remainder, so a slow drag does not round to zero.
-    fn pageMotion(self: *SdlBackend, dx: i32, dy: i32) struct { dx: i32, dy: i32 } {
-        if (self.mouse_scale_den == 0) return .{ .dx = dx, .dy = dy };
-        self.motion_residue_x += @as(i64, dx) * self.mouse_scale_num;
-        self.motion_residue_y += @as(i64, dy) * self.mouse_scale_num;
-        const step_x = @divTrunc(self.motion_residue_x, self.mouse_scale_den);
-        const step_y = @divTrunc(self.motion_residue_y, self.mouse_scale_den);
-        self.motion_residue_x -= step_x * self.mouse_scale_den;
-        self.motion_residue_y -= step_y * self.mouse_scale_den;
-        return .{ .dx = @intCast(step_x), .dy = @intCast(step_y) };
-    }
-
-    /// One pointer position in page pixels: the window point minus the offset of the blit,
-    /// scaled. Outside the blit, the position is clamped to the page, where the pointer is drawn.
-    fn pagePoint(self: *SdlBackend, x: i32, y: i32) struct { x: i32, y: i32 } {
-        const found = self.presentRect() orelse return .{ .x = x, .y = y };
-        const page_x = @divTrunc(
-            @as(i64, x - found.rect.x) * @as(i64, found.page.width),
-            found.rect.w,
-        );
-        const page_y = @divTrunc(
-            @as(i64, y - found.rect.y) * @as(i64, found.page.height),
-            found.rect.h,
-        );
-        return .{
-            .x = @intCast(std.math.clamp(page_x, 0, @as(i64, found.page.width) - 1)),
-            .y = @intCast(std.math.clamp(page_y, 0, @as(i64, found.page.height) - 1)),
-        };
     }
 
     fn setResolution(ctx: *anyopaque, width: u32, height: u32) platform.PlatformError!void {
@@ -626,8 +566,8 @@ pub const SdlBackend = struct {
         return n;
     }
 
-    /// Translates one SDL event into zero or more project events. A text input can split into
-    /// several events. `out` needs room for `max_events_per_sdl_event` events.
+    /// Translates one SDL event into a project event, or none. `out` needs room for
+    /// `max_events_per_sdl_event` events.
     fn translate(self: *SdlBackend, ev: *const c.SDL_Event, out: []platform.Event) usize {
         const payload: platform.Event.Payload = switch (ev.type) {
             c.SDL_QUIT => .quit,
@@ -639,8 +579,6 @@ pub const SdlBackend = struct {
                 c.SDL_WINDOWEVENT_FOCUS_LOST => blk2: {
                     const was_focused = self.keyboard_focused;
                     self.keyboard_focused = false;
-                    // The pointer goes back to the desktop with the focus.
-                    self.setCapture(false);
                     if (!was_focused) return 0;
                     break :blk2 .focus_lost;
                 },
@@ -661,14 +599,6 @@ pub const SdlBackend = struct {
                     self.keyboard_focused = false;
                     break :blk .focus_lost;
                 }
-                // Ctrl+F10 is the host's chord, and the game never sees it. It moves the pointer
-                // between the desktop and the game.
-                if (keyFromScancode(ev.key.keysym.scancode) == .f10 and
-                    (ev.key.keysym.mod & c.KMOD_CTRL) != 0)
-                {
-                    if (ev.type == c.SDL_KEYDOWN) self.setCapture(!self.captured);
-                    return 0;
-                }
                 const key: platform.Event.KeyEvent = .{
                     .key = keyFromScancode(ev.key.keysym.scancode),
                     .repeat = ev.key.repeat != 0,
@@ -677,48 +607,6 @@ pub const SdlBackend = struct {
                     .{ .key_down = key }
                 else
                     .{ .key_up = key };
-            },
-            c.SDL_TEXTINPUT => {
-                const t = self.eventTimeNs(ev.common.timestamp);
-                return splitText(std.mem.sliceTo(&ev.text.text, 0), t, out);
-            },
-            c.SDL_MOUSEMOTION => blk: {
-                if (self.relative_wanted and !self.captured) return 0;
-                const motion = self.pageMotion(ev.motion.xrel, ev.motion.yrel);
-                const at = self.pagePoint(ev.motion.x, ev.motion.y);
-                break :blk .{ .mouse_motion = .{
-                    .dx = motion.dx,
-                    .dy = motion.dy,
-                    .x = at.x,
-                    .y = at.y,
-                } };
-            },
-            c.SDL_MOUSEBUTTONDOWN, c.SDL_MOUSEBUTTONUP => blk: {
-                // A click while the desktop has the pointer captures the pointer. The game does
-                // not get this click.
-                if (self.swallow_button_up and ev.type == c.SDL_MOUSEBUTTONUP) {
-                    self.swallow_button_up = false;
-                    return 0;
-                }
-                if (!self.captured and self.relative_wanted and ev.type == c.SDL_MOUSEBUTTONDOWN) {
-                    self.setCapture(true);
-                    self.swallow_button_up = true;
-                    return 0;
-                }
-                const at = self.pagePoint(ev.button.x, ev.button.y);
-                const button: platform.Event.MouseButtonEvent = .{
-                    .button = mouseButton(ev.button.button),
-                    .x = at.x,
-                    .y = at.y,
-                };
-                break :blk if (ev.type == c.SDL_MOUSEBUTTONDOWN) .{ .mouse_button_down = button } else .{ .mouse_button_up = button };
-            },
-            c.SDL_MOUSEWHEEL => blk: {
-                const sign: i32 = if (ev.wheel.direction == c.SDL_MOUSEWHEEL_FLIPPED) -1 else 1;
-                break :blk .{ .mouse_wheel = .{
-                    .dx = ev.wheel.x * sign,
-                    .dy = ev.wheel.y * sign,
-                } };
             },
             // A joystick SDL has no gamepad mapping for (the user's Mega Drive pad, say) gets the
             // generic one (`genericMapping`) and is opened as a gamepad. One SDL maps comes as
@@ -757,27 +645,6 @@ pub const SdlBackend = struct {
         };
         out[0] = .{ .time_ns = self.eventTimeNs(ev.common.timestamp), .payload = payload };
         return 1;
-    }
-
-    /// Packs UTF-8 `text` into `TextInput` events of at most 8 bytes. It splits only between code
-    /// points. Returns the number of events written to `out`.
-    pub fn splitText(text: []const u8, time_ns: u64, out: []platform.Event) usize {
-        var i: usize = 0;
-        var count: usize = 0;
-        while (i < text.len and count < out.len) {
-            var chunk: platform.Event.TextInput = .{};
-            while (i < text.len) {
-                const seq = std.unicode.utf8ByteSequenceLength(text[i]) catch 1;
-                const len = @min(@as(usize, seq), text.len - i);
-                if (chunk.len + len > chunk.bytes.len) break;
-                @memcpy(chunk.bytes[chunk.len..][0..len], text[i..][0..len]);
-                chunk.len += @intCast(len);
-                i += len;
-            }
-            out[count] = .{ .time_ns = time_ns, .payload = .{ .text_input = chunk } };
-            count += 1;
-        }
-        return count;
     }
 
     /// Gives the joystick at `index` the generic gamepad mapping, from its GUID and its counts of
@@ -936,64 +803,6 @@ pub const SdlBackend = struct {
         if (self.audio.device != 0) c.SDL_CloseAudioDevice(self.audio.device);
         self.audio = .{};
     }
-
-    // --- capture -------------------------------------------------------------------------
-
-    /// Requests relative mode. A `capture_changed` event reports the state that SDL really
-    /// reached, also when the request failed.
-    fn setRelativeMouse(ctx: *anyopaque, enabled: bool) platform.PlatformError!void {
-        const self = cast(ctx);
-        if (!self.started) return error.NotStarted;
-        self.relative_wanted = enabled;
-        const rc = c.SDL_SetRelativeMouseMode(if (enabled) c.SDL_TRUE else c.SDL_FALSE);
-        const actual = c.SDL_GetRelativeMouseMode() == c.SDL_TRUE;
-        self.captured = actual;
-        _ = c.SDL_ShowCursor(if (actual) c.SDL_DISABLE else c.SDL_ENABLE);
-        const t = self.orderedTime(self.elapsedNs());
-        self.pending.append(
-            self.allocator,
-            .{ .time_ns = t, .payload = .{ .capture_changed = actual } },
-        ) catch return error.OutOfMemory;
-        if (rc != 0) return error.Unsupported;
-    }
-
-    /// The device-count scale, as a fraction. The host sets it from `--mouse-scale`.
-    pub fn setMouseScale(self: *SdlBackend, num: i64, den: i64) void {
-        if (num <= 0 or den <= 0) return;
-        self.mouse_scale_num = num;
-        self.mouse_scale_den = den;
-        self.motion_residue_x = 0;
-        self.motion_residue_y = 0;
-    }
-
-    /// The scale, for the line the host prints.
-    pub fn mouseScaleText(self: *SdlBackend) []const u8 {
-        var buf: [32]u8 = undefined;
-        const text = std.fmt.bufPrint(
-            &buf,
-            "{d}/{d} of the device's counts",
-            .{ self.mouse_scale_num, self.mouse_scale_den },
-        ) catch return "an unprintable scale";
-        @memcpy(self.scale_text[0..text.len], text);
-        self.scale_text_len = text.len;
-        return self.scale_text[0..self.scale_text_len];
-    }
-
-    /// Changes the capture for the host's own chord, not for the game. It does the work of
-    /// `setRelativeMouse` without the `NotStarted` contract, so an event handler can use it.
-    fn setCapture(self: *SdlBackend, enabled: bool) void {
-        if (!self.started or enabled == self.captured) return;
-        _ = c.SDL_SetRelativeMouseMode(if (enabled) c.SDL_TRUE else c.SDL_FALSE);
-        self.captured = c.SDL_GetRelativeMouseMode() == c.SDL_TRUE;
-        _ = c.SDL_ShowCursor(if (self.captured) c.SDL_DISABLE else c.SDL_ENABLE);
-        const t = self.orderedTime(self.elapsedNs());
-        self.pending.append(
-            self.allocator,
-            .{ .time_ns = t, .payload = .{ .capture_changed = self.captured } },
-        ) catch {};
-        self.motion_residue_x = 0;
-        self.motion_residue_y = 0;
-    }
 };
 
 // --- key and button mapping ------------------------------------------------------------------
@@ -1087,8 +896,8 @@ const scancode_keys = [_]ScancodeKey{
     .{ c.SDL_SCANCODE_KP_PLUS, .keypad_plus },
     .{ c.SDL_SCANCODE_KP_MINUS, .keypad_minus },
     // The keypad's other keys are the keys that they double with Num Lock off: 0 is Insert, the
-    // period Delete, and 8, 2, 4 and 6 the arrows. The digits that a text field takes arrive as
-    // text input. Change this when the game reads the keypad differently.
+    // period Delete, and 8, 2, 4 and 6 the arrows. Change this when the game reads the keypad
+    // differently.
     .{ c.SDL_SCANCODE_KP_0, .insert },
     .{ c.SDL_SCANCODE_KP_PERIOD, .delete },
     .{ c.SDL_SCANCODE_KP_8, .up },
@@ -1109,11 +918,6 @@ const key_table: [512]platform.Key = blk: {
 
 pub fn keyFromScancode(scancode: u32) platform.Key {
     return if (scancode < key_table.len) key_table[scancode] else .unknown;
-}
-
-/// SDL numbers buttons from 1. The project's enum starts at `left = 0`, in the same order.
-pub fn mouseButton(sdl_button: u8) platform.MouseButton {
-    return @fromBackingInt(sdl_button -| 1);
 }
 
 // --- tests -----------------------------------------------------------------------------------
@@ -1299,8 +1103,6 @@ test "every named key has a scancode" {
     try std.testing.expectEqual(platform.Key.enter, keyFromScancode(c.SDL_SCANCODE_KP_ENTER));
     try std.testing.expectEqual(platform.Key.unknown, keyFromScancode(c.SDL_SCANCODE_CAPSLOCK));
     try std.testing.expectEqual(platform.Key.unknown, keyFromScancode(100_000));
-    try std.testing.expectEqual(platform.MouseButton.left, mouseButton(c.SDL_BUTTON_LEFT));
-    try std.testing.expectEqual(platform.MouseButton.x2, mouseButton(c.SDL_BUTTON_X2));
 }
 
 test "fitting: window size and letterbox rectangle" {
@@ -1348,27 +1150,6 @@ test "fitting: window size and letterbox rectangle" {
         @as(u64, 3_000_000_000),
         SdlBackend.counterToNs(3_000_000_000, 1_000_000_000),
     );
-}
-
-test "text input splits between code points into 8-byte chunks" {
-    var out: [SdlBackend.max_events_per_sdl_event]platform.Event = undefined;
-    // "héllo wörld": 13 bytes; 'é' and 'ö' are two bytes each.
-    const n = SdlBackend.splitText("héllo wörld", 7, &out);
-    try std.testing.expectEqual(@as(usize, 2), n);
-    try std.testing.expectEqualStrings("héllo w", out[0].payload.text_input.slice());
-    try std.testing.expectEqualStrings("örld", out[1].payload.text_input.slice());
-    try std.testing.expectEqual(@as(u64, 7), out[1].time_ns);
-    try std.testing.expectEqual(@as(usize, 0), SdlBackend.splitText("", 0, &out));
-
-    // The worst case that SDL can deliver: 31 bytes that pack five to a chunk. The translation
-    // buffer holds eight events for this case, so no event is lost.
-    const worst = "a\u{10000}a\u{10000}a\u{10000}a\u{10000}a\u{10000}a\u{10000}a";
-    try std.testing.expectEqual(@as(usize, 31), worst.len);
-    const chunks = SdlBackend.splitText(worst, 0, &out);
-    try std.testing.expect(chunks <= SdlBackend.max_events_per_sdl_event);
-    var seen: usize = 0;
-    for (out[0..chunks]) |e| seen += e.payload.text_input.len;
-    try std.testing.expectEqual(worst.len, seen);
 }
 
 test "present honours channel order and stride and retains nothing" {
@@ -1539,48 +1320,23 @@ test "the event log receives every delivered event, once, in delivery order" {
     while (p.pollEvents(&buf) != 0) {} // the events from the window creation
     log.end = 0;
 
-    p.setRelativeMouse(true) catch {};
-    p.setRelativeMouse(false) catch {};
+    // Two key events with no window, as a test injects them.
+    for ([_]u32{ c.SDL_KEYDOWN, c.SDL_KEYUP }) |kind| {
+        var ev = std.mem.zeroes(c.SDL_Event);
+        ev.key = .{ .type = kind, .keysym = .{ .scancode = c.SDL_SCANCODE_A } };
+        try std.testing.expect(c.SDL_PushEvent(&ev) == 1);
+    }
     try std.testing.expectEqual(@as(usize, 2), p.pollEvents(&buf));
     try std.testing.expectEqual(@as(usize, 0), p.pollEvents(&buf));
     var lines = std.mem.splitScalar(u8, std.mem.trimEnd(u8, log.buffered(), "\n"), '\n');
     const first = lines.next().?;
     const second = lines.next().?;
     try std.testing.expectEqual(@as(?[]const u8, null), lines.next());
-    try std.testing.expect(std.mem.indexOf(u8, first, "\"kind\":\"capture_changed\"") != null);
-    try std.testing.expect(std.mem.endsWith(u8, second, "\"captured\":false}"));
+    try std.testing.expect(std.mem.indexOf(u8, first, "\"kind\":\"key_down\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, second, "\"kind\":\"key_up\"") != null);
 }
 
-test "relative mouse requests report the actual capture state" {
-    var backend = try startedBackend(1);
-    defer backend.deinit();
-    var p = backend.asPlatform();
-    try std.testing.expectError(error.NotStarted, p.setRelativeMouse(true));
-    _ = try p.start();
-    try p.setResolution(8, 6);
-    var buf: [8]platform.Event = undefined;
-    _ = p.pollEvents(&buf); // discard the events from the window creation
-    const granted = if (p.setRelativeMouse(true)) true else |err| blk: {
-        try std.testing.expectEqual(error.Unsupported, err);
-        break :blk false;
-    };
-    try std.testing.expectEqual(@as(usize, 1), p.pollEvents(&buf));
-    try std.testing.expectEqual(
-        platform.Event.Kind.capture_changed,
-        std.meta.activeTag(buf[0].payload),
-    );
-    try std.testing.expectEqual(granted, buf[0].payload.capture_changed);
-    try std.testing.expectEqual(
-        c.SDL_GetRelativeMouseMode() == c.SDL_TRUE,
-        buf[0].payload.capture_changed,
-    );
-    p.setRelativeMouse(false) catch {};
-    try std.testing.expectEqual(@as(usize, 1), p.pollEvents(&buf));
-    try std.testing.expect(!buf[0].payload.capture_changed);
-    try std.testing.expect(buf[0].time_ns <= p.nowNs());
-}
-
-test "translation: keys, buttons, wheel direction and timestamps" {
+test "translation: keys and timestamps; text and the mouse are not read" {
     var backend = try startedBackend(1);
     defer backend.deinit();
     var p = backend.asPlatform();
@@ -1599,39 +1355,19 @@ test "translation: keys, buttons, wheel direction and timestamps" {
     try std.testing.expect(out[0].payload.key_down.repeat);
     try std.testing.expect(out[0].time_ns <= p.nowNs());
 
-    ev.wheel = .{
-        .type = c.SDL_MOUSEWHEEL,
-        .y = 1,
-        .direction = c.SDL_MOUSEWHEEL_FLIPPED,
-        .preciseY = 1,
-    };
-    try std.testing.expectEqual(@as(usize, 1), backend.translate(&ev, &out));
-    try std.testing.expectEqual(@as(i32, -1), out[0].payload.mouse_wheel.dy);
     // A time stamp of 0 ms is before the backend's origin. It is clamped to the time of the
     // previous event, never earlier, so the delivery order and the time stamps agree.
     const first = out[0].time_ns;
-
-    ev.button = .{
-        .type = c.SDL_MOUSEBUTTONUP,
-        .timestamp = @truncate(c.SDL_GetTicks64()),
-        .button = c.SDL_BUTTON_RIGHT,
-        .state = c.SDL_RELEASED,
-        .clicks = 1,
-        .x = 3,
-        .y = 4,
-    };
+    ev.key = .{ .type = c.SDL_KEYUP, .timestamp = 0, .state = c.SDL_RELEASED, .keysym = .{ .scancode = c.SDL_SCANCODE_S } };
     try std.testing.expectEqual(@as(usize, 1), backend.translate(&ev, &out));
-    try std.testing.expectEqual(platform.MouseButton.right, out[0].payload.mouse_button_up.button);
-    try std.testing.expectEqual(@as(i32, 4), out[0].payload.mouse_button_up.y);
+    try std.testing.expectEqual(platform.Key.s, out[0].payload.key_up.key);
     try std.testing.expect(out[0].time_ns >= first);
 
-    ev.text = .{ .type = c.SDL_TEXTINPUT };
-    @memcpy(ev.text.text[0..9], "abcdefghi");
-    try std.testing.expectEqual(@as(usize, 2), backend.translate(&ev, &out));
-    try std.testing.expectEqualStrings("i", out[1].payload.text_input.slice());
-
-    ev.common = .{ .type = c.SDL_TEXTEDITING };
-    try std.testing.expectEqual(@as(usize, 0), backend.translate(&ev, &out));
+    // The game reads neither text nor the mouse.
+    for ([_]u32{ c.SDL_TEXTINPUT, c.SDL_TEXTEDITING, c.SDL_MOUSEMOTION, c.SDL_MOUSEBUTTONDOWN, c.SDL_MOUSEWHEEL }) |kind| {
+        ev.common = .{ .type = kind };
+        try std.testing.expectEqual(@as(usize, 0), backend.translate(&ev, &out));
+    }
 }
 
 // The event kinds that no injected input can make on a headless server: window state, quit, and

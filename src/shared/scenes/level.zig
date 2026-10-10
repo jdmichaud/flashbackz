@@ -13,7 +13,6 @@ const platform = @import("../platform.zig");
 const level_mod = @import("../content/level.zig");
 const floppy_interface = @import("../content/floppy_interface.zig");
 const demo_mod = @import("../content/demo.zig");
-const input_recording = @import("../input_recording.zig");
 const step_clock = @import("../step_clock.zig");
 const key_latch = @import("../key_latch.zig");
 const input_mod = @import("../input.zig");
@@ -140,7 +139,7 @@ pub const Scene = struct {
         setup: Setup,
     ) !Scene {
         const recording = try demo_mod.load(allocator, assets, index);
-        defer allocator.free(recording.controls);
+        errdefer allocator.free(recording.controls);
         const start: ?World.Start = if (recording.descriptor.start) |start| .{
             .room = start.room,
             .x = start.x,
@@ -155,9 +154,7 @@ pub const Scene = struct {
             start,
         );
         errdefer scene.deinit();
-        const bytes = try allocator.alloc(u8, recording.controls.len);
-        for (bytes, recording.controls) |*byte, sample| byte.* = inputByte(sample);
-        scene.demo = .{ .bytes = bytes };
+        scene.demo = .{ .bytes = recording.controls };
         scene.screen.password_frames = 0;
         // Demos replay from a fixed random state.
         scene.world.random.state = 0;
@@ -774,17 +771,4 @@ fn openingScene(scenes: data_set.Scenes, level: level_mod.Id) ?i16 {
         inline else => |id| @field(scenes.openings, @tagName(id)),
     };
     return if (scene) |number| number else null;
-}
-
-fn inputByte(sample: input_recording.Sample) u8 {
-    var byte: u8 = 0;
-    if (sample.up) byte |= 0x01;
-    if (sample.down) byte |= 0x02;
-    if (sample.left) byte |= 0x04;
-    if (sample.right) byte |= 0x08;
-    if (sample.use_item) byte |= 0x10;
-    if (sample.weapon) byte |= 0x20;
-    if (sample.action) byte |= 0x40;
-    if (sample.inventory) byte |= 0x80;
-    return byte;
 }

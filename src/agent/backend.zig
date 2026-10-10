@@ -21,7 +21,6 @@ pub const AgentBackend = struct {
     frames_presented: u64 = 0,
     last_frame_hash: u64 = 0,
     audio: Audio = .{},
-    relative_mouse: bool = false,
     /// Counts of six platform calls (the fields of `Calls`), for replay reports.
     calls: Calls = .{},
 
@@ -117,7 +116,6 @@ pub const AgentBackend = struct {
         .audio_status = audioStatus,
         .audio_clear = audioClear,
         .audio_close = audioClose,
-        .set_relative_mouse = setRelativeMouse,
         .controller_model = controllerModel,
     };
 
@@ -246,17 +244,6 @@ pub const AgentBackend = struct {
         const self = cast(ctx);
         self.audio.open = false;
         self.audio.queued_frames = 0;
-    }
-
-    fn setRelativeMouse(ctx: *anyopaque, enabled: bool) platform.PlatformError!void {
-        const self = cast(ctx);
-        if (!self.started) return error.NotStarted;
-        self.relative_mouse = enabled;
-        // The simulated host grants the request and reports it, as a real host does.
-        self.pending.append(
-            self.allocator,
-            .{ .time_ns = self.clock_ns, .payload = .{ .capture_changed = enabled } },
-        ) catch return error.OutOfMemory;
     }
 };
 

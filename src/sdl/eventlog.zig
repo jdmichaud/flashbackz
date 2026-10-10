@@ -22,34 +22,6 @@ pub fn writeEvent(ev: platform.Event, w: *std.Io.Writer) std.Io.Writer.Error!voi
             try js.objectField("repeat");
             try js.write(k.repeat);
         },
-        .text_input => |t| {
-            try js.objectField("text");
-            try js.write(t.slice());
-        },
-        .mouse_motion => |m| {
-            try js.objectField("dx");
-            try js.write(m.dx);
-            try js.objectField("dy");
-            try js.write(m.dy);
-            try js.objectField("x");
-            try js.write(m.x);
-            try js.objectField("y");
-            try js.write(m.y);
-        },
-        .mouse_button_down, .mouse_button_up => |b| {
-            try js.objectField("button");
-            try writeEnum(&js, platform.MouseButton, b.button);
-            try js.objectField("x");
-            try js.write(b.x);
-            try js.objectField("y");
-            try js.write(b.y);
-        },
-        .mouse_wheel => |wheel| {
-            try js.objectField("dx");
-            try js.write(wheel.dx);
-            try js.objectField("dy");
-            try js.write(wheel.dy);
-        },
         .controller_added, .controller_removed => |id| {
             try js.objectField("controller");
             try js.write(@backingInt(id));
@@ -67,10 +39,6 @@ pub fn writeEvent(ev: platform.Event, w: *std.Io.Writer) std.Io.Writer.Error!voi
             try writeEnum(&js, platform.ControllerAxis, a.axis);
             try js.objectField("value");
             try js.write(a.value);
-        },
-        .capture_changed => |captured| {
-            try js.objectField("captured");
-            try js.write(captured);
         },
         .drawable_resized => |size| {
             try js.objectField("width");
@@ -101,30 +69,10 @@ test "events are logged in the agent host's own vocabulary" {
         &w,
     );
     try writeEvent(
-        .{
-            .time_ns = 13,
-            .payload = .{ .mouse_motion = .{ .dx = -2, .dy = 3, .x = 10, .y = 20 } },
-        },
-        &w,
-    );
-    try writeEvent(
-        .{
-            .time_ns = 14,
-            .payload = .{ .mouse_button_down = .{ .button = .right, .x = 1, .y = 2 } },
-        },
-        &w,
-    );
-    try writeEvent(.{ .time_ns = 15, .payload = .{ .mouse_wheel = .{ .dx = 0, .dy = -1 } } }, &w);
-    try writeEvent(.{ .time_ns = 16, .payload = .{ .capture_changed = true } }, &w);
-    try writeEvent(
         .{ .time_ns = 17, .payload = .{ .drawable_resized = .{ .width = 640, .height = 400 } } },
         &w,
     );
     try writeEvent(.{ .time_ns = 18, .payload = .quit }, &w);
-    var text: platform.Event.TextInput = .{};
-    @memcpy(text.bytes[0..4], "a\"\\b");
-    text.len = 4;
-    try writeEvent(.{ .time_ns = 19, .payload = .{ .text_input = text } }, &w);
     try writeEvent(
         .{
             .time_ns = 20,
@@ -147,30 +95,10 @@ test "events are logged in the agent host's own vocabulary" {
         lines.next().?,
     );
     try std.testing.expectEqualStrings(
-        "{\"kind\":\"mouse_motion\",\"t\":13,\"dx\":-2,\"dy\":3,\"x\":10,\"y\":20}",
-        lines.next().?,
-    );
-    try std.testing.expectEqualStrings(
-        "{\"kind\":\"mouse_button_down\",\"t\":14,\"button\":\"right\",\"x\":1,\"y\":2}",
-        lines.next().?,
-    );
-    try std.testing.expectEqualStrings(
-        "{\"kind\":\"mouse_wheel\",\"t\":15,\"dx\":0,\"dy\":-1}",
-        lines.next().?,
-    );
-    try std.testing.expectEqualStrings(
-        "{\"kind\":\"capture_changed\",\"t\":16,\"captured\":true}",
-        lines.next().?,
-    );
-    try std.testing.expectEqualStrings(
         "{\"kind\":\"drawable_resized\",\"t\":17,\"width\":640,\"height\":400}",
         lines.next().?,
     );
     try std.testing.expectEqualStrings("{\"kind\":\"quit\",\"t\":18}", lines.next().?);
-    try std.testing.expectEqualStrings(
-        "{\"kind\":\"text_input\",\"t\":19,\"text\":\"a\\\"\\\\b\"}",
-        lines.next().?,
-    );
     try std.testing.expectEqualStrings(
         "{\"kind\":\"controller_axis\",\"t\":20,\"controller\":3,\"axis\":\"left_x\",\"value\":-300}",
         lines.next().?,

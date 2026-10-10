@@ -149,7 +149,6 @@ pub const Key = enum(u16) {
     _,
 };
 
-pub const MouseButton = enum(u8) { left = 0, middle, right, x1, x2, _ };
 pub const ControllerId = enum(u32) { _ };
 pub const ControllerButton = enum(u8) {
     a,
@@ -201,17 +200,6 @@ pub const Event = struct {
     payload: Payload,
 
     pub const KeyEvent = struct { key: Key, repeat: bool = false };
-    pub const TextInput = struct {
-        /// UTF-8 bytes of the text; `len` of them are valid.
-        bytes: [8]u8 = @splat(0),
-        len: u8 = 0,
-        pub fn slice(t: *const TextInput) []const u8 {
-            return t.bytes[0..t.len];
-        }
-    };
-    pub const MouseMotion = struct { dx: i32, dy: i32, x: i32, y: i32 };
-    pub const MouseButtonEvent = struct { button: MouseButton, x: i32, y: i32 };
-    pub const MouseWheel = struct { dx: i32, dy: i32 };
     pub const ControllerButtonEvent = struct { controller: ControllerId, button: ControllerButton };
     pub const ControllerAxisEvent = struct {
         controller: ControllerId,
@@ -222,11 +210,6 @@ pub const Event = struct {
     pub const Payload = union(enum) {
         key_down: KeyEvent,
         key_up: KeyEvent,
-        text_input: TextInput,
-        mouse_motion: MouseMotion,
-        mouse_button_down: MouseButtonEvent,
-        mouse_button_up: MouseButtonEvent,
-        mouse_wheel: MouseWheel,
         controller_added: ControllerId,
         controller_removed: ControllerId,
         controller_button_down: ControllerButtonEvent,
@@ -234,8 +217,6 @@ pub const Event = struct {
         controller_axis: ControllerAxisEvent,
         focus_gained,
         focus_lost,
-        /// The actual relative-mouse capture state after a request or a host change.
-        capture_changed: bool,
         drawable_resized: Size,
         quit,
     };
@@ -269,7 +250,6 @@ pub const Platform = struct {
         audio_status: *const fn (*anyopaque) AudioStatus,
         audio_clear: *const fn (*anyopaque) void,
         audio_close: *const fn (*anyopaque) void,
-        set_relative_mouse: *const fn (*anyopaque, bool) PlatformError!void,
         available_memory: ?*const fn (*anyopaque) ?u64 = null,
         controller_model: ?*const fn (*anyopaque, ControllerId) ?ControllerModel = null,
         local_time: ?*const fn (*anyopaque) ?LocalTime = null,
@@ -320,10 +300,6 @@ pub const Platform = struct {
     }
     pub fn audioClose(p: *Platform) void {
         p.vtable.audio_close(p.context);
-    }
-    /// Requests relative mouse mode. The actual state arrives as a `capture_changed` event.
-    pub fn setRelativeMouse(p: *Platform, enabled: bool) PlatformError!void {
-        return p.vtable.set_relative_mouse(p.context, enabled);
     }
 };
 
