@@ -336,11 +336,12 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   - 2026-10-10: done; every command run in a worktree beside the user's files.
 
 - [ ] Sound starts without `SDL_AUDIODRIVER=pipewire` (user report, 2026-10-10: on Ubuntu 24.04
-  with SDL2 2.30.0 the audio start hangs; the variable works around it). SDL 2 tries its
-  PulseAudio driver before PipeWire. On Linux, when the user has not chosen a driver, the game
-  uses PipeWire if PipeWire lists output devices (it then serves the sound), and SDL's own order
-  otherwise (PulseAudio owning the sound, PipeWire absent). Gate: tests; the user's machine
-  starts with sound and no variable; a machine without PipeWire keeps SDL's choice.
+  with SDL2 2.30.0 the audio start hangs; the variable works around it). Cause, found on the
+  user's machine: Zig 0.17 gives every thread a 256 KiB alternate signal stack in thread-local
+  storage (`std.options.signal_stack_size`), so glibc cannot start a thread whose stack is
+  256 KiB, and SDL 2.30.0 waits forever for its PulseAudio hot-plug thread, created with such a
+  stack. The SDL game turns the per-thread signal stack off; SDL keeps its own driver order.
+  Gate: tests; on the user's machine the game starts with sound, without the variable.
 
 ## Mega Drive music during play — user decision, 2026-10-09
 
