@@ -135,7 +135,8 @@ terrain history, the score and the checkpoint. Definitions (characters, behavior
 shared immutable content from the data set; per-session state belongs to the world.
 
 The only command is Conrad's input byte: four directions and four buttons held, with the
-original's diagonal rule, read by the level scene from the keyboard (or a demo recording). SDL
+original's diagonal rule, read by the level scene from the keyboard or the pads (or a demo
+recording). SDL
 key symbols, DOS scancodes and host repeat events never become simulation state; modal screens
 release held keys as the original does.
 
@@ -188,6 +189,17 @@ confirms each part in running scenarios before the engine relies on it.
 Player progress and checkpoints include the complete game state needed by the original's
 restart/save behavior. Persistence semantics and the initial state remain unmeasured until their
 research gates pass; the template's synthetic smoke save is not Flashback's save format.
+
+**Saves** (an addition, user decision and approval, 2026-10-10). Besides the original's
+checkpoints (kept in memory for Retry), a level in play can be saved: SAVE GAME in the options
+dialog into one of eight slots, or F5 into the quick slot. A save loads from LOAD GAME on the
+title menu, or with F9 during play. A save holds the session's state: level, difficulty, score,
+the random generator, what is carried between levels, the world (every character, the terrain,
+contacts, mailboxes, the checkpoint) and the level's play state. Art, sound and pictures are
+reloaded and redrawn, as Retry does. It is taken only between two updates, never during a film or
+a demo. A save is one readable record, stamped with its version and a fingerprint of the data set
+it was made with; a save of another version or data set is listed and refused. Loading a save and
+replaying the same input reproduces every character on every update.
 
 ## 5. Time and arithmetic
 
