@@ -619,7 +619,7 @@ load and fails loudly there, devices are adapted to (D6).
   bypassed.
 - [ ] **B13** The extractor's robustness on an unexpected edition.
 - [ ] **B14** Smaller confirmed defects (the review's list).
-- [ ] **D1** The engine models the original's memory layout in places. Decided (user,
+- [x] **D1** The engine models the original's memory layout in places. Decided (user,
   2026-10-10: "My rules was that we produce a modern maintainable code base. Make things
   coherent, easy to read and modify. Use your common sense."): each quirk becomes a named game
   rule where it holds; what truly depends on how the original laid out its data stays exact in
@@ -628,6 +628,9 @@ load and fails loudly there, devices are adapted to (D6).
   test on a record's address) move unchanged into `behavior/original_memory.zig`; DESIGN 3 and
   PLAN 00 record the exception. Gate: tests; per-walk traces of long sessions on all seven
   levels identical before and after; the keyboard sessions keep their hashes.
+  - 2026-10-10: done; 267 tests; 7,783 walks traced identical. The quirks that are arithmetic,
+    not layout (a tier's zero-extended row, a span's y read as unsigned), stay as named rules
+    where they apply.
 - [x] **D2** One audio device, five owners, no mixer. With B2: "One audio output" above.
 - [x] **D3** Input state updated in one path only; settings in hand-synchronised copies. Fixed by
   GS-1 and GS-2.
