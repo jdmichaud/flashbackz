@@ -404,12 +404,15 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     has no letters (its 12 tag spots are its only change), Earth and the alien base keep theirs,
     the other levels are pixel-identical. Poster 6688x12432.
 
-- [ ] Atlas: Earth's two parts aligned (user request, 2026-10-10: "realign the two part of earth
+- [x] Atlas: Earth's two parts aligned (user request, 2026-10-10: "realign the two part of earth
   and remove the A label"). Off a transit line, the area a transport leads to stands beside the
   room it leaves from, on that room's row with one empty cell between them, when it keeps an
   empty cell all around; the two become one piece, untagged. Gate: tests; on the poster Earth's
   taxi stand and the street it leads to share a row, the club's part to the right, and Earth has
   no letters; the other levels are unchanged.
+  - 2026-10-10: 14 atlas tests. Earth: one piece, the taxi stand's room and the club's street
+    on one row a cell apart, no letters; its map 5120 px wide. The other levels are
+    pixel-identical (Earth's glow shifts by at most 1 of 255 at their edges). Poster 7584x12648.
 
 ## Mega Drive music during play — user decision, 2026-10-09
 
