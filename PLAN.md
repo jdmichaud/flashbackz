@@ -624,7 +624,11 @@ load and fails loudly there, devices are adapted to (D6).
   reads the built-in disks of the standalone build, says that it needs the disks otherwise, and
   names the data set directory or the names file it cannot open. Gate: each case by hand.
   - 2026-10-10: done; the standalone build's extraction equals the agent's from the disks.
-- [ ] **B10** Sprite decode errors are swallowed.
+- [ ] **B10** Sprite decode errors are swallowed. Only absences are tolerated: a sprite or an
+  art bank that none of the level's files holds (the tower's 48 composed sprites) is left out,
+  and its count logged; a file that does not decode fails the load. Unused animation entries
+  stay skipped (each level has a few invalid ones; B7 checks the states'). Gate: every level
+  loads; a truncated PERSO.SPR fails; the keyboard sessions keep their hashes.
 - [ ] **B11** The continue screen ends the game when 128 key events are queued.
 - [ ] **B12** The Mega Drive cartridge reader is not overflow-safe; its checksum check can be
   bypassed.
