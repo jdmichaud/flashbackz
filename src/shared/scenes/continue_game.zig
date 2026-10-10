@@ -46,8 +46,32 @@ pub const Menu = struct {
             .key_up, .key_down, .focus_lost => {},
             else => return,
         }
-        if (self.events.items.len == 128) return error.InputQueueFull;
+        // A burst after a stall: the oldest event takes effect early rather than be lost.
+        if (self.events.items.len == queue_capacity) self.apply(self.events.orderedRemove(0));
         try self.events.append(self.allocator, event_in);
+    }
+    const queue_capacity = 128;
+
+    /// A key's press or release, as the held keys the screen polls.
+    fn apply(self: *Menu, queued: platform.Event) void {
+        switch (queued.payload) {
+            .key_down, .key_up => |key| {
+                const pressed = queued.payload == .key_down;
+                if (key.key == .escape) self.cancel_pending = pressed;
+                if (key.key == .up) self.up_pending = pressed;
+                if (key.key == .down) self.down_pending = pressed;
+                for (confirm_keys, 0..) |candidate, i| if (candidate == key.key) {
+                    self.held_confirmation[i] = pressed;
+                };
+            },
+            .focus_lost => {
+                self.cancel_pending = false;
+                self.up_pending = false;
+                self.down_pending = false;
+                @memset(&self.held_confirmation, false);
+            },
+            else => unreachable,
+        }
     }
     /// A pad's press or release (PLAN GS-3), as the keyboard's: its D-pad the arrows, its
     /// buttons Return, as the original's joystick buttons confirm here.
@@ -69,25 +93,7 @@ pub const Menu = struct {
         while (self.clock.?.due(now) and self.outcome == null and work < 8) : (work += 1) {
             const deadline = self.clock.?.deadline();
             while (self.events.items.len != 0 and self.events.items[0].time_ns <= deadline) {
-                const queued = self.events.orderedRemove(0);
-                switch (queued.payload) {
-                    .key_down, .key_up => |key| {
-                        const pressed = queued.payload == .key_down;
-                        if (key.key == .escape) self.cancel_pending = pressed;
-                        if (key.key == .up) self.up_pending = pressed;
-                        if (key.key == .down) self.down_pending = pressed;
-                        for (confirm_keys, 0..) |candidate, i| if (candidate == key.key) {
-                            self.held_confirmation[i] = pressed;
-                        };
-                    },
-                    .focus_lost => {
-                        self.cancel_pending = false;
-                        self.up_pending = false;
-                        self.down_pending = false;
-                        @memset(&self.held_confirmation, false);
-                    },
-                    else => unreachable,
-                }
+                self.apply(self.events.orderedRemove(0));
             }
             self.activation_key = null;
             for (confirm_keys, self.held_confirmation) |key, pressed| if (pressed) {
@@ -305,6 +311,21 @@ test "released taps vanish before polling and simultaneous directions are consum
     try menu.update(0);
     try std.testing.expect(menu.outcome == null);
     try std.testing.expectEqual(Choice.retry, menu.choice);
+    try menu.update(menu.clock.?.deadline());
+    try std.testing.expectEqual(Choice.abort, menu.choice);
+}
+
+test "a burst of more events than the queue holds is kept in order, not an error" {
+    var menu = Menu.init(std.testing.allocator, 0);
+    defer menu.deinit();
+    try menu.update(0);
+    // 200 taps of Down, then Down held: the screen sees Down held at its next poll.
+    for (0..200) |_| {
+        try menu.event(.{ .time_ns = 0, .payload = .{ .key_down = .{ .key = .down } } });
+        try menu.event(.{ .time_ns = 0, .payload = .{ .key_up = .{ .key = .down } } });
+    }
+    try menu.event(.{ .time_ns = 0, .payload = .{ .key_down = .{ .key = .down } } });
+    try std.testing.expect(menu.events.items.len <= Menu.queue_capacity);
     try menu.update(menu.clock.?.deadline());
     try std.testing.expectEqual(Choice.abort, menu.choice);
 }
