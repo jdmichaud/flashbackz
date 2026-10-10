@@ -472,6 +472,13 @@ pub const SdlBackend = struct {
         return self.renderer_name_buf[0..self.renderer_name_len];
     }
 
+    /// The audio driver SDL uses ("pipewire", "pulseaudio", "wasapi", ...); empty without audio.
+    pub fn audioDriverName(self: *const SdlBackend) []const u8 {
+        _ = self;
+        const name = c.SDL_GetCurrentAudioDriver() orelse return "";
+        return std.mem.span(name);
+    }
+
     fn createTexture(
         self: *SdlBackend,
         renderer: *c.SDL_Renderer,

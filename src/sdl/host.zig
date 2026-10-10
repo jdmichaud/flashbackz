@@ -165,13 +165,15 @@ pub fn run(
             }
             announced_first_frame = true;
             const size = backend.window_size;
-            try err.print("{s}: first frame after {d}ms in a {d}x{d} window, renderer {s}{s}\n", .{
+            const line = "{s}: first frame after {d}ms in a {d}x{d} window, renderer {s}{s}, audio {s}\n";
+            try err.print(line, .{
                 name,
                 (p.nowNs() - start_ns) / std.time.ns_per_ms,
                 size.width,
                 size.height,
                 if (backend.rendererName().len != 0) backend.rendererName() else "unknown",
                 if (backend.vsync) ", display-paced" else "",
+                if (backend.audioDriverName().len != 0) backend.audioDriverName() else "none",
             });
             try err.flush();
         }

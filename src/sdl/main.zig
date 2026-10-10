@@ -11,6 +11,13 @@ const clap = native.clap;
 const program = built_in.program;
 const Args = sdl.host.Args(program);
 
+/// No per-thread alternate signal stack. Zig's default puts 256 KiB of it in every thread's
+/// thread-local storage, and glibc then cannot start a thread whose stack is not larger: C
+/// libraries create such threads, and SDL 2.30.0 waits forever for its PulseAudio hot-plug
+/// thread, made with a 256 KiB stack (Ubuntu 24.04, 2026-10-10). The cost: a stack overflow ends
+/// the game without Zig's stack trace; other faults keep theirs.
+pub const std_options: std.Options = .{ .signal_stack_size = null };
+
 pub fn main(init: std.process.Init) !void {
     // The arena keeps the arguments for the whole run.
     const arena = init.arena.allocator();
