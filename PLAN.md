@@ -682,7 +682,7 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
   GS-1 and GS-2.
 - [x] **D4** The template's placeholder (the bouncing ball) and unused template code are still in
   the product. With B4. Done: "No placeholder game" above.
-- [ ] **D5** Module boundaries leak in both directions. The animation reader moves from the
+- [x] **D5** Module boundaries leak in both directions. The animation reader moves from the
   engine to `content/` (the animations stay read from the original files, see above); the
   extractor-only parsers (placements, rule tables, string tables, world messages) move to
   `src/extract`; `content/` stops importing the engine, the scenes and audio (the level pack
@@ -690,6 +690,7 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
   type to `content/`); `World` gets a hand-off API (`handOver`, `restartFrom`,
   `continueAfterDefeat`, `redrawView`). Gate: tests; per-walk traces of all seven levels and
   the keyboard sessions unchanged.
+  - 2026-10-10: done; 272 tests.
 - [ ] **D6** Every runtime error is fatal, and validation is deferred to first use.
 - [ ] **D7** Smaller design issues (the review's list).
 - [ ] **R1-R5** Readability: unnamed magic numbers, behavior tables' readability, dead code, tests
