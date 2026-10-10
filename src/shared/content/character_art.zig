@@ -15,8 +15,6 @@ pub const Key = struct { sprite: u15, composed: bool };
 pub const Art = struct {
     allocator: std.mem.Allocator,
     frames: std.AutoHashMapUnmanaged(Key, sprite.Frame) = .empty,
-    /// Sprites an animation names that no file holds; drawing skips them.
-    missing: u32 = 0,
 
     pub fn deinit(self: *Art) void {
         var frames = self.frames.valueIterator();
@@ -29,7 +27,9 @@ pub const Art = struct {
     }
 };
 
-/// Decodes every sprite named by a frame of the level's animations.
+/// Decodes every sprite named by a frame of the level's animations. A sprite that none of the
+/// level's files holds is left out, and frames that show it draw nothing (the tower names 48);
+/// a file that does not decode is an error.
 pub fn load(
     allocator: std.mem.Allocator,
     source: platform.AssetSource,
@@ -53,7 +53,10 @@ pub fn load(
 
     var art: Art = .{ .allocator = allocator };
     errdefer art.deinit();
+    var missing: u32 = 0;
     for (0..level_animations.count()) |id| {
+        // Entries no state uses can be invalid in the original's directories (each level has a
+        // few); the states' own are checked when the level loads (`level.checkContent`).
         const animation = level_animations.get(@intCast(id)) catch continue;
         for (0..animation.count()) |index| {
             const number = animation.frame(index).sprite orelse continue;
@@ -72,16 +75,17 @@ pub fn load(
                 &monsters,
                 key.sprite,
             )) catch |err| switch (err) {
-                error.OutOfMemory => return err,
-                else => {
-                    art.missing += 1;
+                error.MissingSprite, error.MissingObjectArt, error.MissingObjectArtBankBinding, error.MissingArtBank => {
+                    missing += 1;
                     continue;
                 },
+                else => return err,
             };
             errdefer frame.deinit();
             try art.frames.put(allocator, key, frame);
         }
     }
+    if (missing != 0) std.log.info("{d} sprites the animations name are in none of the level's files; they are not drawn", .{missing});
     return art;
 }
 
