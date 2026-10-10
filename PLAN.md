@@ -388,6 +388,17 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     district last; no tags. The other levels' maps are pixel-identical to the previous poster
     (only the city's glow tail differs, by at most 2 of 255). Poster 9120x11824.
 
+- [ ] Atlas: the city's districts close in (user request, 2026-10-10: "connect the america
+  station to its room up and realign all the subway stations to it", "bring the four space
+  closer together", "move the "red" zone below", "remove the letters in death tower level"). A
+  station with no other room of its district near the spot right under its room stands there,
+  touching it, and the line's row is its row. The districts close in, overlapping where their
+  rooms stay apart, never across another station's way down to its room; the pieces off the line
+  go below. Tags mark only the joins between pieces: the tower's floors that wrap around carry
+  none. Gate: tests; on the poster America's station touches its room and the four stations
+  share its row, the districts stand closer than before with no unlinked rooms touching, the red
+  district is below; the tower has no letters, Earth and the alien base keep theirs.
+
 ## Mega Drive music during play — user decision, 2026-10-09
 
 An addition to the DOS edition: the tunes the Mega Drive edition plays during play, sounding
