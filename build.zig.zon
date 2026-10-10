@@ -21,6 +21,7 @@
         "tools",
         "docs",
         "README.md",
+        "LICENSE",
         "LICENSE-THIRD-PARTY",
         "LICENSES",
     },
