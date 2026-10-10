@@ -9,8 +9,8 @@ depends on the game, and the port builds it as its checks need (below).
 - `zig build test`: the unit tests of every module. **No test is skipped**: the summary says
   "N pass (N total)".
 - The port's own suites, once it has them.
-- `zig build smoke` (the agent host for a few frames, with a save and a load) and `zig build
-  verify` (the agent binary links no SDL).
+- `zig build smoke` (the agent host without the game's files: it must say so and stop) and `zig
+  build verify` (the agent binary links no SDL).
 - `zig fmt --check src build.zig`.
 
 The steps are listed at the top of `build.zig`; agents build into a prefix and a cache under
@@ -53,8 +53,8 @@ reference data arrives, and keep what previous ports found necessary:
 ## The agent host in tests
 
 The agent host runs the whole game without a window, with a virtual clock and injected input. The
-skeleton's `smoke` step runs it for a few frames; a port grows it into the driver of scripted
-end-to-end checks: a fixed script and its expected state and frame digests, long games, save and
+`smoke` step only checks that it refuses to run without the game's files; with the user's files it
+drives scripted end-to-end checks: a fixed script and its expected state and frame digests, long games, save and
 load cycles, statistics ("Comparing behaviours with statistics", below).
 
 It is not the game the user runs ("Gate the join", below).

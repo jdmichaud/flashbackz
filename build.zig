@@ -8,7 +8,8 @@
 //!   flashbackz-atlas      a PNG poster of every level's rooms, from the user's disks
 //! The hosts write the readable data set with `--extract DIR`.
 //! Steps: `zig build` installs both native hosts. `test` runs standalone unit tests;
-//! `smoke` exercises the headless host; `verify` checks that it has no SDL dependency.
+//! `smoke` runs the headless host without the game's files, which must stop it with a message;
+//! `verify` checks that it has no SDL dependency.
 //! `all` installs both native hosts and the atlas for the selected target; `atlas` only the
 //! atlas.
 const std = @import("std");
@@ -183,10 +184,12 @@ pub fn build(b: *std.Build) void {
 
     // The agent host for a few frames, with a save and a load. It needs no game files and no
     // display.
+    // Without the game's files, which builds and tests never have, the agent says so and stops.
     const smoke = b.addRunArtifact(agent_exe);
-    smoke.addArgs(&.{ "--frames", "60", "--key", "10:f2", "--key", "20:f3" });
-    smoke.expectExitCode(0);
-    b.step("smoke", "Run the agent host for a few frames").dependOn(&smoke.step);
+    smoke.addArgs(&.{ "--frames", "60" });
+    smoke.addCheck(.{ .expect_stderr_match = "the game's files are missing" });
+    smoke.expectExitCode(2);
+    b.step("smoke", "Run the agent host without the game's files: it says so and stops").dependOn(&smoke.step);
 
     // The agent binary must have no SDL dependency.
     const no_sdl = b.addSystemCommand(&.{ "sh", "tools/check_no_sdl.sh" });

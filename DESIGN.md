@@ -188,7 +188,7 @@ confirms each part in running scenarios before the engine relies on it.
 
 Player progress and checkpoints include the complete game state needed by the original's
 restart/save behavior. Persistence semantics and the initial state remain unmeasured until their
-research gates pass; the template's synthetic smoke save is not Flashback's save format.
+research gates pass.
 
 **Saves** (an addition, user decision and approval, 2026-10-10). Besides the original's
 checkpoints (kept in memory for Retry), a level in play can be saved: SAVE GAME in the options
@@ -215,7 +215,7 @@ decision, 2026-10-09).
 Simulation uses integer arithmetic with explicit precision, overflow and rounding where they
 affect observable outcomes. The imported motions and rules describe their measured units.
 One owned random generator supplies named draws in a defined order; its algorithm and seeding
-come from the original. The placeholder's RNG is only for platform smoke tests.
+come from the original.
 
 ## 6. Presentation and audio
 
@@ -267,7 +267,7 @@ Interactive milestones require the SDL game with real events and presented frame
 are complementary. An incomplete subsystem is reported as incomplete, not hidden by a synthetic
 renderer or a build-only gate.
 
-The initial template program is explicitly a platform smoke placeholder. It establishes
-compilation, host/provider contracts, deterministic headless execution and native SDL presentation;
-it is replaced as measured Flashback content and systems arrive. The final acceptance is the
+The template's platform smoke program (a bouncing ball) established compilation, host/provider
+contracts, deterministic headless execution and native SDL presentation at the start; it is gone
+(2026-10-10), and the game runs only with the original's files. The final acceptance is the
 whole faithful, independently designed game, not this foundation or a single playable room.

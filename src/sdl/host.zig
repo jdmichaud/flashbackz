@@ -17,10 +17,6 @@ const clap = native.clap;
 /// The rate of the fallback pacer, when the display does not pace the presentation.
 pub const fallback_hz: u32 = 60;
 
-/// Whether the executable refuses to start without an asset path. The placeholder game
-/// runs without files; a port whose game needs the original's files sets this to true.
-pub const assets_required = false;
-
 /// The command line, described once for parsing and for `--help`, under the executable's name:
 /// `flashbackz`, or `flashbackz-standalone` for the standalone build (DESIGN.md 3).
 pub fn Args(comptime program: []const u8) type {
@@ -114,7 +110,7 @@ pub fn run(
     // The backend is made before the game and released after it.
     defer c.SDL_Quit();
     var backend = try SdlBackend.init(gpa, .{
-        .title = "flashbackz — platform smoke",
+        .title = "Flashback",
         .initial_window_scale = options.scale orelse 3,
         .prefer_vsync = options.vsync orelse true,
     });
@@ -259,8 +255,8 @@ pub fn parseArgs(
         .providers = try native.cli.fromArgs(parsed, diagnostic),
     };
     options.providers.built_in = built_in;
-    if ((assets_required or options.providers.entry == .level_development) and
-        options.providers.assets == null and built_in.disks.len == 0) return error.MissingAssets;
+    // The game needs the original's files, given or built in.
+    if (options.providers.assets == null and built_in.disks.len == 0) return error.MissingAssets;
     return options;
 }
 
@@ -281,7 +277,7 @@ fn testParse(args: []const []const u8) ArgError!Options {
 }
 
 test "the host options are parsed, bounded and defaulted" {
-    const defaults = try testParse(&.{});
+    const defaults = try testParse(&.{"game"});
     try std.testing.expectEqual(@as(?u32, null), defaults.scale);
     try std.testing.expectEqual(@as(?bool, null), defaults.vsync);
     try std.testing.expectEqual(@as(?u64, null), defaults.deadlineNs());
@@ -316,6 +312,8 @@ test "the host options are parsed, bounded and defaulted" {
         &.{ "--data", "" },
     }) |args| try std.testing.expectError(error.InvalidValue, testParse(args));
     try std.testing.expectError(error.UnknownOption, testParse(&.{"--frobnicate"}));
+    // Without the game's files the game does not start.
+    try std.testing.expectError(error.MissingAssets, testParse(&.{}));
     try std.testing.expectError(error.MissingAssets, testParse(&.{ "--scene", "jungle" }));
     try std.testing.expect((try testParse(&.{ "--scale", "2", "--help" })).help);
     const data = try testParse(&.{ "--data", "set", "disk1.img" });

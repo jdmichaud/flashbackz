@@ -3,8 +3,9 @@
 //! counts and the hashes of the state and of the last frame. Two runs with the same arguments print
 //! the same line on every machine; a port builds its scripted tests and its debugging on this.
 //!
-//! With an asset path, the game reads that directory; with `--saves`, it saves there. Without them,
-//! it runs on in-memory providers, so the run touches no file.
+//! The game reads its files from the asset paths (both floppy images, or a directory extracted from
+//! them); without them it stops with a message. With `--saves` it saves there; without it saves
+//! in memory, unless the asset paths give the user's save directory (code review B8).
 const std = @import("std");
 const flashbackz = @import("flashbackz");
 const agent = @import("agent");
@@ -161,14 +162,13 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
-    // Real providers when the options name them, else in-memory ones. They outlive the game.
+    // The files the options name, and saves in memory unless they name a directory. The providers
+    // outlive the game.
     var providers: native.cli.Providers = .empty;
     defer providers.deinit();
-    var memory_assets = flashbackz.memory.MemoryAssetSource.init(gpa);
-    defer memory_assets.deinit();
     var memory_storage = flashbackz.memory.MemoryStorage.init(gpa);
     defer memory_storage.deinit();
-    var assets: ?flashbackz.platform.AssetSource = memory_assets.assetSource();
+    var assets: ?flashbackz.platform.AssetSource = null;
     var storage = memory_storage.storage();
     if (options.assets != null or options.saves != null) {
         providers.open(gpa, io, init.environ_map, options) catch |err| {
@@ -179,8 +179,16 @@ pub fn main(init: std.process.Init) !void {
             stderr.interface.flush() catch {};
             std.process.exit(2);
         };
-        assets = providers.assetSource() orelse assets;
+        assets = providers.assetSource();
         storage = providers.storage();
+    }
+    if (assets == null) {
+        var buffer: [256]u8 = undefined;
+        var stderr = std.Io.File.stderr().writerStreaming(io, &buffer);
+        stderr.interface.writeAll("flashbackz-agent: the game's files are missing: give both floppy images " ++
+            "(disk1.img disk2.img) or a directory extracted from them\n") catch {};
+        stderr.interface.flush() catch {};
+        std.process.exit(2);
     }
 
     var backend = agent.AgentBackend.init(gpa, .{});
@@ -257,8 +265,8 @@ pub fn main(init: std.process.Init) !void {
 
     var buf: [512]u8 = undefined;
     var w = std.Io.File.stdout().writerStreaming(io, &buf);
-    try w.interface.print("{{\"updates\":{d},\"frames_presented\":{d},\"events_consumed\":{d},\"saves\":{d},\"loads\":{d},\"state_hash\":\"{x:0>16}\",\"frame_hash\":\"{x:0>16}\"}}\n", .{
-        game.update_count, game.frames_presented, game.events_consumed, game.saves_written, game.loads_done, game.stateHash(), game.last_frame_hash,
+    try w.interface.print("{{\"updates\":{d},\"frames_presented\":{d},\"events_consumed\":{d},\"state_hash\":\"{x:0>16}\",\"frame_hash\":\"{x:0>16}\"}}\n", .{
+        game.update_count, game.frames_presented, game.events_consumed, game.stateHash(), game.last_frame_hash,
     });
     if (game.scene == .level) {
         const scene = &game.scene.level;

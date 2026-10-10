@@ -28,7 +28,8 @@ pub fn main(init: std.process.Init) !void {
         var buf: [1024]u8 = undefined;
         var w = std.Io.File.stderr().writerStreaming(init.io, &buf);
         if (err == error.MissingAssets) {
-            const needs = "--scene with a level needs the disks (ASSET_PATH)";
+            const needs = "the game's files are missing: give both floppy images (disk1.img disk2.img)\n" ++
+                "or a directory extracted from them";
             try w.interface.print("{s}: {s}\n", .{ program, needs });
             try Args.writeUsage(&w.interface);
         } else try Args.writeError(&w.interface, @errorCast(err), diagnostic);
