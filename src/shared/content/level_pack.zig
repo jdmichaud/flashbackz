@@ -139,6 +139,7 @@ pub fn load(
 fn loadIcons(allocator: std.mem.Allocator, source: platform.AssetSource) ![]sprite.Frame {
     var file = try source.readAll("DATA/GLOBAL.ICN", 32768);
     defer file.deinit();
+    if (file.bytes.len < 2) return error.InvalidIconDirectory;
     const count = std.mem.readInt(u16, file.bytes[0..2], .little) / 2;
     var icons: std.ArrayList(sprite.Frame) = .empty;
     errdefer {

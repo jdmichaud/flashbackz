@@ -136,10 +136,12 @@ fn writeEnding(
         switch (stream[at]) {
             0xff => break,
             0xfe => {
+                if (at + 2 > stream.len) return error.TruncatedCredits;
                 try w.line(".{{ .hold = {d} }},", .{stream[at + 1]});
                 at += 2;
             },
             0x01 => {
+                if (at + 3 > stream.len) return error.TruncatedCredits;
                 try w.line(
                     ".{{ .at = .{{ .column = {d}, .row = {d} }} }},",
                     .{ stream[at + 1], stream[at + 2] },

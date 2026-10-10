@@ -38,6 +38,8 @@ pub const Report = struct {
     characters: usize = 0,
     dead_rules: usize = 0,
     ignored_arguments: usize = 0,
+    /// Notes on what the extractor did not understand: another edition's data.
+    unexpected: usize = 0,
     notes: std.ArrayList(u8) = .empty,
 
     pub fn note(
@@ -47,6 +49,17 @@ pub const Report = struct {
         arguments: anytype,
     ) !void {
         try self.notes.print(allocator, format ++ "\n", arguments);
+    }
+
+    /// A note on data the extractor did not understand.
+    pub fn unexpectedData(
+        self: *Report,
+        allocator: std.mem.Allocator,
+        comptime format: []const u8,
+        arguments: anytype,
+    ) !void {
+        self.unexpected += 1;
+        try self.note(allocator, format, arguments);
     }
 };
 
@@ -63,9 +76,14 @@ const Behavior = struct {
     links: [4]?[]const u8 = @splat(null),
     numbers: [4]?[]const u8 = @splat(null),
 
+    fn hasState(self: Behavior, animation: u16) bool {
+        for (self.states) |state| if (state.animation == animation) return true;
+        return false;
+    }
+
     fn stateName(self: Behavior, animation: u16) []const u8 {
         for (self.states) |state| if (state.animation == animation) return state.name;
-        unreachable; // every target and start state is collected
+        unreachable; // every rule's states and every placement's start state are collected
     }
 };
 
@@ -93,6 +111,17 @@ pub fn extract(arena: std.mem.Allocator, input: Input, output: Output, report: *
             record.rule_group,
             try collectBehavior(&level, record.rule_group),
         );
+    }
+    for (0..level.table.count) |index| {
+        const record = try level.table.record(@intCast(index));
+        const behavior = level.behaviors.getPtr(record.rule_group).?;
+        if (behavior.hasState(record.initial_state)) continue;
+        // It only waits there.
+        try report.unexpectedData(arena, "{s}: placement {d} starts in state {d}, which no rule names", .{
+            input.name, index, record.initial_state,
+        });
+        const waiting: State = .{ .animation = record.initial_state, .name = "", .first = behavior.rules.count(), .count = 0 };
+        behavior.states = try std.mem.concat(arena, State, &.{ behavior.states, &.{waiting} });
     }
     try nameBehaviors(&level);
     level.character_ids = try arena.alloc([]const u8, level.table.count);
@@ -286,7 +315,7 @@ fn classifyParameters(level: *Level, behavior: *Behavior) !void {
 }
 
 fn parameterIndex(argument: i16, extra: u2) ?u2 {
-    if (argument < 0 or argument + extra > 3) return null;
+    if (argument < 0 or @as(i32, argument) + extra > 3) return null;
     return @intCast(argument);
 }
 
@@ -418,7 +447,7 @@ fn writeOperation(
     out: *std.Io.Writer,
 ) !void {
     const known = codes.lookup(operation.code) orelse {
-        try level.report.note(
+        try level.report.unexpectedData(
             level.arena,
             "{s}: {s} uses unknown operation {d}",
             .{ level.input.name, behavior.file, operation.code },
@@ -541,7 +570,7 @@ fn invalid(
     arg: i16,
     out: *std.Io.Writer,
 ) !void {
-    try level.report.note(
+    try level.report.unexpectedData(
         level.arena,
         "{s}: {s} gives {s} the unexpected argument {d}",
         .{ level.input.name, behavior.file, known.name, arg },
@@ -760,4 +789,39 @@ test "a synthetic level becomes named, linked, valid ZON with dead rules dropped
         defer tree.deinit(std.testing.allocator);
         try std.testing.expectEqual(@as(usize, 0), tree.errors.len);
     }
+}
+
+test "a placement starting in a state no rule names waits there; the report says so" {
+    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const conrad_rules = testRule(1, 1, .{ 0, 0 }, .{ 0, 0 }, 0, 0);
+    var rules: std.ArrayList(u8) = .empty;
+    try rules.appendSlice(arena, &.{ 1, 0, 4, 0, 0, 0 });
+    try rules.appendSlice(arena, &([_]u8{ 1, 0 } ++ conrad_rules));
+    const placements = [_]u8{ 2, 0 } ++
+        testPlacement(1, 0, 1, .{ 0, 0, 0, 0 }, 0) ++
+        testPlacement(9, 0, 1, .{ 0, 0, 0, 0 }, 0);
+    const labels = [_]u8{ 2, 0, 0 };
+    const overlay = try names.parse(std.testing.allocator, arena, ".{}");
+    var files: TestFiles = .{ .arena = arena };
+    var report: Report = .{};
+    try extract(arena, .{
+        .name = "test",
+        .placements = &placements,
+        .rules = rules.items,
+        .labels = &labels,
+        .score_awards = @splat(0),
+        .overlay = overlay,
+    }, .{ .context = &files, .put = TestFiles.put }, &report);
+    try std.testing.expectEqual(@as(usize, 1), report.unexpected);
+    const characters = files.files.get("test/characters.zon").?;
+    try std.testing.expect(std.mem.indexOf(u8, characters, ".start = .state_9,") != null);
+    const behavior = files.files.get("test/behaviors/behavior_0.zon").?;
+    try std.testing.expect(std.mem.indexOf(u8, behavior, ".state_9 = ") != null);
+}
+
+test "a parameter argument at the top of its range names no parameter" {
+    try std.testing.expectEqual(@as(?u2, null), parameterIndex(32767, 1));
+    try std.testing.expectEqual(@as(?u2, 2), parameterIndex(2, 1));
 }

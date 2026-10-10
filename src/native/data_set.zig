@@ -38,10 +38,16 @@ pub fn extractInMemory(
     source: flashbackz.platform.AssetSource,
 ) !Files {
     var collector: Collector = .{ .arena = arena };
-    _ = try extract.extractAll(gpa, arena, source, extract.built_in_names, .{
+    const report = try extract.extractAll(gpa, arena, source, extract.built_in_names, .{
         .context = &collector,
         .put = Collector.put,
     });
+    // The known edition has none; another one shows what was not understood.
+    if (report.unexpected != 0) {
+        std.log.warn("the data set made from these files has {d} unexpected items:\n{s}", .{
+            report.unexpected, report.notes.items,
+        });
+    }
     return collector.files;
 }
 
