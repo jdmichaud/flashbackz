@@ -169,6 +169,17 @@ pub const ControllerButton = enum(u8) {
     dpad_right,
     _,
 };
+/// A pad's model: SDL's GUID as text, the same for every pad of the model, whether the host gave
+/// it the generic mapping, and the joystick button behind each of its gamepad buttons, by
+/// `ControllerButton`, as the pad numbers them from 0 (PLAN GS-3a).
+pub const ControllerModel = struct {
+    guid: [32]u8,
+    generic: bool = false,
+    buttons: [button_count]?u8 = @splat(null),
+
+    pub const button_count = 15;
+};
+
 pub const ControllerAxis = enum(u8) {
     left_x,
     left_y,
@@ -257,6 +268,7 @@ pub const Platform = struct {
         audio_close: *const fn (*anyopaque) void,
         set_relative_mouse: *const fn (*anyopaque, bool) PlatformError!void,
         available_memory: ?*const fn (*anyopaque) ?u64 = null,
+        controller_model: ?*const fn (*anyopaque, ControllerId) ?ControllerModel = null,
     };
 
     pub fn start(p: *Platform) PlatformError!Capabilities {
@@ -278,6 +290,10 @@ pub const Platform = struct {
     }
     pub fn availableMemory(p: *Platform) ?u64 {
         return if (p.vtable.available_memory) |query| query(p.context) else null;
+    }
+    /// The model of an open pad; null for a pad the host does not know or cannot name.
+    pub fn controllerModel(p: *Platform, id: ControllerId) ?ControllerModel {
+        return if (p.vtable.controller_model) |query| query(p.context, id) else null;
     }
 
     pub fn audioOpen(p: *Platform, requested: AudioFormat) PlatformError!AudioFormat {

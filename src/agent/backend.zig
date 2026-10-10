@@ -118,7 +118,13 @@ pub const AgentBackend = struct {
         .audio_clear = audioClear,
         .audio_close = audioClose,
         .set_relative_mouse = setRelativeMouse,
+        .controller_model = controllerModel,
     };
+
+    /// The agent's pad, a model of its own with a gamepad's names.
+    fn controllerModel(_: *anyopaque, _: platform.ControllerId) ?platform.ControllerModel {
+        return .{ .guid = "00000000000000000000000000a9e47d".* };
+    }
 
     fn cast(ctx: *anyopaque) *AgentBackend {
         return @ptrCast(@alignCast(ctx));

@@ -168,6 +168,11 @@ pub fn main(init: std.process.Init) !void {
     var game = try flashbackz.Game.initWithEntry(gpa, assets, storage, providers.dataSet(), options.entry);
     defer game.deinit();
     var p = backend.asPlatform();
+    // A session with a pad has it connected from the start, as SDL reports one.
+    if (buttons.items.len != 0 or axes.items.len != 0) try backend.inject(.{
+        .time_ns = backend.clock_ns,
+        .payload = .{ .controller_added = @fromBackingInt(@intCast(0)) },
+    });
     var frame: u64 = 0;
     while (frame < frames) : (frame += 1) {
         for (presses.items) |press| if (press.frame == frame) {

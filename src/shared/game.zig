@@ -187,6 +187,8 @@ pub const State = struct {
     }
 };
 
+const ConnectedPad = struct { id: platform.ControllerId, model: platform.ControllerModel };
+
 pub const Game = struct {
     allocator: std.mem.Allocator,
     /// The original's files and the saves, bound by the host. Null when the host has none.
@@ -213,6 +215,10 @@ pub const Game = struct {
     kept_settings: settings_mod.Settings = .{},
     /// What the pads hold, for the screens outside a level (a level tracks its own).
     pads: input.Pads = .{},
+    /// The connected pads' models, which give their layouts (PLAN GS-3a).
+    pad_models: [8]?ConnectedPad = @splat(null),
+    /// The pad that pressed last: the CONTROLS page shows and changes its layout.
+    last_pad: ?platform.ControllerId = null,
     /// P's toggle, which only films read: they hold their picture while it is set.
     films_paused: bool = false,
     /// The music volume keypad + and - step, 0 to 63, for notes started afterwards.
@@ -570,9 +576,20 @@ pub const Game = struct {
             self.settings.joystick = true;
         }
         try scene.update(now, &self.settings);
-        if (scene.options) |*options| if (options.menu.free_memory_mb == null) {
-            if (p.availableMemory()) |bytes| options.menu.free_memory_mb = bytes / (1024 * 1024);
-        };
+        if (scene.options) |*options| {
+            if (options.menu.free_memory_mb == null) {
+                if (p.availableMemory()) |bytes| options.menu.free_memory_mb = bytes / (1024 * 1024);
+            }
+            const shown = self.shownPad();
+            if (options.menu.reset_pad) {
+                options.menu.reset_pad = false;
+                if (shown) |model| self.settings.setPadLayout(model.guid, .{});
+            }
+            options.menu.pad = .{
+                .layout = if (shown) |model| self.settings.padLayout(model.guid) else .{},
+                .model = shown,
+            };
+        }
         switch (scene.outcome) {
             .playing => {
                 try scene.pumpAudio(p, self.settings);
@@ -663,8 +680,9 @@ pub const Game = struct {
         while (true) {
             const n = p.pollEvents(&buf);
             if (n == 0) break;
-            for (buf[0..n]) |event| {
+            for (buf[0..n]) |raw| {
                 self.events_consumed += 1;
+                const event = self.padEvent(p, raw) orelse continue;
                 self.globalKey(event);
                 // A pad's press, of a button or the stick, turns the Joystick option on (PLAN
                 // GS-3).
@@ -745,6 +763,70 @@ pub const Game = struct {
             .k => self.settings.joystick = false,
             else => {},
         }
+    }
+
+    /// A pad's event as the game reads it (PLAN GS-3a). A pad connected has its model noted; a
+    /// button stands for the fixed layout's, by its model's layout, or goes no further when it
+    /// gives no action; on the CONTROLS page, a button pressed on an action's row becomes that
+    /// action's and goes no further.
+    fn padEvent(self: *Game, p: *platform.Platform, event: platform.Event) ?platform.Event {
+        switch (event.payload) {
+            .controller_added => |id| {
+                const model = p.controllerModel(id) orelse return event;
+                for (&self.pad_models) |*slot| if (slot.* == null) {
+                    slot.* = .{ .id = id, .model = model };
+                    break;
+                };
+                return event;
+            },
+            .controller_removed => |id| {
+                for (&self.pad_models) |*slot| if (slot.*) |pad| {
+                    if (pad.id == id) slot.* = null;
+                };
+                if (self.last_pad == id) self.last_pad = null;
+                return event;
+            },
+            .controller_button_down, .controller_button_up => |change| {
+                self.last_pad = change.controller;
+                const model = self.padModel(change.controller) orelse return event;
+                const button = settings_mod.Button.of(change.button) orelse return event;
+                if (event.payload == .controller_button_down and !button.isDirection()) {
+                    if (self.bindingAction()) |action| {
+                        var layout = self.settings.padLayout(model.guid);
+                        layout.bind(action, button);
+                        self.settings.setPadLayout(model.guid, layout);
+                        return null;
+                    }
+                }
+                const standard = self.settings.padLayout(model.guid).standard(button) orelse return null;
+                var translated = event;
+                const payload: platform.Event.ControllerButtonEvent = .{ .controller = change.controller, .button = standard.controller() };
+                translated.payload = if (event.payload == .controller_button_down) .{ .controller_button_down = payload } else .{ .controller_button_up = payload };
+                return translated;
+            },
+            else => return event,
+        }
+    }
+
+    fn padModel(self: *const Game, id: platform.ControllerId) ?platform.ControllerModel {
+        for (self.pad_models) |slot| if (slot) |pad| {
+            if (pad.id == id) return pad.model;
+        };
+        return null;
+    }
+
+    /// The model of the pad the CONTROLS page shows: the last to press, or the first connected.
+    fn shownPad(self: *const Game) ?platform.ControllerModel {
+        if (self.last_pad) |id| if (self.padModel(id)) |model| return model;
+        for (self.pad_models) |slot| if (slot) |pad| return pad.model;
+        return null;
+    }
+
+    /// The action the CONTROLS page gives a pad's button pressed now, if it is open.
+    fn bindingAction(self: *const Game) ?input.Action {
+        if (self.scene != .level) return null;
+        const options = self.scene.level.options orelse return null;
+        return options.menu.binding();
     }
 
     /// Keeps the settings in storage when they have changed since storage last kept them. A

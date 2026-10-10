@@ -141,6 +141,22 @@ pub const SdlBackend = struct {
         return memory.availableBytes();
     }
 
+    /// The pad's GUID, whether it has the generic mapping (`genericMapping` names it so), and the
+    /// joystick button behind each gamepad button.
+    fn controllerModel(_: *anyopaque, id: platform.ControllerId) ?platform.ControllerModel {
+        const handle = c.SDL_GameControllerFromInstanceID(@bitCast(@backingInt(id))) orelse return null;
+        const joystick = c.SDL_GameControllerGetJoystick(handle) orelse return null;
+        var guid: [33]u8 = undefined;
+        c.SDL_JoystickGetGUIDString(c.SDL_JoystickGetGUID(joystick), &guid, guid.len);
+        var model: platform.ControllerModel = .{ .guid = guid[0..32].* };
+        if (c.SDL_GameControllerName(handle)) |name| model.generic = std.mem.eql(u8, std.mem.span(name), generic_name);
+        for (&model.buttons, 0..) |*button, index| {
+            const bind = c.SDL_GameControllerGetBindForButton(handle, @intCast(index));
+            if (bind.bindType == c.SDL_CONTROLLER_BINDTYPE_BUTTON) button.* = @intCast(bind.value.button);
+        }
+        return model;
+    }
+
     const vtable = platform.Platform.VTable{
         .start = start,
         .set_resolution = setResolution,
@@ -149,6 +165,7 @@ pub const SdlBackend = struct {
         .now_ns = nowNs,
         .audio_open = audioOpen,
         .available_memory = availableMemory,
+        .controller_model = controllerModel,
         .audio_queue = audioQueue,
         .audio_status = audioStatus,
         .audio_clear = audioClear,
@@ -1100,6 +1117,8 @@ fn useDummyDrivers() void {
 
 /// The longest generic mapping: the GUID, the name, and each button's, axis' and hat's part.
 const max_mapping = 512;
+/// The generic mapping's name, which tells its pads apart.
+const generic_name = "generic gamepad";
 
 /// The generic gamepad mapping of a joystick SDL has none for (SDL's mapping format: the GUID, a
 /// name, then each gamepad part and the joystick's input that gives it): its buttons in turn A,
@@ -1111,7 +1130,7 @@ fn genericMapping(buffer: *[max_mapping]u8, guid: []const u8, axes: usize, butto
     const in_turn = [_][]const u8{ "a", "b", "x", "y", "leftshoulder", "rightshoulder", "leftstick", "rightstick", "back" };
     const axis_names = [_][]const u8{ "leftx", "lefty", "rightx", "righty", "lefttrigger", "righttrigger" };
     var w: std.Io.Writer = .fixed(buffer[0 .. buffer.len - 1]);
-    w.print("{s},generic gamepad,", .{guid}) catch unreachable;
+    w.print("{s},{s},", .{ guid, generic_name }) catch unreachable;
     const start = if (buttons >= 10) 9 else buttons -| 1;
     var next: usize = 0;
     for (0..@min(buttons, 11)) |b| {
@@ -1162,6 +1181,11 @@ test "a joystick without a gamepad mapping is opened with the generic one" {
         };
     }
     const id = added orelse return error.NoControllerAdded;
+    // Its model: generic, START its tenth button.
+    const model = p.controllerModel(id) orelse return error.NoModel;
+    try std.testing.expect(model.generic);
+    try std.testing.expectEqual(@as(?u8, 9), model.buttons[@backingInt(platform.ControllerButton.start)]);
+    try std.testing.expectEqual(@as(?u8, 0), model.buttons[@backingInt(platform.ControllerButton.a)]);
     const handle = c.SDL_GameControllerFromInstanceID(@bitCast(@backingInt(id))) orelse return error.NotOpened;
     const joystick = c.SDL_GameControllerGetJoystick(handle).?;
     _ = c.SDL_JoystickSetVirtualButton(joystick, 9, 1);
