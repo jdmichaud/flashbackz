@@ -354,6 +354,14 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   no level film. Gate: every way into a level opens its film once; no scene a behavior requests
   is also played by the title, game-over or ending screens.
 
+- [ ] Level atlas (user request, 2026-10-10: "Make it a proper tool in the repo"):
+  `flashbackz-atlas` draws every level into one PNG, a row per level, its name in the game
+  font on the left and its rooms on the right, placed by their links on black. The game's
+  joins that cannot lie flat (links whose place is taken, transports between areas) carry
+  matching lettered tags. The PNG holds the game's art: written where the user asks, never
+  committed. Gate: `zig build atlas`; tests cover the layout, the packing and the PNG writer;
+  the poster from the floppy images marks every join between its drawn areas.
+
 ## Mega Drive music during play — user decision, 2026-10-09
 
 An addition to the DOS edition: the tunes the Mega Drive edition plays during play, sounding
