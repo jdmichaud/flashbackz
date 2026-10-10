@@ -4,6 +4,7 @@
 const std = @import("std");
 const sdl = @import("sdl");
 const native = @import("native");
+const built_in = @import("built_in");
 const clap = native.clap;
 
 pub fn main(init: std.process.Init) !void {
@@ -11,7 +12,8 @@ pub fn main(init: std.process.Init) !void {
     const arena = init.arena.allocator();
     const args = try clap.processArguments(arena, init.minimal.args);
     var diagnostic: clap.Diagnostic = .{};
-    const options = sdl.host.parseArgs(arena, args, &diagnostic) catch |err| {
+    const files: native.cli.BuiltIn = .{ .disks = built_in.disks, .megadrive = built_in.megadrive };
+    const options = sdl.host.parseArgs(arena, args, &diagnostic, files) catch |err| {
         var buf: [1024]u8 = undefined;
         var w = std.Io.File.stderr().writerStreaming(init.io, &buf);
         if (err == error.MissingAssets) {

@@ -159,6 +159,15 @@ on entering the second room of level 2. The DOS edition asks for them as well bu
 for them. They play on an emulated YM2612 (sorz's chips, NTSC timing), mixed with the effects;
 nothing of the cartridge is in the repository. Without the option the game is the DOS edition.
 
+## Standalone build
+
+`zig build -Ddisk1=PATH -Ddisk2=PATH [-Dmegadrive=PATH]` checks the user's files and builds them
+into `flashbackz-sdl`, which then plays with no argument (with the Mega Drive tunes when the
+cartridge is built in); paths on its command line still take precedence. A wrong file stops the
+build and says which. For Windows add `-Dtarget=x86_64-windows-gnu`: one executable to copy.
+Such an executable holds the original game: it is for the user's own machines, never committed
+nor distributed. The agent host never has the files built in.
+
 Both programs list their options with `--help`: the help is generated from the same description
 the command line is parsed with (`src/native/clap.zig`).
 

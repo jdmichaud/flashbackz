@@ -224,11 +224,17 @@ pub const Pacer = struct {
 pub const ArgError = clap.Error || error{MissingAssets};
 
 /// Parses `args`, the arguments after the program's name; the options point into them.
-pub fn parseArgs(allocator: std.mem.Allocator, args: []const []const u8, diagnostic: *clap.Diagnostic) ArgError!Options {
+/// `built_in` are the standalone build's files, which stand in for paths not given.
+pub fn parseArgs(
+    allocator: std.mem.Allocator,
+    args: []const []const u8,
+    diagnostic: *clap.Diagnostic,
+    built_in: native.cli.BuiltIn,
+) ArgError!Options {
     var parsed = try Args.parse(allocator, args, diagnostic);
     defer parsed.deinit(allocator);
     if (parsed.help) return .{ .help = true };
-    const options: Options = .{
+    var options: Options = .{
         .scale = try parsed.number(u32, "scale", 1, SdlBackend.max_window_scale, diagnostic),
         .vsync = if (parsed.flag("no-vsync")) false else null,
         .software = parsed.flag("software"),
@@ -237,8 +243,9 @@ pub fn parseArgs(allocator: std.mem.Allocator, args: []const []const u8, diagnos
         .fps = try parsed.number(u32, "fps", 1, 1000, diagnostic),
         .providers = try native.cli.fromArgs(parsed, diagnostic),
     };
+    options.providers.built_in = built_in;
     if ((assets_required or options.providers.entry == .level_development) and
-        options.providers.assets == null) return error.MissingAssets;
+        options.providers.assets == null and built_in.disks.len == 0) return error.MissingAssets;
     return options;
 }
 
@@ -250,7 +257,7 @@ fn seconds(parsed: Args, comptime long: []const u8, diagnostic: *clap.Diagnostic
 
 fn testParse(args: []const []const u8) ArgError!Options {
     var diagnostic: clap.Diagnostic = .{};
-    return parseArgs(std.testing.allocator, args, &diagnostic);
+    return parseArgs(std.testing.allocator, args, &diagnostic, .{});
 }
 
 test "the host options are parsed, bounded and defaulted" {

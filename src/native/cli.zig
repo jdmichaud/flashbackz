@@ -178,6 +178,8 @@ pub const Options = struct {
     names: ?[]const u8 = null,
     /// `--megadrive`: the Mega Drive edition's cartridge, for its tunes.
     megadrive: ?[]const u8 = null,
+    /// The standalone build's files, read when no path names them.
+    built_in: BuiltIn = .{},
     entry: flashbackz.game.Entry = .automatic,
 
     /// The asset paths in order, in `buffer`.
@@ -197,8 +199,15 @@ pub const Options = struct {
     }
 };
 
+/// The standalone build's files (DESIGN.md 3): the disks, read when no asset path is given, and
+/// the cartridge, read without `--megadrive`.
+pub const BuiltIn = struct {
+    disks: []const []const u8 = &.{},
+    megadrive: ?[]const u8 = null,
+};
+
 /// The kind of asset source, for the host's start-up line and the agent's diagnostics.
-pub const AssetKind = enum { none, directory, floppy, mixed };
+pub const AssetKind = enum { none, directory, floppy, mixed, built_in };
 
 pub const OpenError = error{
     NotFound,
@@ -284,18 +293,27 @@ pub const Providers = struct {
         else
             try defaultSaveDirectory(allocator, environ);
         self.saves = try mapOpen(DirectoryStorage.open(allocator, io, self.saves_path, true));
-        const path = options.assets orelse {
+        if (options.assets == null and options.built_in.disks.len == 0) {
             self.failed = .{};
             return;
-        };
+        }
         self.content = Pack.init(allocator);
-        try self.importPath(io, path);
-        if (options.second_assets) |second| try self.importPath(io, second);
+        if (options.assets) |path| {
+            try self.importPath(io, path);
+            if (options.second_assets) |second| try self.importPath(io, second);
+        } else {
+            self.failed = .{ .what = "built-in disks" };
+            for (options.built_in.disks) |image| try self.importImage(image);
+            self.kind = .built_in;
+        }
         self.failed = .{ .what = "disks' archives" };
         flashbackz.content.archive.expandAll(&self.content.?) catch |err| return mapImportError(err);
         if (options.megadrive) |file| {
             self.failed = .{ .what = "Mega Drive cartridge", .path = file };
             try self.importCartridge(io, file);
+        } else if (options.built_in.megadrive) |cartridge| {
+            self.failed = .{ .what = "built-in Mega Drive cartridge" };
+            try self.addCartridge(cartridge);
         }
         self.failed = .{ .what = "data set", .path = options.data orelse "" };
         try self.openDataSet(io, options.data);
@@ -313,8 +331,21 @@ pub const Providers = struct {
             else => error.UnsupportedCartridge,
         };
         defer self.allocator.free(bytes);
+        try self.addCartridge(bytes);
+    }
+
+    fn addCartridge(self: *Providers, bytes: []const u8) OpenError!void {
+        const megadrive = flashbackz.content.megadrive;
         if (!megadrive.isCartridge(bytes)) return error.UnsupportedCartridge;
         self.content.?.add(megadrive.asset, bytes) catch |err| return mapImportError(err);
+    }
+
+    /// Adds the files of a floppy image, given as bytes.
+    fn importImage(self: *Providers, image: []const u8) OpenError!void {
+        var imported = flashbackz.floppy.load(self.allocator, image) catch |err|
+            return mapImportError(err);
+        defer imported.deinit();
+        self.content.?.merge(&imported) catch |err| return mapImportError(err);
     }
 
     /// Reads the data set from `directory`, or extracts it in memory from the original files.
@@ -381,9 +412,7 @@ pub const Providers = struct {
                 .limited(4 * 1024 * 1024),
             ) catch return error.InvalidImage;
             defer allocator.free(image_bytes);
-            var imported = flashbackz.floppy.load(allocator, image_bytes) catch |failure| return mapImportError(failure);
-            defer imported.deinit();
-            self.content.?.merge(&imported) catch |failure| return mapImportError(failure);
+            try self.importImage(image_bytes);
             break :image .floppy;
         };
         self.kind = if (self.kind == .none or self.kind == kind) kind else .mixed;
@@ -620,6 +649,59 @@ test "the positional source reads a floppy through owned provider storage" {
     var content = try providers.assetSource().?.readAll("data/file.dat", 600);
     defer content.deinit();
     try std.testing.expectEqual(@as(usize, 600), content.bytes.len);
+}
+
+test "the standalone build's files stand in for paths, which still take precedence" {
+    const allocator = std.testing.allocator;
+    const io = std.testing.io;
+    var tmp = std.testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+    const image = try flashbackz.floppy.testImage(allocator);
+    defer allocator.free(image);
+    var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const base = path_buffer[0..try tmp.dir.realPath(io, &path_buffer)];
+    const saves = try std.fmt.allocPrint(allocator, "{s}/saves", .{base});
+    defer allocator.free(saves);
+    const missing = try std.fmt.allocPrint(allocator, "{s}/absent.img", .{base});
+    defer allocator.free(missing);
+    var env = try testEnviron(allocator, &.{});
+    defer env.deinit();
+    const disks: []const []const u8 = &.{image};
+    {
+        var providers: Providers = .empty;
+        defer providers.deinit();
+        const options: Options = .{ .saves = saves, .built_in = .{ .disks = disks } };
+        try providers.open(allocator, io, &env, options);
+        try std.testing.expectEqual(AssetKind.built_in, providers.kind);
+        var content = try providers.assetSource().?.readAll("data/file.dat", 600);
+        defer content.deinit();
+        try std.testing.expectEqual(@as(usize, 600), content.bytes.len);
+    }
+    // A built-in cartridge that is not the accepted one is refused, as a --megadrive file is.
+    {
+        var providers: Providers = .empty;
+        const options: Options = .{
+            .saves = saves,
+            .built_in = .{ .disks = disks, .megadrive = "not a cartridge" },
+        };
+        const failed = providers.open(allocator, io, &env, options);
+        try std.testing.expectError(error.UnsupportedCartridge, failed);
+        var message: std.Io.Writer.Allocating = .init(allocator);
+        defer message.deinit();
+        try providers.writeFailure(error.UnsupportedCartridge, &message.writer);
+        try std.testing.expectEqualStrings("cannot open the built-in Mega Drive cartridge: " ++
+            "not the cartridge Flashback (Europe) (En,Fr)\n", message.written());
+    }
+    // A path on the command line wins over the built-in disks, even a missing one.
+    {
+        var providers: Providers = .empty;
+        const options: Options = .{
+            .assets = missing,
+            .saves = saves,
+            .built_in = .{ .disks = disks },
+        };
+        try std.testing.expectError(error.NotFound, providers.open(allocator, io, &env, options));
+    }
 }
 
 test "multiple disks merge files and conflicting editions fail without partial providers" {
