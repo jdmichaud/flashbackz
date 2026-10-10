@@ -79,7 +79,10 @@ pub const Ending = struct {
             allocator.destroy(arena);
         }
         var diagnostic: data_set.Diagnostic = .{};
-        const scenes = try data_set.loadScenes(allocator, arena.allocator(), files, &diagnostic);
+        const scenes = data_set.loadScenes(allocator, arena.allocator(), files, &diagnostic) catch |err| {
+            std.log.err("data set: {s}", .{diagnostic.message()});
+            return err;
+        };
         const interface = try floppy_interface.load(allocator, assets);
         var font_file = try assets.readAll("DATA/FB_TXT.FNT", 16384);
         defer font_file.deinit();
@@ -98,6 +101,16 @@ pub const Ending = struct {
         errdefer ending.font.deinit();
         if (scenes.film(ending_scene)) |film| ending.add(film);
         for (scenes.ending.scenes) |scene| if (scenes.film(scene)) |film| ending.add(film);
+        if (ending.film_count == 0) {
+            std.log.err("data set: scenes.zon: no film for the ending (scene {d})", .{ending_scene});
+            return error.NoEndingFilm;
+        }
+        for (scenes.ending.credits) |credit| if (credit == .text) for (credit.text) |byte| {
+            if (byte != '|' and ending.font.glyph(byte) == null) {
+                std.log.err("data set: scenes.zon: the font has no character {d} of the credits", .{byte});
+                return error.MissingGlyph;
+            }
+        };
         // One music plays from the first film to the end of the list.
         if (ending.films[0].music) |name| {
             ending.music = try soundtrack.Soundtrack.open(allocator, assets, name);

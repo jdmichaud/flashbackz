@@ -4,6 +4,7 @@
 const std = @import("std");
 const behavior = @import("../behavior/root.zig");
 const level_pack = @import("../content/level_pack.zig");
+const font_mod = @import("../content/font.zig");
 const character_art = @import("../content/character_art.zig");
 const sprite = @import("../content/sprite.zig");
 const palette = @import("../content/palette.zig");
@@ -218,6 +219,7 @@ pub const Scene = struct {
             first_room,
         );
         errdefer pack.deinit();
+        try checkContent(data, messages, &pack);
         var world = try World.init(
             allocator,
             data,
@@ -776,6 +778,37 @@ pub const Scene = struct {
         self.effects.stop();
     }
 };
+
+/// What play animates and draws must be in the level's files: each state's animation, and the
+/// characters of the world messages and the labels. Checked at load, so that a data set fails
+/// there, with its reason, not in play.
+fn checkContent(data: *const data_set.Level, messages: data_set.Messages, pack: *const level_pack.Pack) !void {
+    for (data.behaviors) |table| for (table.states) |state| {
+        _ = pack.animations.get(state.animation) catch |err| {
+            std.log.err("data set: behavior {s}, state {s}: animation {d} is not in the level's files ({s})", .{
+                table.name, state.name, state.animation, @errorName(err),
+            });
+            return err;
+        };
+    };
+    for (messages, 0..) |pages, number| for (pages) |lines| for (lines) |line| {
+        if (missingGlyph(&pack.font, line.text)) |byte| {
+            std.log.err("data set: message {d}: the font has no character {d}", .{ number, byte });
+            return error.MissingGlyph;
+        }
+    };
+    for (data.characters) |character| for ([_]*const font_mod.Font{ &pack.font, &pack.inventory.font }) |font| {
+        if (missingGlyph(font, character.label)) |byte| {
+            std.log.err("data set: {s}'s label: the font has no character {d}", .{ character.name, byte });
+            return error.MissingGlyph;
+        }
+    };
+}
+
+fn missingGlyph(font: *const font_mod.Font, text: []const u8) ?u8 {
+    for (text) |byte| if (font.glyph(byte) == null) return byte;
+    return null;
+}
 
 fn openingScene(scenes: data_set.Scenes, level: level_mod.Id) ?i16 {
     const scene = switch (level) {

@@ -195,9 +195,7 @@ pub const TerrainHistory = struct {
 /// from the saved `active` flags, then restarts as after any continue (engine-level.md 3.4).
 /// Not saved: the random state, messages, countdowns, weapon mode, protection, shake.
 pub const Checkpoint = struct {
-    /// The original's character table holds 256 characters.
-    pub const max_characters = 256;
-    characters: [max_characters]Character,
+    characters: [data_set.max_characters]Character,
     score: u32,
     grid: grid.Grid,
     terrain_history: TerrainHistory,

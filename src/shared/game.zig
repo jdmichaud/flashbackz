@@ -95,7 +95,7 @@ pub const Game = struct {
     suspended_level: ?level_scene.Scene = null,
     /// The character records' flags as the last level left them; the next level's characters
     /// that it does not place keep them, as in the original.
-    inherited: [256]behavior_world.Inherited = @splat(.{}),
+    inherited: [data_set.max_characters]behavior_world.Inherited = @splat(.{}),
     /// The one audio output, which plays the scene's sound.
     sound: audio_output.Output = .{},
     /// The Mega Drive edition's tunes, when the user gave its cartridge (PLAN MD-D), read once
@@ -833,7 +833,7 @@ pub const Game = struct {
         defer arena_state.deinit();
         const record = try save.decode(self.allocator, arena_state.allocator(), bytes.bytes, save.fingerprint(files));
         if (record.inherited.len != self.inherited.len) return error.InvalidSave;
-        var inherited: [256]behavior_world.Inherited = undefined;
+        var inherited: [data_set.max_characters]behavior_world.Inherited = undefined;
         @memcpy(&inherited, record.inherited);
         var scene = try level_scene.Scene.load(self.allocator, assets, files, record.level, .{
             .difficulty = record.difficulty,

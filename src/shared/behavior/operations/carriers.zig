@@ -323,7 +323,7 @@ fn addressLowByte(position: i32) u8 {
 /// history (`world_module.Checkpoint`). The original writes this to a file and shows a
 /// notice on success; here the save cannot fail. Always true.
 pub fn checkpoint(world: *World, _: u16, _: void) !bool {
-    std.debug.assert(world.characters.len <= world_module.Checkpoint.max_characters);
+    // The loader holds a level to `data_set.max_characters`.
     world.checkpoint = @as(world_module.Checkpoint, undefined);
     const saved = &world.checkpoint.?;
     @memcpy(saved.characters[0..world.characters.len], world.characters);
