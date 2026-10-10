@@ -1,4 +1,5 @@
-//! Bounded backward bitstream import used by collision resources. Bytes and bit refill order
+//! Bounded backward bitstream import used by the installation archives (ABA) and the collision
+//! (CT), object art (MBK), room (LEV) and tile bank (BNQ) files. Bytes and bit refill order
 //! reproduce the original codec; the result is owned content, not a simulated DOS buffer.
 const std = @import("std");
 

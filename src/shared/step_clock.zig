@@ -1,5 +1,6 @@
 //! Rational deadlines for discrete simulation. Host presentation rate never sets movement
-//! speed. Gameplay follows the original's tick counter: a frame waits two ticks, and a frame
+//! speed above about 23 frames a second; below, a late frame's one catch-up walk cannot make up
+//! the time. Gameplay follows the original's tick counter: a frame waits two ticks, and a frame
 //! that ends late restarts the clock (the level scene's catch-up walks).
 const std = @import("std");
 

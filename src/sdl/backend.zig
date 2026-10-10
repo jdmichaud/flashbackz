@@ -1,4 +1,4 @@
-//! `SdlBackend`: the Linux/SDL platform (DESIGN.md). It presents through a window,
+//! `SdlBackend`: the SDL platform, on Linux and Windows (DESIGN.md). It presents through a window,
 //! a renderer and one streaming RGBA32 texture. It translates SDL's event queue into the
 //! project's events, with monotonic nanosecond time stamps. The performance counter is the
 //! clock. SDL's queued-audio API implements the bounded PCM queue contract. This file has no palette logic

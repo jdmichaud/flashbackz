@@ -2,7 +2,7 @@
 //! `--scene`, `--saves` and `--data`, and `--extract` with `--names`, described for `clap` once.
 //!
 //! Each asset path is a directory or a FAT12 floppy image. `--saves` defaults to the per-user application data directory, which
-//! is created on first use. The result is a bound `AssetSource` and `Storage`. The game uses
+//! the game creates when it starts if it does not exist (the agent saves in memory instead). The result is a bound `AssetSource` and `Storage`. The game uses
 //! them and does not know which kind of source it has.
 const std = @import("std");
 const builtin = @import("builtin");
@@ -41,7 +41,7 @@ pub const shared_options = [_]clap.Option{
         .long = "extract",
         .value = "DIR",
         .help = "write the data set (characters, behaviors, messages) into DIR, a new or\n" ++
-            "empty directory outside any Git repository, and exit",
+            "empty directory, and exit; it holds the game's content: keep it out of Git",
     },
     .{
         .long = "names",

@@ -1,6 +1,8 @@
 //! Runs one condition or effect. Each vocabulary name is implemented once, in one of the
 //! group files below, as a function named like the name in camel case (`no_floor_ahead` is
-//! `noFloorAhead`). Conditions return whether they hold; effects return true. Some original
+//! `noFloorAhead`). Conditions return whether they hold; most effects return true, and some
+//! return what the original returns (`send_to_touching_*`, `exit_level`, `broadcast`,
+//! `restore_terrain`, `shoot`, `strike`, `snap_to_wall_ahead`, each documented). Some original
 //! conditions also change the world; they do so whether or not a later check fails.
 const std = @import("std");
 const vocabulary = @import("vocabulary.zig");

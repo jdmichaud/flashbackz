@@ -98,7 +98,8 @@ pub const Requests = struct {
     level: ?u8 = null,
     sounds: [16]Sound = undefined,
     sound_count: u8 = 0,
-    /// Characters hit this update (hit messages that reached them), for the zoom view.
+    /// Characters hit this update (hit messages sent to them, kept even when the mail pool is
+    /// full), for the zoom view.
     hits: [16]u16 = undefined,
     hit_count: u8 = 0,
 
@@ -250,7 +251,8 @@ pub const World = struct {
     defeat_countdown: i16 = 0,
     defeat_scene: i16 = -1,
     weapon_mode: i16 = 0,
-    /// The view's vertical shake offset, -1 to 2.
+    /// The view's vertical shake offset, -1 to 2; the screen takes its low two bits as 0 to 3
+    /// rows, so -1 shows as 3.
     shake: i8 = 0,
     requests: Requests = .{},
     /// The updating character's column, tier and facing at the start of its update.
@@ -787,7 +789,7 @@ pub const World = struct {
         }
     }
 
-    /// Sounds play for awake characters in the view room, or quieter from a room beside it.
+    /// Sounds play for active characters in the view room, or quieter from a room beside it.
     /// Every id is asked for, as in the original: its DOS sound driver refuses those from 66 on,
     /// which the Mega Drive edition plays (the sound output decides).
     pub fn requestSound(self: *World, index: u16, id: i16) void {

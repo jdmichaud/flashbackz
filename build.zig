@@ -3,8 +3,8 @@
 //! Targets:
 //!   flashbackz-agent      headless debugging host (shared game + AgentBackend), never links SDL
 //!   flashbackz            the game: the SDL interactive host (Linux, Windows)
-//!   flashbackz-standalone the game with the user's files built in, only with -Ddisk1, -Ddisk2
-//!                         and -Dmegadrive (DESIGN.md 3)
+//!   flashbackz-standalone the game with the user's files built in, when any of -Ddisk1,
+//!                         -Ddisk2 and -Dmegadrive is given (DESIGN.md 3)
 //!   flashbackz-atlas      a PNG poster of every level's rooms, from the user's disks
 //! The hosts write the readable data set with `--extract DIR`.
 //! Steps: `zig build` installs both native hosts. `test` runs standalone unit tests;
@@ -183,8 +183,6 @@ pub fn build(b: *std.Build) void {
         test_step.dependOn(&b.addRunArtifact(t).step);
     }
 
-    // The agent host for a few frames, with a save and a load. It needs no game files and no
-    // display.
     // Without the game's files, which builds and tests never have, the agent says so and stops.
     const smoke = b.addRunArtifact(agent_exe);
     smoke.addArgs(&.{ "--frames", "60" });

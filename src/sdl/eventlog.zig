@@ -1,8 +1,8 @@
 //! The event log of the SDL host: one JSON object on one line for each delivered platform event.
 //!
-//! The field names are the names of the platform's types, so an agent host that parses the same
-//! lines replays an interactive session headlessly. An enum value that has no name is written as
-//! its number; a parser should reject such a line rather than read the number as another value.
+//! The field names are the names of the platform's types, so that a tool can read a session back
+//! (the agent host does not replay these logs). An enum value that has no name is written as its
+//! number; a parser should reject such a line rather than read the number as another value.
 const std = @import("std");
 const flashbackz = @import("flashbackz");
 const platform = flashbackz.platform;

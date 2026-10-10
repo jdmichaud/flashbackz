@@ -22,8 +22,9 @@ page says how they play out in a session.
    recovered source and old notes are leads (`docs/reverse-engineering.md`).
 3. **Measure the original.** Before a behaviour changes, measure what the original does, with an
    oracle outside the repository. A report can be the reverse of the truth.
-4. **Implement** in the port's own structure, with a comment naming the original's routine and
-   address that the code follows.
+4. **Implement** in the port's own structure, naming the research it follows (a flashback-re
+   document), never the original's addresses or routines (AGENTS.md), except in
+   `behavior/original_memory.zig`.
 5. **Gate.** The unit tests and the suites pass (`docs/testing.md`), and the change is seen in the
    build the user runs: the SDL game, in the mode the user plays, with real input. The agent host
    and injected events do not stand in for that.

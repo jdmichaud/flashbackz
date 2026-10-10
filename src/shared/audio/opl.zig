@@ -81,7 +81,7 @@ const Operator = struct {
     op_state: OpState = .off,
     toff: u32 = 0,
     freq_high: i32 = 0,
-    /// The start of the selected waveform in `wavtable`. The C version keeps a pointer; an index
+    /// The start of the selected waveform in `wavtable`. DOSBox 0.73's C code (as modified for vpoolz's oracle) keeps a pointer; an index
     /// avoids a self-reference.
     cur_wform: usize = 0,
     cur_wmask: u32 = 0,
@@ -133,7 +133,7 @@ const wavestart = [8]u32{ 0, waveprec >> 1, 0, waveprec >> 2, 0, 0, 0, waveprec 
 const attackconst = [4]f64{ 1.0 / 2.82624, 1.0 / 2.25280, 1.0 / 1.88416, 1.0 / 1.59744 };
 const decrelconst = [4]f64{ 1.0 / 39.28064, 1.0 / 31.41608, 1.0 / 26.17344, 1.0 / 22.44608 };
 
-/// The C version converts a double to an `int32_t` with a plain cast. Zig's `@intFromFloat` does
+/// The C code converts a double to an `int32_t` with a plain cast. Zig's `@intFromFloat` does
 /// not accept a value outside the range of the type, so this function truncates toward zero and
 /// clamps at the limits. The two differ only on values that the chip never makes.
 fn toI32(v: f64) i32 {
@@ -163,7 +163,7 @@ pub const Chip = struct {
     tremtab_pos: u32 = 0,
     tremtab_add: u32 = 0,
     generator_add: u32 = 0,
-    /// The state of the noise generator of the rhythm section. The C version uses this generator
+    /// The state of the noise generator of the rhythm section. The C code uses this generator
     /// instead of `rand()`, so the noise is reproducible and the audio thread makes no libc call.
     noise_seed: u32 = 1,
 
@@ -180,7 +180,7 @@ pub const Chip = struct {
     frqmul: [16]f32 = @splat(0),
     kslev: [8][16]u8 = @splat(@splat(0)),
 
-    /// The two timers and the status register. The C version runs them on the chip's own clock
+    /// The two timers and the status register. The C code runs them on the chip's own clock
     /// (the frames rendered), not on a wall clock.
     timers: [2]Timer = @splat(.{}),
     chip_frames: u64 = 0,
@@ -328,7 +328,7 @@ pub const Chip = struct {
 /// One of the two timers of the chip.
 ///
 /// DOSBox keeps the timers outside the emulator, in a wrapper that the host's wall clock drives.
-/// The C version and this file put them on the chip's own clock, which is the audio output.
+/// The C code and this file put them on the chip's own clock, which is the audio output.
 /// `chip_frames` counts the frames rendered. A timer with preset N expires `(256 - N)` times its
 /// scale in microseconds after its start. It then reloads and continues, so the flag comes again
 /// one period after each reset, as on the chip.
@@ -497,7 +497,7 @@ pub fn disableOperator(o: *Operator, act_type: u32) void {
 
 // --- the chip's own reset (adlib_init) ---------------------------------------------------------
 
-/// The waveform table. The C version builds it once into a static. The values do not depend on
+/// The waveform table. The C code builds it once into a static. The values do not depend on
 /// the sample rate, so the table is built once, at compile time; freestanding builds link no
 /// compiler-rt, and at run time `sin` would be an import. A test checks it against the table
 /// built at run time.
@@ -522,7 +522,7 @@ fn buildWaveTable(pi: f64) [waveprec * 3]i16 {
     return table;
 }
 
-/// A new chip at a sample rate, with all tables built. The C version keeps the waveform and
+/// A new chip at a sample rate, with all tables built. The C code keeps the waveform and
 /// key-scale tables in statics that it builds once. Here the chip holds them: the result is the
 /// same for one instance, and two instances are independent.
 pub fn init(samplerate_in: u32) Chip {
@@ -804,7 +804,7 @@ fn clipit16(ival: i32) i16 {
     return 32767;
 }
 
-/// The per-block scratch buffers of the render. The C version keeps them on the stack of
+/// The per-block scratch buffers of the render. The C code keeps them on the stack of
 /// `adlib_getsample`.
 const Render = struct {
     outbufl: [blockbuf_size]i32 = @splat(0),

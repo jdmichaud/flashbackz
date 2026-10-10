@@ -26,11 +26,11 @@ Disk 1 is identical to the initial, now-removed `Flashback.ima`. Research lives 
 There is no mandatory remaster and no runtime dependency on an emulator, decompiler, original
 executable's instructions, research tool or sibling repository.
 
-Linux/SDL and the deterministic headless host share the same game. Windows/SDL remains a
-future target. Browser/WebAssembly support is excluded by user instruction (2026-10-04).
-The user accepts Linux runtime verification plus a Windows cross-build for Windows. Windows
-compilation is deferred until Linux gameplay is working (user priority, 2026-10-04); portable
-host boundaries remain required. Network play is excluded. Audio acceptance is AdLib FM
+Linux/SDL and the deterministic headless host share the same game. Windows/SDL is built by
+cross-compilation (`-Dtarget=x86_64-windows-gnu`, SDL2 compiled from source) and not run here:
+the user accepts Linux runtime verification plus a Windows cross-build for Windows.
+Browser/WebAssembly support is excluded by user instruction (2026-10-04); portable host
+boundaries remain required. Network play is excluded. Audio acceptance is AdLib FM
 plus the game's digital samples; MT-32 device ROMs are not required.
 
 ## 2. Ownership and boundaries
@@ -56,12 +56,13 @@ Screen -> indexed frame -> RGBA; effects mixer and film music -> PCM
 
 Each application is a value with its own allocator, providers, scene state, session, renderer and
 audio. No mutable global state and no borrowed provider buffer survives its documented call.
-Content objects own their decoded storage and outlive sessions that use them. Actor references
-are stable handles with generations, never pointers into movable arrays or original RAM offsets.
+Content objects own their decoded storage and outlive sessions that use them. Characters refer to
+each other by their index in the level's table, never by pointers into movable arrays.
 
 Simulation systems receive explicit state and commands, produce ordered events, and do not call
 the platform, open files or wait for sound. The application coordinates I/O at update boundaries.
-Long asset and movie reads become bounded jobs with explicit cancellation and completion order.
+Reads are synchronous and happen at scene changes: a level's files when it loads, a film's when
+it starts.
 
 The platform contracts and native/provider skeleton come from `game-port-template`: context plus
 function table, borrowed completed RGBA8 frames, copied bounded PCM queues, validated logical
@@ -125,9 +126,11 @@ row, each under the room it leads up to (touching it where no other room is near
 above, closing in on each other without their rooms ever touching, the areas off the line below.
 The PNG is the user's, like the standalone executable: never committed, never distributed.
 
-Unsupported content fails loudly. The extractor reports every condition or effect it cannot
-name, with level, character and state. The engine refuses a table that uses an unimplemented
-condition or effect; it never substitutes a default.
+Unsupported content fails loudly. The extractor notes every condition or effect it cannot name,
+with the level, the behavior and the code, and the game logs those notes when it extracts at
+startup. The data-set loader refuses what the engine cannot run, saying why; a level checks its
+animations and glyphs when it loads, and the game imports every film when it starts. The engine
+refuses a table that uses an unimplemented condition or effect; it never substitutes a default.
 
 ## 4. Session and systems
 
@@ -165,9 +168,10 @@ the original on every capture, so the planned Zig controller was not needed).
   a target state. Some original checks are actions that always succeed, such as `set_timer` or
   `send`. They stay in `when`, in order, because they run even when a later check fails.
 - **Conditions and effects** form a fixed vocabulary implemented once in Zig. Each is a small
-  named function with typed arguments, for example `sees(player, within_cells: 16)`,
-  `chance(1, in: 20)`, `timer_expired`, `received(.hit_front)`, `signal(.ambush, .cover)` or
-  `reveal(in_room: 19)`. Original quirks live inside the condition or effect that has them,
+  named function with typed arguments, written in the data set as, for example,
+  `.{ .sees = .{ .kind = .player, .cells = 16 } }`, `.{ .chance = 20 }`,
+  `.{ .timer_reaches = 0 }`, `.{ .received = .call }`,
+  `.{ .send = .{ .to = .gunman, .message = .call } }` or `.{ .reveal = .room_to_appear }`. Original quirks live inside the condition or effect that has them,
   documented there (for example, the sight scan's leftward continuation).
 - **Links** connect a character to others. A behavior names its links (`cover`, `gunman`);
   each placement binds them to characters (`cover = papers_20`). Signals travel over links.
@@ -215,8 +219,8 @@ not assumed to be the template host's 60 Hz. Updates perform bounded work; budge
 change event ordering or simulation results. The agent's virtual clock makes replay independent
 of how long the test runner takes to think or execute. A gameplay frame waits two ticks of the
 original's 70 Hz counter. When the host falls three ticks behind, the next frame walks the
-characters twice and draws once, and the lost time is dropped, as the original does (user
-decision, 2026-10-09).
+characters twice (unless the inventory key is held) and draws once, and the lost time is
+dropped, as the original does (user decision, 2026-10-09).
 
 Simulation uses integer arithmetic with explicit precision, overflow and rounding where they
 affect observable outcomes. The imported motions and rules describe their measured units.

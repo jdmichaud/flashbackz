@@ -74,7 +74,7 @@ pub const Scene = struct {
     /// The options dialog, opened with Esc; the world waits while it is open.
     options: ?Options = null,
     /// Presented frames before the inventory key works: 4 after the level starts, 10 after the
-    /// inventory closes.
+    /// inventory closes or a film ends.
     inventory_delay: u8 = 4,
     inventory: ?Inventory = null,
     inventory_left_zoom: bool = false,
@@ -116,7 +116,8 @@ pub const Scene = struct {
     /// Loads `level` from the data set `files` and the original art and sound in `assets`.
     pub const Setup = struct {
         difficulty: settings_mod.Difficulty = .normal,
-        /// The records' flags as the previous level left them (none in a new game).
+        /// The records' flags as the last level played left them, which the game keeps across
+        /// games and demos (none before the first).
         inherited: []const behavior.world.Inherited = &.{},
         /// The Mega Drive edition's tunes, when the user gave its cartridge.
         tunes: ?*const megadrive.Tunes = null,

@@ -49,7 +49,7 @@ fn hitMessage(world: *const World, actor: u16, target: u16, height: Height) Mess
 }
 
 /// Fires along the tier up to the `range` number's cells (positive: ahead) from the next
-/// cell. The first awake player, enemy or kind-12 character waiting for the hit gets it;
+/// cell. The first active player, enemy or kind-12 character waiting for the hit gets it;
 /// others are passed through. True once a hit is sent, even if the send is dropped.
 pub fn shoot(
     world: *World,
@@ -136,7 +136,7 @@ fn slotWithKey(world: *const World, key: contacts.Key) ?u8 {
 
 // Facing targets that would not accept a hit (98, 99) --------------------------------------
 
-/// An awake character of that kind facing this one within range is not waiting for the hit.
+/// An active character of that kind facing this one within range is not waiting for the hit.
 pub fn facingTargetUnhittable(
     world: *World,
     actor: u16,
@@ -146,7 +146,7 @@ pub fn facingTargetUnhittable(
     return unhittableTargets(world, actor, argument.kind, argument.hit, range, .opposite) != 0;
 }
 
-/// An awake character of that kind with its back turned within range is not waiting for the
+/// An active character of that kind with its back turned within range is not waiting for the
 /// hit.
 pub fn backturnedTargetUnhittable(
     world: *World,
@@ -159,7 +159,7 @@ pub fn backturnedTargetUnhittable(
 
 const Facing = enum { opposite, same };
 
-/// Counts the awake characters of `kind` facing the way `facing` says relative to the actor
+/// Counts the active characters of `kind` facing the way `facing` says relative to the actor
 /// and not waiting for `message`, from its own cell to `range` cells (positive: ahead). A cell
 /// with any terrain at body height ends the count after its characters. Only the count's low
 /// byte matters to a rule.
@@ -277,7 +277,7 @@ fn snapToWall(world: *World, actor: u16, passes_low_gaps: bool, range: i16) bool
 
 const strip_length = 3 * 48;
 
-/// Sees an awake character of that kind along its tier within `cells` (positive: the way
+/// Sees an active character of that kind along its tier within `cells` (positive: the way
 /// it faces, capped at 16, at least one), stopping at body-height terrain. Only rooms of the
 /// window are watched and the own cell never is.
 ///

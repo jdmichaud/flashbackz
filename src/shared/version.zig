@@ -1,4 +1,4 @@
-//! Pinned toolchain versions, supplied by build.zig.
+//! The SDL2 version the build found, supplied by build.zig.
 const build_versions = @import("build_versions");
 
 /// The SDL2 release that the SDL host expects to link against.

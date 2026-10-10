@@ -1,4 +1,4 @@
-//! The platform boundary (DESIGN.md-3): devices, read-only assets and persistent
+//! The platform boundary (DESIGN.md 2): devices, read-only assets and persistent
 //! storage, as bound interfaces that the game calls. No code here knows about the game.
 //!
 //! Each interface is a context pointer plus a vtable, so several backends and several games can
@@ -430,16 +430,24 @@ pub const Storage = struct {
 pub const max_name_len = 64;
 
 /// Portable file name rules for save keys and logical asset names: 1 to 64 ASCII characters
-/// from letters, digits, `.`, `_` and `-`; no `.` at the start; no `..`. A name that breaks a
+/// from letters, digits, `.`, `_` and `-`; no `.` at the start or the end; no `..`; not a
+/// Windows device name (`CON`, `NUL`, `COM1`..., with an extension or not). A name that breaks a
 /// rule is an error; no code corrects it.
 pub fn validateName(name: []const u8) error{InvalidName}!void {
     if (name.len == 0 or name.len > max_name_len) return error.InvalidName;
-    if (name[0] == '.') return error.InvalidName;
+    if (name[0] == '.' or name[name.len - 1] == '.') return error.InvalidName;
     if (std.mem.indexOf(u8, name, "..") != null) return error.InvalidName;
     for (name) |ch| {
         const ok = std.ascii.isAlphanumeric(ch) or ch == '.' or ch == '_' or ch == '-';
         if (!ok) return error.InvalidName;
     }
+    const stem = name[0 .. std.mem.indexOfScalar(u8, name, '.') orelse name.len];
+    for ([_][]const u8{ "CON", "PRN", "AUX", "NUL" }) |device| {
+        if (std.ascii.eqlIgnoreCase(stem, device)) return error.InvalidName;
+    }
+    if (stem.len == 4 and std.ascii.isDigit(stem[3]) and stem[3] != '0' and
+        (std.ascii.eqlIgnoreCase(stem[0..3], "COM") or std.ascii.eqlIgnoreCase(stem[0..3], "LPT")))
+        return error.InvalidName;
 }
 
 /// The separator between the directory components of a logical asset name.
@@ -547,4 +555,13 @@ test "name validation" {
     try std.testing.expectError(error.InvalidName, validateName("é"));
     const long: [65]u8 = @splat('x');
     try std.testing.expectError(error.InvalidName, validateName(&long));
+}
+
+test "names that would not survive on Windows are refused" {
+    for ([_][]const u8{ "CON", "nul.txt", "COM1", "lpt9.sav", "SAVE.", "a.." }) |name| {
+        try std.testing.expectError(error.InvalidName, validateName(name));
+    }
+    for ([_][]const u8{ "SETTINGS", "SAVE1", "QUICK.INFO", "COM0", "CONSOLE", "COM10" }) |name| {
+        try validateName(name);
+    }
 }

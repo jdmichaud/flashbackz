@@ -493,8 +493,9 @@ pub const Screen = struct {
 
     // Texts --------------------------------------------------------------------------------
 
-    /// The icon and name of what Conrad touches: an item in his first cell, else a character
-    /// of kind 5 or 9. Touching anything ends the password display.
+    /// The icon and name of what Conrad touches: an item (kind 3) in his first cell, else a
+    /// character of kind 5 or 9; both searches also take kind -1, as the original compares bytes.
+    /// Touching anything ends the password display.
     fn drawLabel(self: *Screen, pack: *const level_pack.Pack, world: *const World) !void {
         const found = labelTarget(world) orelse {
             self.completed = false;

@@ -1,5 +1,6 @@
-//! Edition-specific interface metadata. Only supplied content is read; no executable
-//! instructions, addresses or packed image survive this import boundary.
+//! Edition-specific interface metadata, read from the unpacked executable's data segment. No
+//! executable instructions or addresses survive this import; `loadImage` gives the unpacked
+//! image to the extractor only.
 const std = @import("std");
 const platform = @import("../platform.zig");
 const palette = @import("palette.zig");
