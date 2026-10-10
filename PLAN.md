@@ -376,6 +376,14 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     district, Asia's station by the start area), rides B-E tagged around the loop; tower: one
     piece, its six wraps tagged as before.
 
+- [ ] Atlas: the city along its subway (user request, 2026-10-10: "make the subway station way
+  below all the rest and spread far apart"; "we get rid of the letters"). A level with a transit
+  line is drawn along it: its districts side by side on one ground, the start's first, the others
+  in the order the line reaches them; its stations on one row below them all, each under the room
+  it leads up to; no tags. Gate: tests; on the poster the city's four stations stand on one row
+  in the line's order, each under its district's room, and the city has no letters; the other
+  levels are unchanged.
+
 ## Mega Drive music during play — user decision, 2026-10-09
 
 An addition to the DOS edition: the tunes the Mega Drive edition plays during play, sounding
