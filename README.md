@@ -12,8 +12,8 @@ The game's files are not included: you need your own English floppy edition, `di
 flashback disk1.img disk2.img
 ```
 
-With your own cartridge of the Mega Drive edition, Flashback (Europe) (En,Fr), its tunes also
-play during play:
+One thing missing from the DOS version is the ambient short musical cue from the Megadrive version. If you provide your
+own flashback ROM to the built, you can have the best of both world: The DOS gameplay and the megadrive music.
 
 ```sh
 flashback --megadrive flashback.md disk1.img disk2.img
@@ -31,8 +31,9 @@ zig build test
 zig build -Dtarget=x86_64-windows-gnu    # zig-out/bin/flashback.exe, SDL2 built in
 ```
 
-A standalone build puts your files inside a second executable, `flashback-standalone`, which then
-starts with no argument. It contains the original game: keep it on your own machines.
+You can build a standalone executable which will contain the DOS disk and the megadrive ROM for better portability.
+This generates a second executable, `flashback-standalone`, which then
+starts with no argument.
 
 ```sh
 zig build -Ddisk1=disk1.img -Ddisk2=disk2.img -Dmegadrive=flashback.md
