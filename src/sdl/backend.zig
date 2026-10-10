@@ -692,7 +692,8 @@ pub const SdlBackend = struct {
             .format = c.AUDIO_S16SYS,
             .channels = format.channels,
             .silence = 0,
-            .samples = 1024,
+            // The device's period: 11.6 ms at 44.1 kHz, which `audio/output.zig`'s lead allows for.
+            .samples = 512,
             .padding = 0,
             .size = 0,
             .callback = null,

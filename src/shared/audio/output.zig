@@ -10,11 +10,13 @@ const effects = @import("effects.zig");
 /// Every source renders at this rate, in stereo; the host converts it to what the device plays.
 pub const format: platform.AudioFormat = .{ .channels = 2, .sample_rate = 44100 };
 
-/// How far ahead of the device the queue is kept: 50 ms. A device takes a period at a time
-/// (SDL's 1,024 frames are 23 ms at 44.1 kHz), and the queue is topped up once a host frame, so
-/// less than a period plus a frame leaves the device short, and SDL plays silence for the rest
-/// of the period.
-pub const lead_frames = format.sample_rate / 20;
+/// How far ahead of the device the queue is kept: 35 ms. A device takes a period at a time
+/// (SDL's 512 frames are 11.6 ms at 44.1 kHz), and the queue is topped up once a host frame
+/// (16.7 ms at 60 Hz), so less than a period plus a frame leaves the device short, and SDL plays
+/// silence for the rest of the period. A sound is heard within the lead and a period, about
+/// 47 ms; the original takes about 12 ms. A host frame that takes longer than the lead (a
+/// level loading) leaves a gap of silence.
+pub const lead_frames = format.sample_rate * 35 / 1000;
 
 /// What plays at a moment: a music (the title's, a film's, the ending's) and a level's sound.
 pub const Sources = struct {
