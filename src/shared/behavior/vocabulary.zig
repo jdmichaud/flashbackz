@@ -1,6 +1,7 @@
 //! The conditions and effects behavior tables are written in. Each has one implementation in
 //! the engine. Field names are the names used in the data set; payload types say how each
 //! argument is read. Meanings: flashback-re `docs/rule-vocabulary.md`.
+const std = @import("std");
 
 /// A message, interned per level. The engine fixes the meaning of a few (see `Message.fixed`).
 pub const Message = enum(u16) {
@@ -34,7 +35,21 @@ pub const Character = enum(u16) { _ };
 /// A character kind. Named kinds are the ones the engine distinguishes.
 pub const Kind = enum(i16) { any = -1, player = 1, interactive = 3, enemy = 10, _ };
 pub const Button = enum { shift, enter, space };
-pub const HitSide = enum { from_behind, from_front, from_front_unannounced };
+pub const HitSide = enum {
+    from_behind,
+    from_front,
+    from_front_unannounced,
+
+    /// Whether a rule's `hit` check on this side waits for `message`, at either height. The
+    /// unannounced front hit waits for none.
+    pub fn awaits(side: HitSide, message: Message) bool {
+        return switch (side) {
+            .from_behind => message == .hit_behind_high or message == .hit_behind_low,
+            .from_front => message == .hit_front_high or message == .hit_front_low,
+            .from_front_unannounced => false,
+        };
+    }
+};
 pub const Height = enum { standing, crouched };
 
 pub const Operation = union(enum) {
@@ -197,8 +212,17 @@ pub const Behavior = struct {
 
     pub fn stateIndex(self: Behavior, name: []const u8) ?u16 {
         for (self.states, 0..) |state, index| {
-            if (@import("std").mem.eql(u8, state.name, name)) return @intCast(index);
+            if (std.mem.eql(u8, state.name, name)) return @intCast(index);
         }
         return null;
     }
 };
+
+test "a hit check waits for the hits from its side, at both heights" {
+    try std.testing.expect(HitSide.from_behind.awaits(.hit_behind_low));
+    try std.testing.expect(!HitSide.from_behind.awaits(.hit_front_high));
+    try std.testing.expect(HitSide.from_front.awaits(.hit_front_low));
+    for ([_]Message{ .hit_front_high, .hit_behind_high }) |message| {
+        try std.testing.expect(!HitSide.from_front_unannounced.awaits(message));
+    }
+}

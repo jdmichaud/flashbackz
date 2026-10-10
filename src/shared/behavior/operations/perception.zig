@@ -27,22 +27,13 @@ pub fn hit(world: *World, actor: u16, side: vocabulary.HitSide) !bool {
     return false;
 }
 
-/// Whether the character's current state has a rule waiting for that hit. Only waiting
-/// characters can be shot or struck; an unannounced front hit never counts as waiting.
+/// Whether the character's current state has a rule waiting for that hit: a `received` of it
+/// or a hit on its side; an `acknowledge` does not count, unlike for a message that ends an
+/// animation early (`World.awaits`). Only waiting characters can be shot or struck.
 fn waitsFor(world: *const World, character: u16, message: Message) bool {
     for (world.stateOf(character).rules) |rule| for (rule.when) |check| switch (check) {
         .received => |expected| if (expected == message) return true,
-        .hit => |side| switch (side) {
-            .from_behind => switch (message) {
-                .hit_behind_high, .hit_behind_low => return true,
-                else => {},
-            },
-            .from_front => switch (message) {
-                .hit_front_high, .hit_front_low => return true,
-                else => {},
-            },
-            .from_front_unannounced => {},
-        },
+        .hit => |side| if (side.awaits(message)) return true,
         else => {},
     };
     return false;
@@ -87,7 +78,7 @@ fn traceHit(world: *World, actor: u16, height: Height, range: i16, blow: Blow) b
     const shooter = world.characters[actor];
     var room = shooter.room;
     if (room >= 64) return false;
-    const tier = @divTrunc(shooter.y -% 8, 72);
+    const tier = grid.contactTierOf(shooter.y);
     if (tier < 0 or tier > 2) return false;
     const ahead = range > 0;
     const cells: i16 = if (ahead) range else -%range;
@@ -97,11 +88,11 @@ fn traceHit(world: *World, actor: u16, height: Height, range: i16, blow: Blow) b
     while (distance <= cells) : (distance += 1) {
         column += step;
         if (column < 0) {
-            room = neighbor(world, room, .left) orelse return false;
+            room = world.grid.neighbor(room, .left) orelse return false;
             column += 16;
         }
         if (column >= 16) {
-            room = neighbor(world, room, .right) orelse return false;
+            room = world.grid.neighbor(room, .right) orelse return false;
             column -= 16;
         }
         const key: contacts.Key = @intCast(@as(i32, room) * 64 + tier * 16 + column);
@@ -189,7 +180,7 @@ fn unhittableTargets(
     if (room >= 64) return 0;
     // This tier ignores the 8-pixel offset of contact cells; outside the three tiers the
     // original returns an uninitialized count.
-    const tier = @divTrunc(observer.y, 72);
+    const tier = grid.tierOf(observer.y);
     if (tier < 0 or tier > 2) {
         world.unmodeled_reads += 1;
         return 0;
@@ -205,11 +196,11 @@ fn unhittableTargets(
         column += step;
     }) {
         if (column < 0) {
-            room = neighbor(world, room, .left) orelse return count;
+            room = world.grid.neighbor(room, .left) orelse return count;
             column += 16;
         }
         if (column >= 16) {
-            room = neighbor(world, room, .right) orelse return count;
+            room = world.grid.neighbor(room, .right) orelse return count;
             column -= 16;
         }
         const key: contacts.Key = @intCast(@as(i32, room) * 64 + tier * 16 + column);
@@ -268,12 +259,12 @@ fn snapToWall(world: *World, actor: u16, passes_low_gaps: bool, range: i16) bool
         last = cell;
         if (column < 0) {
             last = 0;
-            room = neighbor(world, room, .left) orelse return false;
+            room = world.grid.neighbor(room, .left) orelse return false;
             if (room >= 64) return false;
             column += 16;
         } else if (column > 15) {
             last = 0;
-            room = neighbor(world, room, .right) orelse return false;
+            room = world.grid.neighbor(room, .right) orelse return false;
             if (room >= 64) return false;
             column -= 16;
         }
@@ -308,7 +299,7 @@ pub fn sees(world: *World, actor: u16, argument: @FieldType(vocabulary.Operation
     if (room >= 64) return false;
     var third = windowThird(world, room) orelse return false;
     var column = unsignedColumn(observer.x);
-    const tier = @divTrunc(observer.y, 72);
+    const tier = grid.tierOf(observer.y);
     if (tier < 0 or tier > 2) return false;
     const row = tier * 2 + 1;
     const cells = if (world.updating_facing_right) -%argument.cells else argument.cells;
@@ -348,7 +339,7 @@ pub fn sees(world: *World, actor: u16, argument: @FieldType(vocabulary.Operation
         if (column < 0) {
             third -= 1;
             if (third < 0) return false;
-            room = neighbor(world, room, .left) orelse return false;
+            room = world.grid.neighbor(room, .left) orelse return false;
             column = 15;
             cursor = read.back(32);
         } else cursor = cursor.back(1);
@@ -381,7 +372,7 @@ pub fn enemyInLine(world: *World, actor: u16, cells: i16) !bool {
     if (room >= 64) return false;
     var third = windowThird(world, room) orelse return false;
     const column = unsignedColumn(observer.x);
-    const tier = @divTrunc(observer.y, 72);
+    const tier = grid.tierOf(observer.y);
     if (tier < 0 or tier > 2) return false;
     const row = tier * 2 + 1;
     const toward = if (world.updating_facing_right) -%cells else cells;
@@ -396,7 +387,7 @@ pub fn enemyInLine(world: *World, actor: u16, cells: i16) !bool {
             if (counter < 0) {
                 third -= 1;
                 if (third < 0) return false;
-                room = neighbor(world, room, .left) orelse return false;
+                room = world.grid.neighbor(room, .left) orelse return false;
                 counter = 15;
                 terrain_column = 16;
                 strip -= 31;
@@ -509,21 +500,17 @@ fn occupants(world: *World, named: ?u8) ?contacts.Contacts.Occupants {
 
 // Conrad's position --------------------------------------------------------------------------
 //
-// Tiers compare the character's y / 72 with Conrad's (y - 8) / 72.
-
-fn tierOf(y: i16) i16 {
-    return @divTrunc(y, 72);
-}
+// Tiers compare the character's tier with Conrad's contact tier (`grid.contactTierOf`).
 
 fn playerTier(world: *const World) i16 {
-    return @divTrunc(world.characters[0].y -% 8, 72);
+    return grid.contactTierOf(world.characters[0].y);
 }
 
 /// Conrad is on a higher tier of the same room, or anywhere in the room above.
 pub fn playerAbove(world: *World, actor: u16, _: void) !bool {
     const character = world.characters[actor];
     const player = world.characters[0];
-    if (player.room == character.room) return playerTier(world) < tierOf(character.y);
+    if (player.room == character.room) return playerTier(world) < grid.tierOf(character.y);
     return character.room < 64 and world.grid.rawLink(character.room, .up) == player.room;
 }
 
@@ -531,7 +518,7 @@ pub fn playerAbove(world: *World, actor: u16, _: void) !bool {
 pub fn playerBelow(world: *World, actor: u16, _: void) !bool {
     const character = world.characters[actor];
     const player = world.characters[0];
-    if (player.room == character.room) return playerTier(world) > tierOf(character.y);
+    if (player.room == character.room) return playerTier(world) > grid.tierOf(character.y);
     return character.room < 64 and world.grid.rawLink(character.room, .down) == player.room;
 }
 
@@ -553,7 +540,7 @@ pub fn playerBehind(world: *World, actor: u16, cells: i16) !bool {
 fn playerToward(world: *World, actor: u16, cells: i16, right: bool, same_x_counts: bool) bool {
     const character = world.characters[actor];
     const player = world.characters[0];
-    if (playerTier(world) != tierOf(character.y)) return false;
+    if (playerTier(world) != grid.tierOf(character.y)) return false;
     if (player.room != character.room) {
         if (cells != 0 or character.room >= 64) return false;
         return world.grid.rawLink(character.room, if (right) .right else .left) == player.room;
@@ -582,11 +569,6 @@ fn gridByte(world: *World, room: u8, row: i32, column: i32) i8 {
     return original_memory.read(world, world.grid.cell(room, row, column));
 }
 
-/// The neighbor on that side, or null where the link is negative (no room).
-fn neighbor(world: *const World, room: u8, side: grid.Side) ?u8 {
-    const link = world.grid.rawLink(room, side);
-    return if (link >= 0x80) null else link;
-}
 
 /// The column the sight and wall scans start from: `(x + 8) >> 4` with a logical shift, so a
 /// position just left of the room gives a column far to the right.
@@ -686,15 +668,15 @@ const testing = struct {
         w.contacts.begin();
         for (order) |index| {
             const c = w.characters[index];
-            const first = try w.contacts.register(
+            var shared: contacts.Shared = .{};
+            const first = w.contacts.register(
                 &w.grid,
                 index,
                 c.room,
                 c.x,
                 c.y,
                 w.level.characters[index].width,
-                &w.scratch,
-                w.allocator,
+                &shared,
             );
             if (first) |slot| w.characters[index].contact = slot;
         }

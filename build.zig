@@ -102,10 +102,10 @@ pub fn build(b: *std.Build) void {
             .{ .name = "c", .module = sdl_api.createModule() },
         },
     });
-    if (target.result.os.tag == .windows)
-        linkPackagedSdl(b, sdl, sdl_api, target, versions)
-    else
-        linkSdl(b, sdl, sdl_api, sdl_linkage, versions);
+    const sdl_missing = if (target.result.os.tag == .windows) missing: {
+        linkPackagedSdl(b, sdl, sdl_api, target, versions);
+        break :missing null;
+    } else linkSdl(b, sdl, sdl_api, sdl_linkage, versions);
 
     const agent_exe = b.addExecutable(.{
         .name = "flashbackz-agent",
@@ -140,6 +140,7 @@ pub fn build(b: *std.Build) void {
         .shared = shared,
         .sdl = sdl,
         .native = native,
+        .sdl_missing = sdl_missing,
     };
     const no_files = builtInFiles(b, versions, "flashbackz", .{ null, null }, null);
     const sdl_exe = game.executable(b, "flashbackz", no_files);
@@ -212,6 +213,8 @@ const Game = struct {
     shared: *std.Build.Module,
     sdl: *std.Build.Module,
     native: *std.Build.Module,
+    /// Fails the SDL executables' build when SDL2 could not be located.
+    sdl_missing: ?*std.Build.Step,
 
     fn executable(
         game: Game,
@@ -219,7 +222,7 @@ const Game = struct {
         name: []const u8,
         built_in: *std.Build.Module,
     ) *std.Build.Step.Compile {
-        return b.addExecutable(.{
+        const exe = b.addExecutable(.{
             .name = name,
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/sdl/main.zig"),
@@ -234,6 +237,8 @@ const Game = struct {
                 },
             }),
         });
+        if (game.sdl_missing) |step| exe.step.dependOn(step);
+        return exe;
     }
 };
 
@@ -300,15 +305,16 @@ fn linkSdl(
     api: *std.Build.Step.TranslateC,
     linkage: SdlLinkage,
     versions: *std.Build.Step.Options,
-) void {
+) ?*std.Build.Step {
     var code: u8 = 0;
     const include_out = b.runAllowFail(
         &.{ "pkg-config", "--cflags-only-I", "sdl2" },
         &code,
         .ignore,
     ) catch {
-        std.log.err("the SDL host needs pkg-config to locate SDL2's headers", .{});
-        std.process.exit(1);
+        // Only the SDL executables' build fails: the agent does not need SDL.
+        versions.addOption([]const u8, "sdl", "unknown");
+        return &b.addFail("the SDL host needs pkg-config to locate SDL2's headers").step;
     };
     var include_flags = std.mem.tokenizeAny(u8, include_out, " \t\r\n");
     while (include_flags.next()) |flag| {
@@ -334,26 +340,16 @@ fn linkSdl(
                 &.{ "pkg-config", "--variable=libdir", "sdl2" },
                 &code,
                 .ignore,
-            ) catch {
-                std.log.err(
-                    "static SDL2 linkage needs pkg-config to locate libSDL2.a; use -Dsdl-linkage=dynamic",
-                    .{},
-                );
-                std.process.exit(1);
-            };
+            ) catch return &b.addFail(
+                "static SDL2 linkage needs pkg-config to locate libSDL2.a; use -Dsdl-linkage=dynamic",
+            ).step;
             const libdir = std.mem.trim(u8, libdir_out, " \t\r\n");
             m.addObjectFile(.{ .cwd_relative = b.fmt("{s}/libSDL2.a", .{libdir}) });
             const libs_out = b.runAllowFail(
                 &.{ "pkg-config", "--static", "--libs", "sdl2" },
                 &code,
                 .ignore,
-            ) catch {
-                std.log.err(
-                    "pkg-config --static --libs sdl2 failed; use -Dsdl-linkage=dynamic",
-                    .{},
-                );
-                std.process.exit(1);
-            };
+            ) catch return &b.addFail("pkg-config --static --libs sdl2 failed; use -Dsdl-linkage=dynamic").step;
             var it = std.mem.tokenizeAny(u8, libs_out, " \t\r\n");
             while (it.next()) |flag| {
                 if (std.mem.eql(u8, flag, "-lSDL2")) continue;
@@ -366,6 +362,7 @@ fn linkSdl(
             }
         },
     }
+    return null;
 }
 
 /// A Windows build: SDL2 compiled from source by Zig for the target (the `sdl2` package), linked

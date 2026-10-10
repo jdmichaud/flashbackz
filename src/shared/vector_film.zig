@@ -142,35 +142,30 @@ pub const View = struct {
     }
 };
 
+/// Where a film is: the frame shown, and whether it is over. The player's cadence decides when
+/// the next frame comes (`scenes/vector_player.zig`).
 pub const Playback = struct {
     frame: usize = 0,
-    next_tick: u64,
     finished: bool = false,
 
     pub fn init(film: View) !Playback {
         try film.validate();
-        return .{ .next_tick = film.frames[0].hold_ticks };
+        return .{};
     }
 
-    /// Advance at most one visible frame. A late host can call again while needsCatchup is
-    /// true, preserving the order of all presentations instead of silently skipping pictures.
-    pub fn advance(self: *Playback, film: View, elapsed_ticks: u64) !bool {
-        if (!self.needsCatchup(elapsed_ticks)) return false;
+    /// Shows the next frame; after the last one, the film is over. True when a frame was shown.
+    pub fn advance(self: *Playback, film: View) bool {
+        if (self.finished) return false;
         if (self.frame + 1 == film.frames.len) {
             self.finished = true;
             return false;
         }
         self.frame += 1;
-        self.next_tick = try std.math.add(u64, self.next_tick, film.frames[self.frame].hold_ticks);
         return true;
-    }
-
-    pub fn needsCatchup(self: Playback, elapsed_ticks: u64) bool {
-        return !self.finished and elapsed_ticks >= self.next_tick;
     }
 };
 
-test "late playback preserves frame order, exact hold boundaries and final completion" {
+test "playback shows each frame in order, then ends" {
     const colors: palette.Palette = @splat(.{ .r = 0, .g = 0, .b = 0 });
     const frames = [_]Frame{
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4 },
@@ -179,14 +174,11 @@ test "late playback preserves frame order, exact hold boundaries and final compl
     };
     const film: View = .{ .frames = &frames };
     var player = try Playback.init(film);
-    try std.testing.expect(!try player.advance(film, 3));
-    try std.testing.expect(try player.advance(film, 4));
-    try std.testing.expectEqual(@as(usize, 1), player.frame);
-    try std.testing.expect(!try player.advance(film, 12));
-    try std.testing.expect(try player.advance(film, 100));
+    try std.testing.expect(player.advance(film));
+    try std.testing.expect(player.advance(film));
     try std.testing.expectEqual(@as(usize, 2), player.frame);
-    try std.testing.expect(player.needsCatchup(100));
-    try std.testing.expect(!try player.advance(film, 100));
+    try std.testing.expect(!player.advance(film));
     try std.testing.expect(player.finished);
+    try std.testing.expect(!player.advance(film));
     try std.testing.expectError(error.EmptyFilm, Playback.init(.{ .frames = &.{} }));
 }

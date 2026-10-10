@@ -293,8 +293,7 @@ fn changeTerrain(world: *World, actor: u16, row: i16, material: u8) void {
 /// its column, as the terrain writers compute it: from the character's current position,
 /// with y read as unsigned (a negative y gives a row far below the room).
 fn spanOffset(character: world_module.Character, row: i16) i16 {
-    const tier: i16 = @intCast((@as(u16, @bitCast(character.y)) / 36) & 0xfffe);
-    return (tier +% row) *% grid.Grid.columns +% grid.columnOf(character.x);
+    return (grid.bandUnsigned(character.y) +% row) *% grid.Grid.columns +% grid.columnOf(character.x);
 }
 
 /// Remembers where a continue resumes: every character, the score, the grid and the terrain
@@ -319,7 +318,7 @@ pub fn checkpoint(world: *World, _: u16, _: void) !bool {
 pub fn snapToGrid(world: *World, actor: u16, _: void) !bool {
     const character = &world.characters[actor];
     character.x &= ~@as(i16, 15);
-    character.y = (@divTrunc(character.y, 72) + 1) *% 72 -% 2;
+    character.y = (grid.tierOf(character.y) + 1) *% 72 -% 2;
     return true;
 }
 
@@ -377,12 +376,11 @@ const testing = struct {
 
     /// Registers the characters' cells as the update does before the walk.
     fn register(w: *World, indices: []const u16) !void {
-        var shared: std.ArrayList(u16) = .empty;
-        defer shared.deinit(std.testing.allocator);
+        var shared: contacts.Shared = .{};
         w.contacts.begin();
         for (indices) |i| {
             const c = w.characters[i];
-            const first = try w.contacts.register(
+            const first = w.contacts.register(
                 &w.grid,
                 i,
                 c.room,
@@ -390,7 +388,6 @@ const testing = struct {
                 c.y,
                 w.level.characters[i].width,
                 &shared,
-                std.testing.allocator,
             );
             w.characters[i].contact = first orelse contacts.no_slot;
         }

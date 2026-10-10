@@ -359,16 +359,15 @@ const testing = struct {
     fn register(w: *World) !void {
         w.contacts.begin();
         for (w.characters, w.level.characters, 0..) |*c, placement, i| {
-            w.scratch.clearRetainingCapacity();
-            const first = try w.contacts.register(
+            var shared: contacts.Shared = .{};
+            const first = w.contacts.register(
                 &w.grid,
                 @intCast(i),
                 c.room,
                 c.x,
                 c.y,
                 placement.width,
-                &w.scratch,
-                w.allocator,
+                &shared,
             );
             if (first) |slot| c.contact = slot;
         }

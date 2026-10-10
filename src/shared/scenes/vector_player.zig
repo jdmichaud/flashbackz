@@ -135,16 +135,14 @@ pub const Player = struct {
         if (self.movie.frames[self.playback.frame].input_loop_start) |start| {
             if (!self.confirmed) {
                 self.playback.frame = start;
-                const ticks = self.shownTicks();
-                self.playback.next_tick = try std.math.add(u64, self.playback.next_tick, ticks);
-                try self.cadence.hold(ticks);
+                try self.cadence.hold(self.shownTicks());
                 self.rebase();
                 return;
             }
             if (self.staticInputWait()) self.origin_ns = now_ns -| self.cadence.deadline_ns;
             self.confirmed = false;
         }
-        if (try self.playback.advance(self.movie.view(), self.playback.next_tick)) {
+        if (self.playback.advance(self.movie.view())) {
             try self.cadence.hold(self.shownTicks());
         }
     }

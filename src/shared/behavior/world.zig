@@ -201,6 +201,13 @@ pub const Checkpoint = struct {
     terrain_history: TerrainHistory,
 };
 
+/// Every character's live state, and the walk that runs their behavior tables.
+///
+/// Conrad is character 0: the original finds him by index for the hit protection, the
+/// inventory, the `player_*` checks and the view, and the data-set loader checks that character
+/// 0 is of the player kind. Other rules look for the player kind instead, as the original does
+/// (following rooms, being hurt, `reveal`, `transport`); the city has three characters of that
+/// kind.
 pub const World = struct {
     allocator: std.mem.Allocator,
     level: *const data_set.Level,
@@ -246,7 +253,6 @@ pub const World = struct {
     entry_sound: bool = true,
     /// Probes that read original memory outside the grid that the engine does not model.
     unmodeled_reads: u32 = 0,
-    scratch: std.ArrayList(u16) = .empty,
     // Terrain history and checkpoint (see `TerrainHistory` and `Checkpoint` above).
     terrain_history: TerrainHistory = .{},
     /// The last checkpoint of this level, if one was reached.
@@ -390,7 +396,6 @@ pub const World = struct {
     }
 
     pub fn deinit(self: *World) void {
-        self.scratch.deinit(self.allocator);
         self.allocator.free(self.characters);
         self.allocator.free(self.inbox);
     }
@@ -418,7 +423,7 @@ pub const World = struct {
                 return .defeated;
             }
         }
-        try self.buildContacts();
+        self.buildContacts();
         self.contacts.buildWindow(&self.grid, self.view_room);
         for (0..self.characters.len) |i| {
             const index: u16 = @intCast(i);
@@ -442,12 +447,12 @@ pub const World = struct {
 
     /// Every character in the view room's list registers its cells (and may wake there), then
     /// every other active character registers. Sharing a cell wakes those that wake on contact.
-    fn buildContacts(self: *World) !void {
+    fn buildContacts(self: *World) void {
         self.contacts.begin();
         if (self.view_room < 0x80) {
             var cursor = self.room_lists[self.view_room];
             while (cursor) |index| : (cursor = self.characters[index].next_in_room) {
-                try self.register(index);
+                self.register(index);
                 const definition = self.level.characters[index];
                 const asleep = !self.characters[index].active;
                 if (asleep and definition.wakes_when_near) self.activate(index);
@@ -455,25 +460,24 @@ pub const World = struct {
         }
         for (self.characters, 0..) |character, i| {
             if (!character.active or character.room == self.view_room) continue;
-            try self.register(@intCast(i));
+            self.register(@intCast(i));
         }
     }
 
-    fn register(self: *World, index: u16) !void {
+    fn register(self: *World, index: u16) void {
         const character = &self.characters[index];
-        self.scratch.clearRetainingCapacity();
-        const first = try self.contacts.register(
+        var met: contacts.Shared = .{};
+        const first = self.contacts.register(
             &self.grid,
             index,
             character.room,
             character.x,
             character.y,
             self.level.characters[index].width,
-            &self.scratch,
-            self.allocator,
+            &met,
         );
         if (first) |slot| character.contact = slot;
-        for (self.scratch.items) |shared| {
+        for (met.slice()) |shared| {
             if (self.level.characters[shared].wakes_on_contact) self.activate(shared);
         }
     }
@@ -550,27 +554,19 @@ pub const World = struct {
                 character.cursor = @intCast(animation.count());
                 self.column = grid.columnOf(character.x);
                 // This path sign-extends the tier, unlike the walk.
-                const quotient: i8 = @truncate(@divTrunc(character.y, 36));
-                self.band = @as(i16, quotient) & ~@as(i16, 1);
+                self.band = grid.bandSignExtended(character.y);
                 return;
             }
         }
     }
 
+    /// Whether `rule` waits for `message`, which then ends the animation early: a `received`
+    /// or an `acknowledge` of it, or a hit on its side. Being shot or struck asks the same
+    /// without `acknowledge` (`perception.waitsFor`).
     fn awaits(rule: vocabulary.Rule, message: vocabulary.Message) bool {
         for (rule.when) |check| switch (check) {
             .received, .acknowledge => |expected| if (expected == message) return true,
-            .hit => |side| switch (side) {
-                .from_behind => switch (message) {
-                    .hit_behind_high, .hit_behind_low => return true,
-                    else => {},
-                },
-                .from_front => switch (message) {
-                    .hit_front_high, .hit_front_low => return true,
-                    else => {},
-                },
-                .from_front_unannounced => {},
-            },
+            .hit => |side| if (side.awaits(message)) return true,
             else => {},
         };
         return false;
@@ -656,6 +652,7 @@ pub const World = struct {
         }
     }
 
+    /// Whether `state` has a rule for any hit: a `hit` check, or a `received` of a hit message.
     fn listensForHits(state: vocabulary.State) bool {
         for (state.rules) |rule| for (rule.when) |check| switch (check) {
             .hit => return true,

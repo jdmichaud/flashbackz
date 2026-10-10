@@ -11,6 +11,22 @@ pub const Key = u16;
 pub const no_slot: u8 = 0xff;
 pub const capacity = 256;
 
+/// The characters that met in a cell as one registered: the newcomer and the cell's newest,
+/// for each of at most a room's 16 columns.
+pub const Shared = struct {
+    items: [2 * grid.Grid.columns]u16 = undefined,
+    len: usize = 0,
+
+    fn add(self: *Shared, character: u16) void {
+        self.items[self.len] = character;
+        self.len += 1;
+    }
+
+    pub fn slice(self: *const Shared) []const u16 {
+        return self.items[0..self.len];
+    }
+};
+
 pub const Entry = struct {
     key: Key = 0,
     /// The next entry in the same slot.
@@ -42,28 +58,23 @@ pub const Contacts = struct {
         var y: i32 = y_in;
         if (room >= 128) return null;
         if (x < 0) {
-            room = neighbor(collision, room, .left) orelse return null;
+            room = collision.neighbor(room, .left) orelse return null;
             x += 256;
         } else if (x >= 256) {
-            room = neighbor(collision, room, .right) orelse return null;
+            room = collision.neighbor(room, .right) orelse return null;
             x -= 256;
         } else if (y < 0) {
-            room = neighbor(collision, room, .up) orelse return null;
+            room = collision.neighbor(room, .up) orelse return null;
             y += 216;
         } else if (y >= 216) {
-            room = neighbor(collision, room, .down) orelse return null;
+            room = collision.neighbor(room, .down) orelse return null;
             y -= 216;
         }
         const column = (x + 8) >> 4;
         if (column > 15) return null;
-        const band = @divTrunc(y - 8, 72);
+        const band = grid.contactTierOf(@intCast(y));
         if (band < 0 or band > 2) return null;
         return @intCast(@as(i32, room) * 64 + band * 16 + column);
-    }
-
-    fn neighbor(collision: *const grid.Grid, room: u8, side: grid.Side) ?u8 {
-        const link: i8 = @bitCast(collision.rawLink(room, side));
-        return if (link < 0) null else @intCast(link);
     }
 
     pub const Registration = struct {
@@ -73,8 +84,10 @@ pub const Contacts = struct {
         shared_with: ?u16 = null,
     };
 
-    /// Registers `width` cells from `x`. Returns the first slot, or null when the pool is
-    /// full before the first cell (the original then keeps the character's old slot).
+    /// Registers `width` cells from `x` (at most a room's columns, as the data-set loader
+    /// checks), adding to `shared` the characters that meet in a cell. Returns the first slot,
+    /// or null when the pool is full before the first cell (the original then keeps the
+    /// character's old slot).
     pub fn register(
         self: *Contacts,
         collision: *const grid.Grid,
@@ -83,9 +96,8 @@ pub const Contacts = struct {
         x: i16,
         y: i16,
         width: u8,
-        shared: *std.ArrayList(u16),
-        allocator: std.mem.Allocator,
-    ) !?u8 {
+        shared: *Shared,
+    ) ?u8 {
         if (width == 0) return no_slot;
         var first: ?u8 = null;
         var previous: ?u16 = null;
@@ -107,8 +119,8 @@ pub const Contacts = struct {
             };
             self.slots[used] = entry_index;
             if (slot != null) {
-                try shared.append(allocator, character);
-                if (head) |h| try shared.append(allocator, self.entries[h].character);
+                shared.add(character);
+                if (head) |h| shared.add(self.entries[h].character);
             }
             if (previous) |p| self.entries[p].next_slot = used else first = used;
             previous = entry_index;
@@ -183,15 +195,14 @@ test "shared cells form one slot, newest registration first" {
     @memset(layout[0..256], 0xff);
     const collision = try grid.Grid.init(&layout);
     var contacts: Contacts = .{};
-    var shared: std.ArrayList(u16) = .empty;
-    defer shared.deinit(std.testing.allocator);
+    var shared: Shared = .{};
     contacts.begin();
-    const a = try contacts.register(&collision, 7, 1, 100, 214, 2, &shared, std.testing.allocator);
-    const b = try contacts.register(&collision, 9, 1, 116, 214, 1, &shared, std.testing.allocator);
+    const a = contacts.register(&collision, 7, 1, 100, 214, 2, &shared);
+    const b = contacts.register(&collision, 9, 1, 116, 214, 1, &shared);
     try std.testing.expectEqual(@as(?u8, 0), a);
     try std.testing.expectEqual(@as(?u8, 1), b);
     var in_slot = contacts.occupants(1);
     try std.testing.expectEqual(@as(u16, 9), in_slot.nextEntry().?.character);
     try std.testing.expectEqual(@as(u16, 7), in_slot.nextEntry().?.character);
-    try std.testing.expectEqualSlices(u16, &.{ 9, 7 }, shared.items);
+    try std.testing.expectEqualSlices(u16, &.{ 9, 7 }, shared.slice());
 }

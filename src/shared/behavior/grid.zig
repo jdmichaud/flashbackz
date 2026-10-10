@@ -109,11 +109,38 @@ pub fn columnOf(x: i16) i16 {
     return (x +% 8) >> 4;
 }
 
+// A room's height holds three tiers of 72 pixels. The original computes a character's tier in
+// five ways, each kept where the original uses it; they differ for heights above the room
+// (negative y) and near a tier's top (see the test below).
+
 /// The character's tier as a row index (0, 2 or 4): `(y / 36) & ~1`, truncating. The update
 /// loop zero-extends the quotient's low byte, so heights from -71 to -36 give row 254.
 pub fn bandOf(y: i16) i16 {
     const quotient: u8 = @truncate(@as(u16, @bitCast(@divTrunc(y, 36))));
     return quotient & 0xfe;
+}
+
+/// `bandOf`, the quotient sign-extended, as when a message ends an animation early: heights from
+/// -71 to -36 give row -2.
+pub fn bandSignExtended(y: i16) i16 {
+    const quotient: i8 = @truncate(@divTrunc(y, 36));
+    return @as(i16, quotient) & ~@as(i16, 1);
+}
+
+/// `bandOf` with y read as unsigned, as the terrain writers compute it: a negative y gives a row
+/// far below the room.
+pub fn bandUnsigned(y: i16) i16 {
+    return @intCast((@as(u16, @bitCast(y)) / 36) & 0xfffe);
+}
+
+/// The tier of a character's height: 0, 1 or 2 in the room.
+pub fn tierOf(y: i16) i16 {
+    return @divTrunc(y, 72);
+}
+
+/// The tier of a contact cell, and of Conrad's height as others see him: 8 pixels higher.
+pub fn contactTierOf(y: i16) i16 {
+    return @divTrunc(y -% 8, 72);
 }
 
 fn testGrid() Grid {
@@ -162,4 +189,22 @@ test "column and tier follow the original arithmetic" {
     try std.testing.expectEqual(@as(i16, 4), bandOf(214));
     try std.testing.expectEqual(@as(i16, 0), bandOf(35));
     try std.testing.expectEqual(@as(i16, 254), bandOf(-40));
+}
+
+test "the tier variants agree in the room and differ above it and near a tier's top" {
+    for ([_]i16{ 70, 142, 214 }, [_]i16{ 0, 2, 4 }, [_]i16{ 0, 1, 2 }) |y, row, tier| {
+        try std.testing.expectEqual(row, bandOf(y));
+        try std.testing.expectEqual(row, bandSignExtended(y));
+        try std.testing.expectEqual(row, bandUnsigned(y));
+        try std.testing.expectEqual(tier, tierOf(y));
+        try std.testing.expectEqual(tier, contactTierOf(y));
+    }
+    // 40 pixels above the room.
+    try std.testing.expectEqual(@as(i16, 254), bandOf(-40));
+    try std.testing.expectEqual(@as(i16, -2), bandSignExtended(-40));
+    try std.testing.expectEqual(@as(i16, 1818), bandUnsigned(-40));
+    try std.testing.expectEqual(@as(i16, 0), tierOf(-40));
+    // The top 8 pixels of a tier count as the tier above for contacts.
+    try std.testing.expectEqual(@as(i16, 1), tierOf(75));
+    try std.testing.expectEqual(@as(i16, 0), contactTierOf(75));
 }
