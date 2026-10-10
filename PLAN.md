@@ -630,9 +630,10 @@ load and fails loudly there, devices are adapted to (D6).
   stay skipped (each level has a few invalid ones; B7 checks the states'). Gate: every level
   loads; a truncated PERSO.SPR fails; the keyboard sessions keep their hashes.
   - 2026-10-10: done.
-- [ ] **B11** The continue screen ends the game when 128 key events are queued. A full queue
+- [x] **B11** The continue screen ends the game when 128 key events are queued. A full queue
   applies its oldest event early instead: the screen polls held keys, so the order and the final
   state stay. Gate: a test of a 401-event burst; the keyboard sessions keep their hashes.
+  - 2026-10-10: done; 269 tests.
 - [ ] **B12** The Mega Drive cartridge reader is not overflow-safe; its checksum check can be
   bypassed.
 - [ ] **B13** The extractor's robustness on an unexpected edition.
