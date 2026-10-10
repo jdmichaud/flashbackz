@@ -558,13 +558,17 @@ load and fails loudly there, devices are adapted to (D6).
     fault tests use them), the vendored sorz chips (DESIGN 6), the settings' Difficulty (the
     save record needs an exhaustive one). About 835 lines fewer; keyboard sessions keep their
     hashes; 28/28 build steps.
-- [ ] **B1** Using any of the city's four map terminals ends the game. High. The film importer
+- [x] **B1** Using any of the city's four map terminals ends the game. High. The film importer
   takes the map's shape: a confirmation ends the film between its pictures, else it goes on. A
   loop's last picture shows until the loop presents its first again, for the waits and presents
   the loop back passes, not for the time after a confirmation. Importing every film at load is
   D6's. Gate: unit tests for each page-loop shape and a loop's timing; with Conrad at a map
   terminal, the agent plays the map until a confirmation ends it, then play goes on; every film
   the data set names imports; the keyboard sessions keep their hashes.
+  - 2026-10-10: done. A frame carries `confirm_ends` and a loop's last picture `loop_ticks`. The
+    map now blinks 4 ticks on, 4 off (its marker-off picture showed one host frame in four);
+    the log's loop (LOG 0) takes 12 ticks, not 8; MISSIONS 5's is unchanged. All films import;
+    the map plays until a confirmation, then Conrad walks on. 28/28 build steps.
 - [ ] **B2** An audio device granting another format ends the game or overruns a buffer. High on
   Windows. With D2.
 - [x] **B3** A key released in the options dialog or the inventory is ignored when pressed again.
