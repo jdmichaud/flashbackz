@@ -623,7 +623,11 @@ load and fails loudly there, devices are adapted to (D6).
   2026-10-10: "My rules was that we produce a modern maintainable code base. Make things
   coherent, easy to read and modify. Use your common sense."): each quirk becomes a named game
   rule where it holds; what truly depends on how the original laid out its data stays exact in
-  one small, explained module.
+  one small, explained module. The four places (reads past the grid and the terrain writers'
+  addresses, the leftward sight scan's placement records, wake list and mailboxes, the boarding
+  test on a record's address) move unchanged into `behavior/original_memory.zig`; DESIGN 3 and
+  PLAN 00 record the exception. Gate: tests; per-walk traces of long sessions on all seven
+  levels identical before and after; the keyboard sessions keep their hashes.
 - [x] **D2** One audio device, five owners, no mixer. With B2: "One audio output" above.
 - [x] **D3** Input state updated in one path only; settings in hand-synchronised copies. Fixed by
   GS-1 and GS-2.
