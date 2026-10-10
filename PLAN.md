@@ -647,11 +647,12 @@ load and fails loudly there, devices are adapted to (D6).
   addresses and refuses a tune without rows. Gate: an all-0xFF cartridge is refused in a Debug
   test; a bogus MEGADRIVE.MD in an asset directory is refused, the real one plays.
   - 2026-10-10: done; 270 tests.
-- [ ] **B13** The extractor's robustness on an unexpected edition. A placement's start state
+- [x] **B13** The extractor's robustness on an unexpected edition. A placement's start state
   that no rule names becomes a waiting state, reported; the parameter check cannot overflow; a
   truncated credits stream and an icon file shorter than its count are errors; the report's
   notes on data not understood (unknown operations, unexpected arguments, those start states)
   are logged when the game extracts at startup. Gate: tests; the real extraction is unchanged.
+  - 2026-10-10: done; 272 tests.
 - [ ] **B14** Smaller confirmed defects (the review's list).
 - [x] **D1** The engine models the original's memory layout in places. Decided (user,
   2026-10-10: "My rules was that we produce a modern maintainable code base. Make things
