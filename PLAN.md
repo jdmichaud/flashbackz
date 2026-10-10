@@ -597,7 +597,10 @@ load and fails loudly there, devices are adapted to (D6).
 - [x] **B4** Missing or partial game files start the template's placeholder game instead of
   failing. With D4. Done: "No placeholder game" above.
 - [ ] **B5** A catch-up frame drops the first walk's world message and its zoom hits (if the
-  original keeps them).
+  original keeps them). It does: the original clears its message only once shown, and a catch-up
+  walk re-runs only the walk before the frame's one draw (flashback-re engine-update 1, steps
+  11 and 13); the hit counters are presentation state. A catch-up walk keeps both. Gate: a
+  world test, failing before; the keyboard sessions keep their hashes.
 - [x] **B6** Escape in a level reacts to auto-repeat and a quick tap is lost. Kept: the original
   polls Escape the same way (GS-1).
 - [x] **B7** The data-set loader accepts data the engine cannot run. It refuses, saying why: more
