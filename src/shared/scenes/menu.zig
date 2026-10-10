@@ -6,7 +6,8 @@ const palette = @import("../content/palette.zig");
 const font_mod = @import("../content/font.zig");
 const text = @import("../render/text.zig");
 
-pub const Action = enum { start, skill, password, info, demo, quit };
+/// The title's items; LOAD is ours (PLAN GS-5), the others the original's.
+pub const Action = enum { start, load, skill, password, info, demo, quit };
 pub const action_count = @typeInfo(Action).@"enum".field_names.len;
 
 pub const Artwork = struct {

@@ -18,6 +18,7 @@ const settings_mod = @import("settings.zig");
 const step_clock = @import("step_clock.zig");
 const input = @import("input.zig");
 const save = @import("save.zig");
+const save_slots = @import("scenes/save_slots.zig");
 const megadrive = @import("content/megadrive.zig");
 pub const Entry = union(enum) {
     automatic,
@@ -190,6 +191,12 @@ pub const State = struct {
 
 const ConnectedPad = struct { id: platform.ControllerId, model: platform.ControllerModel };
 
+/// The save slots as a slot page shows them, read from storage.
+const SlotList = struct {
+    arena: std.heap.ArenaAllocator,
+    slots: [save_slots.row_count]save.Slot,
+};
+
 pub const Game = struct {
     allocator: std.mem.Allocator,
     /// The original's files and the saves, bound by the host. Null when the host has none.
@@ -222,6 +229,8 @@ pub const Game = struct {
     last_pad: ?platform.ControllerId = null,
     /// The walks of this game's levels before the one in play, which its play time counts.
     play_walks: u64 = 0,
+    /// The save slots, read when a slot page opens, dropped when a save changes them.
+    slot_list: ?SlotList = null,
     /// P's toggle, which only films read: they hold their picture while it is set.
     films_paused: bool = false,
     /// The music volume keypad + and - step, 0 to 63, for notes started afterwards.
@@ -337,6 +346,7 @@ pub const Game = struct {
     }
 
     pub fn deinit(self: *Game) void {
+        self.dropSlots();
         if (self.story) |*story| story.deinit();
         if (self.suspended_level) |*scene| scene.deinit();
         switch (self.scene) {
@@ -441,6 +451,22 @@ pub const Game = struct {
             front.films_paused = self.films_paused;
             front.music_volume = self.music_volume;
             if (self.pads.repeat()) |held| try front.pad(held, p.nowNs());
+            if (front.view == .load) {
+                front.slots = try self.slotList();
+                if (front.load_page.outcome) |outcome| if (outcome == .chosen) {
+                    front.load_page.outcome = null;
+                    var name: [8]u8 = undefined;
+                    // Loading replaces the title: nothing of it is used after.
+                    self.loadGame(p, save_slots.slotName(outcome.chosen, &name)) catch |err| {
+                        std.log.err("the game could not be loaded: {s}", .{@errorName(err)});
+                    };
+                    if (self.scene != .menu) {
+                        self.feedAudio(p);
+                        try self.present(p);
+                        return .running;
+                    }
+                };
+            }
             if (front.stage == .quit) {
                 front.stopAudio(p);
                 self.phase = .finished;
@@ -594,6 +620,22 @@ pub const Game = struct {
                 .layout = if (shown) |model| self.settings.padLayout(model.guid) else .{},
                 .model = shown,
             };
+            if (options.menu.page == .save) {
+                options.menu.slots = try self.slotList();
+                if (options.menu.save_page.outcome) |outcome| {
+                    options.menu.save_page.outcome = null;
+                    options.menu.page = .rows;
+                    switch (outcome) {
+                        .back => {},
+                        .chosen => |row| {
+                            var name: [8]u8 = undefined;
+                            if (self.saveGame(p, save_slots.slotName(row, &name))) {
+                                options.menu.saved = true;
+                            } else |err| std.log.err("the game could not be saved: {s}", .{@errorName(err)});
+                        },
+                    }
+                }
+            }
         }
         switch (scene.outcome) {
             .playing => {
@@ -689,6 +731,7 @@ pub const Game = struct {
             for (buf[0..n]) |raw| {
                 self.events_consumed += 1;
                 const event = self.padEvent(p, raw) orelse continue;
+                if (self.quickKey(p, event)) continue;
                 self.globalKey(event);
                 // A pad's press, of a button or the stick, turns the Joystick option on (PLAN
                 // GS-3).
@@ -840,6 +883,88 @@ pub const Game = struct {
         return self.scene == .level and self.story == null and self.scene.level.canSave();
     }
 
+    /// F5 saves the level in play into the quick slot, F9 loads it, with a notice (PLAN GS-5).
+    /// True when the key was one of them, in a level outside a film or a demo.
+    fn quickKey(self: *Game, p: *platform.Platform, event: platform.Event) bool {
+        const press = switch (event.payload) {
+            .key_down => |key| key,
+            else => return false,
+        };
+        if (press.key != .f5 and press.key != .f9) return false;
+        if (self.scene != .level or self.story != null or self.scene.level.demo != null) return false;
+        if (press.repeat) return true;
+        if (press.key == .f5) {
+            if (!self.canSave()) return true;
+            self.saveGame(p, save.quick_slot) catch |err| {
+                std.log.err("the game could not be saved: {s}", .{@errorName(err)});
+                return true;
+            };
+            self.scene.level.screen.showNotice("GAME SAVED");
+        } else {
+            self.loadGame(p, save.quick_slot) catch |err| {
+                if (err != error.NotFound) std.log.err("the game could not be loaded: {s}", .{@errorName(err)});
+                return true;
+            };
+            self.scene.level.screen.showNotice("GAME LOADED");
+        }
+        return true;
+    }
+
+    /// The save slots, read from storage the first time a slot page needs them.
+    fn slotList(self: *Game) ![]const save.Slot {
+        if (self.slot_list == null) {
+            var list: SlotList = .{ .arena = .init(self.allocator), .slots = undefined };
+            errdefer list.arena.deinit();
+            const print = if (self.data) |files| save.fingerprint(files) else 0;
+            for (&list.slots, 0..) |*slot, row| {
+                var name: [8]u8 = undefined;
+                var info_name: [16]u8 = undefined;
+                const info = save.infoName(save_slots.slotName(row, &name), &info_name);
+                const storage = self.storage orelse {
+                    slot.* = .empty;
+                    continue;
+                };
+                var bytes = storage.load(info) catch |err| {
+                    slot.* = if (err == error.NotFound) .empty else .broken;
+                    continue;
+                };
+                defer bytes.deinit();
+                slot.* = try save.readSlot(self.allocator, list.arena.allocator(), bytes.bytes, print);
+            }
+            self.slot_list = list;
+        }
+        return &self.slot_list.?.slots;
+    }
+
+    fn dropSlots(self: *Game) void {
+        if (self.slot_list) |*list| list.arena.deinit();
+        self.slot_list = null;
+    }
+
+    /// The picture of the save a slot page has selected, if one shows.
+    fn slotPicture(self: *const Game) ?*const save.Picture {
+        const list = &(self.slot_list orelse return null);
+        const row = switch (self.scene) {
+            .level => |*level| if (level.options) |*options| if (options.menu.page == .save) options.menu.save_page.selection else return null else return null,
+            .menu => |*front| if (front.view == .load) front.load_page.selection else return null,
+            else => return null,
+        };
+        return switch (list.slots[row]) {
+            .save => |*s| if (s.picture) |*pixels| pixels else null,
+            else => null,
+        };
+    }
+
+    /// Draws the selected save's picture into the presented `frame`, in its own colors.
+    fn drawSlotPicture(self: *const Game, frame: []u8) void {
+        const pixels = self.slotPicture() orelse return;
+        for (0..save.picture_height) |y| for (0..save.picture_width) |x| {
+            const at = ((save_slots.picture_y + y) * 256 + save_slots.picture_x + x) * 4;
+            const from = (y * save.picture_width + x) * 3;
+            frame[at..][0..4].* = .{ pixels[from], pixels[from + 1], pixels[from + 2], 255 };
+        };
+    }
+
     /// The walks played in this game, the level in play's included: its play time.
     pub fn playedWalks(self: *const Game) u64 {
         return self.play_walks + if (self.scene == .level) self.scene.level.walk_count else 0;
@@ -887,6 +1012,7 @@ pub const Game = struct {
         });
         var name: [16]u8 = undefined;
         try storage.save(save.infoName(slot, &name), info);
+        self.dropSlots();
     }
 
     /// Loads the save in `slot`: its level, loaded again with its world put back, replaces
@@ -1018,6 +1144,7 @@ pub const Game = struct {
             const indices = self.page[0..57344];
             const frame = self.rgba[0 .. 57344 * 4];
             try self.scene.level.draw(indices, frame, self.settings);
+            self.drawSlotPicture(frame);
             self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
             try p.present(.{ .width = 256, .height = 224, .stride = 256 * 4, .pixels = frame });
             self.frames_presented += 1;
@@ -1047,6 +1174,7 @@ pub const Game = struct {
             const indices = self.page[0..count];
             const frame = self.rgba[0 .. count * 4];
             try scene.draw(indices, frame);
+            if (size.width == 256 and size.height == 224) self.drawSlotPicture(frame);
             self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
             try p.present(.{
                 .width = size.width,

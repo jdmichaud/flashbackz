@@ -6,13 +6,16 @@ const font = @import("../content/font.zig");
 const text = @import("../render/text.zig");
 const settings_mod = @import("../settings.zig");
 const platform = @import("../platform.zig");
+const save = @import("../save.zig");
+const save_slots = @import("save_slots.zig");
 const Settings = settings_mod.Settings;
-/// The rows; CONTROLS is ours (PLAN GS-3), the others the original's.
-pub const Item = enum { resume_game, sound_fx, music, volume, joystick, zoom, controls, abort_game };
+/// The rows; SAVE GAME and CONTROLS are ours (PLAN GS-5, GS-3), the others the original's.
+pub const Item = enum { resume_game, save_game, sound_fx, music, volume, joystick, zoom, controls, abort_game };
 const item_count = @typeInfo(Item).@"enum".field_names.len;
 pub const Outcome = enum { resume_game, abort_game };
-/// The dialog's page: its rows, or the CONTROLS page that lists each action's key and button.
-pub const Page = enum { rows, controls };
+/// The dialog's page: its rows, the save slots' page, or the CONTROLS page that lists each
+/// action's key and button.
+pub const Page = enum { rows, save, controls };
 /// The CONTROLS page's rows: the actions a pad's buttons give, DEFAULT and BACK.
 pub const ControlsRow = enum { act, gun, use, inventory, pause, default, back };
 const controls_row_count = @typeInfo(ControlsRow).@"enum".field_names.len;
@@ -26,11 +29,22 @@ pub const Menu = struct {
     reset_pad: bool = false,
     /// The pad last used, which the game sets.
     pad: ?Pad = null,
+    /// The save slots' page; the game reads the slots, sets `slots` and saves into the chosen
+    /// one.
+    save_page: save_slots.Page = .{ .mode = .save },
+    slots: []const save.Slot = &.{},
+    /// The game was saved: the dialog says so where it shows the free memory.
+    saved: bool = false,
     outcome: ?Outcome = null,
     free_memory_mb: ?u64 = null,
     /// A press of `action`: up and down choose the row, left and right change it, and a button
     /// or Escape closes the dialog, abandoning the game on ABORT GAME.
     pub fn press(self: *Menu, action: input.Action, settings: *Settings) void {
+        if (self.page == .save) {
+            // Until the game has read the slots, the page only waits.
+            if (self.slots.len == save_slots.row_count) self.save_page.press(action, self.slots);
+            return;
+        }
         if (self.page == .controls) {
             const row: usize = @backingInt(self.controls_row);
             switch (action) {
@@ -45,11 +59,11 @@ pub const Menu = struct {
         }
         switch (action) {
             .up => self.selection = @fromBackingInt(@as(
-                u3,
+                u4,
                 @intCast((@as(u8, @backingInt(self.selection)) + item_count - 1) % item_count),
             )),
             .down => self.selection = @fromBackingInt(@as(
-                u3,
+                u4,
                 @intCast((@as(u8, @backingInt(self.selection)) + 1) % item_count),
             )),
             .left, .right => switch (self.selection) {
@@ -65,6 +79,12 @@ pub const Menu = struct {
             },
             .pause, .use, .gun, .act => switch (self.selection) {
                 .controls => self.page = .controls,
+                .save_game => if (action != .pause) {
+                    self.page = .save;
+                    self.save_page = .{ .mode = .save };
+                } else {
+                    self.outcome = .resume_game;
+                },
                 .abort_game => self.outcome = .abort_game,
                 else => self.outcome = .resume_game,
             },
@@ -75,7 +95,11 @@ pub const Menu = struct {
     /// A pad's B or START: on the CONTROLS page as any button, or play resumes, never
     /// abandoned (PLAN GS-3).
     pub fn back(self: *Menu) void {
-        if (self.page == .controls) self.controlsButton() else self.outcome = .resume_game;
+        switch (self.page) {
+            .rows => self.outcome = .resume_game,
+            .save => self.save_page.back(),
+            .controls => self.controlsButton(),
+        }
     }
 
     /// A button on the CONTROLS page: DEFAULT asks for the fixed layout, BACK leaves. On an
@@ -107,9 +131,17 @@ pub const Menu = struct {
             try drawPanel(pixels, glyphs, controls_panel);
             return self.drawControls(pixels, glyphs, style);
         }
+        if (self.page == .save) {
+            try drawPanel(pixels, glyphs, slots_panel);
+            if (self.slots.len != save_slots.row_count) return;
+            var selected = style;
+            selected.foreground = 0xe4;
+            return self.save_page.draw(pixels, glyphs, self.slots, style, selected);
+        }
         try drawPanel(pixels, glyphs, rows_panel);
         const labels = [_][]const u8{
             "RESUME GAME",
+            "SAVE GAME",
             "SOUND FX",
             "MUSIC",
             "VOLUME",
@@ -135,7 +167,7 @@ pub const Menu = struct {
                 },
             );
             var volume_text: [4]u8 = undefined;
-            const value: ?[]const u8 = switch (@as(Item, @fromBackingInt(@as(u3, @intCast(i))))) {
+            const value: ?[]const u8 = switch (@as(Item, @fromBackingInt(@as(u4, @intCast(i))))) {
                 .sound_fx => if (settings.sound_fx) "ON  " else "OFF ",
                 .music => if (settings.music) "ON  " else "OFF ",
                 .volume => try std.fmt.bufPrint(&volume_text, "{d}%", .{settings.volume}),
@@ -159,7 +191,7 @@ pub const Menu = struct {
             );
         }
         var memory_text: [48]u8 = undefined;
-        const memory_label = if (self.free_memory_mb) |amount| try std.fmt.bufPrint(
+        const memory_label = if (self.saved) "GAME SAVED" else if (self.free_memory_mb) |amount| try std.fmt.bufPrint(
             &memory_text,
             "FREE MEM {d} MB",
             .{amount},
@@ -209,7 +241,9 @@ pub const Menu = struct {
 const Panel = struct { left: i32, right: i32, top: i32, bottom: i32 };
 
 /// The original's panel, 8 pixels higher and a row longer for CONTROLS.
-const rows_panel: Panel = .{ .left = 48, .right = 200, .top = 32, .bottom = 192 };
+const rows_panel: Panel = .{ .left = 48, .right = 200, .top = 16, .bottom = 200 };
+/// The whole screen, for the save slots' page.
+const slots_panel: Panel = .{ .left = 0, .right = 248, .top = 0, .bottom = 216 };
 /// A wider one for the CONTROLS page's three columns.
 const controls_panel: Panel = .{ .left = 16, .right = 232, .top = 24, .bottom = 184 };
 
@@ -267,6 +301,7 @@ test "options wrap, cycle with horizontal arrows, and apply on Escape or action"
     try std.testing.expectEqual(.abort_game, menu.selection);
     menu.press(.down, &settings);
     menu.press(.down, &settings);
+    menu.press(.down, &settings);
     menu.press(.right, &settings);
     try std.testing.expect(!settings.sound_fx);
     menu.press(.pause, &settings);
@@ -311,4 +346,18 @@ test "the CONTROLS page: rows for each action, DEFAULT asks for the fixed layout
     try std.testing.expect(menu.reset_pad);
     menu.press(.pause, &settings);
     try std.testing.expectEqual(Page.rows, menu.page);
+}
+
+test "SAVE GAME opens the save slots' page, which goes back to the rows" {
+    var settings: Settings = .{};
+    var menu: Menu = .{};
+    menu.press(.down, &settings);
+    try std.testing.expectEqual(Item.save_game, menu.selection);
+    menu.press(.use, &settings);
+    try std.testing.expectEqual(Page.save, menu.page);
+    // Before the slots are read, presses wait.
+    menu.press(.use, &settings);
+    try std.testing.expectEqual(@as(?save_slots.Outcome, null), menu.save_page.outcome);
+    menu.back();
+    try std.testing.expectEqual(@as(?save_slots.Outcome, .back), menu.save_page.outcome);
 }

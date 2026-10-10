@@ -41,6 +41,9 @@ pub const Screen = struct {
     library_behavior: ?u16 = null,
     /// Frames left showing the level's password; none in demos.
     password_frames: u8,
+    /// A notice of ours, as GAME SAVED (PLAN GS-5), and the frames left showing it.
+    notice: []const u8 = "",
+    notice_frames: u8 = 0,
     checkpoint_saves: u32 = 0,
     /// "COMPLETED" shows while Conrad touches the save terminal after saving.
     completed: bool = false,
@@ -118,6 +121,7 @@ pub const Screen = struct {
         self.frame_rects = .{};
         try self.drawLabel(pack, world);
         try self.drawPassword(pack);
+        try self.drawNotice(pack);
         try self.paintHudIcon(pack, world);
         if (self.pending_message) |number| {
             self.pending_message = null;
@@ -522,6 +526,19 @@ pub const Screen = struct {
     /// The inventory loop also draws the password, so its polls count it down too.
     pub fn countPasswordFrame(self: *Screen) void {
         self.password_frames -|= 1;
+    }
+
+    /// Shows `notice` for two seconds, under the password while it shows.
+    pub fn showNotice(self: *Screen, notice: []const u8) void {
+        self.notice = notice;
+        self.notice_frames = 70;
+    }
+
+    fn drawNotice(self: *Screen, pack: *const level_pack.Pack) !void {
+        if (self.notice_frames == 0) return;
+        self.notice_frames -= 1;
+        const x = 128 - 4 * @as(i32, @intCast(self.notice.len));
+        try drawText(&self.picture, &self.frame_rects, pack, self.notice, x, if (self.password_frames == 0) 16 else 28, 0xe7);
     }
 
     fn drawPassword(self: *Screen, pack: *const level_pack.Pack) !void {

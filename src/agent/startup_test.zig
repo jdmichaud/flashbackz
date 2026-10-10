@@ -30,6 +30,8 @@ test "floppy menu preview rejects a missing introduction; Start hands over to th
     );
     defer preview.deinit();
     const front = &preview.scene.menu;
+    // Down past LOAD to SKILL.
+    try front.event(.{ .time_ns = 0, .payload = .{ .key_down = .{ .key = .down } } });
     try front.event(.{ .time_ns = 0, .payload = .{ .key_down = .{ .key = .down } } });
     try front.event(.{ .time_ns = 1, .payload = .{ .key_down = .{ .key = .enter } } });
     try std.testing.expectEqual(game.front_end.View.skill, front.view);

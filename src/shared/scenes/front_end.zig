@@ -14,6 +14,8 @@ const level_codes = @import("../content/level_codes.zig");
 const settings = @import("../settings.zig");
 const key_latch = @import("../key_latch.zig");
 const input_mod = @import("../input.zig");
+const save = @import("../save.zig");
+const save_slots = @import("save_slots.zig");
 pub const Stage = enum {
     branding,
     introduction,
@@ -25,7 +27,7 @@ pub const Stage = enum {
     ending_ready,
     quit,
 };
-pub const View = enum { main, skill, info, password, unavailable };
+pub const View = enum { main, skill, info, password, load, unavailable };
 
 /// The original's main menu chooses Demo once its timer has counted past 2,400 since the page
 /// opened or the last Up or Down: 34.38 s, measured (flashback-re docs/title-menu.md).
@@ -60,6 +62,9 @@ pub const Scene = struct {
     password_length: usize = 0,
     /// The character a pad is choosing after the typed ones (PLAN GS-3).
     pad_character: ?u8 = null,
+    /// LOAD's slots page; the game reads the slots, sets `slots` and loads the chosen one.
+    load_page: save_slots.Page = .{ .mode = .load },
+    slots: []const save.Slot = &.{},
     /// The password's blinking cursor, an underscore after the typed characters, and when it
     /// next changes.
     cursor_shown: bool = true,
@@ -310,6 +315,9 @@ pub const Scene = struct {
                 if (key == .escape) self.mainMenu();
             },
             .info, .unavailable => if (confirm or key == .escape or key == .tab) self.mainMenu(),
+            .load => if (input_mod.keyAction(key)) |action| {
+                if (!press.repeat or action.isDirection()) self.pressLoad(action);
+            },
             .password => {
                 if (key == .backspace) {
                     if (self.pad_character != null) self.pad_character = null else self.password_length -|= 1;
@@ -349,6 +357,10 @@ pub const Scene = struct {
                 try self.show(.skill, "MENU3");
             },
             .info => try self.show(.info, "INSTRU_E"),
+            .load => {
+                self.load_page = .{ .mode = .load };
+                try self.show(.load, "MENU2");
+            },
             .password => {
                 self.password_length = 0;
                 self.pad_character = null;
@@ -394,8 +406,29 @@ pub const Scene = struct {
                 if (choose_it or back) self.mainMenu();
             },
             .info, .unavailable => if (choose_it or back) self.mainMenu(),
+            .load => if (back) {
+                self.load_page.back();
+                self.leaveLoad();
+            } else {
+                // START chooses here.
+                self.pressLoad(if (change.action == .pause) .use else change.action);
+            },
             .password => try self.padCode(change.action, choose_it, back),
         }
+    }
+
+    /// A press on LOAD's page, once the game has read the slots; going back returns to the main
+    /// page.
+    fn pressLoad(self: *Scene, action: input_mod.Action) void {
+        if (self.slots.len == save_slots.row_count) self.load_page.press(action, self.slots);
+        self.leaveLoad();
+    }
+
+    fn leaveLoad(self: *Scene) void {
+        if (self.load_page.outcome) |outcome| if (outcome == .back) {
+            self.load_page.outcome = null;
+            self.mainMenu();
+        };
     }
 
     /// The characters a pad goes through, in order.
@@ -459,6 +492,18 @@ pub const Scene = struct {
         if (self.player) |*player| return player.draw(indices, rgba);
         if (self.view == .main) return self.menu.draw(self.assets.artwork(), .{}, indices, rgba);
         const assets = &(self.page_assets orelse return error.MissingMenuPage);
+        if (self.view == .load) {
+            // On black, in the page's colors.
+            @memset(indices, 0);
+            if (self.slots.len == save_slots.row_count) try self.load_page.draw(
+                indices,
+                &assets.font,
+                self.slots,
+                .{ .foreground = 2, .shadow = 0 },
+                .{ .foreground = 1, .shadow = 0 },
+            );
+            return palette.writeRgba(indices, &assets.colors, rgba);
+        }
         @memcpy(indices, assets.background.pixels);
         switch (self.view) {
             .skill => {
@@ -563,7 +608,7 @@ pub const Scene = struct {
                 );
             },
             .info => {},
-            .main => unreachable,
+            .main, .load => unreachable,
         }
         try palette.writeRgba(indices, &assets.colors, rgba);
     }

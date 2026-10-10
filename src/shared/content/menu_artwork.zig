@@ -23,7 +23,7 @@ pub const Assets = struct {
             .background = &self.background,
             .colors = &self.colors,
             .font = &self.font,
-            .labels = .{ "START", "SKILL", "PASSWORD", "INFO", "DEMO", "QUIT" },
+            .labels = .{ "START", "LOAD", "SKILL", "PASSWORD", "INFO", "DEMO", "QUIT" },
         };
     }
 };
