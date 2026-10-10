@@ -353,7 +353,7 @@ pub const Scene = struct {
                 .menu = .{},
                 .clock = try step_clock.Clock.init(step_clock.inventory, now_ns),
             };
-            self.keys.release();
+            self.keys.latch();
             return;
         }
         try self.afterOptions(now_ns);
@@ -389,7 +389,7 @@ pub const Scene = struct {
         self.screen.zoom.setRow(@backingInt(settings.zoom));
         const paused = deadline -| options.clock.origin_ns;
         self.options = null;
-        self.keys.release();
+        self.keys.unlatch();
         self.clock.?.origin_ns +|= paused;
         if (outcome == .abort_game) {
             self.outcome = .defeated;
@@ -412,7 +412,7 @@ pub const Scene = struct {
         cadence.regular_gap_ticks = 3;
         self.message_clock = try step_clock.Clock.init(cadence, now_ns);
         self.message_clock.?.consume();
-        self.keys.release();
+        self.keys.latch();
     }
 
     /// Enter, Space or Shift turns the page; after the last, play resumes.
@@ -426,9 +426,10 @@ pub const Scene = struct {
             break :byte demo.bytes[demo.cursor - 1];
         } else self.takeKeys(deadline, settings.joystick);
         if (held & 0x70 == 0) return;
-        self.keys.release();
+        self.keys.latch();
         if (try self.screen.nextMessagePage(&self.pack, self.messages)) return;
         // The world resumes where it stopped.
+        self.keys.unlatch();
         const paused = deadline -| self.message_clock.?.origin_ns;
         self.message_clock = null;
         self.clock.?.origin_ns +|= paused;
@@ -532,7 +533,7 @@ pub const Scene = struct {
         self.inventory_delay = 10;
         // Keys pressed during the film and held at its end count only once pressed anew.
         _ = self.takeKeys(now_ns, settings.joystick);
-        self.keys.release();
+        self.keys.unlatch();
         self.clock.?.origin_ns +|= paused_for;
         // Films do not leave the zoom, but its pages are rebuilt.
         if (self.screen.zoom.on) self.screen.zoom.enter = true;
@@ -577,8 +578,12 @@ pub const Scene = struct {
             return false;
         }
         if (controls & 0x80 == 0) return false;
-        self.keys.release();
-        if (self.world.characters[0].health <= 0) return false;
+        self.keys.latch();
+        // It closes at once: the latch ends with it.
+        if (self.world.characters[0].health <= 0) {
+            self.keys.unlatch();
+            return false;
+        }
         var inventory: Inventory = .{
             .menu = undefined,
             .clock = try step_clock.Clock.init(step_clock.inventory, deadline),
@@ -601,7 +606,10 @@ pub const Scene = struct {
             };
             count += 1;
         }
-        inventory.menu = inventory_menu.Menu.init(count) catch return false;
+        inventory.menu = inventory_menu.Menu.init(count) catch {
+            self.keys.unlatch();
+            return false;
+        };
         self.inventory = inventory;
         self.inventory_left_zoom = self.screen.leaveZoomFor();
         return true;
@@ -649,7 +657,7 @@ pub const Scene = struct {
                 const paused = deadline -| inventory.clock.origin_ns;
                 self.inventory = null;
                 self.inventory_delay = 10;
-                self.keys.release();
+                self.keys.unlatch();
                 self.clock.?.origin_ns +|= paused;
                 if (self.inventory_left_zoom) {
                     self.inventory_left_zoom = false;
