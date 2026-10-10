@@ -569,6 +569,11 @@ load and fails loudly there, devices are adapted to (D6).
     map now blinks 4 ticks on, 4 off (its marker-off picture showed one host frame in four);
     the log's loop (LOG 0) takes 12 ticks, not 8; MISSIONS 5's is unchanged. All films import;
     the map plays until a confirmation, then Conrad walks on. 28/28 build steps.
+- [ ] **Agent sessions in the repository.** The scripted agent sessions that show a change keeps
+  play as it was lived only in /tmp; they move to `tools/agent_sessions.sh`, with the accepted
+  output beside it. Four sessions that LOAD GAME on the title or B choosing on menus changed
+  under them reach what their comments name again, and the agent reports the title's page.
+  Gate: the script's output reproduces; each session ends where its comment says.
 - [ ] **B2** An audio device granting another format ends the game or overruns a buffer. High on
   Windows. With D2.
 - [x] **B3** A key released in the options dialog or the inventory is ignored when pressed again.
