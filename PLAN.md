@@ -544,20 +544,27 @@ decision needed): the MUSIC option controls the Mega Drive tunes (D2); the anima
 movement and sounds move into the data set, as DESIGN 4 already says (D5); content is checked at
 load and fails loudly there, devices are adapted to (D6).
 
-- [ ] **B4 and D4 — No placeholder game** (user, 2026-10-10: "What is this placeholder??? It's
+- [x] **B4 and D4 — No placeholder game** (user, 2026-10-10: "What is this placeholder??? It's
   like a game. Sounds like one from the 80s."). The template's smoke program (a bouncing ball, a
   click at each bounce, F2/F3 saving it, TITLE.TXT) and the template code nothing uses leave the
   product. Without its game files the game stops with a message naming what is missing and how
   to give it, in both hosts; `zig build smoke` checks that path. Gate: tests; the SDL game and
   the agent without disks print the message and exit with an error status; with disks the
   keyboard sessions keep their hashes.
+  - 2026-10-10: both hosts without files print "the game's files are missing: give both floppy
+    images (disk1.img disk2.img) or a directory extracted from them" and exit 2; `zig build
+    smoke` checks that. Also gone: the mouse, relative mode and its Ctrl+F10 chord, text input,
+    the input-recording samples. Kept: the storage's listing and deletion (the atomic-save
+    fault tests use them), the vendored sorz chips (DESIGN 6), the settings' Difficulty (the
+    save record needs an exhaustive one). About 880 lines fewer; keyboard sessions keep their
+    hashes; 28/28 build steps.
 - [ ] **B1** Using any of the city's four map terminals ends the game. High.
 - [ ] **B2** An audio device granting another format ends the game or overruns a buffer. High on
   Windows. With D2.
 - [x] **B3** A key released in the options dialog or the inventory is ignored when pressed again.
   Fixed by GS-1.
-- [ ] **B4** Missing or partial game files start the template's placeholder game instead of
-  failing. With D4.
+- [x] **B4** Missing or partial game files start the template's placeholder game instead of
+  failing. With D4. Done: "No placeholder game" above.
 - [ ] **B5** A catch-up frame drops the first walk's world message and its zoom hits (if the
   original keeps them).
 - [x] **B6** Escape in a level reacts to auto-repeat and a quick tap is lost. Kept: the original
@@ -579,8 +586,8 @@ load and fails loudly there, devices are adapted to (D6).
 - [ ] **D2** One audio device, five owners, no mixer. With B2.
 - [x] **D3** Input state updated in one path only; settings in hand-synchronised copies. Fixed by
   GS-1 and GS-2.
-- [ ] **D4** The template's placeholder (the bouncing ball) and unused template code are still in
-  the product. With B4.
+- [x] **D4** The template's placeholder (the bouncing ball) and unused template code are still in
+  the product. With B4. Done: "No placeholder game" above.
 - [ ] **D5** Module boundaries leak in both directions.
 - [ ] **D6** Every runtime error is fatal, and validation is deferred to first use.
 - [ ] **D7** Smaller design issues (the review's list).
