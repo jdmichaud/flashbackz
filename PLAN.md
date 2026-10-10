@@ -722,7 +722,7 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
   `Screen.writeRgba`, `contacts.Registration`, the unreachable Retry to the title, and
   `unused_parameters` (accepted, no longer kept). `placement` stays, documented: it is the
   character's identity when comparing with the original. Gate: as R1.
-- [ ] **R4** Tests missing, and tests that don't test their name. Added: `World.update`'s first
+- [x] **R4** Tests missing, and tests that don't test their name. Added: `World.update`'s first
   tests (a message reaches a later recipient in the same update and an earlier one in the next,
   an awaited message ends the animation; a catch-up walk keeps the message, B5), the interactive
   pages (B1), the output and the options' sounds (B2). Fixed: the string table's alias test
