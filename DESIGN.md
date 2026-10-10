@@ -98,6 +98,13 @@ structure, names behaviors and states (`frightened_civilian`, `aiming`). Unnamed
 systematic name until someone names them. Overlays are committed ZON files in the same format.
 They may rename, add or replace data, and must not contain original content.
 
+**A standalone build** (approved by the user, 2026-10-10) is the one place where original files
+enter a binary: `zig build -Ddisk1=PATH -Ddisk2=PATH [-Dmegadrive=PATH]` checks the user's
+files, then copies them into a generated module that only the SDL host imports; with no path on
+its command line it reads them as it would read the same files given there. The executable then
+holds the original game and is for the user's own machines: never committed, never
+distributed. Without the options nothing is built in, and the agent host never is.
+
 Unsupported content fails loudly. The extractor reports every condition or effect it cannot
 name, with level, character and state. The engine refuses a table that uses an unimplemented
 condition or effect; it never substitutes a default.
