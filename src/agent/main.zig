@@ -48,6 +48,15 @@ const Args = clap.Parser(.{
                 "(-32768 to 32767) at host frame F",
         },
         .{
+            .long = "save",
+            .value = "F:SLOT",
+            .repeats = true,
+            .help = "save the level in play into SLOT (QUICK, SAVE1 to SAVE8) at the end of host\n" ++
+                "frame F",
+        },
+        .{ .long = "load", .value = "F:SLOT", .repeats = true, .help = "load SLOT at the end of host frame F" },
+        .{ .long = "trace", .help = "print the level's state hash after each of its walks" },
+        .{
             .long = "stall",
             .value = "F:MS",
             .repeats = true,
@@ -79,6 +88,7 @@ const AxisMove = struct {
     value: i16,
 };
 const Stall = struct { frame: u64, ns: u64 };
+const SaveAction = struct { frame: u64, slot: []const u8, load: bool };
 
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
@@ -109,6 +119,8 @@ pub fn main(init: std.process.Init) !void {
     defer axes.deinit(gpa);
     var stalls: std.ArrayList(Stall) = .empty;
     defer stalls.deinit(gpa);
+    var saves: std.ArrayList(SaveAction) = .empty;
+    defer saves.deinit(gpa);
     // In command-line order: the order of the events at one frame matters.
     for (args.given) |given| {
         const bad: clap.Diagnostic = .{ .argument = Args.flagName(given.option), .value = given.value };
@@ -132,6 +144,15 @@ pub fn main(init: std.process.Init) !void {
                 gpa,
                 parseAxis(given.value) orelse return fail(io, error.InvalidValue, bad),
             ),
+            Args.index("save"), Args.index("load") => {
+                const colon = std.mem.indexOfScalar(u8, given.value, ':') orelse return fail(io, error.InvalidValue, bad);
+                const frame = std.fmt.parseInt(u64, given.value[0..colon], 10) catch return fail(io, error.InvalidValue, bad);
+                try saves.append(gpa, .{
+                    .frame = frame,
+                    .slot = given.value[colon + 1 ..],
+                    .load = given.option == Args.index("load"),
+                });
+            },
             Args.index("stall") => try stalls.append(
                 gpa,
                 parseStall(given.value) orelse return fail(io, error.InvalidValue, bad),
@@ -173,6 +194,8 @@ pub fn main(init: std.process.Init) !void {
         .time_ns = backend.clock_ns,
         .payload = .{ .controller_added = @fromBackingInt(@intCast(0)) },
     });
+    const trace = args.flag("trace");
+    var traced_walks: u64 = 0;
     var frame: u64 = 0;
     while (frame < frames) : (frame += 1) {
         for (presses.items) |press| if (press.frame == frame) {
@@ -205,6 +228,21 @@ pub fn main(init: std.process.Init) !void {
         });
         for (stalls.items) |stall| if (stall.frame == frame) backend.advance(stall.ns);
         if (try game.update(&p) == .finished) break;
+        if (trace and game.scene == .level and game.scene.level.walk_count != traced_walks) {
+            traced_walks = game.scene.level.walk_count;
+            std.debug.print("{{\"frame\":{d},\"walks\":{d},\"state_hash\":\"{x:0>16}\"}}\n", .{ frame, traced_walks, game.scene.level.stateHash() });
+        }
+        for (saves.items) |action| if (action.frame == frame) {
+            const result = if (action.load) game.loadGame(&p, action.slot) else game.saveGame(action.slot);
+            result catch |err| std.debug.print("flashbackz-agent: {s} {s}: {s}\n", .{
+                if (action.load) "load" else "save",
+                action.slot,
+                @errorName(err),
+            });
+            if (trace) std.debug.print("{{\"frame\":{d},\"{s}\":\"{s}\"}}\n", .{ frame, if (action.load) "load" else "save", action.slot });
+            // A loaded level counts its walks from none.
+            if (action.load) traced_walks = 0;
+        };
         backend.advance(frame_ns);
     }
 

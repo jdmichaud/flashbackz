@@ -17,6 +17,7 @@ const input_recording = @import("../input_recording.zig");
 const step_clock = @import("../step_clock.zig");
 const key_latch = @import("../key_latch.zig");
 const input_mod = @import("../input.zig");
+const save = @import("../save.zig");
 const settings_mod = @import("../settings.zig");
 const Settings = settings_mod.Settings;
 const audio_effects = @import("../audio/effects.zig");
@@ -90,6 +91,8 @@ pub const Scene = struct {
     caught_up: bool = false,
     /// The catch-up walks run so far: how often the host fell behind.
     catch_up_walks: u32 = 0,
+    /// The walks run so far in this scene, for tests that follow them one by one.
+    walk_count: u64 = 0,
 
     const Options = struct {
         menu: game_options.Menu,
@@ -545,6 +548,7 @@ pub const Scene = struct {
 
     fn walk(self: *Scene, controls: u8, kind: behavior.world.Walk, sound_fx: bool) !void {
         const outcome = try self.world.update(@bitCast(controls), kind);
+        self.walk_count += 1;
         for (self.world.requests.sounds[0..self.world.requests.sound_count]) |sound| {
             if (sound_fx) self.effects.submit(self.pack.sounds, .{
                 .sound = @fromBackingInt(sound.id),
@@ -678,6 +682,31 @@ pub const Scene = struct {
             }
         }
         return self.keys.read(joystick);
+    }
+
+    /// Whether the level can be saved now: in play or behind its options dialog, not a demo, a
+    /// film, the inventory or a message (DESIGN.md 4).
+    pub fn canSave(self: *const Scene) bool {
+        return self.demo == null and self.outcome == .playing and self.film == null and
+            self.inventory == null and self.message_clock == null;
+    }
+
+    /// The play state outside the world that a save keeps.
+    pub fn saveState(self: *const Scene) save.Record.Scene {
+        return .{
+            .last_direction = self.keys.last_direction,
+            .inventory_delay = self.inventory_delay,
+            .catch_up_due = self.catch_up_due,
+            .requested_scene = self.requested_scene,
+        };
+    }
+
+    /// Puts back a save's play state in this level, loaded again; its world is put back apart.
+    pub fn restoreState(self: *Scene, state: save.Record.Scene) void {
+        self.keys = .{ .last_direction = state.last_direction };
+        self.inventory_delay = state.inventory_delay;
+        self.catch_up_due = state.catch_up_due;
+        self.requested_scene = state.requested_scene;
     }
 
     /// Every character's state and inventory links, the score, the view and the random state.

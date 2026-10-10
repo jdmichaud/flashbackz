@@ -17,6 +17,7 @@ const memory = @import("memory.zig");
 const settings_mod = @import("settings.zig");
 const step_clock = @import("step_clock.zig");
 const input = @import("input.zig");
+const save = @import("save.zig");
 const megadrive = @import("content/megadrive.zig");
 pub const Entry = union(enum) {
     automatic,
@@ -827,6 +828,93 @@ pub const Game = struct {
         if (self.scene != .level) return null;
         const options = self.scene.level.options orelse return null;
         return options.menu.binding();
+    }
+
+    /// Whether the level in play can be saved now (DESIGN.md 4).
+    pub fn canSave(self: *const Game) bool {
+        return self.scene == .level and self.story == null and self.scene.level.canSave();
+    }
+
+    /// Saves the level in play into `slot` (`save.quick_slot`, or `save.slotName`).
+    pub fn saveGame(self: *Game, slot: []const u8) !void {
+        if (!self.canSave()) return error.NothingToSave;
+        const storage = self.storage orelse return error.NoStorage;
+        const files = self.data orelse return error.DataSetRequired;
+        var arena_state: std.heap.ArenaAllocator = .init(self.allocator);
+        defer arena_state.deinit();
+        const arena = arena_state.allocator();
+        const level = &self.scene.level;
+        var print: [16]u8 = undefined;
+        const text = try save.encode(arena, .{
+            .version = save.version,
+            .data_set = std.fmt.bufPrint(&print, "{x:0>16}", .{save.fingerprint(files)}) catch unreachable,
+            .level = level.level,
+            .difficulty = self.difficulty,
+            .inherited = &self.inherited,
+            .scene = level.saveState(),
+            .world = try save.captureWorld(arena, &level.world),
+        });
+        try storage.save(slot, text);
+    }
+
+    /// Loads the save in `slot`: its level, loaded again with its world put back, replaces
+    /// whatever plays. A save of another version or data set is refused (`save.Error`).
+    pub fn loadGame(self: *Game, p: *platform.Platform, slot: []const u8) !void {
+        const storage = self.storage orelse return error.NoStorage;
+        const files = self.data orelse return error.DataSetRequired;
+        const assets = self.assets orelse return error.OriginalContentRequired;
+        var bytes = try storage.load(slot);
+        defer bytes.deinit();
+        var arena_state: std.heap.ArenaAllocator = .init(self.allocator);
+        defer arena_state.deinit();
+        const record = try save.decode(self.allocator, arena_state.allocator(), bytes.bytes, save.fingerprint(files));
+        if (record.inherited.len != self.inherited.len) return error.InvalidSave;
+        var inherited: [256]behavior_world.Inherited = undefined;
+        @memcpy(&inherited, record.inherited);
+        var scene = try level_scene.Scene.load(self.allocator, assets, files, record.level, .{
+            .difficulty = record.difficulty,
+            .inherited = &inherited,
+            .tunes = self.tunes,
+        });
+        errdefer scene.deinit();
+        try save.restoreWorld(&scene.world, record.world);
+        scene.restoreState(record.scene);
+        self.endScene(p);
+        self.inherited = inherited;
+        self.level = record.level;
+        self.difficulty = record.difficulty;
+        self.scene = .{ .level = scene };
+    }
+
+    /// Ends whatever plays, its film and a level waiting behind the continue screen included,
+    /// with their sound.
+    fn endScene(self: *Game, p: *platform.Platform) void {
+        if (self.story) |*story| {
+            story.stopAudio(p);
+            story.deinit();
+            self.story = null;
+        }
+        if (self.suspended_level) |*level| {
+            level.deinit();
+            self.suspended_level = null;
+        }
+        switch (self.scene) {
+            .smoke => {},
+            .menu => |*scene| {
+                scene.stopAudio(p);
+                scene.deinit();
+            },
+            .level => |*scene| {
+                scene.stopAudio(p);
+                scene.deinit();
+            },
+            .continue_game => |*scene| scene.deinit(),
+            .ending => |*scene| {
+                scene.stopMusic(p);
+                scene.deinit();
+            },
+        }
+        self.scene = .smoke;
     }
 
     /// Keeps the settings in storage when they have changed since storage last kept them. A
