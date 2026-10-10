@@ -501,6 +501,10 @@ LOAD dialog in the in game menu is awkward").
   turned a page, counts again only once released; when the screen ends, a pad button still held
   counts again at once, as the original polls the joystick. Gate: tests; the agent turns one
   page per pad press; keyboard and pad sessions keep their hashes otherwise.
+  - [x] 2026-10-10: 262 tests (under the latch a held pad button counts once, again once
+    released, and at once when the screen ends). Keyboard and pad sessions keep their hashes.
+    No world message is near enough to a level's start for an agent session.
+  - [ ] With the user's pad: one page per press when talking to someone.
 - [ ] **GS-4 — The save** — A save holds the level, difficulty, score, random generator, what is
   carried between levels, the world (every character, the terrain, contacts, mailboxes, the
   save terminal's checkpoint) and the level's play state; art, sound and pictures are reloaded
