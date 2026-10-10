@@ -463,7 +463,7 @@ pub const Scene = struct {
 
     pub fn draw(self: *const Scene, indices: []u8, rgba: []u8) !void {
         if (self.player) |*player| return player.draw(indices, rgba);
-        if (self.view == .main) return self.menu.draw(self.assets.artwork(), .{}, indices, rgba);
+        if (self.view == .main) return self.menu.draw(.of(&self.assets), .{}, indices, rgba);
         const assets = &(self.page_assets orelse return error.MissingMenuPage);
         if (self.view == .load) {
             // On black, in the page's colors.

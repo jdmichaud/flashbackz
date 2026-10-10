@@ -8,7 +8,7 @@ const sprite = @import("sprite.zig");
 const object_art = @import("object_artwork.zig");
 const art_bank = @import("art_bank.zig");
 const actor_art = @import("actor_art.zig");
-const animations = @import("../behavior/animations.zig");
+const animations = @import("animations.zig");
 
 pub const Key = struct { sprite: u15, composed: bool };
 

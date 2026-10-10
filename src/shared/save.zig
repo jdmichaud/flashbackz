@@ -382,7 +382,7 @@ pub fn decode(gpa: std.mem.Allocator, arena: std.mem.Allocator, bytes: []const u
 
 const synthetic = struct {
     const vocabulary = @import("behavior/vocabulary.zig");
-    const animations = @import("behavior/animations.zig");
+    const animations = @import("content/animations.zig");
 
     const states = [_]vocabulary.State{.{ .name = "idle", .animation = 0, .rules = &.{} }};
     const behaviors = [_]vocabulary.Behavior{.{

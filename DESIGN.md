@@ -76,7 +76,10 @@ Two kinds of original content are used, in two different ways:
 
 - **Images and sound** are always read from the user's original files at runtime: room art,
   sprites, palettes, cinematics, music and samples. They are decoded into owned assets and
-  never written out (except by the level atlas, below) or committed.
+  never written out (except by the level atlas, below) or committed. So are the animations
+  (each frame's sprite and movement, a sound cue, a pose): the engine reads past an
+  animation's last frame into the file's next bytes, as the original does, so the frames keep
+  the file's layout (`content/animations.zig`).
 - **Everything else** (placements, behavior rules, links between characters, timings, text)
   is converted once by the **extractor** into a readable **data set** stored outside Git, in a
   directory the user chooses. The game loads only the data set plus the original images and

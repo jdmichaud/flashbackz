@@ -3,7 +3,6 @@
 const std = @import("std");
 const sprite = @import("sprite.zig");
 const font_mod = @import("font.zig");
-const menu = @import("../scenes/inventory_menu.zig");
 
 pub const Assets = struct {
     background: sprite.Frame,
@@ -21,17 +20,6 @@ pub const Assets = struct {
         self.previous_page.deinit();
         self.next_page.deinit();
         self.* = undefined;
-    }
-
-    pub fn artwork(self: *const Assets) menu.Artwork {
-        return .{
-            .background = &self.background,
-            .marker = &self.marker,
-            .previous_page = &self.previous_page,
-            .next_page = &self.next_page,
-            .font = &self.font,
-            .level_label = self.level_label,
-        };
     }
 };
 

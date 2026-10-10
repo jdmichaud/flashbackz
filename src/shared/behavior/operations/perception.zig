@@ -598,7 +598,7 @@ fn unsignedColumn(x: i16) i32 {
 
 const testing = struct {
     const data_set = @import("../data_set.zig");
-    const animations = @import("../animations.zig");
+    const animations = @import("../../content/animations.zig");
 
     const waits_for_front = [_]vocabulary.Rule{.{ .when = &.{.{ .hit = .from_front }}, .next = 0 }};
     const waits_for_behind_low = [_]vocabulary.Rule{.{

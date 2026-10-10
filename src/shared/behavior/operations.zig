@@ -58,7 +58,7 @@ test "operation names map to camel-case functions" {
 const testing = struct {
     const data_set = @import("data_set.zig");
     const grid = @import("grid.zig");
-    const animations = @import("animations.zig");
+    const animations = @import("../content/animations.zig");
     const world_module = @import("world.zig");
 
     const states = [_]vocabulary.State{.{ .name = "idle", .animation = 0, .rules = &.{} }};

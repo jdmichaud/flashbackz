@@ -2,7 +2,7 @@
 const std = @import("std");
 const platform = @import("../platform.zig");
 const content = @import("../content/music.zig");
-const score = @import("score.zig");
+const score = @import("../content/score.zig");
 const music = @import("music_player.zig");
 const output = @import("output.zig");
 

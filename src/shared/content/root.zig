@@ -10,14 +10,10 @@ pub const demo = @import("demo.zig");
 pub const archive = @import("archive.zig");
 pub const backward_stream = @import("backward_stream.zig");
 
-// What the extractor reads.
-pub const placement = @import("placement.zig");
-pub const rule_table = @import("rule_table.zig");
-pub const string_table = @import("string_table.zig");
-pub const world_messages = @import("world_messages.zig");
-
 // Images.
 pub const level_pack = @import("level_pack.zig");
+pub const animations = @import("animations.zig");
+pub const collision = @import("collision.zig");
 pub const room_source = @import("room_source.zig");
 pub const room_artwork = @import("room_artwork.zig");
 pub const floppy_rooms = @import("floppy_rooms.zig");

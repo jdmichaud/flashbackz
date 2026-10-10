@@ -2,7 +2,7 @@
 //! Binary layouts, track bindings and DOS filename truncation end here.
 const std = @import("std");
 const platform = @import("../platform.zig");
-const music = @import("../audio/score.zig");
+const music = @import("score.zig");
 
 fn word(bytes: []const u8, at: usize) u16 {
     return std.mem.readInt(u16, bytes[at..][0..2], .little);

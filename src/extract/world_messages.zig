@@ -5,8 +5,9 @@ pub const Line = struct { text: []const u8, ink: u8 };
 pub const Page = struct { lines: []const Line };
 pub const Message = struct { pages: []const Page };
 pub const Id = enum(u16) { _ };
-const floppy_interface = @import("floppy_interface.zig");
-const platform = @import("../platform.zig");
+const flashbackz = @import("flashbackz");
+const floppy_interface = flashbackz.content.floppy_interface;
+const platform = flashbackz.platform;
 pub const Assets = struct {
     allocator: std.mem.Allocator,
     messages: []Message,

@@ -159,7 +159,7 @@ pub const Scene = struct {
         scene.demo = .{ .bytes = recording.controls };
         scene.screen.password_frames = 0;
         // Demos replay from a fixed random state.
-        scene.world.random.state = 0;
+        scene.world.random = .{};
         return scene;
     }
 
@@ -224,7 +224,7 @@ pub const Scene = struct {
             allocator,
             data,
             pack.animations,
-            pack.grid,
+            try .init(&pack.collision),
             .{
                 .difficulty = @fromBackingInt(@backingInt(difficulty)),
                 .start = start,
@@ -507,8 +507,7 @@ pub const Scene = struct {
     /// the score the level was entered with unless the checkpoint saved another. False when
     /// no checkpoint was saved: the level must start again.
     pub fn continueAfterDefeat(self: *Scene) bool {
-        self.world.score = self.world.entry_score;
-        if (!self.world.restoreCheckpoint()) return false;
+        if (!self.world.continueAfterDefeat()) return false;
         self.outcome = .playing;
         self.clock = null;
         self.message_clock = null;
@@ -532,7 +531,7 @@ pub const Scene = struct {
     pub fn finishFilm(self: *Scene, now_ns: u64, paused_for: u64, settings: *Settings) !void {
         self.film = null;
         if (self.outcome != .playing) return;
-        self.world.view_dirty = true;
+        self.world.redrawView();
         self.inventory_delay = 10;
         // Keys pressed during the film and held at its end count only once pressed anew.
         _ = self.takeKeys(now_ns, settings.joystick);
@@ -746,7 +745,7 @@ pub const Scene = struct {
     pub fn draw(self: *const Scene, indices: []u8, rgba: []u8, settings: Settings) !void {
         var picture = self.screen.displayed;
         if (self.inventory) |inventory| try inventory.menu.draw(
-            self.pack.inventory.artwork(),
+            .of(&self.pack.inventory),
             inventory.entries[0..inventory.menu.count],
             self.world.score,
             &picture,

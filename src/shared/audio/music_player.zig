@@ -1,7 +1,7 @@
 //! Sample-clock music playback over the shared OPL synthesizer. Content is immutable;
 //! voice allocation, note lifetimes and part cursors are local to this player.
 const std = @import("std");
-const score_mod = @import("score.zig");
+const score_mod = @import("../content/score.zig");
 const opl = @import("opl.zig");
 
 pub const RegisterWrite = struct { tick: u64, register: u8, value: u8 };

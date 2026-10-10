@@ -3,6 +3,7 @@
 //! (flashback-re `docs/rules/codes-001-033.md`, section B and C).
 const std = @import("std");
 const original_memory = @import("original_memory.zig");
+const collision = @import("../content/collision.zig");
 
 pub const Side = enum(u2) { up = 0, down = 1, right = 2, left = 3 };
 
@@ -26,9 +27,9 @@ pub const Grid = struct {
     /// as in the original.
     bytes: [layout_size]u8,
 
-    pub const layout_size = 256 + 64 * cells_per_room;
-    pub const columns = 16;
-    pub const rows = 7;
+    pub const layout_size = collision.size;
+    pub const columns = collision.columns;
+    pub const rows = collision.rows;
     const cells_per_room = rows * columns;
 
     pub fn init(decoded: []const u8) !Grid {

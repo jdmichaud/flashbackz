@@ -381,9 +381,7 @@ pub const Game = struct {
                                     .tunes = self.tunes,
                                 },
                             );
-                            fresh.world.score = level.world.entry_score;
-                            fresh.world.entry_score = level.world.entry_score;
-                            fresh.world.random = level.world.random;
+                            fresh.world.restartFrom(&level.world);
                             fresh.catch_up_due = level.catch_up_due;
                             self.play_walks += level.walk_count;
                             self.retire(level);
@@ -492,10 +490,7 @@ pub const Game = struct {
                         .tunes = self.tunes,
                     },
                 );
-                next.world.score = scene.world.score;
-                next.world.entry_score = scene.world.score;
-                next.world.random = scene.world.random;
-                next.world.shake = scene.world.shake;
+                scene.world.handOver(&next.world);
                 next.catch_up_due = scene.catch_up_due;
                 scene.deinit();
                 self.level = destination;

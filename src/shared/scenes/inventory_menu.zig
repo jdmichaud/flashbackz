@@ -6,6 +6,7 @@ const font_mod = @import("../content/font.zig");
 const sprites = @import("../render/sprite.zig");
 const text = @import("../render/text.zig");
 const input_mod = @import("../input.zig");
+const inventory_artwork = @import("../content/inventory_artwork.zig");
 
 pub const Input = struct {
     right: bool = false,
@@ -72,6 +73,17 @@ pub const Artwork = struct {
     next_page: *const sprite.Frame,
     font: *const font_mod.Font,
     level_label: []const u8,
+
+    pub fn of(assets: *const inventory_artwork.Assets) Artwork {
+        return .{
+            .background = &assets.background,
+            .marker = &assets.marker,
+            .previous_page = &assets.previous_page,
+            .next_page = &assets.next_page,
+            .font = &assets.font,
+            .level_label = assets.level_label,
+        };
+    }
 };
 
 pub const Menu = struct {

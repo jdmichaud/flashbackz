@@ -123,7 +123,8 @@ pub fn main(init: std.process.Init) !u8 {
         defer pack.deinit();
         var present: map.RoomSet = .empty;
         for (pack.rooms, 0..) |room, index| if (room != null) present.set(index);
-        const links: map.Links = .fromGrid(&pack.grid, present);
+        const terrain: flashbackz.behavior.grid.Grid = try .init(&pack.collision);
+        const links: map.Links = .fromGrid(&terrain, present);
         const owned = map.owned(&links, starts[i], sharer(ids, i, &starts));
         var rooms: map.Pixels = @splat(null);
         var drawn = owned.iterator(.{});

@@ -2,7 +2,7 @@
 //! their order of first appearance. Copies of one behavior that use different animations or
 //! message values share a key, so one overlay entry names them all.
 const std = @import("std");
-const rule_table = @import("flashbackz").content.rule_table;
+const rule_table = @import("rule_table.zig");
 const codes = @import("codes.zig");
 
 pub const Key = [16]u8;

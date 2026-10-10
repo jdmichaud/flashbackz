@@ -1,6 +1,8 @@
-//! A level's animations, read in place from the original animation file. A state's
-//! animation is a list of frames, each with a sprite and a movement, plus a sound to play
-//! on entry and a pose tag that contact checks can test.
+//! A level's animations, read in place from the original animation file, as the level pack's
+//! art is (DESIGN 2). A state's animation is a list of frames, each with a sprite and a
+//! movement, plus a sound to play on entry and a pose tag that contact checks can test. The
+//! engine reads past an animation's last frame, as the original does, so the frames stay in the
+//! file's layout: a copy in the data set would have to carry it.
 const std = @import("std");
 
 pub const Frame = struct {

@@ -2,9 +2,9 @@
 //! placement becomes a character. Output is readable ZON; see DESIGN.md section 3.
 const std = @import("std");
 const flashbackz = @import("flashbackz");
-const placement = flashbackz.content.placement;
-const rule_table = flashbackz.content.rule_table;
-const string_table = flashbackz.content.string_table;
+const placement = @import("placement.zig");
+const rule_table = @import("rule_table.zig");
+const string_table = @import("string_table.zig");
 const codes = @import("codes.zig");
 const key = @import("key.zig");
 const names = @import("names.zig");

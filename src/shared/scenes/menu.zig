@@ -5,6 +5,7 @@ const bitmap = @import("../content/bitmap.zig");
 const palette = @import("../content/palette.zig");
 const font_mod = @import("../content/font.zig");
 const text = @import("../render/text.zig");
+const menu_artwork = @import("../content/menu_artwork.zig");
 
 /// The title's items; LOAD is ours (PLAN GS-5), the others the original's.
 pub const Action = enum { start, load, skill, password, info, demo, quit };
@@ -15,6 +16,16 @@ pub const Artwork = struct {
     colors: *const palette.Palette,
     font: *const font_mod.Font,
     labels: [action_count][]const u8,
+
+    /// The title menu on the menu picture, with its rows' labels.
+    pub fn of(assets: *const menu_artwork.Assets) Artwork {
+        return .{
+            .background = &assets.background,
+            .colors = &assets.colors,
+            .font = &assets.font,
+            .labels = .{ "START", "LOAD", "SKILL", "PASSWORD", "INFO", "DEMO", "QUIT" },
+        };
+    }
 };
 
 pub const Layout = struct {

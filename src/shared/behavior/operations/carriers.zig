@@ -327,7 +327,7 @@ pub fn snapToGrid(world: *World, actor: u16, _: void) !bool {
 
 const testing = struct {
     const data_set = @import("../data_set.zig");
-    const animations = @import("../animations.zig");
+    const animations = @import("../../content/animations.zig");
 
     // State 0 plays a one-frame animation, state 1 a three-frame one.
     const states = [_]vocabulary.State{

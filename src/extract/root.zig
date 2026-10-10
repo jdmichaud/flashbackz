@@ -7,6 +7,7 @@ const flashbackz = @import("flashbackz");
 const level = @import("level.zig");
 const names = @import("names.zig");
 const zon = @import("zon.zig");
+const world_messages = @import("world_messages.zig");
 
 pub const Output = level.Output;
 pub const Report = level.Report;
@@ -170,7 +171,7 @@ fn writeMessages(
     source: flashbackz.platform.AssetSource,
     sink: level.Output,
 ) !void {
-    var messages = try flashbackz.content.world_messages.load(arena, source);
+    var messages = try world_messages.load(arena, source);
     defer messages.deinit();
     var text: std.Io.Writer.Allocating = .init(arena);
     var w: zon.Writer = .{ .out = &text.writer };
@@ -202,5 +203,9 @@ test {
     _ = @import("key.zig");
     _ = @import("level.zig");
     _ = @import("names.zig");
+    _ = @import("placement.zig");
+    _ = @import("rule_table.zig");
+    _ = @import("string_table.zig");
+    _ = @import("world_messages.zig");
     _ = @import("zon.zig");
 }

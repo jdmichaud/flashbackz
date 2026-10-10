@@ -4,7 +4,6 @@ const platform = @import("../platform.zig");
 const bitmap = @import("bitmap.zig");
 const palette = @import("palette.zig");
 const font_mod = @import("font.zig");
-const menu = @import("../scenes/menu.zig");
 const memory = @import("../memory.zig");
 
 pub const Assets = struct {
@@ -16,15 +15,6 @@ pub const Assets = struct {
         self.font.deinit();
         self.background.deinit();
         self.* = undefined;
-    }
-
-    pub fn artwork(self: *const Assets) menu.Artwork {
-        return .{
-            .background = &self.background,
-            .colors = &self.colors,
-            .font = &self.font,
-            .labels = .{ "START", "LOAD", "SKILL", "PASSWORD", "INFO", "DEMO", "QUIT" },
-        };
     }
 };
 

@@ -7,7 +7,7 @@ const std = @import("std");
 const vocabulary = @import("vocabulary.zig");
 const data_set = @import("data_set.zig");
 const grid = @import("grid.zig");
-const animations = @import("animations.zig");
+const animations = @import("../content/animations.zig");
 const contacts = @import("contacts.zig");
 const random = @import("../random.zig");
 const operations = @import("operations.zig");
@@ -327,6 +327,35 @@ pub const World = struct {
         world.view_room = characters[0].room;
         world.resetLetters();
         return world;
+    }
+
+    /// What a level hands to the next one: the score, which becomes its entry score, the random
+    /// stream and the screen shake.
+    pub fn handOver(self: *const World, next: *World) void {
+        next.score = self.score;
+        next.entry_score = self.score;
+        next.random = self.random;
+        next.shake = self.shake;
+    }
+
+    /// A level started again after a defeat with no checkpoint: from the score it was entered
+    /// with, the random stream going on.
+    pub fn restartFrom(self: *World, defeated: *const World) void {
+        self.score = defeated.entry_score;
+        self.entry_score = defeated.entry_score;
+        self.random = defeated.random;
+    }
+
+    /// The player continues after a defeat: the score goes back to the level's entry score, then
+    /// the last checkpoint, if any, is restored (`restoreCheckpoint`).
+    pub fn continueAfterDefeat(self: *World) bool {
+        self.score = self.entry_score;
+        return self.restoreCheckpoint();
+    }
+
+    /// The view is drawn again after the next walk, as after a film.
+    pub fn redrawView(self: *World) void {
+        self.view_dirty = true;
     }
 
     /// A continue: back to the last checkpoint, with the room lists rebuilt in placement order

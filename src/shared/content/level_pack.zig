@@ -6,7 +6,6 @@ const level_mod = @import("level.zig");
 const artwork = @import("room_artwork.zig");
 const palette = @import("palette.zig");
 const floppy_interface = @import("floppy_interface.zig");
-const backward_stream = @import("backward_stream.zig");
 const character_art = @import("character_art.zig");
 const sprite = @import("sprite.zig");
 const font_mod = @import("font.zig");
@@ -14,7 +13,8 @@ const sound_effects = @import("sound_effects.zig");
 const inventory_artwork = @import("inventory_artwork.zig");
 const settings = @import("../settings.zig");
 const RoomSource = @import("room_source.zig").RoomSource;
-const behavior = @import("../behavior/root.zig");
+const animations_mod = @import("animations.zig");
+const collision = @import("collision.zig");
 
 pub const room_count = 64;
 
@@ -25,8 +25,9 @@ pub const Pack = struct {
     characters: character_art.Art,
     /// The animation file; `animations` reads it in place.
     animation_file: platform.OwnedBytes,
-    animations: behavior.animations.Animations,
-    grid: behavior.grid.Grid,
+    animations: animations_mod.Animations,
+    /// The terrain: each room's neighbors and cells.
+    collision: collision.Bytes,
     /// Item icons, for the HUD and the touch label.
     icons: []sprite.Frame,
     font: font_mod.Font,
@@ -69,16 +70,10 @@ pub fn load(
     const files = level_mod.files(id);
     var animation_file = try readLevel(source, files.actors, "ANI", 1 << 20);
     errdefer animation_file.deinit();
-    const animations = try behavior.animations.Animations.init(animation_file.bytes);
+    const animations = try animations_mod.Animations.init(animation_file.bytes);
     var collision_file = try readLevel(source, files.rooms, "CT", 65536);
     defer collision_file.deinit();
-    const layout = try backward_stream.decode(
-        allocator,
-        collision_file.bytes,
-        behavior.grid.Grid.layout_size,
-    );
-    defer allocator.free(layout);
-    const grid = try behavior.grid.Grid.init(layout);
+    const terrain = try collision.decode(allocator, collision_file.bytes);
 
     var characters = try character_art.load(
         allocator,
@@ -126,7 +121,7 @@ pub fn load(
         .characters = characters,
         .animation_file = animation_file,
         .animations = animations,
-        .grid = grid,
+        .collision = terrain,
         .icons = icons,
         .font = font,
         .library_colors = library_colors,

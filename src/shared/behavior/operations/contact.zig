@@ -293,7 +293,7 @@ fn inPose(world: *const World, character: u16, pose: i16) !bool {
 const testing = struct {
     const data_set = @import("../data_set.zig");
     const grid = @import("../grid.zig");
-    const animations = @import("../animations.zig");
+    const animations = @import("../../content/animations.zig");
 
     /// Animation 0 has pose 0 and animation 1 pose 4; each is one still frame.
     const animation_bytes = [_]u8{ 2, 0, 4, 0, 14, 0 } ++
