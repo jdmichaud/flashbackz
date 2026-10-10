@@ -743,6 +743,11 @@ pub const Scene = struct {
     }
 
     pub fn draw(self: *const Scene, indices: []u8, rgba: []u8, settings: Settings) !void {
+        // Most frames draw nothing over the picture: no copy then.
+        if (self.inventory == null and self.options == null) {
+            self.screen.display(&self.screen.displayed, indices[0..pixel_count]);
+            return palette.writeRgba(indices, &self.screen.colors, rgba);
+        }
         var picture = self.screen.displayed;
         if (self.inventory) |inventory| try inventory.menu.draw(
             .of(&self.pack.inventory),

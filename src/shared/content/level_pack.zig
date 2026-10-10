@@ -88,7 +88,9 @@ pub fn load(
     errdefer for (&rooms) |*r| if (r.*) |*art| art.deinit();
     try loadRooms(allocator, source, interface, files, first_room, &rooms);
 
-    const icons = try loadIcons(allocator, source);
+    var icon_file = try source.readAll("DATA/GLOBAL.ICN", 32768);
+    defer icon_file.deinit();
+    const icons = try loadIcons(allocator, icon_file.bytes);
     errdefer {
         for (icons) |*icon| icon.deinit();
         allocator.free(icons);
@@ -97,8 +99,6 @@ pub fn load(
     defer font_file.deinit();
     var font = try font_mod.decode(allocator, font_file.bytes);
     errdefer font.deinit();
-    var icon_file = try source.readAll("DATA/GLOBAL.ICN", 32768);
-    defer icon_file.deinit();
     var inventory = try inventory_artwork.load(
         allocator,
         icon_file.bytes,
@@ -131,18 +131,16 @@ pub fn load(
     };
 }
 
-fn loadIcons(allocator: std.mem.Allocator, source: platform.AssetSource) ![]sprite.Frame {
-    var file = try source.readAll("DATA/GLOBAL.ICN", 32768);
-    defer file.deinit();
-    if (file.bytes.len < 2) return error.InvalidIconDirectory;
-    const count = std.mem.readInt(u16, file.bytes[0..2], .little) / 2;
+fn loadIcons(allocator: std.mem.Allocator, file: []const u8) ![]sprite.Frame {
+    if (file.len < 2) return error.InvalidIconDirectory;
+    const count = std.mem.readInt(u16, file[0..2], .little) / 2;
     var icons: std.ArrayList(sprite.Frame) = .empty;
     errdefer {
         for (icons.items) |*icon| icon.deinit();
         icons.deinit(allocator);
     }
     for (0..count) |index| {
-        var icon = try sprite.fromIcons(allocator, file.bytes, @intCast(index));
+        var icon = try sprite.fromIcons(allocator, file, @intCast(index));
         errdefer icon.deinit();
         try icons.append(allocator, icon);
     }
@@ -163,26 +161,23 @@ fn loadRooms(
     defer room_files.deinit();
     var colors = try readLevel(source, files.rooms, "PAL", 8192);
     defer colors.deinit();
-    const reference_bank = reference: {
-        var first = try room_files.decode(allocator, colors.bytes, first_room);
-        defer first.deinit();
-        break :reference first.palette_banks[2];
-    };
-    const icon_colors = try palette.decodeLevelBank(colors.bytes, reference_bank);
     for (rooms, 0..) |*slot, index| {
-        const decoded = room_files.decode(allocator, colors.bytes, @intCast(index));
-        var art = decoded catch |err| switch (err) {
-            error.AbsentRoom => continue,
+        slot.* = room_files.decode(allocator, colors.bytes, @intCast(index)) catch |err| switch (err) {
+            error.AbsentRoom => null,
             else => return err,
         };
-        errdefer art.deinit();
+    }
+    // The first room's third bank is the reference the others' actor colors follow.
+    const first = rooms[first_room] orelse return error.AbsentRoom;
+    const reference_bank = first.palette_banks[2];
+    const icon_colors = try palette.decodeLevelBank(colors.bytes, reference_bank);
+    for (rooms) |*slot| if (slot.*) |*art| {
         const alternate = art.palette_banks[2] != reference_bank;
         @memcpy(art.colors[0x40..0x50], &interface.actor_colors[@intFromBool(alternate)]);
         @memcpy(art.colors[0xa0..0xb0], &icon_colors);
         @memcpy(art.colors[0xe0..0xf0], &interface.text_colors);
         @memcpy(art.colors[0xf0..0x100], &interface.interface_colors);
-        slot.* = art;
-    }
+    };
 }
 
 fn readLevel(

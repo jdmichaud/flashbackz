@@ -203,8 +203,7 @@ pub const Ending = struct {
         if (step.kind == .picture or step.kind == .page) {
             var view = player.movie.view();
             view.texts = self.replay.normal;
-            var rgba: [pixel_count * 4]u8 = undefined;
-            try view.draw(step.frame, &self.image, &rgba);
+            try view.drawPicture(step.frame, &self.image);
         }
         self.image_colors = frame.colors;
         @memcpy(self.image_colors[0xe0..0xf0], &self.text_colors);
@@ -253,8 +252,7 @@ pub const Ending = struct {
     fn keepPicture(self: *Ending) void {
         if (self.stage != .score_film) return;
         const player = &(self.player orelse return);
-        var rgba: [pixel_count * 4]u8 = undefined;
-        player.draw(&self.picture, &rgba) catch return;
+        player.movie.view().drawPicture(player.playback.frame, &self.picture) catch return;
         self.colors = player.movie.frames[player.playback.frame].colors;
     }
 

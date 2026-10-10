@@ -81,7 +81,14 @@ pub const View = struct {
         };
     }
 
+    /// Frame `frame_index` as palette indices in `pixels`, and as RGBA in `rgba`.
     pub fn draw(self: View, frame_index: usize, pixels: []u8, rgba: []u8) !void {
+        try self.drawPicture(frame_index, pixels);
+        try palette.writeRgba(pixels, &self.frames[frame_index].colors, rgba);
+    }
+
+    /// Frame `frame_index` as palette indices.
+    pub fn drawPicture(self: View, frame_index: usize, pixels: []u8) !void {
         if (frame_index >= self.frames.len or
             pixels.len != @as(usize, self.width) * self.height) return error.InvalidFilmFrame;
         @memset(pixels, self.background);
@@ -112,7 +119,7 @@ pub const View = struct {
             ),
             .text => |run| if (self.texts) try self.drawText(pixels, self.height, run),
         };
-        if (!self.texts) return palette.writeRgba(pixels, &frame.colors, rgba);
+        if (!self.texts) return;
         if (frame.caption_band) {
             const start = @min(pixels.len, @as(usize, self.width) * 178);
             const end = @min(pixels.len, @as(usize, self.width) * 203);
@@ -125,7 +132,6 @@ pub const View = struct {
         for (frame.captions) |run| {
             try self.drawText(pixels[0 .. caption_rows * self.width], @intCast(caption_rows), run);
         }
-        try palette.writeRgba(pixels, &frame.colors, rgba);
     }
     fn drawText(self: View, pixels: []u8, rows: u16, run: TextRun) !void {
         const font = self.font orelse return error.MissingCinematicFont;

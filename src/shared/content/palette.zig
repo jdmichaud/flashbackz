@@ -67,10 +67,11 @@ pub fn decodeRgb8(bytes: []const u8) !Palette {
 pub fn writeRgba(indices: []const u8, colors: *const Palette, destination: []u8) !void {
     if (destination.len % 4 != 0 or
         destination.len / 4 != indices.len) return error.InvalidFrameLength;
-    for (indices, 0..) |index, i| {
-        const color = colors[index];
-        @memcpy(destination[i * 4 ..][0..4], &[_]u8{ color.r, color.g, color.b, 255 });
-    }
+    // Each color's four bytes once, then a copy per pixel.
+    var rgba: [256][4]u8 = undefined;
+    for (&rgba, colors) |*bytes, color| bytes.* = .{ color.r, color.g, color.b, 255 };
+    const pixels: [][4]u8 = @ptrCast(destination);
+    for (pixels, indices) |*pixel, index| pixel.* = rgba[index];
 }
 
 test "component quantization discards the source low bits and spans the full output range" {
