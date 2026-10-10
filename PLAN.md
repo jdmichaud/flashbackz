@@ -548,9 +548,10 @@ LOAD dialog in the in game menu is awkward").
 The review the user asked for (2026-10-10), on commit `a9b6b26`. Each finding here is a
 checkbox; fixing one adds its own plan item first, as usual. Order: B4 with D4 (the user asked
 about the placeholder), B1, B2 with D2, B7, D1, then the rest. Common-sense calls (no user
-decision needed): the MUSIC option controls the Mega Drive tunes (D2); the animations' per-frame
-movement and sounds move into the data set, as DESIGN 4 already says (D5); content is checked at
-load and fails loudly there, devices are adapted to (D6).
+decision needed): the MUSIC option controls the Mega Drive tunes (D2); content is checked at
+load and fails loudly there, devices are adapted to (D6). Revised 2026-10-10: the animations stay
+read from the original files, as DESIGN 2's diagram has them (D5): the engine reads past an
+animation's last frame into the file's next bytes, so a data-set copy would carry that layout.
 
 - [x] **B4 and D4 — No placeholder game** (user, 2026-10-10: "What is this placeholder??? It's
   like a game. Sounds like one from the 80s."). The template's smoke program (a bouncing ball, a
@@ -681,7 +682,14 @@ load and fails loudly there, devices are adapted to (D6).
   GS-1 and GS-2.
 - [x] **D4** The template's placeholder (the bouncing ball) and unused template code are still in
   the product. With B4. Done: "No placeholder game" above.
-- [ ] **D5** Module boundaries leak in both directions.
+- [ ] **D5** Module boundaries leak in both directions. The animation reader moves from the
+  engine to `content/` (the animations stay read from the original files, see above); the
+  extractor-only parsers (placements, rule tables, string tables, world messages) move to
+  `src/extract`; `content/` stops importing the engine, the scenes and audio (the level pack
+  keeps the decoded collision bytes, the menus' artwork adapters go to their scenes, the score
+  type to `content/`); `World` gets a hand-off API (`handOver`, `restartFrom`,
+  `continueAfterDefeat`, `redrawView`). Gate: tests; per-walk traces of all seven levels and
+  the keyboard sessions unchanged.
 - [ ] **D6** Every runtime error is fatal, and validation is deferred to first use.
 - [ ] **D7** Smaller design issues (the review's list).
 - [ ] **R1-R5** Readability: unnamed magic numbers, behavior tables' readability, dead code, tests
