@@ -26,7 +26,7 @@ pub const Sources = struct {
 
 pub const Output = struct {
     state: enum { closed, open, failed } = .closed,
-    /// The master volume, in percent, applied to the mix.
+    /// The master volume, in percent, applied to the mix (`gain`).
     volume: u8 = 100,
     /// Mixed and not yet queued (stereo, interleaved).
     pending: [2048]i16 = undefined,
@@ -107,10 +107,19 @@ fn mix(sources: Sources, out: []i16, volume: u8) void {
     scale(out, volume);
 }
 
+/// The VOLUME option's steps sound even: each percent below 100 takes 0.4 dB off, so that a step
+/// of 10% is 4 dB (20% is -32 dB) and 0% is silent. As 1/65,536ths.
+pub fn gain(volume: u8) u32 {
+    if (volume == 0) return 0;
+    if (volume >= 100) return 1 << 16;
+    const decibels = (@as(f64, @floatFromInt(volume)) - 100) * 0.4;
+    return @intFromFloat(@round(std.math.pow(f64, 10, decibels / 20) * (1 << 16)));
+}
+
 fn scale(samples: []i16, volume: u8) void {
-    if (volume < 100) for (samples) |*sample| {
-        sample.* = @intCast(@divTrunc(@as(i32, sample.*) * volume, 100));
-    };
+    if (volume >= 100) return;
+    const factor: i64 = gain(volume);
+    for (samples) |*sample| sample.* = @intCast((@as(i64, sample.*) * factor) >> 16);
 }
 
 fn add(sum: []i16, part: []const i16) void {
@@ -121,17 +130,23 @@ fn add(sum: []i16, part: []const i16) void {
     ));
 }
 
-test "the master volume keeps the full range, halves both signs and mutes" {
+test "the master volume keeps the full range, takes 4 dB a step and mutes" {
     const input = [_]i16{ -32768, -101, 0, 101, 32767 };
     var samples = input;
     scale(&samples, 100);
     try std.testing.expectEqualSlices(i16, &input, &samples);
+    // 50% is -20 dB: a tenth.
     samples = input;
     scale(&samples, 50);
-    try std.testing.expectEqualSlices(i16, &.{ -16384, -50, 0, 50, 16383 }, &samples);
+    try std.testing.expectEqualSlices(i16, &.{ -3277, -11, 0, 10, 3276 }, &samples);
     samples = input;
     scale(&samples, 0);
     try std.testing.expectEqualSlices(i16, &.{ 0, 0, 0, 0, 0 }, &samples);
+    var step: u8 = 10;
+    while (step <= 100) : (step += 10) {
+        const ratio = @as(f64, @floatFromInt(gain(step))) / @as(f64, @floatFromInt(gain(step - 10)));
+        if (step > 10) try std.testing.expectApproxEqAbs(4.0, 20 * std.math.log10(ratio), 0.01);
+    }
 }
 
 test "sources add, short of clipping" {

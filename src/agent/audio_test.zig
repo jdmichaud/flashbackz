@@ -33,12 +33,12 @@ test "the output opens at the first sound, keeps its lead, and a stopped source 
     try std.testing.expectEqual(@as(u64, audio_output.lead_frames), p.audioStatus().queued_frames);
     try std.testing.expectEqual(@as(i16, 100 * 256), backend.audio.pcm.items[0]);
 
-    // At half volume, the next frames are half as loud.
+    // At 50%, 20 dB down, the next frames are a tenth as loud.
     backend.advance(10 * std.time.ns_per_ms);
     output.volume = 50;
     const heard = backend.audio.pcm.items.len;
     output.pump(&p, .{ .level = .{ .sound = &sound, .bank = bank } });
-    try std.testing.expectEqual(@as(i16, 50 * 256), backend.audio.pcm.items[heard]);
+    try std.testing.expectEqual(@as(i16, 10 * 256), backend.audio.pcm.items[heard]);
 
     output.pump(&p, .{});
     try std.testing.expectEqual(@as(u64, 0), p.audioStatus().queued_frames);
