@@ -1,5 +1,7 @@
 //! The poster's design: a row per level on black, its name in the game font right-aligned
 //! against a gutter, its map to the right in its own light, the map's joins tagged with letters.
+//! A level with a transit line is drawn along it: its districts above, its stations on one row
+//! below them.
 const std = @import("std");
 const flashbackz = @import("flashbackz");
 const map_mod = @import("map.zig");
@@ -16,6 +18,10 @@ const label_width = 1440;
 const label_gap = 256;
 const row_gap = 320;
 const piece_gap = 128;
+/// Along a transit line, the districts stand this far apart, and the stations this far below
+/// the lowest of them.
+const district_gap = 2 * piece_gap;
+const station_drop = 2 * room_pitch;
 const map_limit = 14 * room_width;
 const name_scale = 14;
 const number_scale = 6;
@@ -33,6 +39,8 @@ pub const Level = struct {
     /// The drawn rooms' pixels.
     rooms: map_mod.Pixels,
     map: map_mod.Map,
+    /// The level's transit line, if it has one: the level is drawn along it.
+    line: ?map_mod.Line,
     joins: []const map_mod.Join,
 };
 
@@ -151,25 +159,11 @@ fn buildBlock(allocator: std.mem.Allocator, level: *const Level) !Block {
     }
     starts[piece_count] = count;
 
-    // Joined rooms in different pieces pull their pieces together.
-    var ties: [2 * map_mod.room_count]pack_mod.Tie = undefined;
-    var tie_count: usize = 0;
-    for (level.joins) |join| {
-        const a, const b = ends(join);
-        const piece_a = map.cells[a.room].?.piece;
-        const piece_b = map.cells[b.room].?.piece;
-        if (piece_a == piece_b or tie_count == ties.len) continue;
-        ties[tie_count] = .{ .a = piece_a, .a_at = inPiece(map, a), .b = piece_b, .b_at = inPiece(map, b) };
-        tie_count += 1;
-    }
     var origins: [map_mod.room_count]pack_mod.Point = undefined;
-    const size = pack_mod.pack(
-        pieces[0..piece_count],
-        ties[0..tie_count],
-        map_limit,
-        piece_gap,
-        origins[0..piece_count],
-    );
+    const size = if (level.line) |*line|
+        alongLine(map, line, pieces[0..piece_count], origins[0..piece_count])
+    else
+        packJoined(level, pieces[0..piece_count], origins[0..piece_count]);
     var image = try draw.Image.init(allocator, @intCast(size.w), @intCast(size.h));
     errdefer image.deinit(allocator);
     for (0..piece_count) |p| {
@@ -190,6 +184,82 @@ fn buildBlock(allocator: std.mem.Allocator, level: *const Level) !Block {
     }
     separate(tags);
     return .{ .image = image, .tags = tags };
+}
+
+/// The pieces packed, joined rooms in different pieces pulling their pieces together.
+fn packJoined(level: *const Level, pieces: []const pack_mod.Piece, origins: []pack_mod.Point) pack_mod.Size {
+    const map = &level.map;
+    var ties: [2 * map_mod.room_count]pack_mod.Tie = undefined;
+    var tie_count: usize = 0;
+    for (level.joins) |join| {
+        const a, const b = ends(join);
+        const piece_a = map.cells[a.room].?.piece;
+        const piece_b = map.cells[b.room].?.piece;
+        if (piece_a == piece_b or tie_count == ties.len) continue;
+        ties[tie_count] = .{ .a = piece_a, .a_at = inPiece(map, a), .b = piece_b, .b_at = inPiece(map, b) };
+        tie_count += 1;
+    }
+    return pack_mod.pack(pieces, ties[0..tie_count], map_limit, piece_gap, origins);
+}
+
+/// The pieces along the transit line: the districts side by side, `district_gap` apart and
+/// standing on one ground, the start's district first (the layout's first piece) and the others
+/// in the order the line reaches them, then the other pieces in order; the stations on one row
+/// `station_drop` below the ground, each under the room it leads up to, or else after the
+/// station before it.
+fn alongLine(
+    map: *const map_mod.Map,
+    line: *const map_mod.Line,
+    pieces: []const pack_mod.Piece,
+    origins: []pack_mod.Point,
+) pack_mod.Size {
+    var first: usize = 0;
+    for (line.above[0..line.len], 0..) |above, i| {
+        const room = above orelse continue;
+        if (map.cells[room].?.piece == 0) {
+            first = i;
+            break;
+        }
+    }
+    var placed: [map_mod.room_count]bool = @splat(false);
+    for (line.stations[0..line.len]) |station| placed[map.cells[station].?.piece] = true;
+    var order: [map_mod.room_count]u8 = undefined;
+    var count: usize = 0;
+    for (0..line.len) |k| {
+        const room = line.above[(first + k) % line.len] orelse continue;
+        const piece = map.cells[room].?.piece;
+        if (placed[piece]) continue;
+        placed[piece] = true;
+        order[count] = piece;
+        count += 1;
+    }
+    for (0..pieces.len) |piece| {
+        if (placed[piece]) continue;
+        order[count] = @intCast(piece);
+        count += 1;
+    }
+
+    var ground: i32 = 0;
+    for (order[0..count]) |piece| ground = @max(ground, pieces[piece].size.h);
+    var x: i32 = 0;
+    var width: i32 = 0;
+    for (order[0..count]) |piece| {
+        origins[piece] = .{ .x = x, .y = ground - pieces[piece].size.h };
+        width = x + pieces[piece].size.w;
+        x = width + district_gap;
+    }
+    var station_x: i32 = 0;
+    for (0..line.len) |k| {
+        const i = (first + k) % line.len;
+        if (line.above[i]) |room| {
+            const cell = map.cells[room].?;
+            station_x = origins[cell.piece].x + cell.x * room_width;
+        }
+        origins[map.cells[line.stations[i]].?.piece] = .{ .x = station_x, .y = ground + station_drop };
+        width = @max(width, station_x + room_width);
+        station_x += room_width + district_gap;
+    }
+    return .{ .w = width, .h = ground + station_drop + room_height };
 }
 
 /// One end of a join: its room, where in the room its tag goes, and which way the tag moves
@@ -255,4 +325,37 @@ test "a tag that would cover another moves along its edge" {
     try std.testing.expectEqual(@as(i32, 100 + draw.tag_size + 16), tags[1].x);
     try std.testing.expectEqual(@as(i32, 96), tags[1].y);
     try std.testing.expectEqual(@as(i32, 300), tags[2].x);
+}
+
+test "along a transit line, the stations stand on one row, each under the room it leads up to" {
+    // Piece 0, the start's district, two rooms across; piece 1, a district one room across and
+    // two high; pieces 2 and 3, the stations: 4 under room 1, 5 under room 2, the lower room of
+    // piece 1. Riding right, 5 leads into 4: the start's station goes first all the same.
+    var map: map_mod.Map = .{ .piece_count = 4 };
+    map.cells[0] = .{ .piece = 0, .x = 0, .y = 0 };
+    map.cells[1] = .{ .piece = 0, .x = 1, .y = 0 };
+    map.cells[3] = .{ .piece = 1, .x = 0, .y = 0 };
+    map.cells[2] = .{ .piece = 1, .x = 0, .y = 1 };
+    map.cells[4] = .{ .piece = 2, .x = 0, .y = 0 };
+    map.cells[5] = .{ .piece = 3, .x = 0, .y = 0 };
+    var line: map_mod.Line = .{ .len = 2 };
+    line.stations[0..2].* = .{ 5, 4 };
+    line.above[0..2].* = .{ 2, 1 };
+    const pieces = [_]pack_mod.Piece{
+        .{ .rooms = &.{}, .size = .{ .w = 2 * room_width, .h = room_height } },
+        .{ .rooms = &.{}, .size = .{ .w = room_width, .h = room_pitch + room_height } },
+        .{ .rooms = &.{}, .size = .{ .w = room_width, .h = room_height } },
+        .{ .rooms = &.{}, .size = .{ .w = room_width, .h = room_height } },
+    };
+    var origins: [4]pack_mod.Point = undefined;
+    const size = alongLine(&map, &line, &pieces, &origins);
+
+    // The districts stand on one ground, the start's first.
+    const ground = room_pitch + room_height;
+    try std.testing.expectEqual(pack_mod.Point{ .x = 0, .y = room_pitch }, origins[0]);
+    try std.testing.expectEqual(pack_mod.Point{ .x = 2 * room_width + district_gap, .y = 0 }, origins[1]);
+    const row = ground + station_drop;
+    try std.testing.expectEqual(pack_mod.Point{ .x = room_width, .y = row }, origins[2]);
+    try std.testing.expectEqual(pack_mod.Point{ .x = 2 * room_width + district_gap, .y = row }, origins[3]);
+    try std.testing.expectEqual(pack_mod.Size{ .w = 3 * room_width + district_gap, .h = row + room_height }, size);
 }

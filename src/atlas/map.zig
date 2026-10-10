@@ -1,9 +1,9 @@
 //! A level's rooms on a flat map. The rooms' links (the collision grid's neighbor tables) place
 //! them on a grid of room cells from the start room. The game's rooms do not always lie flat: a
-//! link may lead to a room whose cell another link has taken (the tower's floors wrap around), a
-//! ring of links may be a transit line rather than ground (the city's subway stations), and some
-//! areas are reached only by a transport. Those links and transports are the map's joins; the
-//! poster tags both ends of each.
+//! link may lead to a room whose cell another link has taken (the tower's floors wrap around), and
+//! some areas are reached only by a transport. Those links and transports are the map's joins; the
+//! poster tags both ends of each. A ring of links may also be a transit line rather than ground
+//! (the city's subway stations): its stations lie apart, and the poster draws the level along it.
 const std = @import("std");
 const flashbackz = @import("flashbackz");
 const grid = flashbackz.behavior.grid;
@@ -211,36 +211,63 @@ pub fn seam(pixels: *const Pixels, room: u8, side: Side, to: u8) ?f32 {
     return @as(f32, @floatFromInt(total)) / @as(f32, @floatFromInt(count));
 }
 
-/// The links of the level's transit lines, which the layout does not follow. A ring (rooms
-/// each linked to the next on one side, the last back to the first) is a transit line, like
-/// the city's subway stations, when both hold: none of its links continues the picture (each
-/// breaks it more than the level's usual link on that axis), and without its links its rooms
-/// lead into two or more parts of the level that have rooms of their own. A tower floor that
-/// wraps around continues its pictures, so it stays ground.
-pub fn transitLinks(links: *const Links, rooms: RoomSet, pixels: *const Pixels) Skipped {
-    var skipped: Skipped = @splat(@splat(false));
-    for ([_]Side{ .right, .down }) |side| {
-        const usual = medianSeam(links, rooms, pixels, side) orelse continue;
-        var starts = rooms.iterator(.{});
-        while (starts.next()) |index| {
-            var ring: [room_count]u8 = undefined;
-            const length = findRing(links, rooms, @intCast(index), side, &ring) orelse continue;
-            const members = ring[0..length];
-            // Each ring once, from its lowest room.
-            if (std.mem.min(u8, members) != index) continue;
-            const breaks = for (members, 0..) |room, i| {
-                const break_size = seam(pixels, room, side, members[(i + 1) % length]) orelse break false;
-                if (break_size <= usual) break false;
-            } else true;
-            if (!breaks or !separates(links, rooms, members, side)) continue;
-            for (members, 0..) |room, i| {
-                const next = members[(i + 1) % length];
-                skipped[room][@backingInt(side)] = true;
-                if (links.neighbor(next, opposite(side)) == room) skipped[next][@backingInt(opposite(side))] = true;
+/// A level's transit line: a ring of stations, each riding right into the next and the last back
+/// into the first.
+pub const Line = struct {
+    stations: [room_count]u8 = undefined,
+    /// The room each station leads up to, if it leads up.
+    above: [room_count]?u8 = undefined,
+    len: usize = 0,
+
+    pub fn has(self: *const Line, room: u8) bool {
+        return std.mem.indexOfScalar(u8, self.stations[0..self.len], room) != null;
+    }
+
+    /// Every link into or out of a station: the layout puts each station apart, a piece of its
+    /// own.
+    pub fn skipped(self: *const Line, links: *const Links) Skipped {
+        var result: Skipped = @splat(@splat(false));
+        var rooms = links.present.iterator(.{});
+        while (rooms.next()) |index| {
+            const room: u8 = @intCast(index);
+            for (std.enums.values(Side)) |side| {
+                const next = links.neighbor(room, side) orelse continue;
+                if (self.has(room) or self.has(next)) result[room][@backingInt(side)] = true;
             }
         }
+        return result;
     }
-    return skipped;
+};
+
+/// The level's transit line, if it has one: the first ring of rooms, each linked right to the
+/// next, for which both hold: none of its links continues the picture (each breaks it more than
+/// the level's usual link across), and without its links its rooms lead into two or more parts
+/// of the level that have rooms of their own. A tower floor that wraps around continues its
+/// pictures, so it stays ground.
+pub fn transitLine(links: *const Links, rooms: RoomSet, pixels: *const Pixels) ?Line {
+    const usual = medianSeam(links, rooms, pixels, .right) orelse return null;
+    // Rooms in order, so a ring is found from its lowest room.
+    var starts = rooms.iterator(.{});
+    while (starts.next()) |index| {
+        var ring: [room_count]u8 = undefined;
+        const length = findRing(links, rooms, @intCast(index), .right, &ring) orelse continue;
+        const members = ring[0..length];
+        const breaks = for (members, 0..) |room, i| {
+            const break_size = seam(pixels, room, .right, members[(i + 1) % length]) orelse break false;
+            if (break_size <= usual) break false;
+        } else true;
+        if (!breaks or !separates(links, rooms, members, .right)) continue;
+        var line: Line = .{ .len = length };
+        for (members, 0..) |station, i| {
+            line.stations[i] = station;
+            line.above[i] = null;
+            if (links.neighbor(station, .up)) |room| {
+                if (rooms.isSet(room) and std.mem.indexOfScalar(u8, members, room) == null) line.above[i] = room;
+            }
+        }
+        return line;
+    }
+    return null;
 }
 
 /// The rooms reached from `start` by following `side` until it comes back to `start`.
@@ -533,22 +560,20 @@ test "a ring of stations between districts is a transit line; a ring whose pictu
         pixels[room] = buffer;
     }
 
-    // The stations' pictures do not continue into each other: the ring is a transit line, and
-    // the districts become pieces of their own, joined by its two rides.
+    // The stations' pictures do not continue into each other: the ring is a transit line, each
+    // station under the district it leads up to, and the stations lie apart from the districts.
     @memset(&buffers[1], 200);
-    const transit = transitLinks(&links, links.present, &pixels);
-    try std.testing.expect(transit[0][@backingInt(Side.right)] and transit[1][@backingInt(Side.right)]);
-    try std.testing.expect(transit[0][@backingInt(Side.left)] and transit[1][@backingInt(Side.left)]);
-    try std.testing.expect(!transit[2][@backingInt(Side.right)]);
-    const map = lay(&links, links.present, 2, &transit);
-    try std.testing.expectEqual(@as(u8, 2), map.piece_count);
-    var joins: std.ArrayList(Join) = .empty;
-    defer joins.deinit(allocator);
-    try cutLinks(allocator, &links, &map, &joins);
-    try std.testing.expectEqual(@as(usize, 2), joins.items.len);
+    const line = transitLine(&links, links.present, &pixels).?;
+    try std.testing.expectEqualSlices(u8, &.{ 0, 1 }, line.stations[0..line.len]);
+    try std.testing.expectEqualSlices(?u8, &.{ 2, 5 }, line.above[0..line.len]);
+    const skipped = line.skipped(&links);
+    try std.testing.expect(skipped[2][@backingInt(Side.down)] and !skipped[2][@backingInt(Side.right)]);
+    const map = lay(&links, links.present, 2, &skipped);
+    try std.testing.expectEqual(@as(u8, 4), map.piece_count);
+    try std.testing.expect(map.cells[0].?.piece != map.cells[2].?.piece);
+    try std.testing.expect(map.cells[0].?.piece != map.cells[1].?.piece);
 
     // The same ring with continuous pictures is ground, like a tower floor.
     @memset(&buffers[1], 0);
-    const ground = transitLinks(&links, links.present, &pixels);
-    for (ground) |sides| for (sides) |skipped| try std.testing.expect(!skipped);
+    try std.testing.expect(transitLine(&links, links.present, &pixels) == null);
 }

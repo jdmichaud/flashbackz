@@ -109,10 +109,12 @@ and is for the user's own machines: never committed, never distributed. The game
 **The level atlas** (user request, 2026-10-10) is the one tool that writes original art out:
 `flashbackz-atlas [-o FILE] disk1.img disk2.img` (built by `zig build atlas`; a release build,
 `-Doptimize=ReleaseFast`, takes seconds where a debug build takes a minute) draws every
-level's rooms into one PNG, placed by their links (`src/atlas`). Links that cannot lie flat,
-transit lines (a ring of links whose pictures never continue and that alone joins parts of the
-level, like the city's subway) and the transports between areas carry matching lettered tags. The PNG is the user's, like
-the standalone executable: never committed, never distributed.
+level's rooms into one PNG, placed by their links (`src/atlas`). Links that cannot lie flat and
+the transports between areas carry matching lettered tags. A level with a transit line (a ring
+of links whose pictures never continue and that alone joins parts of the level, like the city's
+subway) is drawn along it instead, without tags: its districts side by side, its stations on
+one row below them, each under the room it leads up to. The PNG is the user's, like the
+standalone executable: never committed, never distributed.
 
 Unsupported content fails loudly. The extractor reports every condition or effect it cannot
 name, with level, character and state. The engine refuses a table that uses an unimplemented
