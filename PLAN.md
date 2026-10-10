@@ -535,6 +535,48 @@ LOAD dialog in the in game menu is awkward").
   another version's save is shown, not loaded; F5 saves to the quick slot and F9 loads it during
   play. Gate: in the SDL game, a save made in play loads from the title and plays on.
 
+## Code review, 2026-10-10 — `docs/review-2026-10-10.md`
+
+The review the user asked for (2026-10-10), on commit `a9b6b26`. Each finding here is a
+checkbox; fixing one adds its own plan item first, as usual. Order recommended to the user:
+B1, B4 with D4, B2 with D2, B7, then the rest; D1 waits for the user's decision.
+
+- [ ] **B1** Using any of the city's four map terminals ends the game. High.
+- [ ] **B2** An audio device granting another format ends the game or overruns a buffer. High on
+  Windows. With D2.
+- [x] **B3** A key released in the options dialog or the inventory is ignored when pressed again.
+  Fixed by GS-1.
+- [ ] **B4** Missing or partial game files start the template's placeholder game instead of
+  failing. With D4.
+- [ ] **B5** A catch-up frame drops the first walk's world message and its zoom hits (if the
+  original keeps them).
+- [x] **B6** Escape in a level reacts to auto-repeat and a quick tap is lost. Kept: the original
+  polls Escape the same way (GS-1).
+- [ ] **B7** The data-set loader accepts data the engine cannot run.
+- [ ] **B8** The agent without `--saves` uses and creates the user's real save directory.
+- [ ] **B9** Command-line options silently ignored, and standalone `--extract`.
+- [ ] **B10** Sprite decode errors are swallowed.
+- [ ] **B11** The continue screen ends the game when 128 key events are queued.
+- [ ] **B12** The Mega Drive cartridge reader is not overflow-safe; its checksum check can be
+  bypassed.
+- [ ] **B13** The extractor's robustness on an unexpected edition.
+- [ ] **B14** Smaller confirmed defects (the review's list).
+- [ ] **D1** The engine models the original's memory layout in places. Needs the user's decision:
+  a documented exception confined to one module, or each case restated as a named game rule.
+- [ ] **D2** One audio device, five owners, no mixer. With B2.
+- [x] **D3** Input state updated in one path only; settings in hand-synchronised copies. Fixed by
+  GS-1 and GS-2.
+- [ ] **D4** The template's placeholder (the bouncing ball) and unused template code are still in
+  the product. With B4.
+- [ ] **D5** Module boundaries leak in both directions.
+- [ ] **D6** Every runtime error is fatal, and validation is deferred to first use.
+- [ ] **D7** Smaller design issues (the review's list).
+- [ ] **R1-R5** Readability: unnamed magic numbers, behavior tables' readability, dead code, tests
+  missing or not testing their name, style.
+- [ ] **P1-P3** Performance: the documented build is Debug, audio latency, minor waste.
+- [ ] **Documentation**: the wrong or stale claims of the review's section 5, in DESIGN.md,
+  README.md, docs and code comments.
+
 ## Mega Drive music during play — user decision, 2026-10-09
 
 An addition to the DOS edition: the tunes the Mega Drive edition plays during play, sounding
