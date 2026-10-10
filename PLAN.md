@@ -345,6 +345,9 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   - 2026-10-10: on the user's machine, no variable: "audio pulseaudio", 221,184 frames played
     in 5 s, normal exit (it hung before).
 
+- [ ] The executables are `flashbackz` and `flashbackz-standalone` (user request, 2026-10-10,
+  "add the z back"). Gate: both builds, their help and messages carry the names.
+
 ## Mega Drive music during play — user decision, 2026-10-09
 
 An addition to the DOS edition: the tunes the Mega Drive edition plays during play, sounding
