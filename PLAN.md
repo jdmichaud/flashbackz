@@ -365,6 +365,14 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
     the floppy images: every drawn piece is tagged to the rest (city 6 joins, tower 6, Earth
     1, alien base 1); the jungle, spaceport and alien surface lie flat.
 
+- [ ] Atlas: transit lines stand apart (user report, 2026-10-10: the city's subway stations are
+  drawn side by side, "In reality they would not"). A ring of links whose pictures never
+  continue, and without which its rooms lead into separate parts of the level, is a transit
+  line: the layout does not follow it, so each station stays with its district, and its rides
+  are tagged. Pieces tied by joins are packed near each other; no tag covers another. Gate:
+  tests; on the poster the city's districts stand apart, each with its station, the four rides
+  tagged; the tower's floors are unchanged.
+
 ## Mega Drive music during play — user decision, 2026-10-09
 
 An addition to the DOS edition: the tunes the Mega Drive edition plays during play, sounding
