@@ -493,6 +493,14 @@ LOAD dialog in the in game menu is awkward").
     layout under the agent pad's model; DEFAULT empties it. Keyboard and pad sessions keep
     their state hashes.
   - [ ] With the user's pad: a layout chosen in the game, there after a restart.
+- [ ] **GS-3b — A held pad button counts once on modal screens** (user report, 2026-10-10:
+  talking to someone with the pad "autofire[s] the dialog very quickly"). The pads' bits were
+  never released by modal screens, so a held button turned a message page at every poll. In
+  the original's latch the joystick's presses register like the keys' (flashback-re
+  engine-presentation 6.2, 6.4): a pad bit held when a modal screen latches the keys, or that
+  turned a page, counts again only once released; when the screen ends, a pad button still held
+  counts again at once, as the original polls the joystick. Gate: tests; the agent turns one
+  page per pad press; keyboard and pad sessions keep their hashes otherwise.
 - [ ] **GS-4 — The save** — A save holds the level, difficulty, score, random generator, what is
   carried between levels, the world (every character, the terrain, contacts, mailboxes, the
   save terminal's checkpoint) and the level's play state; art, sound and pictures are reloaded
