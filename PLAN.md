@@ -585,6 +585,10 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
   Gate: the script's output reproduces; each session ends where its comment says.
   - 2026-10-10: done; 23 sessions. The menu sessions now start an expert game, open LOAD GAME
     and the code page; B on ABORT GAME abandons, as A does.
+- [x] **Agent traces in the repository.** The per-walk traces of a long session on each level,
+  which showed D1, D5, D7, R1 and R2 change no play, move from /tmp to
+  `tools/agent_traces.sh`, with the accepted output (a hash per level) beside it. Gate: its
+  output equals the baseline taken after D1.
 - [x] **B2 and D2 — One audio output.** B2: an audio device granting another format ends the
   game or overruns a buffer (high on Windows). D2: five owners of the device, no mixer. The game
   owns one output: it opens the device once for 44,100 Hz stereo, which the host converts (SDL
