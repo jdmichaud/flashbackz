@@ -7,11 +7,9 @@ const pack_mod = @import("pack.zig");
 const draw = @import("draw.zig");
 const Font = flashbackz.content.font.Font;
 
-pub const room_width = 256;
-pub const room_height = 224;
-/// Rooms stacked by their links overlap by eight rows: the room below repeats the bottom of
-/// the room above (the collision grid's floors are 216 pixels apart).
-pub const room_pitch = 216;
+const room_width = map_mod.room_width;
+const room_height = map_mod.room_height;
+const room_pitch = map_mod.room_pitch;
 
 const margin = 384;
 const label_width = 1440;
@@ -32,8 +30,8 @@ pub const Level = struct {
     name: []const u8,
     /// The accent's hue, in degrees.
     hue: f32,
-    /// The drawn rooms' pixels, RGB, by room number.
-    rooms: [map_mod.room_count]?[]const u8,
+    /// The drawn rooms' pixels.
+    rooms: map_mod.Pixels,
     map: map_mod.Map,
     joins: []const map_mod.Join,
 };
@@ -43,7 +41,8 @@ const Block = struct {
     image: draw.Image,
     tags: []Tag,
 };
-const Tag = struct { letter: u8, x: i32, y: i32 };
+/// A tag on the block; when it would cover another, it moves along x, or else along y.
+const Tag = struct { letter: u8, x: i32, y: i32, along_x: bool };
 
 pub fn render(allocator: std.mem.Allocator, font: *const Font, levels: []const Level) !draw.Canvas {
     const blocks = try allocator.alloc(Block, levels.len);
@@ -152,8 +151,25 @@ fn buildBlock(allocator: std.mem.Allocator, level: *const Level) !Block {
     }
     starts[piece_count] = count;
 
+    // Joined rooms in different pieces pull their pieces together.
+    var ties: [2 * map_mod.room_count]pack_mod.Tie = undefined;
+    var tie_count: usize = 0;
+    for (level.joins) |join| {
+        const a, const b = ends(join);
+        const piece_a = map.cells[a.room].?.piece;
+        const piece_b = map.cells[b.room].?.piece;
+        if (piece_a == piece_b or tie_count == ties.len) continue;
+        ties[tie_count] = .{ .a = piece_a, .a_at = inPiece(map, a), .b = piece_b, .b_at = inPiece(map, b) };
+        tie_count += 1;
+    }
     var origins: [map_mod.room_count]pack_mod.Point = undefined;
-    const size = pack_mod.pack(pieces[0..piece_count], map_limit, piece_gap, origins[0..piece_count]);
+    const size = pack_mod.pack(
+        pieces[0..piece_count],
+        ties[0..tie_count],
+        map_limit,
+        piece_gap,
+        origins[0..piece_count],
+    );
     var image = try draw.Image.init(allocator, @intCast(size.w), @intCast(size.h));
     errdefer image.deinit(allocator);
     for (0..piece_count) |p| {
@@ -166,33 +182,57 @@ fn buildBlock(allocator: std.mem.Allocator, level: *const Level) !Block {
     const tags = try allocator.alloc(Tag, 2 * level.joins.len);
     errdefer allocator.free(tags);
     for (level.joins, 0..) |join, i| {
-        const letter: u8 = @intCast('A' + i);
-        switch (join) {
-            .link => |link| {
-                const from = roomOrigin(map, &origins, link.room);
-                const to = roomOrigin(map, &origins, link.to);
-                const a = edge(link.side);
-                const b = edge(map_mod.opposite(link.side));
-                tags[2 * i] = .{ .letter = letter, .x = from.x + a.x, .y = from.y + a.y };
-                tags[2 * i + 1] = .{ .letter = letter, .x = to.x + b.x, .y = to.y + b.y };
-            },
-            .transport => |t| {
-                const from = roomOrigin(map, &origins, t.from.room);
-                const to = roomOrigin(map, &origins, t.to.room);
-                // Above the characters' feet.
-                tags[2 * i] = .{ .letter = letter, .x = from.x + t.from.x, .y = from.y + t.from.y - 48 };
-                tags[2 * i + 1] = .{ .letter = letter, .x = to.x + t.to.x, .y = to.y + t.to.y - 48 };
-            },
+        for (ends(join), 0..) |end, n| {
+            const origin = origins[map.cells[end.room].?.piece];
+            const at = inPiece(map, end);
+            tags[2 * i + n] = .{ .letter = @intCast('A' + i), .x = origin.x + at.x, .y = origin.y + at.y, .along_x = end.along_x };
         }
     }
+    separate(tags);
     return .{ .image = image, .tags = tags };
 }
 
-/// Where a room's top-left is on its level's block.
-fn roomOrigin(map: *const map_mod.Map, origins: []const pack_mod.Point, room: u8) pack_mod.Point {
-    const cell = map.cells[room].?;
-    const origin = origins[cell.piece];
-    return .{ .x = origin.x + cell.x * room_width, .y = origin.y + cell.y * room_pitch };
+/// One end of a join: its room, where in the room its tag goes, and which way the tag moves
+/// if another is there.
+const End = struct { room: u8, at: pack_mod.Point, along_x: bool };
+
+fn ends(join: map_mod.Join) [2]End {
+    return switch (join) {
+        .link => |link| blk: {
+            const across = link.side == .up or link.side == .down;
+            break :blk .{
+                .{ .room = link.room, .at = edge(link.side), .along_x = across },
+                .{ .room = link.to, .at = edge(map_mod.opposite(link.side)), .along_x = across },
+            };
+        },
+        // Above the characters' feet.
+        .transport => |t| .{
+            .{ .room = t.from.room, .at = .{ .x = t.from.x, .y = t.from.y - 48 }, .along_x = true },
+            .{ .room = t.to.room, .at = .{ .x = t.to.x, .y = t.to.y - 48 }, .along_x = true },
+        },
+    };
+}
+
+/// Where a join's end is in its piece.
+fn inPiece(map: *const map_mod.Map, end: End) pack_mod.Point {
+    const cell = map.cells[end.room].?;
+    return .{ .x = cell.x * room_width + end.at.x, .y = cell.y * room_pitch + end.at.y };
+}
+
+/// Moves each tag off the tags before it, along its edge, until none covers another.
+fn separate(tags: []Tag) void {
+    const spacing = draw.tag_size + 16;
+    for (tags, 0..) |*t, i| {
+        var moved = true;
+        while (moved) {
+            moved = false;
+            for (tags[0..i]) |other| {
+                if (@abs(t.x - other.x) >= spacing or @abs(t.y - other.y) >= spacing) continue;
+                if (t.along_x) t.x = other.x + spacing else t.y = other.y + spacing;
+                moved = true;
+            }
+        }
+    }
 }
 
 /// The middle of a room's edge on `side`, from the room's top-left.
@@ -203,4 +243,16 @@ fn edge(side: map_mod.Side) pack_mod.Point {
         .right => .{ .x = room_width, .y = room_pitch / 2 },
         .left => .{ .x = 0, .y = room_pitch / 2 },
     };
+}
+
+test "a tag that would cover another moves along its edge" {
+    var tags = [_]Tag{
+        .{ .letter = 'A', .x = 100, .y = 100, .along_x = true },
+        .{ .letter = 'B', .x = 104, .y = 96, .along_x = true },
+        .{ .letter = 'C', .x = 300, .y = 100, .along_x = false },
+    };
+    separate(&tags);
+    try std.testing.expectEqual(@as(i32, 100 + draw.tag_size + 16), tags[1].x);
+    try std.testing.expectEqual(@as(i32, 96), tags[1].y);
+    try std.testing.expectEqual(@as(i32, 300), tags[2].x);
 }

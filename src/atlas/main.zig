@@ -119,17 +119,12 @@ pub fn main(init: std.process.Init) !u8 {
         for (pack.rooms, 0..) |room, index| if (room != null) present.set(index);
         const links: map.Links = .fromGrid(&pack.grid, present);
         const owned = map.owned(&links, starts[i], sharer(ids, i, &starts));
-        const level_map = map.lay(&links, owned, start);
-        try map.cutLinks(gpa, &links, &level_map, &joins[i]);
-        try map.transports(gpa, &data[i], &level_map, &joins[i]);
-
-        const look = design(id);
-        levels[i] = .{ .name = look.name, .hue = look.hue, .rooms = @splat(null), .map = level_map, .joins = joins[i].items };
+        var rooms: map.Pixels = @splat(null);
         var drawn = owned.iterator(.{});
         while (drawn.next()) |room| {
             const art = pack.room(@intCast(room)).?;
             // The poster lays rooms out at the size the game draws them.
-            if (art.image.width != poster.room_width or art.image.height != poster.room_height)
+            if (art.image.width != map.room_width or art.image.height != map.room_height)
                 return error.UnexpectedRoomSize;
             const rgb = try gpa.alloc(u8, art.image.pixels.len * 3);
             try pixels.append(gpa, rgb);
@@ -137,8 +132,14 @@ pub fn main(init: std.process.Init) !u8 {
                 const color = art.colors[index];
                 rgb[p * 3 ..][0..3].* = .{ color.r, color.g, color.b };
             }
-            levels[i].rooms[room] = rgb;
+            rooms[room] = rgb;
         }
+        const transit = map.transitLinks(&links, owned, &rooms);
+        const level_map = map.lay(&links, owned, start, &transit);
+        try map.cutLinks(gpa, &links, &level_map, &joins[i]);
+        try map.transports(gpa, &data[i], &level_map, &joins[i]);
+        const look = design(id);
+        levels[i] = .{ .name = look.name, .hue = look.hue, .rooms = rooms, .map = level_map, .joins = joins[i].items };
     }
 
     var canvas = try poster.render(gpa, &font, &levels);

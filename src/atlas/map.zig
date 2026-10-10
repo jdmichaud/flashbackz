@@ -1,8 +1,9 @@
 //! A level's rooms on a flat map. The rooms' links (the collision grid's neighbor tables) place
 //! them on a grid of room cells from the start room. The game's rooms do not always lie flat: a
-//! link may lead to a room whose cell another link has taken (the tower's floors wrap around),
-//! and some areas are reached only by a transport. Those links and transports are the map's
-//! joins; the poster tags both ends of each.
+//! link may lead to a room whose cell another link has taken (the tower's floors wrap around), a
+//! ring of links may be a transit line rather than ground (the city's subway stations), and some
+//! areas are reached only by a transport. Those links and transports are the map's joins; the
+//! poster tags both ends of each.
 const std = @import("std");
 const flashbackz = @import("flashbackz");
 const grid = flashbackz.behavior.grid;
@@ -12,6 +13,18 @@ const vocabulary = flashbackz.behavior.vocabulary;
 pub const room_count = 64;
 pub const RoomSet = std.StaticBitSet(room_count);
 pub const Side = grid.Side;
+
+pub const room_width = 256;
+pub const room_height = 224;
+/// Rooms stacked by their links overlap by eight rows: the room below repeats the bottom of
+/// the room above (the collision grid's floors are 216 pixels apart).
+pub const room_pitch = 216;
+
+/// Each drawn room's pixels, RGB, by room number.
+pub const Pixels = [room_count]?[]const u8;
+
+/// Links the layout does not follow, by room and `Side`.
+pub const Skipped = [room_count][4]bool;
 
 /// The order links are followed in: across before up and down.
 const walk_order = [_]Side{ .right, .left, .down, .up };
@@ -105,8 +118,9 @@ pub const Map = struct {
 };
 
 /// Lays `rooms` out from `start`: breadth first, a room goes where the first link to reach it
-/// puts it, unless that cell is taken. The rooms left over start new pieces, in room order.
-pub fn lay(links: *const Links, rooms: RoomSet, start: u8) Map {
+/// puts it, unless that cell is taken or the link is skipped. The rooms left over start new
+/// pieces, in room order.
+pub fn lay(links: *const Links, rooms: RoomSet, start: u8, skipped: *const Skipped) Map {
     var map: Map = .{};
     var seeds: [room_count + 1]u8 = undefined;
     seeds[0] = start;
@@ -131,6 +145,7 @@ pub fn lay(links: *const Links, rooms: RoomSet, start: u8) Map {
             const room = queue[head];
             const here = map.cells[room].?;
             for (walk_order) |side| {
+                if (skipped[room][@backingInt(side)]) continue;
                 const next = links.neighbor(room, side) orelse continue;
                 if (!rooms.isSet(next) or map.cells[next] != null) continue;
                 const d = step(side);
@@ -165,6 +180,157 @@ pub fn lay(links: *const Links, rooms: RoomSet, start: u8) Map {
         map.sizes[piece] = .{ .w = max_x - min_x + 1, .h = max_y - min_y + 1 };
     }
     return map;
+}
+
+/// How much the picture breaks where `room` meets `to` on its `side`: the mean difference, per
+/// color channel, of the pixel columns either side of their edge, or of the eight rows a room
+/// repeats from the room above it.
+pub fn seam(pixels: *const Pixels, room: u8, side: Side, to: u8) ?f32 {
+    const here = pixels[room] orelse return null;
+    const there = pixels[to] orelse return null;
+    const first, const second = switch (side) {
+        .right, .down => .{ here, there },
+        .left, .up => .{ there, here },
+    };
+    var total: u32 = 0;
+    var count: u32 = 0;
+    switch (side) {
+        .right, .left => for (0..room_height) |y| {
+            const a = first[(y * room_width + room_width - 1) * 3 ..][0..3];
+            const b = second[(y * room_width) * 3 ..][0..3];
+            for (a, b) |p, q| total += @abs(@as(i16, p) - q);
+            count += 3;
+        },
+        .down, .up => for (0..room_height - room_pitch) |y| {
+            const a = first[(room_pitch + y) * room_width * 3 ..][0 .. room_width * 3];
+            const b = second[y * room_width * 3 ..][0 .. room_width * 3];
+            for (a, b) |p, q| total += @abs(@as(i16, p) - q);
+            count += room_width * 3;
+        },
+    }
+    return @as(f32, @floatFromInt(total)) / @as(f32, @floatFromInt(count));
+}
+
+/// The links of the level's transit lines, which the layout does not follow. A ring (rooms
+/// each linked to the next on one side, the last back to the first) is a transit line, like
+/// the city's subway stations, when both hold: none of its links continues the picture (each
+/// breaks it more than the level's usual link on that axis), and without its links its rooms
+/// lead into two or more parts of the level that have rooms of their own. A tower floor that
+/// wraps around continues its pictures, so it stays ground.
+pub fn transitLinks(links: *const Links, rooms: RoomSet, pixels: *const Pixels) Skipped {
+    var skipped: Skipped = @splat(@splat(false));
+    for ([_]Side{ .right, .down }) |side| {
+        const usual = medianSeam(links, rooms, pixels, side) orelse continue;
+        var starts = rooms.iterator(.{});
+        while (starts.next()) |index| {
+            var ring: [room_count]u8 = undefined;
+            const length = findRing(links, rooms, @intCast(index), side, &ring) orelse continue;
+            const members = ring[0..length];
+            // Each ring once, from its lowest room.
+            if (std.mem.min(u8, members) != index) continue;
+            const breaks = for (members, 0..) |room, i| {
+                const break_size = seam(pixels, room, side, members[(i + 1) % length]) orelse break false;
+                if (break_size <= usual) break false;
+            } else true;
+            if (!breaks or !separates(links, rooms, members, side)) continue;
+            for (members, 0..) |room, i| {
+                const next = members[(i + 1) % length];
+                skipped[room][@backingInt(side)] = true;
+                if (links.neighbor(next, opposite(side)) == room) skipped[next][@backingInt(opposite(side))] = true;
+            }
+        }
+    }
+    return skipped;
+}
+
+/// The rooms reached from `start` by following `side` until it comes back to `start`.
+fn findRing(links: *const Links, rooms: RoomSet, start: u8, side: Side, ring: *[room_count]u8) ?usize {
+    ring[0] = start;
+    var length: usize = 1;
+    var room = start;
+    while (links.neighbor(room, side)) |next| {
+        if (next == start) return if (length >= 2) length else null;
+        if (!rooms.isSet(next) or std.mem.indexOfScalar(u8, ring[0..length], next) != null) return null;
+        ring[length] = next;
+        length += 1;
+        room = next;
+    }
+    return null;
+}
+
+/// The median seam of the links between `rooms` on the axis of `side`.
+fn medianSeam(links: *const Links, rooms: RoomSet, pixels: *const Pixels, side: Side) ?f32 {
+    var values: [room_count]f32 = undefined;
+    var count: usize = 0;
+    var all = rooms.iterator(.{});
+    while (all.next()) |index| {
+        const room: u8 = @intCast(index);
+        const to = links.neighbor(room, side) orelse continue;
+        if (!rooms.isSet(to)) continue;
+        values[count] = seam(pixels, room, side, to) orelse continue;
+        count += 1;
+    }
+    if (count == 0) return null;
+    std.sort.pdq(f32, values[0..count], {}, std.sort.asc(f32));
+    return values[count / 2];
+}
+
+/// Whether, without the ring's links, its rooms lie in two or more parts of `rooms` that hold
+/// rooms beyond the ring.
+fn separates(links: *const Links, rooms: RoomSet, ring: []const u8, side: Side) bool {
+    // Parts by flood fill over every link but the ring's, both ways.
+    var part: [room_count]?u8 = @splat(null);
+    var part_count: u8 = 0;
+    var all = rooms.iterator(.{});
+    while (all.next()) |index| {
+        if (part[index] != null) continue;
+        var stack: [room_count]u8 = undefined;
+        var depth: usize = 1;
+        stack[0] = @intCast(index);
+        part[index] = part_count;
+        while (depth > 0) {
+            depth -= 1;
+            const room = stack[depth];
+            var others = rooms.iterator(.{});
+            while (others.next()) |other_index| {
+                const other: u8 = @intCast(other_index);
+                if (part[other] != null or !linked(links, ring, side, room, other)) continue;
+                part[other] = part_count;
+                stack[depth] = other;
+                depth += 1;
+            }
+        }
+        part_count += 1;
+    }
+    var parts_with_rooms: std.StaticBitSet(room_count) = .empty;
+    for (ring) |room| {
+        const p = part[room].?;
+        for (part, 0..) |other, room_index| {
+            if (other == p and std.mem.indexOfScalar(u8, ring, @intCast(room_index)) == null) {
+                parts_with_rooms.set(p);
+                break;
+            }
+        }
+    }
+    return parts_with_rooms.count() >= 2;
+}
+
+/// Whether a link joins `a` and `b`, either way, other than the ring's own.
+fn linked(links: *const Links, ring: []const u8, side: Side, a: u8, b: u8) bool {
+    for (std.enums.values(Side)) |s| {
+        if (links.neighbor(a, s) == b and !ringLink(ring, side, a, s, b)) return true;
+        if (links.neighbor(b, s) == a and !ringLink(ring, side, b, s, a)) return true;
+    }
+    return false;
+}
+
+fn ringLink(ring: []const u8, side: Side, from: u8, s: Side, to: u8) bool {
+    if (s != side and s != opposite(side)) return false;
+    const i = std.mem.indexOfScalar(u8, ring, from) orelse return false;
+    const j = std.mem.indexOfScalar(u8, ring, to) orelse return false;
+    const next = (i + 1) % ring.len;
+    const previous = (i + ring.len - 1) % ring.len;
+    return if (s == side) j == next else j == previous;
 }
 
 /// A place in a room, in the room's pixels.
@@ -262,6 +428,8 @@ fn revealRoom(behavior: vocabulary.Behavior, character: data_set.Character) ?u8 
     return null;
 }
 
+const no_skips: Skipped = @splat(@splat(false));
+
 fn testLinks(comptime rows: []const []const u8) Links {
     // A letter per room on a grid of cells; neighbors are the letters beside each other.
     var links: Links = .{ .present = .empty, .neighbors = @splat(@splat(null)) };
@@ -279,7 +447,7 @@ fn testLinks(comptime rows: []const []const u8) Links {
 
 test "a grid of linked rooms lies flat as one piece, from its start room" {
     const links = testLinks(&.{ "ab.", ".cd" });
-    const map = lay(&links, links.present, 2);
+    const map = lay(&links, links.present, 2, &no_skips);
     try std.testing.expectEqual(@as(u8, 1), map.piece_count);
     try std.testing.expectEqual(Cell{ .piece = 0, .x = 0, .y = 0 }, map.cells[0].?);
     try std.testing.expectEqual(Cell{ .piece = 0, .x = 2, .y = 1 }, map.cells[3].?);
@@ -295,7 +463,7 @@ test "a ring of rooms is cut once, and its wrap-around link is a join" {
     var links = testLinks(&.{"abcd"});
     links.neighbors[3][@backingInt(Side.right)] = 0;
     links.neighbors[0][@backingInt(Side.left)] = 3;
-    const map = lay(&links, links.present, 0);
+    const map = lay(&links, links.present, 0, &no_skips);
     try std.testing.expectEqual(@as(u8, 1), map.piece_count);
     var joins: std.ArrayList(Join) = .empty;
     defer joins.deinit(std.testing.allocator);
@@ -314,7 +482,7 @@ test "a link into a taken cell starts a new piece, joined to the first" {
     links.neighbors[2][@backingInt(Side.up)] = null;
     links.present.set(4);
     links.neighbors[4][@backingInt(Side.up)] = 1;
-    const map = lay(&links, links.present, 3);
+    const map = lay(&links, links.present, 3, &no_skips);
     try std.testing.expectEqual(@as(u8, 2), map.piece_count);
     try std.testing.expectEqual(@as(u8, 1), map.cells[4].?.piece);
     var joins: std.ArrayList(Join) = .empty;
@@ -340,4 +508,47 @@ test "levels sharing a room file own their characters' rooms and the free rooms 
     try std.testing.expect(rooms.isSet(0) and rooms.isSet(1) and rooms.isSet(2));
     try std.testing.expect(!rooms.isSet(3) and !rooms.isSet(4));
     try std.testing.expectEqual(links.present, owned(&links, mine, null));
+}
+
+test "a ring of stations between districts is a transit line; a ring whose picture continues is ground" {
+    const allocator = std.testing.allocator;
+    // Two districts of three rooms in a row (2 3 4 and 5 6 7), each above a station (0 below
+    // 2, 1 below 5); each station leads into the other on both sides.
+    var links: Links = .{ .present = .empty, .neighbors = @splat(@splat(null)) };
+    for (0..8) |room| links.present.set(room);
+    const pairs = [_]struct { u8, Side, u8 }{
+        .{ 0, .right, 1 }, .{ 1, .right, 0 }, .{ 2, .down, 0 },  .{ 5, .down, 1 },
+        .{ 2, .right, 3 }, .{ 3, .right, 4 }, .{ 5, .right, 6 }, .{ 6, .right, 7 },
+    };
+    for (pairs) |pair| {
+        const a, const side, const b = pair;
+        links.neighbors[a][@backingInt(side)] = b;
+        links.neighbors[b][@backingInt(opposite(side))] = a;
+    }
+    const buffers = try allocator.alloc([room_width * room_height * 3]u8, 8);
+    defer allocator.free(buffers);
+    var pixels: Pixels = @splat(null);
+    for (buffers, 0..) |*buffer, room| {
+        @memset(buffer, if (room >= 2) 50 else 0);
+        pixels[room] = buffer;
+    }
+
+    // The stations' pictures do not continue into each other: the ring is a transit line, and
+    // the districts become pieces of their own, joined by its two rides.
+    @memset(&buffers[1], 200);
+    const transit = transitLinks(&links, links.present, &pixels);
+    try std.testing.expect(transit[0][@backingInt(Side.right)] and transit[1][@backingInt(Side.right)]);
+    try std.testing.expect(transit[0][@backingInt(Side.left)] and transit[1][@backingInt(Side.left)]);
+    try std.testing.expect(!transit[2][@backingInt(Side.right)]);
+    const map = lay(&links, links.present, 2, &transit);
+    try std.testing.expectEqual(@as(u8, 2), map.piece_count);
+    var joins: std.ArrayList(Join) = .empty;
+    defer joins.deinit(allocator);
+    try cutLinks(allocator, &links, &map, &joins);
+    try std.testing.expectEqual(@as(usize, 2), joins.items.len);
+
+    // The same ring with continuous pictures is ground, like a tower floor.
+    @memset(&buffers[1], 0);
+    const ground = transitLinks(&links, links.present, &pixels);
+    for (ground) |sides| for (sides) |skipped| try std.testing.expect(!skipped);
 }
