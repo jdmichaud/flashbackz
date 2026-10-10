@@ -717,7 +717,7 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
   kinds 5, 9 and 12 explained; the fall scene, the protection after a hit and `Room.nowhere` are
   named; the instrument file's fields, the profile's timing fields and the executable's data
   segment are named. Gate: audio, traces and sessions unchanged.
-- [ ] **R2** Behavior tables' readability: state names, signs of the terrain arguments. The eight
+- [x] **R2** Behavior tables' readability: state names, signs of the terrain arguments. The eight
   terrain checks that took the original's backward offset (`ledge_above_*`, `floor_edge_*`,
   `grab_edge_ahead`, `wall_beyond_gap`, `wall_starts`, `wall_ends`) now take cells ahead, like
   the others: the extractor writes them negated and the engine reads them so. The extraction
