@@ -486,6 +486,13 @@ LOAD dialog in the in game menu is awkward").
   The settings record's version becomes 2. Gate: tests; the agent binds ACTION to another button
   and that button acts; with the user's pad, its layout chosen in the game is there after a
   restart.
+  - [x] 2026-10-10: 259 tests (layouts stand buttons for the fixed ones and swap; models kept,
+    forgotten at the fixed layout or when full; record v2 round trip; the CONTROLS rows; the
+    virtual pad's model, generic, START its tenth button). Agent: ACTION bound to LB on the
+    CONTROLS page, LB with right runs as A did, A then gives nothing; the record keeps the
+    layout under the agent pad's model; DEFAULT empties it. Keyboard and pad sessions keep
+    their state hashes.
+  - [ ] With the user's pad: a layout chosen in the game, there after a restart.
 - [ ] **GS-4 — The save** — A save holds the level, difficulty, score, random generator, what is
   carried between levels, the world (every character, the terrain, contacts, mailboxes, the
   save terminal's checkpoint) and the level's play state; art, sound and pictures are reloaded
