@@ -556,7 +556,7 @@ load and fails loudly there, devices are adapted to (D6).
     smoke` checks that. Also gone: the mouse, relative mode and its Ctrl+F10 chord, text input,
     the input-recording samples. Kept: the storage's listing and deletion (the atomic-save
     fault tests use them), the vendored sorz chips (DESIGN 6), the settings' Difficulty (the
-    save record needs an exhaustive one). About 880 lines fewer; keyboard sessions keep their
+    save record needs an exhaustive one). About 835 lines fewer; keyboard sessions keep their
     hashes; 28/28 build steps.
 - [ ] **B1** Using any of the city's four map terminals ends the game. High.
 - [ ] **B2** An audio device granting another format ends the game or overruns a buffer. High on
