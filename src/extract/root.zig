@@ -49,13 +49,16 @@ pub fn extractAll(
     try writeScenes(arena, &interface, output);
     var summary: std.Io.Writer.Allocating = .init(arena);
     try summary.writer.print(
-        \\Extracted {d} characters and {d} behaviors ({d} named by the overlay).
+        \\Extracted {d} characters and {d} behaviors; the overlay names {d} behaviors and {d} of
+        \\the {d} states.
         \\Dropped {d} unreachable rules; {d} operations had an argument the original ignores.
         \\
     , .{
         report.characters,
         report.behaviors,
         report.named_behaviors,
+        report.named_states,
+        report.states,
         report.dead_rules,
         report.ignored_arguments,
     });

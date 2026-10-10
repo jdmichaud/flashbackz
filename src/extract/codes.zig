@@ -9,6 +9,9 @@ pub const Argument = union(enum) {
     none,
     /// A plain number: cells, steps, a scene, sound, text or object id.
     number,
+    /// A column offset the original counts backward: written negated, as cells ahead like the
+    /// other terrain checks' arguments.
+    cells_behind,
     /// A message value, written by name.
     message,
     /// Send a message to the link stored in the given placement parameter.
@@ -88,14 +91,14 @@ pub fn lookup(code: u8) ?Operation {
         26 => op("no_floor_ahead", .number),
         27 => op("no_floor_here", .none),
         28 => op("no_floor_behind", .number),
-        29 => op("ledge_above_behind", .number),
-        30 => op("floor_edge_behind", .number),
-        31 => op("ledge_above_ahead", .number),
-        32 => op("floor_edge_ahead", .number),
-        33 => op("grab_edge_ahead", .number),
-        40 => op("wall_beyond_gap", .number),
-        41 => op("wall_starts", .number),
-        42 => op("wall_ends", .number),
+        29 => op("ledge_above_behind", .cells_behind),
+        30 => op("floor_edge_behind", .cells_behind),
+        31 => op("ledge_above_ahead", .cells_behind),
+        32 => op("floor_edge_ahead", .cells_behind),
+        33 => op("grab_edge_ahead", .cells_behind),
+        40 => op("wall_beyond_gap", .cells_behind),
+        41 => op("wall_starts", .cells_behind),
+        42 => op("wall_ends", .cells_behind),
         103 => op("low_passage_ahead", .number),
         116 => op("floor_below_ahead", .number),
         122 => op("step_clear_ahead", .number),

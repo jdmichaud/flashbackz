@@ -35,6 +35,9 @@ pub const Output = struct {
 pub const Report = struct {
     behaviors: usize = 0,
     named_behaviors: usize = 0,
+    /// States, and those the naming overlay names: how readable the tables are.
+    states: usize = 0,
+    named_states: usize = 0,
     characters: usize = 0,
     dead_rules: usize = 0,
     ignored_arguments: usize = 0,
@@ -205,10 +208,12 @@ fn nameBehaviors(level: *Level) !void {
             .{behavior.group},
         );
         for (behavior.states, 0..) |*state, ordinal| {
+            level.report.states += 1;
             state.name = try std.fmt.allocPrint(level.arena, "state_{d}", .{state.animation});
             const named = behavior.named orelse continue;
             for (named.states) |entry| if (entry.ordinal == ordinal) {
                 state.name = entry.name;
+                level.report.named_states += 1;
             };
         }
         for (behavior.states, 0..) |state, i| for (behavior.states[0..i]) |earlier| {
@@ -502,6 +507,7 @@ fn writeValue(
     switch (known.argument) {
         .none => unreachable,
         .number => try out.print("{d}", .{arg}),
+        .cells_behind => try out.print("{d}", .{-@as(i32, arg)}),
         .message => try out.print("{f}", .{zon.identifier(try messageName(level, arg))}),
         .send_to_link => |p| try out.print(".{{ .to = {f}, .message = {f} }}", .{
             zon.identifier(behavior.links[p].?), zon.identifier(try messageName(level, arg)),

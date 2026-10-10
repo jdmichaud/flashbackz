@@ -79,57 +79,53 @@ pub fn noFloorBehind(world: *World, actor: u16, cells: i16) !bool {
 }
 
 /// A solid ceiling cell with the opening just behind it and room to stand on top.
-pub fn ledgeAboveBehind(world: *World, actor: u16, argument: i16) !bool {
-    const k = -argument;
+pub fn ledgeAboveBehind(world: *World, actor: u16, k: i16) !bool {
     return solid(world, actor, ceiling, k) and
         !solid(world, actor, ceiling, k - 1) and
         !solid(world, actor, body_above, k);
 }
 
 /// A solid ceiling cell with the opening just beyond it and room to stand on top.
-pub fn ledgeAboveAhead(world: *World, actor: u16, argument: i16) !bool {
-    const k = -argument;
+pub fn ledgeAboveAhead(world: *World, actor: u16, k: i16) !bool {
     return solid(world, actor, ceiling, k) and
         !solid(world, actor, ceiling, k + 1) and
         !solid(world, actor, body_above, k);
 }
 
 /// A floor cell whose near side is a hole, with clear body space above it.
-pub fn floorEdgeBehind(world: *World, actor: u16, argument: i16) !bool {
-    const k = -argument;
+pub fn floorEdgeBehind(world: *World, actor: u16, k: i16) !bool {
     return solid(world, actor, floor, k) and
         !solid(world, actor, floor, k - 1) and
         !solid(world, actor, body, k);
 }
 
 /// A floor cell with a hole just beyond it and clear body space above it.
-pub fn floorEdgeAhead(world: *World, actor: u16, argument: i16) !bool {
-    const k = -argument;
+pub fn floorEdgeAhead(world: *World, actor: u16, k: i16) !bool {
     return solid(world, actor, floor, k) and
         !solid(world, actor, floor, k + 1) and
         !solid(world, actor, body, k);
 }
 
 /// A hole, then a floor edge just beyond it: the ledge to grab ahead.
-pub fn grabEdgeAhead(world: *World, actor: u16, argument: i16) !bool {
-    const k = -argument;
+pub fn grabEdgeAhead(world: *World, actor: u16, k: i16) !bool {
     return solid(world, actor, floor, k + 1) and
         !solid(world, actor, floor, k) and
         !solid(world, actor, body, k + 1);
 }
 
-// 40-42 take the original's raw column offset, whose positive values point backward.
-
-pub fn wallBeyondGap(world: *World, actor: u16, raw: i16) !bool {
-    return solid(world, actor, body, 1 - raw) and !solid(world, actor, floor, -raw);
+/// A wall one cell beyond a gap in the floor `k` cells ahead.
+pub fn wallBeyondGap(world: *World, actor: u16, k: i16) !bool {
+    return solid(world, actor, body, k + 1) and !solid(world, actor, floor, k);
 }
 
-pub fn wallStarts(world: *World, actor: u16, raw: i16) !bool {
-    return solid(world, actor, body, 1 - raw) and !solid(world, actor, body, -raw);
+/// The body layer is clear `k` cells ahead and solid in the next.
+pub fn wallStarts(world: *World, actor: u16, k: i16) !bool {
+    return solid(world, actor, body, k + 1) and !solid(world, actor, body, k);
 }
 
-pub fn wallEnds(world: *World, actor: u16, raw: i16) !bool {
-    return !solid(world, actor, body, 1 - raw) and solid(world, actor, body, -raw);
+/// The body layer is solid `k` cells ahead and clear in the next.
+pub fn wallEnds(world: *World, actor: u16, k: i16) !bool {
+    return !solid(world, actor, body, k + 1) and solid(world, actor, body, k);
 }
 
 /// Material 2 in the body layer: a passage only a rolling character fits through.
