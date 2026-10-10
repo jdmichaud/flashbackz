@@ -762,7 +762,7 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
   change), the input queues popping from the front (a few events a frame), the font decoded
   for the inventory as well (3 KB). Gate: tests; the sessions' frame hashes and the traces
   unchanged.
-- [ ] **Documentation**: the wrong or stale claims of the review's section 5, in DESIGN.md,
+- [x] **Documentation**: the wrong or stale claims of the review's section 5, in DESIGN.md,
   README.md, docs and code comments. The user granted (2026-10-10) correcting DESIGN.md's
   statements of fact so they describe what exists; changes to its rules still need approval.
   Done: DESIGN's facts (the Windows cross-build, characters by index, synchronous reads,
