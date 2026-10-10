@@ -701,7 +701,15 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
   startup; startup costs 0.2 s more in Debug, 30 ms in ReleaseFast; the sessions keep their
   hashes.
   - 2026-10-10: done.
-- [ ] **D7** Smaller design issues (the review's list).
+- [ ] **D7** Smaller design issues (the review's list). Films keep one clock (the player's
+  cadence; `Playback` is the frame and the end). Without pkg-config only the SDL executables'
+  build fails, so the agent builds. Contacts collect the characters meeting in a cell in a fixed
+  buffer: an update no longer allocates. The five tier formulas are named once in `grid.zig`, with
+  a test of where they differ; the three neighbour helpers become the grid's one; the two "waits
+  for" scans share the hit-side match and say how they differ. Kept, as the original: Conrad is
+  character 0 for some rules and the player kind for others (`World` says which; the loader
+  checks character 0). Gate: tests; traces of all seven levels and the sessions unchanged; the
+  agent builds without pkg-config and the game's build then fails, saying why.
 - [ ] **R1-R5** Readability: unnamed magic numbers, behavior tables' readability, dead code, tests
   missing or not testing their name, style.
 - [x] **P1** The documented build is Debug. Kept (user, 2026-10-10: "Default build is debug."):
