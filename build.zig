@@ -5,10 +5,12 @@
 //!   flashbackz            the game: the SDL interactive host (Linux, Windows)
 //!   flashbackz-standalone the game with the user's files built in, only with -Ddisk1, -Ddisk2
 //!                         and -Dmegadrive (DESIGN.md 3)
+//!   flashbackz-atlas      a PNG poster of every level's rooms, from the user's disks
 //! The hosts write the readable data set with `--extract DIR`.
 //! Steps: `zig build` installs both native hosts. `test` runs standalone unit tests;
 //! `smoke` exercises the headless host; `verify` checks that it has no SDL dependency.
-//! `all` installs both native hosts for the selected target.
+//! `all` installs both native hosts and the atlas for the selected target; `atlas` only the
+//! atlas.
 const std = @import("std");
 
 /// The compiler release used by this project's builds and checks.
@@ -118,6 +120,18 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    const atlas = b.createModule(.{
+        .root_source_file = b.path("src/atlas/main.zig"),
+        .target = target,
+        .optimize = optimize,
+        .imports = &.{
+            .{ .name = "flashbackz", .module = shared },
+            .{ .name = "native", .module = native },
+        },
+    });
+    const atlas_exe = b.addExecutable(.{ .name = "flashbackz-atlas", .root_module = atlas });
+    const install_atlas = b.addInstallArtifact(atlas_exe, .{});
+
     // The game, and the standalone build when its files are given.
     const game: Game = .{
         .target = target,
@@ -142,6 +156,10 @@ pub fn build(b: *std.Build) void {
         "agent",
         "Build and install only the headless agent host",
     ).dependOn(&b.addInstallArtifact(agent_exe, .{}).step);
+    b.step(
+        "atlas",
+        "Build and install only the level atlas, flashbackz-atlas",
+    ).dependOn(&install_atlas.step);
     const sdl_step = b.step(
         "sdl",
         "Build and install only the SDL game (and its standalone build with the -D options)",
@@ -156,6 +174,7 @@ pub fn build(b: *std.Build) void {
         native,
         sdl,
         extract_library,
+        atlas,
     };
     for (unit_modules) |m| {
         const t = b.addTest(.{ .root_module = m });
@@ -175,10 +194,12 @@ pub fn build(b: *std.Build) void {
     no_sdl.expectExitCode(0);
     b.step("verify", "Check the agent host binary links no SDL library").dependOn(&no_sdl.step);
 
-    b.step(
+    const all_step = b.step(
         "all",
-        "Build and install both native hosts for the selected target",
-    ).dependOn(b.getInstallStep());
+        "Build and install both native hosts and the atlas for the selected target",
+    );
+    all_step.dependOn(b.getInstallStep());
+    all_step.dependOn(&install_atlas.step);
 }
 
 /// The SDL game's modules, from which `flashbackz` and `flashbackz-standalone` are built.
