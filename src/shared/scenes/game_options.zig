@@ -1,6 +1,6 @@
 //! The in-game options dialog owns a draft of settings while the world is paused.
 const std = @import("std");
-const platform = @import("../platform.zig");
+const input = @import("../input.zig");
 const font = @import("../content/font.zig");
 const text = @import("../render/text.zig");
 pub const Zoom = enum { off, on, auto };
@@ -18,8 +18,10 @@ pub const Menu = struct {
     settings: Settings,
     outcome: ?Outcome = null,
     free_memory_mb: ?u64 = null,
-    pub fn key(self: *Menu, key_code: platform.Key) void {
-        switch (key_code) {
+    /// A press of `action`: up and down choose the row, left and right change it, and a button
+    /// or Escape closes the dialog, abandoning the game on ABORT GAME.
+    pub fn press(self: *Menu, action: input.Action) void {
+        switch (action) {
             .up => self.selection = @fromBackingInt(@as(
                 u3,
                 @intCast((@as(u8, @backingInt(self.selection)) + 6) % 7),
@@ -31,16 +33,16 @@ pub const Menu = struct {
             .left, .right => switch (self.selection) {
                 .sound_fx => self.settings.sound_fx = !self.settings.sound_fx,
                 .music => self.settings.music = !self.settings.music,
-                .volume => self.settings.volume = if (key_code == .right) @min(100, self.settings.volume + 10) else self.settings.volume -| 10,
+                .volume => self.settings.volume = if (action == .right) @min(100, self.settings.volume + 10) else self.settings.volume -| 10,
                 .joystick => self.settings.joystick = !self.settings.joystick,
                 .zoom => self.settings.zoom = @fromBackingInt(@as(
                     u2,
-                    @intCast((@as(u8, @backingInt(self.settings.zoom)) + @as(u8, if (key_code == .right) 1 else 2)) % 3),
+                    @intCast((@as(u8, @backingInt(self.settings.zoom)) + @as(u8, if (action == .right) 1 else 2)) % 3),
                 )),
                 else => {},
             },
-            .escape, .enter, .space, .left_shift, .right_shift => self.outcome = if (self.selection == .abort_game) .abort_game else .resume_game,
-            else => {},
+            .pause, .use, .gun, .act => self.outcome = if (self.selection == .abort_game) .abort_game else .resume_game,
+            .inventory => {},
         }
     }
     pub fn draw(self: Menu, pixels: []u8, glyphs: *const font.Font) !void {
@@ -148,16 +150,16 @@ pub const Menu = struct {
 
 test "options wrap, cycle with horizontal arrows, and apply on Escape or action" {
     var menu: Menu = .{ .settings = .{} };
-    menu.key(.up);
+    menu.press(.up);
     try std.testing.expectEqual(.abort_game, menu.selection);
-    menu.key(.down);
-    menu.key(.down);
-    menu.key(.right);
+    menu.press(.down);
+    menu.press(.down);
+    menu.press(.right);
     try std.testing.expect(!menu.settings.sound_fx);
-    menu.key(.escape);
+    menu.press(.pause);
     try std.testing.expectEqual(@as(?Outcome, .resume_game), menu.outcome);
     var abort: Menu = .{ .settings = .{} };
-    abort.key(.up);
-    abort.key(.enter);
+    abort.press(.up);
+    abort.press(.use);
     try std.testing.expectEqual(@as(?Outcome, .abort_game), abort.outcome);
 }

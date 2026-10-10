@@ -16,6 +16,7 @@ const demo_mod = @import("../content/demo.zig");
 const input_recording = @import("../input_recording.zig");
 const step_clock = @import("../step_clock.zig");
 const key_latch = @import("../key_latch.zig");
+const input_mod = @import("../input.zig");
 const settings = @import("../settings.zig");
 const audio_effects = @import("../audio/effects.zig");
 const megadrive = @import("../content/megadrive.zig");
@@ -57,7 +58,7 @@ pub const Scene = struct {
     pack: level_pack.Pack,
     world: World,
     screen: *Screen,
-    keys: Keys = .{},
+    keys: input_mod.Tracker = .{},
     /// A demo replays its recorded input bytes instead of the keys.
     demo: ?Demo = null,
     clock: ?step_clock.Clock = null,
@@ -367,10 +368,11 @@ pub const Scene = struct {
         const options = &self.options.?;
         while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
             const event = self.pending.orderedRemove(0);
-            switch (event.payload) {
-                .key_down => |press| if (options.direction_repeat.registers(press, event.time_ns))
-                    options.menu.key(press.key),
-                else => self.keys.controller(event.payload),
+            const changes = self.keys.apply(event.payload);
+            // The original's dialog reads only the keyboard.
+            for (changes.slice()) |change| {
+                if (change.pad or !change.down) continue;
+                if (options.direction_repeat.registers(change, event.time_ns)) options.menu.press(change.action);
             }
         }
         const outcome = options.menu.outcome orelse return;
@@ -519,6 +521,8 @@ pub const Scene = struct {
         if (self.outcome != .playing) return;
         self.world.view_dirty = true;
         self.inventory_delay = 10;
+        // Keys pressed during the film and held at its end count only once pressed anew.
+        _ = self.takeKeys(now_ns);
         self.keys.release();
         self.clock.?.origin_ns +|= paused_for;
         // Films do not leave the zoom, but its pages are rebuilt.
@@ -601,12 +605,14 @@ pub const Scene = struct {
         self.screen.countPasswordFrame();
         while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
             const event = self.pending.orderedRemove(0);
-            switch (event.payload) {
-                .key_down => |key| if (!key_latch.isDirection(key.key) or
-                    inventory.direction_repeat.accept(key, event.time_ns)) inventory.keys.key(key.key, true),
-                .key_up => |key| inventory.keys.key(key.key, false),
-                .focus_lost => inventory.keys = .{},
-                else => self.keys.controller(event.payload),
+            const changes = self.keys.apply(event.payload);
+            if (event.payload == .focus_lost) inventory.keys = .{};
+            // The original polls the joystick here too when the Joystick option is on.
+            for (changes.slice()) |change| {
+                if (change.pad and !self.settings.joystick) continue;
+                if (change.down and change.action.isDirection() and
+                    !inventory.direction_repeat.accept(change.repeat, event.time_ns)) continue;
+                inventory.keys.action(change.action, change.down);
             }
         }
         if (self.demo) |*demo| {
@@ -622,10 +628,7 @@ pub const Scene = struct {
                 .left = byte & 0x04 != 0,
                 .right = byte & 0x08 != 0,
             };
-            inventory.keys.enter = byte & 0x10 != 0;
-            inventory.keys.space = byte & 0x20 != 0;
-            inventory.keys.left_shift = byte & 0x40 != 0;
-            inventory.keys.tab = byte & 0x80 != 0;
+            inventory.keys.buttons = byte & 0xf0;
         }
         switch (inventory.menu.poll(inventory.keys.sample())) {
             .stay => {},
@@ -649,11 +652,9 @@ pub const Scene = struct {
     fn takeKeys(self: *Scene, deadline: u64) u8 {
         while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
             const event = self.pending.orderedRemove(0);
-            switch (event.payload) {
-                .focus_lost => self.keys.lose(),
-                .key_down => |key| self.keys.press(key.key, true, key.repeat),
-                .key_up => |key| self.keys.press(key.key, false, false),
-                else => self.keys.controller(event.payload),
+            const changes = self.keys.apply(event.payload);
+            for (changes.slice()) |change| {
+                if (change.action == .pause) self.keys.escape = change.down;
             }
         }
         return self.keys.read(self.settings.joystick);
@@ -711,109 +712,6 @@ pub const Scene = struct {
     }
 };
 
-/// The keyboard as the original reads it: one byte of held keys (no edge detection) and the
-/// last direction held without a diagonal. After a modal screen the held keys are released:
-/// a key still down counts again only when pressed anew (or when the keyboard repeats it).
-pub const Keys = struct {
-    held: u8 = 0,
-    /// Keys physically down, and those of them released by a modal screen.
-    down: u8 = 0,
-    ignored: u8 = 0,
-    last_direction: u8 = 0,
-    escape: bool = false,
-    /// What a joystick or gamepad holds: its stick and its buttons. The original polls the
-    /// joystick before every update when the Joystick option is on, pressing again whatever
-    /// is held, so these bits are not released by modal screens (engine-presentation 6.2).
-    stick: u8 = 0,
-    buttons: u8 = 0,
-
-    /// The held byte an update reads: the keyboard's, and the joystick's when it is enabled.
-    pub fn read(self: *const Keys, joystick: bool) u8 {
-        return self.held | if (joystick) self.stick | self.buttons else 0;
-    }
-
-    /// A stick past a quarter of its travel holds that direction; the buttons are fire (Shift),
-    /// Space, Return and the inventory, then the D-pad's directions.
-    pub fn controller(self: *Keys, payload: platform.Event.Payload) void {
-        switch (payload) {
-            .controller_axis => |motion| {
-                const quarter = 8192;
-                const negative: u8, const positive: u8 = switch (motion.axis) {
-                    .left_x => .{ 0x04, 0x08 },
-                    .left_y => .{ 0x01, 0x02 },
-                    else => return,
-                };
-                self.stick &= ~(negative | positive);
-                if (motion.value < -quarter) self.stick |= negative;
-                if (motion.value > quarter) self.stick |= positive;
-            },
-            .controller_button_down, .controller_button_up => |change| {
-                const bit: u8 = switch (change.button) {
-                    .a => 0x40,
-                    .b => 0x20,
-                    .x => 0x10,
-                    .y => 0x80,
-                    .dpad_up => 0x01,
-                    .dpad_down => 0x02,
-                    .dpad_left => 0x04,
-                    .dpad_right => 0x08,
-                    else => return,
-                };
-                if (payload == .controller_button_down) self.buttons |= bit else self.buttons &= ~bit;
-            },
-            .controller_removed => {
-                self.stick = 0;
-                self.buttons = 0;
-            },
-            else => {},
-        }
-    }
-
-    pub fn release(self: *Keys) void {
-        self.ignored |= self.down;
-        self.held = 0;
-    }
-
-    pub fn lose(self: *Keys) void {
-        self.* = .{ .last_direction = self.last_direction, .stick = self.stick, .buttons = self.buttons };
-    }
-
-    pub fn press(self: *Keys, key: platform.Key, down: bool, repeat: bool) void {
-        const bit: u8 = switch (key) {
-            .up => 0x01,
-            .down => 0x02,
-            .left => 0x04,
-            .right => 0x08,
-            .enter => 0x10,
-            .space => 0x20,
-            .left_shift, .right_shift => 0x40,
-            .tab, .backspace => 0x80,
-            .escape => {
-                self.escape = down;
-                return;
-            },
-            else => return,
-        };
-        if (down) {
-            self.down |= bit;
-            if (repeat) self.ignored &= ~bit;
-            if (self.ignored & bit == 0) self.held |= bit;
-        } else {
-            self.down &= ~bit;
-            self.ignored &= ~bit;
-            self.held &= ~bit;
-        }
-    }
-
-    /// Holding a vertical and a horizontal direction keeps the last single direction, with the
-    /// buttons held now.
-    pub fn collapse(self: *Keys, raw: u8) u8 {
-        if (raw & 0x03 != 0 and raw & 0x0c != 0) return (raw & 0xf0) | (self.last_direction & 0x0f);
-        self.last_direction = raw;
-        return raw;
-    }
-};
-
 fn openingScene(scenes: data_set.Scenes, level: level_mod.Id) ?i16 {
     const scene = switch (level) {
         inline else => |id| @field(scenes.openings, @tagName(id)),
@@ -832,48 +730,4 @@ fn inputByte(sample: input_recording.Sample) u8 {
     if (sample.action) byte |= 0x40;
     if (sample.inventory) byte |= 0x80;
     return byte;
-}
-
-test "the joystick holds directions and buttons beside the keyboard when enabled" {
-    var keys: Keys = .{};
-    keys.controller(.{ .controller_axis = .{ .controller = @fromBackingInt(@intCast(0)), .axis = .left_x, .value = 20000 } });
-    keys.controller(.{ .controller_button_down = .{ .controller = @fromBackingInt(@intCast(0)), .button = .a } });
-    try std.testing.expectEqual(@as(u8, 0), keys.read(false));
-    try std.testing.expectEqual(@as(u8, 0x48), keys.read(true));
-    // A small deflection is the centre; the keyboard adds its own bits.
-    keys.controller(.{ .controller_axis = .{ .controller = @fromBackingInt(@intCast(0)), .axis = .left_x, .value = 4000 } });
-    keys.press(.space, true, false);
-    try std.testing.expectEqual(@as(u8, 0x60), keys.read(true));
-    // A modal screen releases the keyboard's keys but not what the joystick holds.
-    keys.release();
-    try std.testing.expectEqual(@as(u8, 0x40), keys.read(true));
-    keys.controller(.{ .controller_button_up = .{ .controller = @fromBackingInt(@intCast(0)), .button = .a } });
-    keys.controller(.{ .controller_button_down = .{ .controller = @fromBackingInt(@intCast(0)), .button = .dpad_up } });
-    try std.testing.expectEqual(@as(u8, 0x01), keys.read(true));
-    keys.controller(.{ .controller_removed = @fromBackingInt(@intCast(0)) });
-    try std.testing.expectEqual(@as(u8, 0), keys.read(true));
-}
-
-test "a key held through a modal screen counts again only once pressed anew" {
-    var keys: Keys = .{};
-    keys.press(.enter, true, false);
-    try std.testing.expectEqual(@as(u8, 0x10), keys.held);
-    keys.release();
-    try std.testing.expectEqual(@as(u8, 0), keys.held);
-    keys.press(.enter, true, false);
-    try std.testing.expectEqual(@as(u8, 0), keys.held);
-    keys.press(.enter, true, true);
-    try std.testing.expectEqual(@as(u8, 0x10), keys.held);
-    keys.release();
-    keys.press(.enter, false, false);
-    keys.press(.enter, true, false);
-    try std.testing.expectEqual(@as(u8, 0x10), keys.held);
-}
-
-test "diagonals keep the last single direction with the current buttons" {
-    var keys: Keys = .{};
-    try std.testing.expectEqual(@as(u8, 0x08), keys.collapse(0x08));
-    try std.testing.expectEqual(@as(u8, 0x48), keys.collapse(0x49));
-    try std.testing.expectEqual(@as(u8, 0x03), keys.collapse(0x03));
-    try std.testing.expectEqual(@as(u8, 0x23), keys.collapse(0x25));
 }

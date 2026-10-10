@@ -13,6 +13,7 @@ const content_level = @import("../content/level.zig");
 const level_codes = @import("../content/level_codes.zig");
 const settings = @import("../settings.zig");
 const key_latch = @import("../key_latch.zig");
+const input_mod = @import("../input.zig");
 pub const Stage = enum {
     branding,
     introduction,
@@ -276,8 +277,9 @@ pub const Scene = struct {
         if (self.player != null) return;
         const confirm = key == .enter or key == .space or key == .left_shift or key == .right_shift;
         if (self.stage != .menu) return;
-        if (self.view != .password and key_latch.isDirection(key) and
-            !self.direction_repeat.accept(press, input.time_ns)) return;
+        const direction = if (input_mod.keyAction(key)) |action| action.isDirection() else false;
+        if (self.view != .password and direction and
+            !self.direction_repeat.accept(press.repeat, input.time_ns)) return;
         switch (self.view) {
             .main => {
                 if (key == .up or key == .down) self.idle_since_ns = input.time_ns;

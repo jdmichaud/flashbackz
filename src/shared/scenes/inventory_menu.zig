@@ -5,7 +5,7 @@ const sprite = @import("../content/sprite.zig");
 const font_mod = @import("../content/font.zig");
 const sprites = @import("../render/sprite.zig");
 const text = @import("../render/text.zig");
-const platform = @import("../platform.zig");
+const input_mod = @import("../input.zig");
 
 pub const Input = struct {
     right: bool = false,
@@ -22,31 +22,28 @@ const Directions = struct {
     down: bool = false,
 };
 
-/// Navigation consumes a key make, including a repeated key-down event. Score keys remain
-/// held. Mixed axes retain the preceding sampled directions, as in gameplay input.
+/// Navigation consumes a make, including a repeated key-down event. The buttons remain held,
+/// as the input byte's bits: Shift, Space or Return shows the score, Tab or Backspace closes.
+/// Mixed axes retain the preceding sampled directions, as in gameplay input.
 pub const Keys = struct {
     directions: Directions = .{},
     previous: Directions = .{},
-    left_shift: bool = false,
-    right_shift: bool = false,
-    space: bool = false,
-    enter: bool = false,
-    tab: bool = false,
+    /// The buttons held, as input bits.
+    buttons: u8 = 0,
 
-    /// Other keys, P and the function keys included, do nothing here (P's film pause is the
-    /// game's).
-    pub fn key(self: *Keys, code: platform.Key, down: bool) void {
-        switch (code) {
+    /// Escape does nothing here.
+    pub fn action(self: *Keys, pressed: input_mod.Action, down: bool) void {
+        switch (pressed) {
             .right => self.directions.right = down,
             .left => self.directions.left = down,
             .up => self.directions.up = down,
             .down => self.directions.down = down,
-            .left_shift => self.left_shift = down,
-            .right_shift => self.right_shift = down,
-            .space => self.space = down,
-            .enter => self.enter = down,
-            .tab => self.tab = down,
-            else => {},
+            .use, .gun, .act, .inventory => if (down) {
+                self.buttons |= pressed.bit();
+            } else {
+                self.buttons &= ~pressed.bit();
+            },
+            .pause => {},
         }
     }
 
@@ -60,8 +57,8 @@ pub const Keys = struct {
             .left = selected.left,
             .up = selected.up,
             .down = selected.down,
-            .score = self.left_shift or self.right_shift or self.space or self.enter,
-            .close = self.tab,
+            .score = self.buttons & (input_mod.Action.use.bit() | input_mod.Action.gun.bit() | input_mod.Action.act.bit()) != 0,
+            .close = self.buttons & input_mod.Action.inventory.bit() != 0,
         };
     }
 };
@@ -268,27 +265,26 @@ test "centered score text retains the interface's four-pixel placement grid" {
 
 test "navigation consumes makes and mixed axes retain the preceding sample" {
     var keys: Keys = .{};
-    keys.key(.right, true);
+    keys.action(.right, true);
     try std.testing.expect(keys.sample().right);
-    keys.key(.left, true);
-    keys.key(.up, true);
+    keys.action(.left, true);
+    keys.action(.up, true);
     try std.testing.expect(keys.sample().right);
-    keys.key(.up, false);
+    keys.action(.up, false);
     try std.testing.expect(keys.sample().left);
     try std.testing.expect(!keys.sample().left);
     // An explicit repeated make re-arms navigation without needing a release.
-    keys.key(.left, true);
+    keys.action(.left, true);
     try std.testing.expect(keys.sample().left);
-    keys.key(.left_shift, true);
-    keys.key(.right_shift, true);
-    keys.key(.left_shift, false);
+    keys.action(.act, true);
     try std.testing.expect(keys.sample().score);
-    keys.key(.right_shift, false);
+    keys.action(.act, false);
     try std.testing.expect(!keys.sample().score);
-    keys.key(.left_ctrl, true);
-    try std.testing.expect(!keys.sample().score);
-    keys.key(.space, true);
+    keys.action(.gun, true);
     try std.testing.expect(keys.sample().score);
-    for ([_]platform.Key{ .p, .f1, .f2, .f3, .escape }) |code| keys.key(code, true);
+    keys.action(.pause, true);
     try std.testing.expect(keys.sample().score);
+    try std.testing.expect(!keys.sample().close);
+    keys.action(.inventory, true);
+    try std.testing.expect(keys.sample().close);
 }
