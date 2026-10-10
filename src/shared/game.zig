@@ -21,6 +21,7 @@ const save = @import("save.zig");
 const save_slots = @import("scenes/save_slots.zig");
 const megadrive = @import("content/megadrive.zig");
 const audio_output = @import("audio/output.zig");
+const content_check = @import("content_check.zig");
 pub const Entry = union(enum) {
     automatic,
     menu_development,
@@ -124,6 +125,7 @@ pub const Game = struct {
             picture_pixels * platform.RgbaFrame.bytes_per_pixel,
         );
         errdefer allocator.free(rgba);
+        if (assets) |source| if (data) |files| try content_check.check(allocator, source, files);
         const settings = settings_mod.load(storage);
         const tunes = try loadTunes(allocator, assets);
         errdefer if (tunes) |t| freeTunes(allocator, t);
