@@ -220,11 +220,14 @@ pub const Tracker = struct {
         self.pad_latched |= self.pads.held();
     }
 
-    /// A modal screen ends: the keys held stay as the latch left them, and the pads count again
-    /// at once, as the original polls the joystick again.
+    /// A modal screen ends: what is held still counts again only once released, the pads'
+    /// buttons as the keys, so that the button that closed it does not act in play (PLAN
+    /// GS-3c; the original's polled joystick would count it at once). A pad's direction goes on.
     pub fn unlatch(self: *Tracker) void {
-        self.latch();
-        self.pad_latched = 0;
+        self.ignored |= self.down;
+        self.held = 0;
+        // Directions go on at once; buttons wait for their release.
+        self.pad_latched = self.pads.held() & 0xf0;
     }
 
     pub fn lose(self: *Tracker) void {
@@ -276,9 +279,9 @@ test "the joystick holds directions and buttons beside the keyboard when enabled
     _ = keys.apply(.{ .controller_axis = .{ .controller = pad(0), .axis = .left_x, .value = 4000 } });
     _ = keys.apply(.{ .key_down = .{ .key = .space } });
     try std.testing.expectEqual(@as(u8, 0x60), keys.read(true));
-    // A modal screen that ends releases the keyboard's keys but not what the joystick holds.
+    // A modal screen that ends holds back what is held, the joystick's as the keys'.
     keys.unlatch();
-    try std.testing.expectEqual(@as(u8, 0x40), keys.read(true));
+    try std.testing.expectEqual(@as(u8, 0), keys.read(true));
     _ = keys.apply(.{ .controller_button_up = .{ .controller = pad(0), .button = .a } });
     _ = keys.apply(.{ .controller_button_down = .{ .controller = pad(0), .button = .dpad_up } });
     try std.testing.expectEqual(@as(u8, 0x01), keys.read(true));
@@ -332,7 +335,7 @@ test "diagonals keep the last single direction with the current buttons" {
     try std.testing.expectEqual(@as(u8, 0x23), keys.collapse(0x25));
 }
 
-test "under a modal screen's latch a pad button held counts once, then again when the screen ends" {
+test "under a modal screen's latch, and after it, a pad button held counts once until released" {
     var keys: Tracker = .{};
     _ = keys.apply(.{ .controller_button_down = .{ .controller = pad(0), .button = .a } });
     try std.testing.expectEqual(@as(u8, 0x40), keys.read(true));
@@ -345,7 +348,10 @@ test "under a modal screen's latch a pad button held counts once, then again whe
     try std.testing.expectEqual(@as(u8, 0x40), keys.read(true));
     keys.latch();
     try std.testing.expectEqual(@as(u8, 0), keys.read(true));
-    // The screen ends: still held, it counts at once.
+    // The screen ends: still held, it counts only once released and pressed again.
     keys.unlatch();
+    try std.testing.expectEqual(@as(u8, 0), keys.read(true));
+    _ = keys.apply(.{ .controller_button_up = .{ .controller = pad(0), .button = .a } });
+    _ = keys.apply(.{ .controller_button_down = .{ .controller = pad(0), .button = .a } });
     try std.testing.expectEqual(@as(u8, 0x40), keys.read(true));
 }

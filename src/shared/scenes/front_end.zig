@@ -379,15 +379,16 @@ pub const Scene = struct {
         self.password_length += 1;
     }
 
-    /// A pad's press on the pages (PLAN GS-3): the D-pad moves, A, X or START chooses, B goes
-    /// back; B on the main page does not quit. Films take the pad's buttons as raw events.
+    /// A pad's press on the pages (PLAN GS-3c): the D-pad moves, A, B and X choose as Shift,
+    /// Space and Return do, START goes back as Escape does, except on the main page, where it
+    /// chooses rather than quits. Films take the pad's buttons as raw events.
     pub fn pad(self: *Scene, change: input_mod.Change, time_ns: u64) !void {
         if (!change.down or self.player != null or self.stage != .menu) return;
         if (change.action.isDirection()) {
             if (!self.direction_repeat.accept(change.repeat, time_ns)) return;
         } else if (change.repeat) return;
-        const choose_it = change.action == .act or change.action == .use or change.action == .pause;
-        const back = change.action == .gun;
+        const back = change.action == .pause;
+        const choose_it = !back and !change.action.isDirection();
         switch (self.view) {
             .main => switch (change.action) {
                 .up, .down => {
@@ -396,7 +397,7 @@ pub const Scene = struct {
                     const step: usize = if (change.action == .up) menu_mod.action_count - 1 else 1;
                     self.menu.selected = @fromBackingInt(@as(u3, @intCast((index + step) % menu_mod.action_count)));
                 },
-                else => if (choose_it) try self.choose(),
+                else => if (choose_it or back) try self.choose(),
             },
             .skill => {
                 const selected: u2 = @backingInt(self.pending_difficulty);
@@ -406,13 +407,7 @@ pub const Scene = struct {
                 if (choose_it or back) self.mainMenu();
             },
             .info, .unavailable => if (choose_it or back) self.mainMenu(),
-            .load => if (back) {
-                self.load_page.back();
-                self.leaveLoad();
-            } else {
-                // START chooses here.
-                self.pressLoad(if (change.action == .pause) .use else change.action);
-            },
+            .load => self.pressLoad(change.action),
             .password => try self.padCode(change.action, choose_it, back),
         }
     }
@@ -435,7 +430,7 @@ pub const Scene = struct {
     const pad_characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
     /// The code with a pad: up and down change the character being chosen, right keeps it,
-    /// left drops it or erases the last one, A, X or START enters the code, B erases (or goes
+    /// left drops it or erases the last one, A, B or X enters the code, START erases (or goes
     /// back from an empty code).
     fn padCode(self: *Scene, action: input_mod.Action, enter: bool, back: bool) !void {
         switch (action) {

@@ -376,9 +376,9 @@ pub const Scene = struct {
             const changes = self.keys.apply(event.payload);
             for (changes.slice()) |change| {
                 if (!change.down) continue;
-                // The original's dialog reads only the keyboard; a pad's B or START resumes
-                // (PLAN GS-3).
-                if (change.pad and (change.action == .gun or change.action == .pause)) {
+                // The original's dialog reads only the keyboard. A pad's buttons act as their
+                // keys, except START, which goes back and never abandons the game (PLAN GS-3c).
+                if (change.pad and change.action == .pause) {
                     options.menu.back();
                     continue;
                 }
