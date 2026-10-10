@@ -535,12 +535,13 @@ LOAD dialog in the in game menu is awkward").
   another version's save is shown, not loaded; F5 saves to the quick slot and F9 loads it during
   play. Gate: in the SDL game, a save made in play loads from the title and plays on.
 
-- [ ] **Volume steps that sound even** (user report, 2026-10-10: "Even at 20% it's very loud.
+- [x] **Volume steps that sound even** (user report, 2026-10-10: "Even at 20% it's very loud.
   We should decrease the volume."). The VOLUME option scaled the samples linearly: 20% took only
   14 dB off, and the top half of the range hardly changed what is heard. Each step of 10% now
   takes 4 dB off: 100% plays as before, 50% is -20 dB, 20% is -32 dB, 0% is silent. The levels
   at 100% were measured first: music and effects peak at -12 dBFS. Gate: tests of the curve; the
   agent's audio at 100% is unchanged and at 20% is 32 dB down.
+  - 2026-10-10: done. With the user: whether 100% is still too loud as a default.
 
 ## Code review, 2026-10-10 — `docs/review-2026-10-10.md`
 
