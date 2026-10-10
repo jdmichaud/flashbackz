@@ -746,7 +746,7 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
   in `Game`. Gate: as R1.
 - [x] **P1** The documented build is Debug. Kept (user, 2026-10-10: "Default build is debug."):
   the default build stays Debug, and `--release` keeps Zig's own default.
-- [ ] **P2** Audio latency. SDL's period halves to 512 frames (11.6 ms) and the queue's lead
+- [x] **P2** Audio latency. SDL's period halves to 512 frames (11.6 ms) and the queue's lead
   drops from 50 to 35 ms (a period, a 60 Hz frame and a margin): a sound is heard within about
   47 ms, not 73 (the original: about 12). The trade-off is now explained in
   `audio/output.zig`. Gate: tests; in a Debug build with SDL's real-time disk driver, the
