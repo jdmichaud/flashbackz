@@ -544,6 +544,13 @@ decision needed): the MUSIC option controls the Mega Drive tunes (D2); the anima
 movement and sounds move into the data set, as DESIGN 4 already says (D5); content is checked at
 load and fails loudly there, devices are adapted to (D6).
 
+- [ ] **B4 and D4 — No placeholder game** (user, 2026-10-10: "What is this placeholder??? It's
+  like a game. Sounds like one from the 80s."). The template's smoke program (a bouncing ball, a
+  click at each bounce, F2/F3 saving it, TITLE.TXT) and the template code nothing uses leave the
+  product. Without its game files the game stops with a message naming what is missing and how
+  to give it, in both hosts; `zig build smoke` checks that path. Gate: tests; the SDL game and
+  the agent without disks print the message and exit with an error status; with disks the
+  keyboard sessions keep their hashes.
 - [ ] **B1** Using any of the city's four map terminals ends the game. High.
 - [ ] **B2** An audio device granting another format ends the game or overruns a buffer. High on
   Windows. With D2.
