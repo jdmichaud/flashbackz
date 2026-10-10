@@ -314,6 +314,13 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   tests; each host's message for a missing disk.
   - 2026-10-09: both hosts and --extract print "cannot open the disk disk1.img: not found".
 
+- [ ] A standalone build (user request, 2026-10-10): `zig build -Ddisk1=PATH -Ddisk2=PATH
+  [-Dmegadrive=PATH]` checks the user's files and builds them into flashbackz-sdl, which then
+  plays with no argument (the DOS edition, with the Mega Drive tunes when the cartridge is
+  built in); paths on the command line still take precedence. Such an executable holds the
+  original game: it is never committed nor distributed. Gate: a build with the files and one
+  without; the bundled SDL game starts with no argument; a wrong file stops the build.
+
 ## Mega Drive music during play — user decision, 2026-10-09
 
 An addition to the DOS edition: the tunes the Mega Drive edition plays during play, sounding
