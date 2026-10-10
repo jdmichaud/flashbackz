@@ -635,7 +635,9 @@ load and fails loudly there, devices are adapted to (D6).
   state stay. Gate: a test of a 401-event burst; the keyboard sessions keep their hashes.
   - 2026-10-10: done; 269 tests.
 - [ ] **B12** The Mega Drive cartridge reader is not overflow-safe; its checksum check can be
-  bypassed.
+  bypassed. The game checks the cartridge however the files give it, the reader widens its
+  addresses and refuses a tune without rows. Gate: an all-0xFF cartridge is refused in a Debug
+  test; a bogus MEGADRIVE.MD in an asset directory is refused, the real one plays.
 - [ ] **B13** The extractor's robustness on an unexpected edition.
 - [ ] **B14** Smaller confirmed defects (the review's list).
 - [x] **D1** The engine models the original's memory layout in places. Decided (user,
