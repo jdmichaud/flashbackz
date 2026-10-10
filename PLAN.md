@@ -711,8 +711,21 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
   checks character 0). Gate: tests; traces of all seven levels and the sessions unchanged; the
   agent builds without pkg-config and the game's build then fails, saying why.
   - 2026-10-10: done; 274 tests.
-- [ ] **R1-R5** Readability: unnamed magic numbers, behavior tables' readability, dead code, tests
-  missing or not testing their name, style.
+- [ ] **R1** Unnamed numbers. The timer's rate and tick, and the VGA's frame, are named once in
+  `step_clock.zig`, whose `jungle` cadence becomes `level`; kinds compare by name through
+  `Kind.matches` (the low byte, as the original), with kind 11 named `overlay` and the unnamed
+  kinds 5, 9 and 12 explained; the fall scene, the protection after a hit and `Room.nowhere` are
+  named; the instrument file's fields, the profile's timing fields and the executable's data
+  segment are named. Gate: audio, traces and sessions unchanged.
+- [ ] **R2** Behavior tables' readability: state names, signs of the terrain arguments.
+- [ ] **R3** Dead code: the title's unused notice page, `Player.interactive`,
+  `Screen.writeRgba`, `contacts.Registration`, the unreachable Retry to the title, and
+  `unused_parameters` (accepted, no longer kept). `placement` stays, documented: it is the
+  character's identity when comparing with the original. Gate: as R1.
+- [ ] **R4** Tests missing, and tests that don't test their name.
+- [ ] **R5** Style: no inline `@import` (vendored sorz code excepted), `presence.zig`'s imports
+  at the top, one meaning per alias (`score`, `music_player`), the film's duration named as such
+  in `Game`. Gate: as R1.
 - [x] **P1** The documented build is Debug. Kept (user, 2026-10-10: "Default build is debug."):
   the default build stays Debug, and `--release` keeps Zig's own default.
 - [ ] **P2** Audio latency.
