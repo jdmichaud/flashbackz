@@ -22,7 +22,8 @@ const map_limit = 14 * room_width;
 const name_scale = 14;
 const number_scale = 6;
 const note_scale = 4;
-const glow_strength = 1.1;
+/// How bright each map's light is just outside its rooms: its brightest channel, of 255.
+const glow_edge = 48;
 
 const name_color: draw.Rgb = .{ 238, 238, 246 };
 const note_color: draw.Rgb = .{ 150, 150, 162 };
@@ -73,7 +74,7 @@ pub fn render(allocator: std.mem.Allocator, font: *const Font, levels: []const L
     for (levels, blocks, 1..) |*level, *block, number| {
         const accent = draw.hue(level.hue, 0.58, 0.96);
         const x: i32 = margin + label_width + label_gap;
-        try canvas.glow(allocator, &block.image, x, y, glow_strength);
+        try canvas.glow(allocator, &block.image, x, y, glow_edge);
         canvas.draw(&block.image, x, y);
         for (block.tags) |t| canvas.tag(font, t.letter, x + t.x, y + t.y, accent);
         drawLabel(&canvas, font, level, number, @intCast(block.image.height), y, accent);

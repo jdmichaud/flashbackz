@@ -87,15 +87,17 @@ pub const Canvas = struct {
     }
 
     /// Adds the light `image` (at x, y) casts around it: its colors averaged over 16-pixel
-    /// blocks, blurred (a Gaussian of 160 pixels' deviation), scaled by `strength` and
-    /// stretched back, out to 512 pixels beyond its edges.
+    /// blocks, blurred (a Gaussian of 160 pixels' deviation) and stretched back, out to 512
+    /// pixels beyond its edges. The light is scaled so that just outside its rooms (the blocks
+    /// beside covered ones) its brightest channel averages `edge`: a dark map glows as much as
+    /// a bright one, each in its own colors.
     pub fn glow(
         self: *Canvas,
         allocator: std.mem.Allocator,
         image: *const Image,
         x: i32,
         y: i32,
-        strength: f32,
+        edge: f32,
     ) !void {
         const block = 16;
         const pad = 512;
@@ -107,17 +109,23 @@ pub const Canvas = struct {
         const small = try allocator.alloc(f32, small_w * small_h * 3);
         defer allocator.free(small);
         @memset(small, 0);
+        const lit = try allocator.alloc(bool, small_w * small_h);
+        defer allocator.free(lit);
+        @memset(lit, false);
         for (0..image.height) |row| for (0..image.width) |column| {
             const from = row * image.width + column;
             if (!image.covered[from]) continue;
             const sx = (column + pad) / block;
             const sy = (row + pad) / block;
             if (sx >= small_w or sy >= small_h) continue;
+            lit[sy * small_w + sx] = true;
             for (0..3) |c| small[(sy * small_w + sx) * 3 + c] += @floatFromInt(image.rgb[from * 3 + c]);
         };
         for (small) |*v| v.* /= block * block;
         try blur(allocator, small, small_w, small_h, sigma);
-        for (small) |*v| v.* *= strength;
+        const at_edge = edgeLight(small, lit, small_w, small_h);
+        const scale = if (at_edge > 0) edge / at_edge else 0;
+        for (small) |*v| v.* *= scale;
 
         // Bilinear, sample centers aligned, clamped at the edges.
         const scale_x = @as(f32, @floatFromInt(small_w)) / @as(f32, @floatFromInt(full_w));
@@ -206,6 +214,23 @@ pub fn hue(degrees: f32, saturation: f32, value: f32) Rgb {
     return result;
 }
 
+/// The mean of the brightest channel of `light` over the blocks just outside the lit ones: not
+/// lit themselves, beside one that is.
+fn edgeLight(light: []const f32, lit: []const bool, width: usize, height: usize) f32 {
+    var total: f32 = 0;
+    var count: usize = 0;
+    for (0..height) |sy| for (0..width) |sx| {
+        const i = sy * width + sx;
+        if (lit[i]) continue;
+        const beside = (sx > 0 and lit[i - 1]) or (sx + 1 < width and lit[i + 1]) or
+            (sy > 0 and lit[i - width]) or (sy + 1 < height and lit[i + width]);
+        if (!beside) continue;
+        total += @max(light[i * 3], @max(light[i * 3 + 1], light[i * 3 + 2]));
+        count += 1;
+    };
+    return if (count == 0) 0 else total / @as(f32, @floatFromInt(count));
+}
+
 /// A separable Gaussian blur of an RGB float image, black beyond its edges.
 fn blur(allocator: std.mem.Allocator, pixels: []f32, width: usize, height: usize, sigma: f32) !void {
     const radius: usize = @intFromFloat(@ceil(sigma * 3));
@@ -265,8 +290,18 @@ test "a map's glow lights the black around it and leaves far pixels dark" {
     image.paste(&white, 32, 32, 0, 0);
     var canvas = try Canvas.init(allocator, 1200, 1200);
     defer canvas.deinit(allocator);
-    try canvas.glow(allocator, &image, 584, 584, 1.0);
+    try canvas.glow(allocator, &image, 584, 584, 48);
     const near = (600 * 1200 + 640) * 3;
     try std.testing.expect(canvas.rgb[near] > 0);
     try std.testing.expectEqual(@as(u8, 0), canvas.rgb[0]);
+
+    // A dark map glows as brightly at its edges, in its own color.
+    var dark = try Image.init(allocator, 32, 32);
+    defer dark.deinit(allocator);
+    const gray: [32 * 32 * 3]u8 = @splat(48);
+    dark.paste(&gray, 32, 32, 0, 0);
+    var dark_canvas = try Canvas.init(allocator, 1200, 1200);
+    defer dark_canvas.deinit(allocator);
+    try dark_canvas.glow(allocator, &dark, 584, 584, 48);
+    try std.testing.expect(@abs(@as(i16, canvas.rgb[near]) - dark_canvas.rgb[near]) <= 1);
 }
