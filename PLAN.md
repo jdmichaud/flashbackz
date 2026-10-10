@@ -49,7 +49,8 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   - [x] Film input as the original (flashback-re engine-presentation 6.1a): a fresh press of
     Backspace or Tab skips a film (films play with the key latch on, so a key held when a film
     opens does not skip it); P pauses the pictures while the music plays on; Escape, Enter,
-    Space and Shift do not skip (Enter, Space and Shift still turn interactive pages). With the
+    Space and Shift do not skip (Enter, Space and Shift still turn interactive pages). Escape
+    skips again since 2026-10-09 (the user's decision, below). With the
     joystick option its inventory button skips too. Gate: agent runs of the introduction and an
     in-game film with each key.
     - 2026-10-09, agent: on LOGOS, Tab or Backspace starts INTRO1 and a second press reaches the
@@ -98,7 +99,8 @@ Browser/WebAssembly support is excluded by the user; native Linux is the current
   behavior table, and the engine regression checks all of them against each capture. They were:
   the jungle holocube; the Conrad movement pass; demo playback through the shared simulation;
   collectibles, credits and stones; the leftward visibility continuation; the carried force
-  field; fuse repair; identity card and employment; interactive film pages; mission terminals;
+  field; fuse repair; identity card and employment; interactive film pages (the city's map
+  terminals were not covered; review B1 fixed them, 2026-10-10); mission terminals;
   the courier, android, reactor and escort assignments; the bar and forger; city police and
   rescued civilians; shared enemy families (robots and ceiling guns included); energy
   generators; the item-aid NPCs; trading; world messages; keys, cards and locks; the
@@ -763,6 +765,14 @@ animation's last frame into the file's next bytes, so a data-set copy would carr
 - [ ] **Documentation**: the wrong or stale claims of the review's section 5, in DESIGN.md,
   README.md, docs and code comments. The user granted (2026-10-10) correcting DESIGN.md's
   statements of fact so they describe what exists; changes to its rules still need approval.
+  Done: DESIGN's facts (the Windows cross-build, characters by index, synchronous reads,
+  what fails loudly and where, the vocabulary's real syntax, the catch-up walk's exception),
+  `docs/process.md` (no addresses in comments, as AGENTS.md says), the build's and README's
+  claims (the accepted cartridge, the standalone build's condition, typos; the build lines are
+  the user's), and the code comments listed. The file name rules become as portable as they
+  claim (no Windows device names, no trailing dot). Kept: the vendored sorz files' comments,
+  unaltered as DESIGN 6 wants; AGENTS.md's `signal(gunman)` example is the user's text.
+  Gate: tests; the sessions unchanged.
 
 ## Mega Drive music during play — user decision, 2026-10-09
 
