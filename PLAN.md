@@ -505,7 +505,7 @@ LOAD dialog in the in game menu is awkward").
     released, and at once when the screen ends). Keyboard and pad sessions keep their hashes.
     No world message is near enough to a level's start for an agent session.
   - [ ] With the user's pad: one page per press when talking to someone.
-- [ ] **GS-3c — The pad's buttons act as their keys on the menus** (user report, 2026-10-10:
+- [x] **GS-3c — The pad's buttons act as their keys on the menus** (user report, 2026-10-10:
   GUN "will exit the menu and have Conrad draw his gun which is inconsistent with the other
   buttons"). On every menu page A, B and X act as Shift, Space and Return: they choose; START acts
   as Escape: back, never abandoning the game, and on the title's main page it chooses. When a
@@ -513,6 +513,9 @@ LOAD dialog in the in game menu is awkward").
   replaces GS-3b's "counts again at once"). Gate: tests; the agent's B chooses on the dialog and
   the slots' page and START goes back; after the dialog closes on a held button Conrad does not
   act; keyboard sessions keep their hashes.
+  - 2026-10-10: 268 tests. Agent: the options dialog closed with B held until well after ends
+    in the same state as closed with START (Conrad does not draw his gun); B on the slots' page
+    saves into the quick slot. Keyboard sessions keep their hashes against the build before.
 - [x] **GS-4 — The save** — A save holds the level, difficulty, score, random generator, what is
   carried between levels, the world (every character, the terrain, contacts, mailboxes, the
   save terminal's checkpoint) and the level's play state; art, sound and pictures are reloaded
