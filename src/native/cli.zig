@@ -92,17 +92,22 @@ pub fn fromArgs(args: anytype, diagnostic: *clap.Diagnostic) clap.Error!Options 
             diagnostic.* = .{ .argument = Args.flagName(given.option), .value = "--extract" };
             return error.ExcludedOption;
         }
-        if (result.assets == null) {
-            diagnostic.* = .{ .argument = "ASSET_PATH (--extract needs the disks)" };
-            return error.MissingArgument;
-        }
     }
     return result;
 }
 
-/// `--extract`: writes the data set made from the options' disks into the chosen directory and
-/// prints the extraction report. Returns the exit status, after saying what failed if anything.
+/// `--extract`: writes the data set made from the options' disks, or the built-in ones, into the
+/// chosen directory and prints the extraction report. Returns the exit status, after saying what
+/// failed if anything.
 pub fn extractCommand(gpa: std.mem.Allocator, io: std.Io, program: []const u8, options: Options) u8 {
+    if (options.assets == null and options.built_in.disks.len == 0) {
+        var buffer: [256]u8 = undefined;
+        var stderr = std.Io.File.stderr().writerStreaming(io, &buffer);
+        stderr.interface.print("{s}: --extract needs the game's files: give both floppy images " ++
+            "(disk1.img disk2.img) or a directory extracted from them\n", .{program}) catch {};
+        stderr.interface.flush() catch {};
+        return 2;
+    }
     var arena_state: std.heap.ArenaAllocator = .init(gpa);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
@@ -145,12 +150,13 @@ fn writeDataSet(
     options: Options,
     providers: *Providers,
 ) ![]const u8 {
-    var paths: [2][]const u8 = undefined;
-    try providers.openAssets(gpa, io, options.assetPaths(&paths));
+    try providers.openAssets(gpa, io, options);
+    providers.failed = .{ .what = "names file", .path = options.names orelse "" };
     const names: [:0]const u8 = if (options.names) |path|
         try std.Io.Dir.cwd().readFileAllocOptions(io, path, arena, .limited(1 << 20), .of(u8), 0)
     else
         extract.built_in_names;
+    providers.failed = .{ .what = "data set directory", .path = options.extract.? };
     return data_set.writeDirectory(gpa, arena, io, providers.assetSource().?, names, options.extract.?);
 }
 
@@ -180,14 +186,10 @@ pub const Options = struct {
     megadrive: ?[]const u8 = null,
     /// The standalone build's files, read when no path names them.
     built_in: BuiltIn = .{},
+    /// Where the game saves without `--saves`: the user's save directory, or in memory for the
+    /// agent, whose runs touch no file they are not given.
+    default_saves: enum { user_directory, memory } = .user_directory,
     entry: flashbackz.game.Entry = .automatic,
-
-    /// The asset paths in order, in `buffer`.
-    pub fn assetPaths(self: *const Options, buffer: *[2][]const u8) []const []const u8 {
-        buffer[0] = self.assets orelse return buffer[0..0];
-        buffer[1] = self.second_assets orelse return buffer[0..1];
-        return buffer;
-    }
 
     pub fn addAsset(self: *Options, path: []const u8) error{ MissingValue, TooManyAssets }!void {
         if (path.len == 0) return error.MissingValue;
@@ -287,27 +289,19 @@ pub const Providers = struct {
     ) OpenError!void {
         self.allocator = allocator;
         errdefer self.deinit();
-        self.failed = .{ .what = "save directory", .path = options.saves orelse "" };
-        self.saves_path = if (options.saves) |path|
-            try allocator.dupe(u8, path)
-        else
-            try defaultSaveDirectory(allocator, environ);
-        self.saves = try mapOpen(DirectoryStorage.open(allocator, io, self.saves_path, true));
+        if (options.saves != null or options.default_saves == .user_directory) {
+            self.failed = .{ .what = "save directory", .path = options.saves orelse "" };
+            self.saves_path = if (options.saves) |path|
+                try allocator.dupe(u8, path)
+            else
+                try defaultSaveDirectory(allocator, environ);
+            self.saves = try mapOpen(DirectoryStorage.open(allocator, io, self.saves_path, true));
+        }
         if (options.assets == null and options.built_in.disks.len == 0) {
             self.failed = .{};
             return;
         }
-        self.content = Pack.init(allocator);
-        if (options.assets) |path| {
-            try self.importPath(io, path);
-            if (options.second_assets) |second| try self.importPath(io, second);
-        } else {
-            self.failed = .{ .what = "built-in disks" };
-            for (options.built_in.disks) |image| try self.importImage(image);
-            self.kind = .built_in;
-        }
-        self.failed = .{ .what = "disks' archives" };
-        flashbackz.content.archive.expandAll(&self.content.?) catch |err| return mapImportError(err);
+        try self.importAssets(io, options);
         if (options.megadrive) |file| {
             self.failed = .{ .what = "Mega Drive cartridge", .path = file };
             try self.importCartridge(io, file);
@@ -371,16 +365,23 @@ pub const Providers = struct {
     }
 
     /// Opens only asset paths, for tools that read the game and never save.
-    pub fn openAssets(
-        self: *Providers,
-        allocator: std.mem.Allocator,
-        io: std.Io,
-        paths: []const []const u8,
-    ) OpenError!void {
+    /// Opens the game's files only: the asset paths, else the built-in disks.
+    pub fn openAssets(self: *Providers, allocator: std.mem.Allocator, io: std.Io, options: Options) OpenError!void {
         self.allocator = allocator;
         errdefer self.deinit();
-        self.content = Pack.init(allocator);
-        for (paths) |path| try self.importPath(io, path);
+        try self.importAssets(io, options);
+    }
+
+    fn importAssets(self: *Providers, io: std.Io, options: Options) OpenError!void {
+        self.content = Pack.init(self.allocator);
+        if (options.assets) |path| {
+            try self.importPath(io, path);
+            if (options.second_assets) |second| try self.importPath(io, second);
+        } else {
+            self.failed = .{ .what = "built-in disks" };
+            for (options.built_in.disks) |image| try self.importImage(image);
+            self.kind = .built_in;
+        }
         self.failed = .{ .what = "disks' archives" };
         flashbackz.content.archive.expandAll(&self.content.?) catch |err| return mapImportError(err);
         self.failed = .{};
@@ -453,8 +454,9 @@ pub const Providers = struct {
         return if (self.content) |*content| content.assetSource() else null;
     }
 
-    pub fn storage(self: *Providers) platform.Storage {
-        return self.saves.?.storage();
+    /// The save directory's storage; null when the options save in memory.
+    pub fn storage(self: *Providers) ?platform.Storage {
+        return if (self.saves) |*saves| saves.storage() else null;
     }
 
     pub fn dataSet(self: *const Providers) ?*const flashbackz.behavior.data_set.Files {
@@ -579,7 +581,7 @@ test "the options open a game directory, or none" {
         defer providers.deinit();
         try std.testing.expect(providers.kind != .none);
         try contract.assetContract(providers.assetSource().?);
-        const s = providers.storage();
+        const s = providers.storage().?;
         try s.save("CLI.PT", "position");
         var loaded = try s.load("CLI.PT");
         defer loaded.deinit();
@@ -594,7 +596,7 @@ test "the options open a game directory, or none" {
         defer providers.deinit();
         try std.testing.expectEqual(AssetKind.none, providers.kind);
         try std.testing.expect(providers.assetSource() == null);
-        var names = try providers.storage().listSaves();
+        var names = try providers.storage().?.listSaves();
         names.deinit();
         try std.testing.expectEqualStrings(paths[1], providers.saves_path);
     }

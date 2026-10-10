@@ -64,9 +64,15 @@ pub fn main(init: std.process.Init) !u8 {
     }
     const output = args.value("output") orelse "flashback-levels.png";
 
+    var options: native.cli.Options = .{};
+    for (args.positional("ASSET_PATH")) |path| options.addAsset(path) catch {
+        try err_out.print("flashbackz-atlas: an empty ASSET_PATH\n", .{});
+        try err_out.flush();
+        return 2;
+    };
     var providers: native.Providers = .empty;
     defer providers.deinit();
-    providers.openAssets(gpa, io, args.positional("ASSET_PATH")) catch |err| {
+    providers.openAssets(gpa, io, options) catch |err| {
         try err_out.writeAll("flashbackz-atlas: ");
         try providers.writeFailure(err, err_out);
         try err_out.flush();

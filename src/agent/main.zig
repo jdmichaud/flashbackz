@@ -4,8 +4,8 @@
 //! the same line on every machine; a port builds its scripted tests and its debugging on this.
 //!
 //! The game reads its files from the asset paths (both floppy images, or a directory extracted from
-//! them); without them it stops with a message. With `--saves` it saves there; without it saves
-//! in memory, unless the asset paths give the user's save directory (code review B8).
+//! them); without them it stops with a message. With `--saves` it saves there; without it, in
+//! memory: a run touches no file it is not given.
 const std = @import("std");
 const flashbackz = @import("flashbackz");
 const agent = @import("agent");
@@ -102,7 +102,8 @@ pub fn main(init: std.process.Init) !void {
     if (args.help) return help(io);
     const frames = (args.number(u64, "frames", 0, std.math.maxInt(u64), &diagnostic) catch |err|
         return fail(io, err, diagnostic)) orelse 120;
-    const options = native.cli.fromArgs(args, &diagnostic) catch |err| return fail(io, err, diagnostic);
+    var options = native.cli.fromArgs(args, &diagnostic) catch |err| return fail(io, err, diagnostic);
+    options.default_saves = .memory;
     if (options.extract != null) {
         const status = native.cli.extractCommand(gpa, io, "flashbackz-agent", options);
         if (status != 0) std.process.exit(status);
@@ -180,7 +181,7 @@ pub fn main(init: std.process.Init) !void {
             std.process.exit(2);
         };
         assets = providers.assetSource();
-        storage = providers.storage();
+        if (providers.storage()) |directory| storage = directory;
     }
     if (assets == null) {
         var buffer: [256]u8 = undefined;
