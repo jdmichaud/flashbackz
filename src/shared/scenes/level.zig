@@ -17,7 +17,8 @@ const input_recording = @import("../input_recording.zig");
 const step_clock = @import("../step_clock.zig");
 const key_latch = @import("../key_latch.zig");
 const input_mod = @import("../input.zig");
-const settings = @import("../settings.zig");
+const settings_mod = @import("../settings.zig");
+const Settings = settings_mod.Settings;
 const audio_effects = @import("../audio/effects.zig");
 const megadrive = @import("../content/megadrive.zig");
 const inventory_menu = @import("inventory_menu.zig");
@@ -67,7 +68,6 @@ pub const Scene = struct {
     message_clock: ?step_clock.Clock = null,
     pending: std.ArrayList(platform.Event) = .empty,
     effects: audio_effects.Output = .{},
-    settings: game_options.Settings = .{},
     outcome: Outcome = .playing,
     /// The options dialog, opened with Esc; the world waits while it is open.
     options: ?Options = null,
@@ -111,7 +111,7 @@ pub const Scene = struct {
 
     /// Loads `level` from the data set `files` and the original art and sound in `assets`.
     pub const Setup = struct {
-        difficulty: settings.Difficulty = .normal,
+        difficulty: settings_mod.Difficulty = .normal,
         /// The records' flags as the previous level left them (none in a new game).
         inherited: []const behavior.world.Inherited = &.{},
         /// The Mega Drive edition's tunes, when the user gave its cartridge.
@@ -273,12 +273,14 @@ pub const Scene = struct {
     }
 
     /// Runs the updates due by `now_ns`, at the original's cadence.
-    pub fn update(self: *Scene, now_ns: u64) !void {
+    /// Runs the updates due by `now_ns`, at the original's cadence, with the game's `settings`
+    /// (the options dialog changes them).
+    pub fn update(self: *Scene, now_ns: u64, settings: *Settings) !void {
         if (self.clock == null) {
             self.clock = try step_clock.Clock.init(step_clock.jungle, now_ns);
             // The automatic zoom option lasts for the program run; a permanent zoom does not
             // survive a new game or a continue.
-            self.screen.zoom.automatic = self.settings.zoom == .auto;
+            self.screen.zoom.automatic = settings.zoom == .auto;
         }
         var work: usize = 0;
         while (self.outcome == .playing and self.film == null and self.needsCatchup(now_ns) and
@@ -287,25 +289,25 @@ pub const Scene = struct {
             if (self.options) |*options| {
                 const deadline = options.clock.deadline();
                 options.clock.consume();
-                try self.pollOptions(deadline);
+                try self.pollOptions(deadline, settings);
                 continue;
             }
             if (self.inventory) |*inventory| {
                 const deadline = inventory.clock.deadline();
                 inventory.clock.consume();
-                try self.pollInventory(deadline);
+                try self.pollInventory(deadline, settings.joystick);
                 continue;
             }
             if (self.message_clock) |*clock| {
                 const deadline = clock.deadline();
                 clock.consume();
-                try self.pollMessage(deadline);
+                try self.pollMessage(deadline, settings);
                 continue;
             }
             const deadline = self.clock.?.deadline();
-            const controls = try self.step(deadline);
+            const controls = try self.step(deadline, settings.*);
             if (self.film != null) return;
-            try self.finishFrame(controls, deadline);
+            try self.finishFrame(controls, deadline, settings);
             self.frameWait();
             try self.checkLate(now_ns);
         }
@@ -330,14 +332,14 @@ pub const Scene = struct {
     /// After the walk and the draw, in the original's order: a world message, the zoom's
     /// timers, Esc (the options dialog; it ends a demo), the inventory key, then the flip. A
     /// modal screen holds the rest of the sequence until it closes.
-    fn finishFrame(self: *Scene, controls: u8, now_ns: u64) !void {
+    fn finishFrame(self: *Scene, controls: u8, now_ns: u64, settings: *Settings) !void {
         if (self.outcome != .playing) return;
         self.frame_controls = controls;
         if (self.screen.message != null) return self.openMessage(now_ns);
-        try self.afterMessage(now_ns);
+        try self.afterMessage(now_ns, settings);
     }
 
-    fn afterMessage(self: *Scene, now_ns: u64) !void {
+    fn afterMessage(self: *Scene, now_ns: u64, settings: *Settings) !void {
         self.screen.afterDraw();
         if (self.keys.escape) {
             self.keys.escape = false;
@@ -345,10 +347,10 @@ pub const Scene = struct {
                 self.outcome = .aborted;
                 return;
             }
-            var settings_shown = self.settings;
-            settings_shown.zoom = @fromBackingInt(self.screen.zoom.row());
+            // The dialog shows the zoom the view has.
+            settings.zoom = @fromBackingInt(self.screen.zoom.row());
             self.options = .{
-                .menu = .{ .settings = settings_shown },
+                .menu = .{},
                 .clock = try step_clock.Clock.init(step_clock.inventory, now_ns),
             };
             self.keys.release();
@@ -364,7 +366,7 @@ pub const Scene = struct {
 
     /// The options dialog takes key presses; resuming applies its settings, and abandoning the
     /// game leads to the continue screen, as a defeat does.
-    fn pollOptions(self: *Scene, deadline: u64) !void {
+    fn pollOptions(self: *Scene, deadline: u64, settings: *Settings) !void {
         const options = &self.options.?;
         while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
             const event = self.pending.orderedRemove(0);
@@ -372,12 +374,11 @@ pub const Scene = struct {
             // The original's dialog reads only the keyboard.
             for (changes.slice()) |change| {
                 if (change.pad or !change.down) continue;
-                if (options.direction_repeat.registers(change, event.time_ns)) options.menu.press(change.action);
+                if (options.direction_repeat.registers(change, event.time_ns)) options.menu.press(change.action, settings);
             }
         }
         const outcome = options.menu.outcome orelse return;
-        self.settings = options.menu.settings;
-        self.screen.zoom.setRow(@backingInt(self.settings.zoom));
+        self.screen.zoom.setRow(@backingInt(settings.zoom));
         const paused = deadline -| options.clock.origin_ns;
         self.options = null;
         self.keys.release();
@@ -407,7 +408,7 @@ pub const Scene = struct {
     }
 
     /// Enter, Space or Shift turns the page; after the last, play resumes.
-    fn pollMessage(self: *Scene, deadline: u64) !void {
+    fn pollMessage(self: *Scene, deadline: u64, settings: *Settings) !void {
         const held = if (self.demo) |*demo| byte: {
             if (demo.cursor == demo.bytes.len) {
                 self.outcome = .aborted;
@@ -415,7 +416,7 @@ pub const Scene = struct {
             }
             demo.cursor += 1;
             break :byte demo.bytes[demo.cursor - 1];
-        } else self.takeKeys(deadline);
+        } else self.takeKeys(deadline, settings.joystick);
         if (held & 0x70 == 0) return;
         self.keys.release();
         if (try self.screen.nextMessagePage(&self.pack, self.messages)) return;
@@ -423,7 +424,7 @@ pub const Scene = struct {
         const paused = deadline -| self.message_clock.?.origin_ns;
         self.message_clock = null;
         self.clock.?.origin_ns +|= paused;
-        try self.afterMessage(deadline);
+        try self.afterMessage(deadline, settings);
     }
 
     /// Play proper: no film, inventory, message or end of the level. The options dialog does
@@ -439,8 +440,8 @@ pub const Scene = struct {
     }
 
     /// One update with the input held at `deadline`; returns the input byte it used last.
-    fn step(self: *Scene, deadline: u64) !u8 {
-        const held = self.takeKeys(deadline);
+    fn step(self: *Scene, deadline: u64, settings: Settings) !u8 {
+        const held = self.takeKeys(deadline, settings.joystick);
         // Tab or Backspace ends a demo.
         if (self.demo != null and held & 0x80 != 0) {
             self.outcome = .aborted;
@@ -460,7 +461,7 @@ pub const Scene = struct {
                 return controls;
             }
         }
-        return self.walks(controls, deadline);
+        return self.walks(controls, deadline, settings);
     }
 
     /// The demo's next input byte, or the keys `held`. Null when the demo has ended.
@@ -478,15 +479,15 @@ pub const Scene = struct {
 
     /// The frame's walk, and after a late frame a catch-up walk with the input read again,
     /// unless the inventory key is held. Returns the input byte read last.
-    fn walks(self: *Scene, controls: u8, deadline: u64) !u8 {
+    fn walks(self: *Scene, controls: u8, deadline: u64, settings: Settings) !u8 {
         const twice = self.catch_up_due and controls & 0x80 == 0;
-        try self.walk(controls, if (twice) .first_of_two else .only);
+        try self.walk(controls, if (twice) .first_of_two else .only, settings.sound_fx);
         if (!twice or self.outcome != .playing) return controls;
         self.catch_up_due = false;
         self.caught_up = true;
         self.catch_up_walks += 1;
-        const again = self.input(self.takeKeys(deadline)) orelse return controls;
-        try self.walk(again, .catch_up);
+        const again = self.input(self.takeKeys(deadline, settings.joystick)) orelse return controls;
+        try self.walk(again, .catch_up, settings.sound_fx);
         return again;
     }
 
@@ -516,27 +517,27 @@ pub const Scene = struct {
 
     /// The film has played: the view reloads after this update's walk, held keys are
     /// released, and the inventory waits again.
-    pub fn finishFilm(self: *Scene, now_ns: u64, paused_for: u64) !void {
+    pub fn finishFilm(self: *Scene, now_ns: u64, paused_for: u64, settings: *Settings) !void {
         self.film = null;
         if (self.outcome != .playing) return;
         self.world.view_dirty = true;
         self.inventory_delay = 10;
         // Keys pressed during the film and held at its end count only once pressed anew.
-        _ = self.takeKeys(now_ns);
+        _ = self.takeKeys(now_ns, settings.joystick);
         self.keys.release();
         self.clock.?.origin_ns +|= paused_for;
         // Films do not leave the zoom, but its pages are rebuilt.
         if (self.screen.zoom.on) self.screen.zoom.enter = true;
-        const controls = try self.walks(self.after_film, now_ns);
-        try self.finishFrame(controls, now_ns);
+        const controls = try self.walks(self.after_film, now_ns, settings.*);
+        try self.finishFrame(controls, now_ns, settings);
         // The film restarted the tick counter: this frame is not late.
         self.frameWait();
     }
 
-    fn walk(self: *Scene, controls: u8, kind: behavior.world.Walk) !void {
+    fn walk(self: *Scene, controls: u8, kind: behavior.world.Walk, sound_fx: bool) !void {
         const outcome = try self.world.update(@bitCast(controls), kind);
         for (self.world.requests.sounds[0..self.world.requests.sound_count]) |sound| {
-            if (self.settings.sound_fx) self.effects.submit(self.pack.sounds, .{
+            if (sound_fx) self.effects.submit(self.pack.sounds, .{
                 .sound = @fromBackingInt(sound.id),
                 .attenuation = @intFromBool(sound.distant),
             });
@@ -600,7 +601,7 @@ pub const Scene = struct {
 
     /// One poll of the inventory: directions move, a button shows the score, the inventory key
     /// closes it and selects the item shown.
-    fn pollInventory(self: *Scene, deadline: u64) !void {
+    fn pollInventory(self: *Scene, deadline: u64, joystick: bool) !void {
         const inventory = &self.inventory.?;
         self.screen.countPasswordFrame();
         while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
@@ -609,7 +610,7 @@ pub const Scene = struct {
             if (event.payload == .focus_lost) inventory.keys = .{};
             // The original polls the joystick here too when the Joystick option is on.
             for (changes.slice()) |change| {
-                if (change.pad and !self.settings.joystick) continue;
+                if (change.pad and !joystick) continue;
                 if (change.down and change.action.isDirection() and
                     !inventory.direction_repeat.accept(change.repeat, event.time_ns)) continue;
                 inventory.keys.action(change.action, change.down);
@@ -649,7 +650,7 @@ pub const Scene = struct {
     }
 
     /// The keys held at `deadline`, from the events that arrived by then.
-    fn takeKeys(self: *Scene, deadline: u64) u8 {
+    fn takeKeys(self: *Scene, deadline: u64, joystick: bool) u8 {
         while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
             const event = self.pending.orderedRemove(0);
             const changes = self.keys.apply(event.payload);
@@ -657,7 +658,7 @@ pub const Scene = struct {
                 if (change.action == .pause) self.keys.escape = change.down;
             }
         }
-        return self.keys.read(self.settings.joystick);
+        return self.keys.read(joystick);
     }
 
     /// Every character's state and inventory links, the score, the view and the random state.
@@ -686,7 +687,7 @@ pub const Scene = struct {
         return hash.final();
     }
 
-    pub fn draw(self: *const Scene, indices: []u8, rgba: []u8) !void {
+    pub fn draw(self: *const Scene, indices: []u8, rgba: []u8, settings: Settings) !void {
         var picture = self.screen.displayed;
         if (self.inventory) |inventory| try inventory.menu.draw(
             self.pack.inventory.artwork(),
@@ -696,14 +697,14 @@ pub const Scene = struct {
             width,
             height,
         );
-        if (self.options) |options| try options.menu.draw(&picture, &self.pack.font);
+        if (self.options) |options| try options.menu.draw(&picture, &self.pack.font, settings);
         self.screen.display(&picture, indices[0..pixel_count]);
         try palette.writeRgba(indices, &self.screen.colors, rgba);
     }
 
-    pub fn pumpAudio(self: *Scene, p: *platform.Platform) !void {
-        self.effects.volume = self.settings.volume;
-        if (self.options != null or !self.settings.sound_fx) return self.effects.stop(p);
+    pub fn pumpAudio(self: *Scene, p: *platform.Platform, settings: Settings) !void {
+        self.effects.volume = settings.volume;
+        if (self.options != null or !settings.sound_fx) return self.effects.stop(p);
         try self.effects.pump(self.pack.sounds, p);
     }
 

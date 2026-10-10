@@ -205,8 +205,8 @@ pub fn main(init: std.process.Init) !void {
                 scene.world.score,
                 scene.catch_up_walks,
                 game.isStoryPlaying(),
-                scene.settings.sound_fx,
-                scene.settings.joystick,
+                game.settings.sound_fx,
+                game.settings.joystick,
             },
         );
     } else if (game.scene == .menu) {

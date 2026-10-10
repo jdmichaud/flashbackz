@@ -16,7 +16,6 @@ const game_options = @import("scenes/game_options.zig");
 const memory = @import("memory.zig");
 const settings_mod = @import("settings.zig");
 const step_clock = @import("step_clock.zig");
-const volume_preference = @import("volume_preference.zig");
 const megadrive = @import("content/megadrive.zig");
 pub const Entry = union(enum) {
     automatic,
@@ -207,7 +206,10 @@ pub const Game = struct {
     saves_written: u32 = 0,
     loads_done: u32 = 0,
     audio: ?platform.AudioFormat = null,
-    preferences: game_options.Settings = .{},
+    /// The player's settings, which the game owns and keeps in storage.
+    settings: settings_mod.Settings = .{},
+    /// The settings as storage last kept them.
+    kept_settings: settings_mod.Settings = .{},
     /// P's toggle, which only films read: they hold their picture while it is set.
     films_paused: bool = false,
     /// The music volume keypad + and - step, 0 to 63, for notes started afterwards.
@@ -255,19 +257,18 @@ pub const Game = struct {
             page_width * page_height * platform.RgbaFrame.bytes_per_pixel,
         );
         errdefer allocator.free(rgba);
-        const preferences: game_options.Settings = .{ .volume = volume_preference.load(storage) };
+        const settings = settings_mod.load(storage);
         const tunes = try loadTunes(allocator, assets);
         errdefer if (tunes) |t| freeTunes(allocator, t);
         if (entry == .level_development) {
             const level = entry.level_development;
-            var scene = try level_scene.Scene.load(
+            const scene = try level_scene.Scene.load(
                 allocator,
                 assets orelse return error.OriginalContentRequired,
                 data orelse return error.DataSetRequired,
                 level,
                 .{ .tunes = tunes },
             );
-            scene.settings = preferences;
             return .{
                 .allocator = allocator,
                 .assets = assets,
@@ -275,7 +276,8 @@ pub const Game = struct {
                 .data = data,
                 .page = page,
                 .rgba = rgba,
-                .preferences = preferences,
+                .settings = settings,
+                .kept_settings = settings,
                 .level = level,
                 .scene = .{ .level = scene },
                 .tunes = tunes,
@@ -296,7 +298,8 @@ pub const Game = struct {
             .data = data,
             .page = page,
             .rgba = rgba,
-            .preferences = preferences,
+            .settings = settings,
+            .kept_settings = settings,
             .scene = scene,
             .tunes = tunes,
         };
@@ -369,6 +372,8 @@ pub const Game = struct {
     pub fn update(self: *Game, p: *platform.Platform) !UpdateResult {
         if (self.phase == .finished) return .finished;
         self.update_count += 1;
+        // What the last update changed: the options dialog, S, J and K.
+        self.keepSettings();
         switch (self.phase) {
             .startup => {
                 _ = try p.start();
@@ -389,6 +394,7 @@ pub const Game = struct {
             .finished => {},
         }
         if (self.phase == .finished) {
+            self.keepSettings();
             if (self.story) |*story| story.stopAudio(p);
             if (self.audio != null) p.audioClose();
             if (self.scene == .menu) self.scene.menu.stopAudio(p);
@@ -398,9 +404,9 @@ pub const Game = struct {
         }
         if (self.scene == .ending) {
             const ending = &self.scene.ending;
-            ending.music_enabled = self.preferences.music;
+            ending.music_enabled = self.settings.music;
             if (ending.music) |*music| {
-                music.volume = self.preferences.volume;
+                music.volume = self.settings.volume;
                 music.player.master_volume = self.music_volume;
             }
             ending.setPaused(self.films_paused, p.nowNs());
@@ -417,9 +423,9 @@ pub const Game = struct {
         }
         if (self.scene == .menu) {
             const front = &self.scene.menu;
-            front.music_enabled = self.preferences.music;
-            front.volume = self.preferences.volume;
-            front.joystick = self.preferences.joystick;
+            front.music_enabled = self.settings.music;
+            front.volume = self.settings.volume;
+            front.joystick = self.settings.joystick;
             front.films_paused = self.films_paused;
             front.music_volume = self.music_volume;
             if (front.stage == .quit) {
@@ -433,14 +439,13 @@ pub const Game = struct {
                     self.demo_index = 0;
                     try front.intro();
                 } else {
-                    var next = try level_scene.Scene.loadDemo(
+                    const next = try level_scene.Scene.loadDemo(
                         self.allocator,
                         self.assets.?,
                         self.data orelse return error.DataSetRequired,
                         self.demo_index,
                         .{ .inherited = &self.inherited, .tunes = self.tunes },
                     );
-                    next.settings = self.preferences;
                     front.deinit();
                     self.scene = .{ .level = next };
                     self.demo_index += 1;
@@ -455,7 +460,7 @@ pub const Game = struct {
                 front.deinit();
                 self.scene = .{ .ending = next };
             } else if (front.stage == .ready) {
-                var next = try level_scene.Scene.load(
+                const next = try level_scene.Scene.load(
                     self.allocator,
                     self.assets.?,
                     self.data orelse return error.DataSetRequired,
@@ -466,7 +471,6 @@ pub const Game = struct {
                         .tunes = self.tunes,
                     },
                 );
-                next.settings = self.preferences;
                 self.level = front.selected_level;
                 self.difficulty = front.difficulty;
                 front.deinit();
@@ -496,7 +500,6 @@ pub const Game = struct {
                             fresh.world.score = level.world.entry_score;
                             fresh.world.entry_score = level.world.entry_score;
                             fresh.world.random = level.world.random;
-                            fresh.settings = level.settings;
                             fresh.catch_up_due = level.catch_up_due;
                             self.retire(level);
                             level.* = fresh;
@@ -539,12 +542,11 @@ pub const Game = struct {
                     film.music,
                     now,
                 );
-                self.story.?.joystick = scene.settings.joystick;
             }
             const story = &self.story.?;
-            story.music_enabled = self.preferences.music;
+            story.music_enabled = self.settings.music;
             if (story.music) |*music| {
-                music.volume = self.preferences.volume;
+                music.volume = self.settings.volume;
                 music.player.master_volume = self.music_volume;
             }
             story.player.setPaused(self.films_paused, now);
@@ -556,21 +558,20 @@ pub const Game = struct {
             story.stopAudio(p);
             story.deinit();
             self.story = null;
-            try scene.finishFilm(now, paused);
+            try scene.finishFilm(now, paused, &self.settings);
         }
         // J's request is served at the next frame of play, outside a demo.
         if (self.joystick_requested and scene.demo == null) {
             self.joystick_requested = false;
-            self.setJoystick(true);
+            self.settings.joystick = true;
         }
-        try scene.update(now);
-        self.applyPreferences(scene.settings);
+        try scene.update(now, &self.settings);
         if (scene.options) |*options| if (options.menu.free_memory_mb == null) {
             if (p.availableMemory()) |bytes| options.menu.free_memory_mb = bytes / (1024 * 1024);
         };
         switch (scene.outcome) {
             .playing => {
-                try scene.pumpAudio(p);
+                try scene.pumpAudio(p, self.settings);
                 return scene.needsCatchup(now);
             },
             .level => |destination| {
@@ -590,7 +591,6 @@ pub const Game = struct {
                 next.world.entry_score = scene.world.score;
                 next.world.random = scene.world.random;
                 next.world.shake = scene.world.shake;
-                next.settings = scene.settings;
                 next.catch_up_due = scene.catch_up_due;
                 scene.stopAudio(p);
                 scene.deinit();
@@ -634,7 +634,7 @@ pub const Game = struct {
             return error.MissingMenu;
         var next = front_end.Scene.init(self.allocator, self.assets.?, art);
         next.difficulty = self.difficulty;
-        next.music_enabled = self.preferences.music;
+        next.music_enabled = self.settings.music;
         return next;
     }
 
@@ -667,7 +667,7 @@ pub const Game = struct {
                         self.phase = .finished;
                         continue;
                     }
-                    if (story.event(event)) continue;
+                    if (story.event(event, self.settings.joystick)) continue;
                     if (self.scene == .level) try self.scene.level.enqueue(event);
                     continue;
                 }
@@ -725,33 +725,21 @@ pub const Game = struct {
             .s => if (!press.repeat and self.story == null and self.scene == .level) {
                 const level = &self.scene.level;
                 if (level.inPlay()) {
-                    level.settings.sound_fx = !level.settings.sound_fx;
-                    if (level.options) |*options| options.menu.settings.sound_fx = level.settings.sound_fx;
+                    self.settings.sound_fx = !self.settings.sound_fx;
                 }
             },
             .j => self.joystick_requested = true,
-            .k => self.setJoystick(false),
+            .k => self.settings.joystick = false,
             else => {},
         }
     }
 
-    /// The joystick option wherever it is kept: the preferences, a level in progress or
-    /// waiting behind the continue screen, its options dialog and its film.
-    fn setJoystick(self: *Game, on: bool) void {
-        self.preferences.joystick = on;
-        if (self.story) |*story| story.joystick = on;
-        if (self.suspended_level) |*level| level.settings.joystick = on;
-        if (self.scene == .level) {
-            const level = &self.scene.level;
-            level.settings.joystick = on;
-            if (level.options) |*options| options.menu.settings.joystick = on;
-        }
-    }
-
-    fn applyPreferences(self: *Game, settings: game_options.Settings) void {
-        const volume_changed = self.preferences.volume != settings.volume;
-        self.preferences = settings;
-        if (volume_changed) volume_preference.save(self.storage, settings.volume) catch {};
+    /// Keeps the settings in storage when they have changed since storage last kept them. A
+    /// failed save is tried again at the next change.
+    fn keepSettings(self: *Game) void {
+        if (std.meta.eql(self.settings, self.kept_settings)) return;
+        settings_mod.save(self.storage, self.settings) catch return;
+        self.kept_settings = self.settings;
     }
 
     fn saveState(self: *Game) void {
@@ -813,7 +801,7 @@ pub const Game = struct {
         if (self.scene == .level) {
             const indices = self.page[0..57344];
             const frame = self.rgba[0 .. 57344 * 4];
-            try self.scene.level.draw(indices, frame);
+            try self.scene.level.draw(indices, frame, self.settings);
             self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
             try p.present(.{ .width = 256, .height = 224, .stride = 256 * 4, .pixels = frame });
             self.frames_presented += 1;
@@ -969,21 +957,18 @@ test "F2 saves through the bound storage, F3 loads it back, and the title comes 
     try testing.expectEqual(@as(u32, 0), bare.saves_written);
 }
 
-test "applied volume survives a new game instance and invalid preferences use defaults" {
+test "settings changed in a game are there in the next, and the old volume record is not read" {
     var store = memory.MemoryStorage.init(testing.allocator);
     defer store.deinit();
-    for ([_]u8{ 50, 0, 100 }) |volume| {
-        var first = try Game.init(testing.allocator, null, store.storage());
-        first.applyPreferences(.{ .volume = volume });
-        first.deinit();
-        var reopened = try Game.init(testing.allocator, null, store.storage());
-        defer reopened.deinit();
-        try testing.expectEqual(volume, reopened.preferences.volume);
-    }
-    for ([_][]const u8{ "101", "-1", "broken", "" }) |record| {
-        try store.storage().save(volume_preference.key, record);
-        var game = try Game.init(testing.allocator, null, store.storage());
-        defer game.deinit();
-        try testing.expectEqual(@as(u8, 100), game.preferences.volume);
-    }
+    try store.storage().save("VOLUME", "50\n");
+    var first = try Game.init(testing.allocator, null, store.storage());
+    try testing.expectEqual(settings_mod.Settings{}, first.settings);
+    first.settings.volume = 30;
+    first.settings.joystick = true;
+    first.keepSettings();
+    first.deinit();
+    var reopened = try Game.init(testing.allocator, null, store.storage());
+    defer reopened.deinit();
+    try testing.expectEqual(@as(u8, 30), reopened.settings.volume);
+    try testing.expect(reopened.settings.joystick);
 }

@@ -1,26 +1,19 @@
-//! The in-game options dialog owns a draft of settings while the world is paused.
+//! The in-game options dialog, while the world is paused: it changes the game's settings as
+//! they are chosen.
 const std = @import("std");
 const input = @import("../input.zig");
 const font = @import("../content/font.zig");
 const text = @import("../render/text.zig");
-pub const Zoom = enum { off, on, auto };
-pub const Settings = struct {
-    volume: u8 = 100,
-    sound_fx: bool = true,
-    music: bool = true,
-    joystick: bool = false,
-    zoom: Zoom = .off,
-};
+const Settings = @import("../settings.zig").Settings;
 pub const Item = enum { resume_game, sound_fx, music, volume, joystick, zoom, abort_game };
 pub const Outcome = enum { resume_game, abort_game };
 pub const Menu = struct {
     selection: Item = .resume_game,
-    settings: Settings,
     outcome: ?Outcome = null,
     free_memory_mb: ?u64 = null,
     /// A press of `action`: up and down choose the row, left and right change it, and a button
     /// or Escape closes the dialog, abandoning the game on ABORT GAME.
-    pub fn press(self: *Menu, action: input.Action) void {
+    pub fn press(self: *Menu, action: input.Action, settings: *Settings) void {
         switch (action) {
             .up => self.selection = @fromBackingInt(@as(
                 u3,
@@ -31,13 +24,13 @@ pub const Menu = struct {
                 @intCast((@as(u8, @backingInt(self.selection)) + 1) % 7),
             )),
             .left, .right => switch (self.selection) {
-                .sound_fx => self.settings.sound_fx = !self.settings.sound_fx,
-                .music => self.settings.music = !self.settings.music,
-                .volume => self.settings.volume = if (action == .right) @min(100, self.settings.volume + 10) else self.settings.volume -| 10,
-                .joystick => self.settings.joystick = !self.settings.joystick,
-                .zoom => self.settings.zoom = @fromBackingInt(@as(
+                .sound_fx => settings.sound_fx = !settings.sound_fx,
+                .music => settings.music = !settings.music,
+                .volume => settings.volume = if (action == .right) @min(100, settings.volume + 10) else settings.volume -| 10,
+                .joystick => settings.joystick = !settings.joystick,
+                .zoom => settings.zoom = @fromBackingInt(@as(
                     u2,
-                    @intCast((@as(u8, @backingInt(self.settings.zoom)) + @as(u8, if (action == .right) 1 else 2)) % 3),
+                    @intCast((@as(u8, @backingInt(settings.zoom)) + @as(u8, if (action == .right) 1 else 2)) % 3),
                 )),
                 else => {},
             },
@@ -45,7 +38,7 @@ pub const Menu = struct {
             .inventory => {},
         }
     }
-    pub fn draw(self: Menu, pixels: []u8, glyphs: *const font.Font) !void {
+    pub fn draw(self: Menu, pixels: []u8, glyphs: *const font.Font, settings: Settings) !void {
         if (pixels.len != 256 * 224) return error.InvalidFrameLength;
         // The original panel uses nine ordinary font glyphs for its rounded frame.
         for (40..192) |y| @memset(pixels[y * 256 + 56 .. y * 256 + 200], 0xe2);
@@ -107,11 +100,11 @@ pub const Menu = struct {
             );
             var volume_text: [4]u8 = undefined;
             const value: ?[]const u8 = switch (@as(Item, @fromBackingInt(@as(u3, @intCast(i))))) {
-                .sound_fx => if (self.settings.sound_fx) "ON  " else "OFF ",
-                .music => if (self.settings.music) "ON  " else "OFF ",
-                .volume => try std.fmt.bufPrint(&volume_text, "{d}%", .{self.settings.volume}),
-                .joystick => if (self.settings.joystick) "ON  " else "OFF ",
-                .zoom => switch (self.settings.zoom) {
+                .sound_fx => if (settings.sound_fx) "ON  " else "OFF ",
+                .music => if (settings.music) "ON  " else "OFF ",
+                .volume => try std.fmt.bufPrint(&volume_text, "{d}%", .{settings.volume}),
+                .joystick => if (settings.joystick) "ON  " else "OFF ",
+                .zoom => switch (settings.zoom) {
                     .off => "OFF ",
                     .on => "ON  ",
                     .auto => "AUTO",
@@ -149,17 +142,18 @@ pub const Menu = struct {
 };
 
 test "options wrap, cycle with horizontal arrows, and apply on Escape or action" {
-    var menu: Menu = .{ .settings = .{} };
-    menu.press(.up);
+    var settings: Settings = .{};
+    var menu: Menu = .{};
+    menu.press(.up, &settings);
     try std.testing.expectEqual(.abort_game, menu.selection);
-    menu.press(.down);
-    menu.press(.down);
-    menu.press(.right);
-    try std.testing.expect(!menu.settings.sound_fx);
-    menu.press(.pause);
+    menu.press(.down, &settings);
+    menu.press(.down, &settings);
+    menu.press(.right, &settings);
+    try std.testing.expect(!settings.sound_fx);
+    menu.press(.pause, &settings);
     try std.testing.expectEqual(@as(?Outcome, .resume_game), menu.outcome);
-    var abort: Menu = .{ .settings = .{} };
-    abort.press(.up);
-    abort.press(.use);
+    var abort: Menu = .{};
+    abort.press(.up, &settings);
+    abort.press(.use, &settings);
     try std.testing.expectEqual(@as(?Outcome, .abort_game), abort.outcome);
 }

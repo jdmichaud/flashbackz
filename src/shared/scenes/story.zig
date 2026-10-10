@@ -10,8 +10,6 @@ pub const Story = struct {
     audio_open: bool = false,
     music_enabled: bool = true,
     skip: bool = false,
-    /// The joystick option: the joystick's buttons turn pages and skip as the keys do.
-    joystick: bool = false,
 
     /// Plays entry `entry` of film `film`, with the music file `music` if any.
     pub fn openFilm(
@@ -63,9 +61,10 @@ pub const Story = struct {
         return false;
     }
     /// The film's keys: Backspace, Tab or Escape skips it, and Enter, Space or Shift turns an
-    /// interactive page. True when the film took the event.
-    pub fn event(self: *Story, input: platform.Event) bool {
-        if (vector.skips(input.payload, self.joystick)) {
+    /// interactive page; with the `joystick` option, the joystick's buttons do as the keys do.
+    /// True when the film took the event.
+    pub fn event(self: *Story, input: platform.Event, joystick: bool) bool {
+        if (vector.skips(input.payload, joystick)) {
             self.skip = true;
             return true;
         }
@@ -76,7 +75,7 @@ pub const Story = struct {
                 else => return false,
             },
             .controller_button_down => |change| switch (change.button) {
-                .a, .b, .x => if (self.joystick) self.player.confirm() else return false,
+                .a, .b, .x => if (joystick) self.player.confirm() else return false,
                 else => return false,
             },
             else => return false,
