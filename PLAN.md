@@ -538,8 +538,11 @@ LOAD dialog in the in game menu is awkward").
 ## Code review, 2026-10-10 — `docs/review-2026-10-10.md`
 
 The review the user asked for (2026-10-10), on commit `a9b6b26`. Each finding here is a
-checkbox; fixing one adds its own plan item first, as usual. Order recommended to the user:
-B1, B4 with D4, B2 with D2, B7, then the rest; D1 waits for the user's decision.
+checkbox; fixing one adds its own plan item first, as usual. Order: B4 with D4 (the user asked
+about the placeholder), B1, B2 with D2, B7, D1, then the rest. Common-sense calls (no user
+decision needed): the MUSIC option controls the Mega Drive tunes (D2); the animations' per-frame
+movement and sounds move into the data set, as DESIGN 4 already says (D5); content is checked at
+load and fails loudly there, devices are adapted to (D6).
 
 - [ ] **B1** Using any of the city's four map terminals ends the game. High.
 - [ ] **B2** An audio device granting another format ends the game or overruns a buffer. High on
@@ -561,8 +564,11 @@ B1, B4 with D4, B2 with D2, B7, then the rest; D1 waits for the user's decision.
   bypassed.
 - [ ] **B13** The extractor's robustness on an unexpected edition.
 - [ ] **B14** Smaller confirmed defects (the review's list).
-- [ ] **D1** The engine models the original's memory layout in places. Needs the user's decision:
-  a documented exception confined to one module, or each case restated as a named game rule.
+- [ ] **D1** The engine models the original's memory layout in places. Decided (user,
+  2026-10-10: "My rules was that we produce a modern maintainable code base. Make things
+  coherent, easy to read and modify. Use your common sense."): each quirk becomes a named game
+  rule where it holds; what truly depends on how the original laid out its data stays exact in
+  one small, explained module.
 - [ ] **D2** One audio device, five owners, no mixer. With B2.
 - [x] **D3** Input state updated in one path only; settings in hand-synchronised copies. Fixed by
   GS-1 and GS-2.
@@ -575,7 +581,8 @@ B1, B4 with D4, B2 with D2, B7, then the rest; D1 waits for the user's decision.
   missing or not testing their name, style.
 - [ ] **P1-P3** Performance: the documented build is Debug, audio latency, minor waste.
 - [ ] **Documentation**: the wrong or stale claims of the review's section 5, in DESIGN.md,
-  README.md, docs and code comments.
+  README.md, docs and code comments. The user granted (2026-10-10) correcting DESIGN.md's
+  statements of fact so they describe what exists; changes to its rules still need approval.
 
 ## Mega Drive music during play — user decision, 2026-10-09
 
