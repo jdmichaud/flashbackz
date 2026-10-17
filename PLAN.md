@@ -805,6 +805,15 @@ flashback-re MD1–MD3.
     tune 68 starts on entering level 2's room 17, where the DOS original asks for it.
   - [ ] The cartridge's own placements (flashback-re MD3), and the other tunes heard in play.
 
+## Source documentation — user request, 2026-10-17
+
+- [ ] **DOC-1 — Comments at the hinges and in the hard code** (user, 2026-10-17: "document the
+  source code better", "the main nexus of the code, where things get hinged together", "the code
+  that is hard to grasp", "Use Simplified Technical English"). Find the places where the parts
+  join (hosts, game, scenes, world) and the code that is hardest to follow. Add short comments
+  there in Simplified Technical English (ASD-STE100). Comments only: the code does not change.
+  Gate: zigfmt clean; tests pass; the agent sessions and traces unchanged.
+
 ## Historical CD implementation/research milestones
 
 The sibling flashback-re plan owns research. Exact fidelity and maintainability are independent
