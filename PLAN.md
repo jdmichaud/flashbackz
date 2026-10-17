@@ -944,10 +944,16 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
     original; no change with the supplied files). The executable's prefix equals the old literal
     and its eighth code holds a 0 byte (scratch checks that print only the answer). Tests
     283/283, smoke and verify, sessions and traces unchanged.
-- [ ] **FX-6 — The fidelity questions, measured before any change.** The music block above 3
+- [x] **FX-6 — The fidelity questions, measured before any change.** The music block above 3
   bits, register 0xc0's connection and feedback bits, and the frame after an animation's last
   frame in `showFrame`: find what the original does and what the supplied files reach. Change
   the code only with that evidence; otherwise the format documents state the limit.
+  - 2026-10-17, `d97798e`: measured with a scratch test and scratch instrumentation, neither
+    committed. The block: the menu cue plays 54 notes of pitch 96 or more inside the 3,901
+    writes that agree exactly with the original, so the original does the same; kept. Register
+    0xc0: the supplied instruments stay in the range where the readings agree; kept, limits
+    stated. The frame past the end: no show of it in the seven levels' trace sessions nor in the
+    three demos; kept. The code records each measurement where it makes the choice.
 - [ ] **DOC-3 — The documents follow.** `docs/formats/` follows FX-1 to FX-6; the flashback-re
   documents that the code contradicts are corrected there, under that repository's own plan.
 
