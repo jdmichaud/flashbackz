@@ -837,6 +837,15 @@ flashback-re MD1–MD3.
       unchecked.
     - The music player's bend also writes to drum voices (ignored registers, and key-on bits
       on channels 7 and 8); not checked against the original.
+- [ ] **DOC-2 — A specification for each file format** (user, 2026-10-17: "For each different
+  format we need a technical specification document written in STE"). One document for each
+  format that the game, the extractor or the atlas reads or writes, in `docs/formats/`, with
+  an index: the original's files (disk images, archives, rooms, sprites, films, sound, the
+  executable's tables) and ours (the data set, the naming overlay, saves, settings, the logs).
+  Files that only work together (SPR and OFF) share one document. Docs only: the code does not
+  change. No original content: no bytes, texts or level codes from the files; synthetic
+  examples only. Gate: every fact checked against the code that reads or writes the format;
+  the index lists every file that the code opens.
 
 ## Historical CD implementation/research milestones
 
