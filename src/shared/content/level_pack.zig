@@ -201,6 +201,7 @@ fn loadRooms(
         };
     }
     // The first room's third bank is the reference the others' actor colors follow.
+    if (first_room >= rooms.len) return error.AbsentRoom;
     const first = rooms[first_room] orelse return error.AbsentRoom;
     const reference_bank = first.palette_banks[2];
     const icon_colors = try palette.decodeLevelBank(colors.bytes, reference_bank);

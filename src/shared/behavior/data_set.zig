@@ -2,6 +2,7 @@
 //! behaviors and characters. Every name is resolved here; the engine works with indices.
 const std = @import("std");
 const vocabulary = @import("vocabulary.zig");
+const collision = @import("../content/collision.zig");
 const Zoir = std.zig.Zoir;
 const Node = Zoir.Node;
 
@@ -263,6 +264,15 @@ pub fn load(
     }
     if (characters.len == 0 or characters[0].kind != .player) {
         return fail(diagnostic, "characters.zon: the first character must be the player", .{});
+    }
+    if (characters[0].room) |room| {
+        if (room >= collision.rooms) {
+            return fail(
+                diagnostic,
+                "characters.zon: the player must start in a room from 0 to 63",
+                .{},
+            );
+        }
     }
     return .{
         .behaviors = loaded,
@@ -1111,6 +1121,12 @@ const conrad = ".placement = 0, .behavior = .guard, .start = .idle, .room = 1, .
 const player = ".kind = .player, .position = .{ .x = 10, .y = 70 }, .width = 1, .active = true";
 
 test "the loader refuses what the engine cannot run, saying why" {
+    try expectRejected(
+        ".{ .conrad = .{ .placement = 0, .behavior = .guard, .start = .idle, .room = 64, " ++
+            ".facing = .right, .health = 4, .minimum_difficulty = .easy, " ++ player ++ " } }",
+        "",
+        "characters.zon: the player must start in a room from 0 to 63",
+    );
     try expectRejected(
         ".{ .conrad = .{ " ++ conrad ++ player ++ ", .activ = true } }",
         "",
