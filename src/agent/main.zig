@@ -84,7 +84,7 @@ const Args = clap.Parser(.{
             .repeats = true,
             .help = "load SLOT at the end of host frame F",
         },
-        .{ .long = "trace", .help = "print the level's state hash after each of its walks" },
+        .{ .long = "trace", .help = "print the level's state hash after each frame it walked in" },
         .{
             .long = "stall",
             .value = "F:MS",
@@ -270,6 +270,9 @@ pub fn main(init: std.process.Init) !void {
         });
     }
     const trace = args.flag("trace");
+    // The game's walks when the trace last wrote: they count on across levels, so a new level
+    // whose count meets the old one's still writes. A frame can hold several walks; its line
+    // gives the level's count after them.
     var traced_walks: u64 = 0;
     var frame: u64 = 0;
     while (frame < frames) : (frame += 1) {
@@ -326,11 +329,11 @@ pub fn main(init: std.process.Init) !void {
             }
         }
         if (try game.update(&p) == .finished) break;
-        if (trace and game.scene == .level and game.scene.level.walk_count != traced_walks) {
-            traced_walks = game.scene.level.walk_count;
+        if (trace and game.scene == .level and game.playedWalks() != traced_walks) {
+            traced_walks = game.playedWalks();
             std.debug.print("{{\"frame\":{d},\"walks\":{d},\"state_hash\":\"{x:0>16}\"}}\n", .{
                 frame,
-                traced_walks,
+                game.scene.level.walk_count,
                 game.scene.level.stateHash(),
             });
         }
@@ -339,22 +342,24 @@ pub fn main(init: std.process.Init) !void {
                 game.loadGame(action.slot)
             else
                 game.saveGame(&p, action.slot);
-            result catch |err|
+            const done = if (result) |_| true else |err| failed: {
                 std.debug.print("flashbackz-agent: {s} {s}: {s}\n", .{
                     if (action.load) "load" else "save",
                     action.slot,
                     @errorName(err),
                 });
+                break :failed false;
+            };
             if (trace) {
-                std.debug.print("{{\"frame\":{d},\"{s}\":\"{s}\"}}\n", .{
+                std.debug.print("{{\"frame\":{d},\"{s}\":{f}}}\n", .{
                     frame,
                     if (action.load) "load" else "save",
-                    action.slot,
+                    std.json.fmt(action.slot, .{}),
                 });
             }
-            // A loaded level counts its walks from none.
-            if (action.load) {
-                traced_walks = 0;
+            // A loaded game counts its walks from the save's; the next walk writes.
+            if (action.load and done) {
+                traced_walks = game.playedWalks();
             }
         };
         backend.advance(frame_ns);
