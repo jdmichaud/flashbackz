@@ -820,7 +820,8 @@ flashback-re MD1–MD3.
     the file formats (rooms, sprites, films, archives, rule records). Wrong or stale comments
     fixed on the way. With comments removed, every file equals its earlier version; zigfmt
     clean; 276/276 tests; smoke and verify; the agent sessions and traces unchanged.
-  - Found while documenting, not fixed (code, outside DOC-1; each needs its own item):
+  - Found while documenting, not fixed (code, outside DOC-1; each needs its own item). Fixed
+    since: `skipToAwaitedRule` and `Contacts.cellKey` (FX-1), `save.fingerprint` (FX-2):
     - The SDL version report: build.zig's warning says the pin is checked at run time, but
       nothing compares it; the host prints the recorded release as "pinned";
       `VersionCheck.matches` and `pinned_zig_version` are unused.
@@ -853,7 +854,8 @@ flashback-re MD1–MD3.
     level code in an old PLAN note (removed, `bfbb2a3`; commit `e3ff092`'s message still holds
     it). Links, anchors, line widths and modal verbs checked by script. `DESIGN.md` facts fixed
     (`a27cadb`).
-  - Found while specifying, not fixed (code; each needs its own item):
+  - Found while specifying, not fixed at the time; all fixed or settled since by FX-1 to FX-6
+    (the extraction log was already shown in release builds):
     - Panics: `flashbackz-agent --save F:SLOT` with a slot of 12 characters or more (the `.INFO`
       name buffer, reproduced; the record stays without its INFO); a settings record with 8 pad
       models and long button names (2,149 bytes for a 2,048-byte buffer); a data-set start room
@@ -954,8 +956,14 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
     0xc0: the supplied instruments stay in the range where the readings agree; kept, limits
     stated. The frame past the end: no show of it in the seven levels' trace sessions nor in the
     three demos; kept. The code records each measurement where it makes the choice.
-- [ ] **DOC-3 — The documents follow.** `docs/formats/` follows FX-1 to FX-6; the flashback-re
+- [x] **DOC-3 — The documents follow.** `docs/formats/` follows FX-1 to FX-6; the flashback-re
   documents that the code contradicts are corrected there, under that repository's own plan.
+  - 2026-10-17, `2bc37c5`: 17 format documents, reviewed against the code; lint clean, no level
+    code in them. flashback-re `8154ccb` (its DC1): the nine documents and seven more stale
+    statements. Two leftovers found on the way were fixed (`1f8ce2c`: no trace line for a
+    restart, the player starts in a room); two are kept: an extraction that runs out of memory
+    says "cannot open the data set directory", and the fingerprint also covers a stray file in
+    a `behaviors/` subfolder (the data set did change).
 
 ## Historical CD implementation/research milestones
 
