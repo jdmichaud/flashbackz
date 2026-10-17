@@ -1,9 +1,11 @@
-//! GLOBAL.FIB import into immutable signed PCM. The directory and delta coding stay here;
-//! the mixer consumes ordinary samples addressed by opaque sound IDs.
+//! Imports GLOBAL.FIB, the effects bank, as signed PCM that does not change. The directory and
+//! the delta coding stay in this file. The mixer gets plain samples by their sound id.
 const std = @import("std");
+/// A decoded sound, as signed 8-bit amplitudes.
 pub const Sample = struct {
     pcm: []i8,
 };
+/// The sounds of GLOBAL.FIB. The level pack owns it.
 pub const Bank = struct {
     allocator: std.mem.Allocator,
     samples: []Sample,
@@ -15,7 +17,15 @@ pub const Bank = struct {
         self.* = undefined;
     }
 };
+/// The 16 amplitude steps that a 4-bit code selects.
 const deltas = [_]i8{ -34, -21, -13, -8, -5, -3, -2, -1, 0, 1, 2, 3, 5, 8, 13, 21 };
+/// Decodes GLOBAL.FIB. The file starts with a count (u16), then a 6-byte record for each sound:
+/// its offset (u32) and its encoded length in bytes (u16), little-endian. A length of 0 gives an
+/// empty sound.
+///
+/// The first byte of a sound is its first amplitude, which the decoder writes twice. Each next
+/// byte holds two 4-bit indices into `deltas`, the high half first. Each delta adds to the
+/// amplitude with wrap. Thus n bytes give 2 * n amplitudes.
 pub fn decode(allocator: std.mem.Allocator, bytes: []const u8) !Bank {
     if (bytes.len < 2) return error.InvalidSoundArchive;
     const count = std.mem.readInt(u16, bytes[0..2], .little);

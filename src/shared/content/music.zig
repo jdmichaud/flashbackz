@@ -10,6 +10,7 @@ fn word(bytes: []const u8, at: usize) u16 {
 fn terminated(bytes: []const u8) ![]const u8 {
     return bytes[0..std.mem.indexOfScalar(u8, bytes, 0) orelse return error.UnterminatedMusicName];
 }
+/// Reads `DATA/<name><extension>` in capitals; when it is not there, the same file at the root.
 fn read(
     source: platform.AssetSource,
     name: []const u8,
@@ -122,12 +123,23 @@ const Reader = struct {
     }
 };
 
+/// A PRF profile: 752 or 753 bytes (flashback-re docs/floppy-music.md). The game reads these
+/// fields:
+/// - 0: 16 instrument names, 30 bytes each, each ended by a zero.
+/// - 480 and 512: 16 words each, the pitch and the velocity to add to the notes of a part or of
+///   a binding.
+/// - 544: the interrupts in one tick; 548: the ticks in one bar.
+/// - 550: the name of the MIDI file, 20 bytes, ended by a zero.
+/// - 570: a word; when it is not zero, program changes select a binding from the words at 572.
+/// - 572: 16 words, the program of each binding.
+/// - 732: a byte for each part; when it is not zero, the part plays once.
+/// - 748: the limit, a signed dword. A positive limit stops the cue; a negative one restarts it.
 pub const Profile = struct {
     bytes: []const u8,
     interval: u16,
     bar_ticks: u16,
     limit: i32,
-    // The timing fields of a profile file; its other bytes are not read.
+    // The timing fields. `importPart` and `load` read the other fields from `bytes`.
     const interval_at = 544;
     const bar_ticks_at = 548;
     const limit_at = 748;
@@ -147,6 +159,10 @@ pub const Profile = struct {
     }
 };
 
+/// Imports the MIDI track of `part` as timed events. The notes of a part play the instrument of
+/// its binding, which starts as the part's index. An event's tick is 1 plus the sum of the
+/// deltas up to it. When byte 732 + part is zero, the part repeats. Its period is the first
+/// multiple of `bar_ticks` above its length (the sum of all its deltas).
 fn importPart(
     allocator: std.mem.Allocator,
     bytes: []const u8,
@@ -189,6 +205,8 @@ fn importPart(
         const kind = status >> 4;
         const second = if (kind == 0xc or kind == 0xd) 0 else try reader.byte();
         if (first >= 128 or second >= 128) return error.InvalidMidiData;
+        // Without program binding (word 570 at zero), the part selects the additions; else the
+        // binding does. The additions wrap at 8 bits, then the velocity stops at 127.
         const adjustment = if (word(profile.bytes, 570) == 0) part else binding;
         const pitch = first +% @as(u8, @truncate(word(profile.bytes, 480 + adjustment * 2)));
         const velocity = @min(
@@ -208,6 +226,8 @@ fn importPart(
                     },
                 },
             0xe => .{ .bend = @as(u14, second) << 7 | first },
+            // A program change binds the part to the first slot at 572 with that program. With
+            // no such slot, the binding stays.
             0xc => change: {
                 if (word(profile.bytes, 570) != 0) {
                     for (0..16) |i| {
@@ -234,6 +254,7 @@ fn importPart(
     return .{ .events = try events.toOwnedSlice(allocator), .repeat_ticks = repeat_ticks };
 }
 
+/// Returns the score of a MIDI file of format 0 or 1, with one part for each track (16 at most).
 pub fn decode(
     allocator: std.mem.Allocator,
     midi: []const u8,
@@ -264,8 +285,11 @@ pub fn decode(
     return .{
         .instruments = instruments,
         .parts = parts,
+        // The music interrupt runs at 1,193,182 / 532 Hz (a calibrated PIT divisor); a tick is
+        // `interval` interrupts.
         .tick_pit_cycles = 532 * @as(u32, profile.interval),
-        // Widened: a limit at either end of its range still gives a count of ticks.
+        // A positive limit stops the events and a negative one restarts every part; 0 sets
+        // neither. The sums are in i64, so a limit at either end of its range still fits.
         .stop_after_ticks = if (profile.limit > 0) @intCast(@as(i64, profile.limit) + 1) else null,
         .restart_after_ticks = if (profile.limit < 0)
             @intCast(-@as(i64, profile.limit) + 2)
@@ -274,6 +298,8 @@ pub fn decode(
     };
 }
 
+/// Loads the cue `name`: its profile (`name`.PRF), the MIDI file that it names and its
+/// instruments. As in DOS, an instrument's file name keeps only its first 8 characters.
 pub fn load(
     allocator: std.mem.Allocator,
     source: platform.AssetSource,

@@ -1,6 +1,14 @@
-//! The game's one audio output (DESIGN 6): the device, opened once at the format every source
-//! renders at, and the sources of the moment mixed on its sample clock, a short queue ahead of
-//! the device. A device that fails leaves the game silent; it never ends the game.
+//! The game's one audio output (DESIGN 6). The game owns it. It opens the device once, at the
+//! format that every source renders at. A device that fails leaves the game silent. It never
+//! ends the game.
+//!
+//! The scenes own the sources: a `Soundtrack` or the level's `effects.Player`. The level pack
+//! owns the effects `Bank`. `pump` borrows them as `Sources` for one call, and does these steps:
+//! 1. It clears the queue when a new music starts or a source stops.
+//! 2. It mixes the sources in chunks of at most 1,024 frames, then applies the volume.
+//! 3. It queues the chunks until the device holds `lead_frames`.
+//! A source advances only by the frames mixed. Thus a music stops while the device stalls or
+//! while the music is not a source.
 const std = @import("std");
 const platform = @import("../platform.zig");
 const sounds = @import("../content/sound_effects.zig");
@@ -19,29 +27,36 @@ pub const format: platform.AudioFormat = .{ .channels = 2, .sample_rate = 44100 
 pub const lead_frames = format.sample_rate * 35 / 1000;
 
 /// What plays at a moment: a music (the title's, a film's, the ending's) and a level's sound.
+/// The scenes own them; `pump` borrows them for one call.
 pub const Sources = struct {
     music: ?*soundtrack.Soundtrack = null,
     level: ?Level = null,
 
+    /// A level's effects and tunes, with the samples of its effects.
     pub const Level = struct {
         sound: *effects.Player,
+        /// The level pack owns it.
         bank: sounds.Bank,
     };
 };
 
 pub const Output = struct {
+    /// A device that failed stays `failed` until `close`: the game is then silent.
     state: enum { closed, open, failed } = .closed,
-    /// The master volume, in percent, applied to the mix (`gain`).
+    /// The VOLUME setting, 0 to 100 percent, applied to the whole mix (`gain`). The game sets it
+    /// before each `pump`. The music has a separate volume (`music_player.Player.master_volume`).
     volume: u8 = 100,
-    /// Mixed and not yet queued (stereo, interleaved).
+    /// One chunk: mixed and not yet queued (stereo, interleaved). `begin` and `end` give the
+    /// samples that the host did not accept yet.
     pending: [2048]i16 = undefined,
     begin: usize = 0,
     end: usize = 0,
-    /// What played at the last pump: a source gone takes what it had queued with it.
+    /// The sources at the last `pump`. When one of them goes, `pump` drops what it had queued.
     played: struct { music: bool = false, level: bool = false } = .{},
 
-    /// Keeps the queue `lead_frames` ahead with `sources` mixed. A music not heard yet replaces
-    /// what was queued, as does a source that stopped.
+    /// Keeps the queue `lead_frames` ahead of the device, with `sources` mixed. It clears the
+    /// queue when a music starts that it did not get before (`heard` is false), or when the
+    /// music or the level sound of the last call is gone.
     pub fn pump(self: *Output, p: *platform.Platform, sources: Sources) void {
         const fresh_music = if (sources.music) |music| !music.heard else false;
         if (fresh_music or
@@ -58,6 +73,9 @@ pub const Output = struct {
             self.open(p);
         }
         if (self.state != .open) return;
+        // At most 8 passes. A pass mixes a new chunk when the host took all of the last one,
+        // then queues what the host accepts. The sources advance only here, by the frames mixed.
+        // Two full chunks fill an empty lead.
         for (0..8) |_| {
             const status = p.audioStatus();
             if (!status.running or status.suspended or status.queued_frames >= lead_frames) return;
@@ -111,7 +129,8 @@ pub const Output = struct {
     }
 };
 
-/// The sources' next `out.len / 2` frames, added, at `volume` percent.
+/// Writes the sources' next `out.len / 2` frames to `out`, at `volume` percent. The sum clips at
+/// the limits of 16 bits before the volume applies.
 fn mix(sources: Sources, out: []i16, volume: u8) void {
     @memset(out, 0);
     var part: [2048]i16 = undefined;
@@ -126,8 +145,8 @@ fn mix(sources: Sources, out: []i16, volume: u8) void {
     scale(out, volume);
 }
 
-/// The VOLUME option's steps sound even: each percent below 100 takes 0.4 dB off, so that a step
-/// of 10% is 4 dB (20% is -32 dB) and 0% is silent. As 1/65,536ths.
+/// Returns the gain of the VOLUME option, in 1/65,536ths. Each percent below 100 removes 0.4 dB.
+/// Thus each step of 10% is 4 dB and the steps sound even. 20% is -32 dB, and 0% is silent.
 pub fn gain(volume: u8) u32 {
     if (volume == 0) return 0;
     if (volume >= 100) return 1 << 16;

@@ -9,7 +9,7 @@ const chips = @import("megadrive/root.zig");
 
 const channels = megadrive.channels;
 
-/// Added to each row's length during play on an NTSC console (the cartridge's $FFF62B).
+/// The tempo: the cartridge adds it to each row's length during play on an NTSC console.
 const tempo = 1;
 
 /// The registers an instrument's bytes 0-32 go to, in the driver's order; the channel is added

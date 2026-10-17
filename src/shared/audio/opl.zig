@@ -81,8 +81,8 @@ const Operator = struct {
     op_state: OpState = .off,
     toff: u32 = 0,
     freq_high: i32 = 0,
-    /// The start of the selected waveform in `wavtable`. DOSBox 0.73's C code (as modified for vpoolz's oracle) keeps a pointer; an index
-    /// avoids a self-reference.
+    /// The start of the selected waveform in `wavtable`. DOSBox 0.73's C code (as modified for
+    /// vpoolz's oracle) keeps a pointer; an index avoids a self-reference.
     cur_wform: usize = 0,
     cur_wmask: u32 = 0,
     act_state: u32 = op_act_off,
@@ -150,7 +150,8 @@ fn toU32(v: f64) u32 {
     return @intFromFloat(t);
 }
 
-/// The whole chip. One instance is one YMF262. The game uses one.
+/// The whole chip. One instance is one YMF262. Each music player (one for each `Soundtrack`)
+/// owns its chip.
 pub const Chip = struct {
     op: [max_operators]Operator = @splat(.{}),
     int_samplerate: i32 = 0,

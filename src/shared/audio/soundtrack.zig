@@ -1,4 +1,5 @@
-//! One music cue: the OPL music player over a score, rendered at the output's rate.
+//! One music cue: a score and the OPL music player that renders it at the output's rate.
+//! The scenes with music own their `Soundtrack`: the title menu, the films and the ending.
 const std = @import("std");
 const platform = @import("../platform.zig");
 const content = @import("../content/music.zig");
@@ -7,11 +8,15 @@ const music_player = @import("music_player.zig");
 const output = @import("output.zig");
 
 pub const Soundtrack = struct {
+    /// The score, in its own arena.
     owned: score.Owned,
+    /// The player, with its own OPL chip.
     player: music_player.Player,
-    /// Set once the output plays it: a new music replaces what was queued before it.
+    /// False until `output.Output.pump` first gets this music; only `pump` reads and sets it.
+    /// While it is false, `pump` clears the queue, so the new music replaces what was queued.
     heard: bool = false,
 
+    /// Loads the cue `name` (its profile, its MIDI file and its instruments) at tick 0.
     pub fn open(
         allocator: std.mem.Allocator,
         source: platform.AssetSource,

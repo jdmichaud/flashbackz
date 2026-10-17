@@ -1,30 +1,44 @@
-//! Sample-clock music playback over the shared OPL synthesizer. Content is immutable;
-//! voice allocation, note lifetimes and part cursors are local to this player.
+//! Plays a score on an OPL chip, on the output's sample clock. The score does not change; the
+//! player owns the chip, the voices and a cursor for each part. Playback has these steps:
+//! 1. `render` makes the chip's frames up to the start of the next tick.
+//! 2. `advanceTick` plays the events that are due, part after part.
+//! 3. A note takes a free melodic channel (0 to 5) or the channel of its drum (6 to 10).
+//! Tick n starts at frame n * tick_pit_cycles * rate / 1,193,182 (the PIT clock). The drums use
+//! the chip's rhythm mode. A note that finds no free channel does not play.
 const std = @import("std");
 const score_mod = @import("../content/score.zig");
 const opl = @import("opl.zig");
 
+/// A register write and the tick that it belongs to.
 pub const RegisterWrite = struct {
     tick: u64,
     register: u8,
     value: u8,
 };
+/// Gets each register write before the chip. flashback-re's music_probe uses it to report the
+/// timed writes.
 pub const Observer = struct {
     context: *anyopaque,
     write: *const fn (*anyopaque, RegisterWrite) void,
 };
+/// A note that sounds. Its part and pitch find it at the release. `channel` is 0 to 5 for a
+/// melodic note and 6 to 10 for a drum (the value of `score.Percussion`).
 const Voice = struct {
     part: u4,
     pitch: u8,
     channel: u8,
     percussion: bool,
 };
+/// The position of a part: its next event, and the local tick where its current repeat started.
 const Cursor = struct {
     event: usize = 0,
     origin: u64 = 0,
 };
-// Equal-tempered pitches measured at the original chip boundary.
+/// The OPL F-numbers of the notes C to B. The block (octave) of a note is its pitch / 12. The
+/// values are equal-tempered, measured at the original's chip writes.
 const frequencies = [_]u16{ 343, 364, 385, 408, 433, 459, 486, 515, 546, 579, 614, 650 };
+/// The operator offsets of each channel: the modulator, then the carrier. Channels 6 to 10 are
+/// the drums of `score.Percussion`. The bass drum has two operators, the other drums one.
 const operators = [_][2]u8{
     .{ 0, 3 },
     .{ 1, 4 },
@@ -38,21 +52,32 @@ const operators = [_][2]u8{
     .{ 21, 21 },
     .{ 17, 17 },
 };
+/// The operator offsets of the 9 channels of an OPL2.
 const all_operators = [_]u8{ 0, 1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21 };
 
 pub const Player = struct {
     score: score_mod.Score,
     chip: opl.Chip,
     rate: u32,
+    /// The frames rendered.
     samples: u64 = 0,
+    /// The ticks done since the start.
     tick: u64 = 0,
+    /// The tick of the last restart (`restart_after_ticks`). The local tick counts from it.
     score_origin: u64 = 0,
     cursors: [16]Cursor = @splat(.{}),
+    /// The notes that sound: slots 0 to 5 hold melodic notes, 6 to 10 drums.
     voices: [11]?Voice = @splat(null),
+    /// The value of register 0xBD. Bit 5 (0x20) sets the rhythm mode. Bits 4 to 0 key on the
+    /// bass drum, snare, tom-tom, cymbal and hi-hat (channels 6 to 10).
     percussion_flags: u8 = 0x20,
+    /// The music volume, 0 to 63, 48 at the start as in the original. The keypad + and - keys
+    /// set it (`Game.music_volume`). `level` reads it only when a note starts. The VOLUME
+    /// setting is a separate gain, in percent, on the whole mix (`output.Output.volume`).
     master_volume: u8 = 48,
     observer: ?Observer = null,
 
+    /// Returns a player at tick 0, with the chip silent.
     pub fn init(score: score_mod.Score, rate: u32, observer: ?Observer) Player {
         var self: Player = .{
             .score = score,
@@ -63,6 +88,7 @@ pub const Player = struct {
         self.silence();
         return self;
     }
+    /// Sends a register write to the observer, then to the chip.
     fn write(self: *Player, register: u8, value: u8) void {
         if (self.observer) |observer| {
             observer.write(observer.context, .{
@@ -73,6 +99,7 @@ pub const Player = struct {
         }
         opl.write(&self.chip, register, value);
     }
+    /// Keys off the notes and the drums, then clears the chip's registers. Forgets every voice.
     pub fn silence(self: *Player) void {
         for (0..6) |i| {
             self.write(0xb0 + @as(u8, @intCast(i)), 1);
@@ -95,6 +122,7 @@ pub const Player = struct {
                 self.write(base + op, 0);
             }
         }
+        // Register 1: waveform selection on, then off, as the original does at its reset.
         self.write(1, 0x20);
         self.write(1, 0);
         for (0..9) |i| {
@@ -104,10 +132,16 @@ pub const Player = struct {
         self.write(0xbd, 0);
         self.voices = @splat(null);
     }
+    /// Keys off the drum of `channel` (6 to 10): it clears bit 10 - channel of register 0xBD.
     fn releaseDrum(self: *Player, channel: u8) void {
         self.percussion_flags &= ~(@as(u8, 1) << @as(u3, @intCast(10 - channel)));
         self.write(0xbd, self.percussion_flags);
     }
+    /// Returns the key scale and the attenuation of `op` for a note of `velocity`. The
+    /// attenuation is 0 to 63, in OPL steps of 0.75 dB. With `scale`, the level (63 minus the
+    /// attenuation) is multiplied by volume / 127 and rounded to the nearest step. The volume is
+    /// velocity * master_volume / 64, rounded down. Without `scale`, the attenuation does not
+    /// change: a modulator in FM mode does not sound.
     fn level(self: *const Player, op: score_mod.Operator, velocity: u7, scale: bool) u8 {
         const volume: i32 = (@as(i32, velocity) * self.master_volume) >> 6;
         const attenuation = if (scale)
@@ -116,6 +150,8 @@ pub const Player = struct {
             op.attenuation;
         return op.key_scale | @as(u8, @intCast(attenuation));
     }
+    /// Writes the operators of `instrument` for `channel`. A drum other than the bass drum has
+    /// one operator: it gets only the carrier.
     fn configure(self: *Player, instrument: score_mod.Instrument, channel: u8, velocity: u7) void {
         const pair = operators[channel];
         if (instrument.percussion == null or instrument.percussion == .bass_drum) {
@@ -125,7 +161,10 @@ pub const Player = struct {
             self.write(0x60 + pair[0], op.attack_decay);
             self.write(0x80 + pair[0], op.sustain_release);
             self.write(0xc0 + channel, instrument.feedback_connection);
-            // The original writes these low register addresses (not E0 + operator).
+            // The original writes the waveform to 0x0E + operator, not 0xE0 + operator. Thus
+            // every operator keeps the sine wave that `silence` sets. For operators 18 to 21
+            // the address is 0x20 to 0x23: the write sets the multiplier of operators 0 to 3
+            // (channels 0 to 2) and clears their other bits, until their next note.
             self.write(0x0e + pair[0], op.waveform);
         }
         const op = instrument.carrier;
@@ -143,6 +182,8 @@ pub const Player = struct {
         }
         return false;
     }
+    /// Starts `note` of `part`. A melodic note takes the lowest free channel from 0 to 5, and a
+    /// drum takes its own channel. A drum keys on in register 0xBD, a melodic note in 0xB0.
     fn play(self: *Player, part: u4, note: score_mod.Note) void {
         const instrument = self.score.instruments[note.instrument] orelse return;
         const channel: u8 = if (instrument.percussion) |drum| @backingInt(drum) else find: {
@@ -164,9 +205,11 @@ pub const Player = struct {
         };
         self.configure(instrument, channel, note.velocity);
         const frequency = frequencies[note.pitch % 12];
+        // Register 0xB0: the block in bits 2 to 4, above bits 8 and 9 of the F-number.
         const high: u8 = @truncate((@as(u16, note.pitch / 12) << 2) | (frequency >> 8));
         if (instrument.percussion != null) {
             self.releaseDrum(channel);
+            // The snare and the hi-hat share chip channel 7, the tom-tom and the cymbal 8.
             const physical = if (channel == 9) 8 else if (channel == 10) 7 else channel;
             self.write(0xa0 + physical, @truncate(frequency));
             self.write(0xb0 + physical, high);
@@ -178,6 +221,7 @@ pub const Player = struct {
             self.write(0xb0 + channel, high | 0x20);
         }
     }
+    /// Keys off the first voice of `part` that plays `pitch`.
     fn release(self: *Player, part: u4, pitch: u8) void {
         for (&self.voices) |*entry| {
             if (entry.*) |voice| {
@@ -195,8 +239,12 @@ pub const Player = struct {
             }
         }
     }
+    /// Bends the voices of `part`. `amount` is the 14-bit MIDI value, read as a sign and a size:
+    /// bit 13 set makes it negative, and bits 0 to 12 are the size. 8192 does nothing.
     fn bend(self: *Player, part: u4, amount: u14) void {
-        // Preserve the original asymmetric bend and octave rounding, including neutral no-op.
+        // This keeps the original's asymmetric bend and octave rounding. The size is below 8192,
+        // so the semitone shift is always 0. The detune is the signed amount * 25, wrapped to 16
+        // bits, / 8192: -4 to +3 F-number steps. The written block is one less than the note's.
         if (amount == 8192) return;
         const signed: i32 = if (amount & 8192 != 0) -@as(i32, amount & 8191) else amount;
         for (self.voices) |entry| {
@@ -225,6 +273,11 @@ pub const Player = struct {
             }
         }
     }
+    /// Advances the score by one tick and plays the events due. The local tick counts from the
+    /// last restart:
+    /// 1. When it reaches `restart_after_ticks`, the chip goes silent and every part restarts.
+    /// 2. When it passes `stop_after_ticks`, no more events play. The notes keep sounding.
+    /// 3. When it passes a part's origin plus `repeat_ticks`, the part starts again.
     pub fn advanceTick(self: *Player) void {
         self.tick += 1;
         var local_tick = self.tick - self.score_origin;
@@ -259,6 +312,9 @@ pub const Player = struct {
             }
         }
     }
+    /// Renders the next `stereo.len / 2` frames. The chip renders up to the first frame of the
+    /// next tick, then that tick's events apply. Thus the output does not depend on the size of
+    /// the buffers.
     pub fn render(self: *Player, stereo: []i16) void {
         std.debug.assert(stereo.len % 2 == 0);
         var frames: usize = 0;
