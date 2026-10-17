@@ -1,5 +1,13 @@
-//! The shared module: the platform boundary, the in-memory providers and the game. It links
-//! nothing and needs no libc; native presentation and headless verification use the same game.
+//! The shared module: the game without a host. It links nothing and needs no libc. The SDL host
+//! and the headless agent host run the same game.
+//!
+//! How the parts join, from the outside in:
+//! - A host gives a `platform.Platform` and calls `Game.update` (`game.zig`).
+//! - `Game` owns the scene in play (`scenes/`). It starts the next scene when one ends.
+//! - A level scene (`scenes/level.zig`) runs the world (`behavior/world.zig`). The world runs
+//!   the characters' rule tables from the data set (`behavior/data_set.zig`).
+//! - The scenes read the original's files with `content/` and draw with `render/`.
+//! - `audio/output.zig` mixes the music and the effects of the scene for the host.
 const std = @import("std");
 
 pub const platform = @import("platform.zig");

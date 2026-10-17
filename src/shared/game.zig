@@ -1,6 +1,16 @@
-//! Shared application lifecycle and tagged scene ownership. Hosts provide input, time and
-//! presentation; the selected scene owns its content and simulation. The game needs the
-//! original's files: without them it does not start.
+//! The game: the part that a host drives. The host (SDL or the agent) gives the input, the time,
+//! the screen and the audio device. It calls `update` once in each pass of its loop.
+//!
+//! The game owns the scene in play (`scene`) and the film that plays over it (`story`). A scene
+//! does not start the next scene. It sets a field, and `step` reads that field after the update:
+//! - the title menu: `stage`;
+//! - a level: `outcome`;
+//! - the continue screen: `menu.outcome`;
+//! - the ending: `finished`;
+//! - a film: `Story.update` returns true.
+//! `step` then makes the next scene and frees the old one.
+//!
+//! The game needs the original's files: without them it does not start.
 const std = @import("std");
 const platform = @import("platform.zig");
 const menu_art = @import("content/menu_artwork.zig");
@@ -233,6 +243,8 @@ pub const Game = struct {
         return std.meta.activeTag(self.scene);
     }
 
+    /// True when the film or the scene in play is late. The host then calls `update` again at
+    /// once, without a wait.
     pub fn needsCatchup(self: *const Game, now_ns: u64) bool {
         if (self.story) |*story| return story.player.needsCatchup(now_ns);
         if (self.scene == .level) return self.scene.level.needsCatchup(now_ns);
@@ -246,7 +258,8 @@ pub const Game = struct {
         return self.story != null;
     }
 
-    /// One frame: the input, one step of the state, the picture and the sound.
+    /// One pass of the host's loop. `step` updates the scene and presents the picture. Then
+    /// `pump` gives the sound to the host. A level can show 0 to 8 frames in one update.
     pub fn update(self: *Game, p: *platform.Platform) !UpdateResult {
         const result = try self.step(p);
         if (result == .finished) {
@@ -269,7 +282,11 @@ pub const Game = struct {
         };
     }
 
-    /// The input, one step of the state and the picture.
+    /// The steps of one update, in this order:
+    /// 1. Keep the settings that the last update changed.
+    /// 2. Read the events (`consumeEvents`). The first update starts the platform first.
+    /// 3. Update the scene in play. If it ended, make the next scene.
+    /// 4. Present the picture. A film presents its own picture, and a late level presents none.
     fn step(self: *Game, p: *platform.Platform) !UpdateResult {
         if (self.phase == .finished) return .finished;
         self.update_count += 1;
@@ -420,7 +437,8 @@ pub const Game = struct {
                 var next = front_end.Scene.init(self.allocator, self.assets.?, art);
                 errdefer next.deinit();
                 next.difficulty = self.difficulty;
-                // Abandoned (Retry always finds the defeated level above).
+                // Only an abort comes here: a retry always has the suspended level. The title
+                // plays the game-over film first.
                 try next.gameOver();
                 dialog.deinit();
                 self.scene = .{ .menu = next };
@@ -430,11 +448,16 @@ pub const Game = struct {
         return .running;
     }
 
-    /// Runs the table-driven level and acts on how it ends. True when the frame is done and
-    /// the caller should return.
+    /// Updates the level, or the film that the level asked for. Then it acts on `scene.outcome`:
+    /// - `.level`: it loads the next level and hands over the score and the random stream;
+    /// - `.defeated`: it keeps the level in `suspended_level` and opens the continue screen;
+    /// - `.aborted`, `.ending`: it ends the level and opens the title or the ending.
+    /// Returns true when `step` must stop: a film presented its picture, or the level is late.
     fn updateLevel(self: *Game, p: *platform.Platform) !bool {
         const scene = &self.scene.level;
         const now = p.nowNs();
+        // A walk asked for a film. The film plays over the next updates. When it ends,
+        // `finishFilm` moves the level's clock past the film and runs the walk that waited.
         if (scene.film) |film| {
             if (self.story == null) {
                 scene.stopSound();
@@ -529,6 +552,7 @@ pub const Game = struct {
                 self.scene = .{ .level = next };
             },
             .defeated => {
+                // The defeat film plays first. The continue screen opens after it.
                 if (scene.film != null) return false;
                 scene.stopSound();
                 const next = try continue_mod.Scene.init(
@@ -573,6 +597,12 @@ pub const Game = struct {
         scene.deinit();
     }
 
+    /// Reads all waiting events. Each event goes through these steps, in this order:
+    /// 1. `padEvent` changes a pad button into its action, or drops the event.
+    /// 2. `quickKey` takes F5 and F9 in a level.
+    /// 3. `globalKey` acts on P, keypad + and -, S, J and K. The event goes on.
+    /// 4. A pad press turns the Joystick option on.
+    /// 5. The film in play gets the event, else the scene in play. A level queues it.
     fn consumeEvents(self: *Game, p: *platform.Platform) !void {
         var buf: [32]platform.Event = undefined;
         while (true) {
@@ -919,8 +949,12 @@ pub const Game = struct {
         self.dropSlots();
     }
 
-    /// Loads the save in `slot`: its level, loaded again with its world put back, replaces
-    /// whatever plays. A save of another version or data set is refused (`save.Error`).
+    /// Loads the save in `slot` and puts its level in place of the scene in play:
+    /// 1. `save.decode` reads the record. It refuses a save of another version or data set.
+    /// 2. The level loads again from the data set.
+    /// 3. The saved world and scene state go back into it.
+    /// 4. The scene in play ends (`endScene`), and the loaded level takes its place.
+    /// If a step fails, the scene in play continues.
     pub fn loadGame(self: *Game, slot: []const u8) !void {
         const storage = self.storage orelse return error.NoStorage;
         const files = self.data orelse return error.DataSetRequired;
