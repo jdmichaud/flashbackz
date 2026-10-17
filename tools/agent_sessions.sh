@@ -6,11 +6,16 @@
 #   tools/agent_sessions.sh zig-out/bin/flashbackz-agent disk1.img disk2.img | diff tools/agent_sessions.txt -
 #
 # Each session saves into its own temporary directory, never the user's.
-set -eu
+#
+# A session whose agent fails (an exit status other than 0, or not its two JSON lines) prints
+# FAILED with the agent's messages, and the script then exits with status 1. Other lines on the
+# agent's standard error, except its `info:` log lines, print under the session's line.
+set -euo pipefail
 agent="${1:?usage: agent_sessions.sh <agent> <disk1.img> <disk2.img>}"
 disks=("${2:?the first floppy image}" "${3:?the second floppy image}")
 saves_root="$(mktemp -d)"
 trap 'rm -rf "$saves_root"' EXIT
+failed=0
 
 skip="--key-down 5:escape --key-up 8:escape" # the level's opening film
 run() {
@@ -18,11 +23,20 @@ run() {
   shift
   local saves="$saves_root/$name"
   mkdir "$saves"
-  local out
-  out="$("$agent" --saves "$saves" "$@" "${disks[@]}" 2>&1 || true)"
+  local out status=0
+  out="$("$agent" --saves "$saves" "$@" "${disks[@]}" 2>"$saves_root/stderr")" || status=$?
+  local messages
+  messages="$(grep -v '^info:' "$saves_root/stderr" || true)"
   local hashes
   hashes="$(printf '%s\n' "$out" | head -1 | grep -o '"state_hash":"[0-9a-f]*","frame_hash":"[0-9a-f]*"' || true)"
+  if [ "$status" -ne 0 ] || [ -z "$hashes" ] || [ "$(printf '%s\n' "$out" | wc -l)" -ne 2 ]; then
+    echo "$name: FAILED (exit status $status)"
+    if [ -n "$messages" ]; then printf '%s\n' "$messages" | sed 's/^/  /'; fi
+    failed=1
+    return
+  fi
   echo "$name: $hashes $(printf '%s\n' "$out" | tail -1)"
+  if [ -n "$messages" ]; then printf '%s\n' "$messages" | sed 's/^/  stderr: /'; fi
   if [ -f "$saves/SETTINGS" ]; then echo "  settings: $(tr -d '\n ' <"$saves/SETTINGS")"; fi
 }
 
@@ -73,3 +87,8 @@ run abort-retry-pad --scene jungle --frames 700 $skip --button-down 40:start --b
 run title-pad --scene menu --frames 400 --button-down 30:dpad_down --button-up 32:dpad_down --button-down 40:dpad_down --button-up 42:dpad_down --button-down 50:a --button-up 52:a --button-down 80:dpad_down --button-up 82:dpad_down --button-down 100:a --button-up 102:a --button-down 160:a --button-up 162:a
 # The title: B on the main page chooses START, as A does.
 run title-b --scene menu --frames 120 --button-down 30:b --button-up 32:b
+
+if [ "$failed" -ne 0 ]; then
+  echo "agent_sessions.sh: a session failed" >&2
+  exit 1
+fi
