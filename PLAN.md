@@ -937,9 +937,13 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   message when a run fails, rather than print empty or partial hashes.
   - 2026-10-17, `169ad7f`: both reproduce their accepted outputs; three fake agents (failing,
     logging first, logging only) give FAILED lines and exit 1, or the accepted output.
-- [ ] **FX-5 — True comments and names, no dead code.** The wrong comments listed under DOC-2,
+- [x] **FX-5 — True comments and names, no dead code.** The wrong comments listed under DOC-2,
   the ending's code notice read from FB.EXE, the eighth level code checked like the others, no
   unreachable error, error names that match their condition.
+  - 2026-10-17, `846bda0`..`3413d85`: also the demos' opening scene (none in any demo, as the
+    original; no change with the supplied files). The executable's prefix equals the old literal
+    and its eighth code holds a 0 byte (scratch checks that print only the answer). Tests
+    283/283, smoke and verify, sessions and traces unchanged.
 - [ ] **FX-6 — The fidelity questions, measured before any change.** The music block above 3
   bits, register 0xc0's connection and feedback bits, and the frame after an animation's last
   frame in `showFrame`: find what the original does and what the supplied files reach. Change
