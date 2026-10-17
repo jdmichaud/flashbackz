@@ -329,6 +329,10 @@ pub fn main(init: std.process.Init) !void {
             }
         }
         if (try game.update(&p) == .finished) break;
+        // A new game or a demo counts its walks from none again: no line until it walks.
+        if (game.playedWalks() < traced_walks) {
+            traced_walks = 0;
+        }
         if (trace and game.scene == .level and game.playedWalks() != traced_walks) {
             traced_walks = game.playedWalks();
             std.debug.print("{{\"frame\":{d},\"walks\":{d},\"state_hash\":\"{x:0>16}\"}}\n", .{

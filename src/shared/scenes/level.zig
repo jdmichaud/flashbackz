@@ -232,7 +232,8 @@ pub const Scene = struct {
             return err;
         };
         const interface = try floppy_interface.load(allocator, assets);
-        const first_room = if (start) |s| s.room else data.characters[0].room orelse 0;
+        // The data-set loader checks that the player starts in a room of the level.
+        const first_room = if (start) |s| s.room else data.characters[0].room.?;
         var pack = try level_pack.load(
             allocator,
             assets,

@@ -269,14 +269,14 @@ pub fn load(
     if (characters.len == 0 or characters[0].kind != .player) {
         return fail(diagnostic, "characters.zon: the first character must be the player", .{});
     }
-    if (characters[0].room) |room| {
-        if (room >= collision.rooms) {
-            return fail(
-                diagnostic,
-                "characters.zon: the player must start in a room from 0 to 63",
-                .{},
-            );
-        }
+    // The level's colors and the view follow the player's start room (`level_pack`).
+    const start_room = characters[0].room orelse collision.rooms;
+    if (start_room >= collision.rooms) {
+        return fail(
+            diagnostic,
+            "characters.zon: the player must start in a room from 0 to 63",
+            .{},
+        );
     }
     return .{
         .behaviors = loaded,
@@ -1162,6 +1162,12 @@ const player = ".kind = .player, .position = .{ .x = 10, .y = 70 }, .width = 1, 
 test "the loader refuses what the engine cannot run, saying why" {
     try expectRejected(
         ".{ .conrad = .{ .placement = 0, .behavior = .guard, .start = .idle, .room = 64, " ++
+            ".facing = .right, .health = 4, .minimum_difficulty = .easy, " ++ player ++ " } }",
+        "",
+        "characters.zon: the player must start in a room from 0 to 63",
+    );
+    try expectRejected(
+        ".{ .conrad = .{ .placement = 0, .behavior = .guard, .start = .idle, .room = .outside, " ++
             ".facing = .right, .health = 4, .minimum_difficulty = .easy, " ++ player ++ " } }",
         "",
         "characters.zon: the player must start in a room from 0 to 63",
