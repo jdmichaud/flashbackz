@@ -807,12 +807,36 @@ flashback-re MD1–MD3.
 
 ## Source documentation — user request, 2026-10-17
 
-- [ ] **DOC-1 — Comments at the hinges and in the hard code** (user, 2026-10-17: "document the
+- [x] **DOC-1 — Comments at the hinges and in the hard code** (user, 2026-10-17: "document the
   source code better", "the main nexus of the code, where things get hinged together", "the code
   that is hard to grasp", "Use Simplified Technical English"). Find the places where the parts
   join (hosts, game, scenes, world) and the code that is hardest to follow. Add short comments
   there in Simplified Technical English (ASD-STE100). Comments only: the code does not change.
   Gate: zigfmt clean; tests pass; the agent sessions and traces unchanged.
+  - 2026-10-17, `87f2a55`..`667b7de`: 74 files. The hinges: the module map (shared/root.zig),
+    `Game` (update steps, scene changes, event order, load), the hosts' loops, the providers,
+    the level scene's play frame, the world's update order, the audio output. The hard code:
+    the clocks and cadences, the draw order, the sight scans and contacts, the music player,
+    the file formats (rooms, sprites, films, archives, rule records). Wrong or stale comments
+    fixed on the way. With comments removed, every file equals its earlier version; zigfmt
+    clean; 276/276 tests; smoke and verify; the agent sessions and traces unchanged.
+  - Found while documenting, not fixed (code, outside DOC-1; each needs its own item):
+    - The SDL version report: build.zig's warning says the pin is checked at run time, but
+      nothing compares it; the host prints the recorded release as "pinned";
+      `VersionCheck.matches` and `pinned_zig_version` are unused.
+    - The SDL backend drops key events until the first focus-gained event.
+    - `World.skipToAwaitedRule` compares unsigned where the original compares signed bytes
+      (animations of 128 frames or more), and its count cast panics above 255 frames.
+    - `Contacts.cellKey`: an x below about -264 gives a negative column that passes the bound
+      test; the cast then panics in a Debug build.
+    - `original_memory.recordByte`: byte 17 of a record is reachable but not modeled.
+    - `save.fingerprint` hashes only the first 1024 files, in load order, before the sort.
+    - A stored zoom ON never applies at level start, and the options dialog then shows OFF.
+    - A pad's B (GUN) on ABORT GAME abandons the game; only START is kept from it.
+    - `library_colors` relies on `SpriteLibrary` matching the executable's library order,
+      unchecked.
+    - The music player's bend also writes to drum voices (ignored registers, and key-on bits
+      on channels 7 and 8); not checked against the original.
 
 ## Historical CD implementation/research milestones
 
