@@ -16,8 +16,8 @@ vocabulary of conditions and effects.
 
 The name of the file, with no `.zon`, is the behavior name. A character refers to its behavior
 by this name ([characters.md](characters.md)). The loader reads the behavior files of a level in
-the byte order of their names. It also reads the `.zon` files in the subdirectories of
-`behaviors/`.
+the byte order of their names. It reads only the `.zon` files directly in `behaviors/`, not the
+files in its subdirectories.
 
 ### Root fields
 
@@ -30,7 +30,7 @@ The root is a struct literal.
 | `numbers` | List of names, at most 4 | No numbers | The number names of the behavior. Each character gives each number a value. |
 | `states` | Struct literal | Necessary | The states. Each field name is a state name. |
 
-The reader ignores other root fields. The rules refer to a link or a number by its name. The
+The reader refuses other root fields. The rules refer to a link or a number by its name. The
 extractor writes the links and the numbers in the order of the original placement parameters.
 It leaves out the parameters that the behavior does not use.
 
@@ -41,7 +41,7 @@ It leaves out the parameters that the behavior does not use.
 | `animation` | Integer, 0 to 65535 | Necessary | The animation that the state plays ([animations.md](animations.md)). It must be in the level's files. |
 | `rules` | List of rules | Necessary | The rules of the state, in order. In a state with no rules (`.{}`), no rule fires, and the character keeps its last frame. |
 
-The reader ignores other fields of a state. The order of the states in the file is not
+The reader refuses other fields of a state. The order of the states in the file is not
 important to the engine.
 
 ### Rule fields
@@ -88,7 +88,7 @@ vocabulary calls effects are always true, so they can be checks that always pass
 | side | `.from_front` | `.from_behind`, `.from_front` or `.from_front_unannounced` |
 | height | `.standing` | `.standing` (a high hit) or `.crouched` (a low hit) |
 | boolean | `true` | `true` or `false` |
-| struct | `.{ .kind = .player, .cells = 16 }` | The fields that the vocabulary gives, each of its own type. All are necessary. The reader ignores other fields. |
+| struct | `.{ .kind = .player, .cells = 16 }` | The fields that the vocabulary gives, each of its own type. All are necessary. The reader refuses other fields. |
 
 ### Messages
 
@@ -201,7 +201,8 @@ parameter (0 to 3). These rules also apply:
 - `touching_kind_in_pose`, `sees`, `facing_target_unhittable` and
   `backturned_target_unhittable` read their `kind` from the argument of the first condition of
   the rule. When one of them is the second condition, the extractor writes that argument as its
-  `kind`. In another position, the extractor writes `kind_0`.
+  `kind`. In another position, it writes the raw form `.{ .NAME_raw = A }`, and the report notes
+  it.
 - For `ledge_above_behind`, `floor_edge_behind`, `ledge_above_ahead`, `floor_edge_ahead`,
   `grab_edge_ahead`, `wall_beyond_gap`, `wall_starts` and `wall_ends`, the original counts the
   columns backward. The extractor negates the argument, so it counts cells ahead.
@@ -257,7 +258,9 @@ Some terms:
   is solid.
 - **Its cells**: the cells of the character's footprint, registered at the start of the update.
   They are the `width` cells from its column to the right, on its tier. **Its first cell** is the
-  first of them.
+  first of them. A cell with a column outside 0 to 15 gets no contact slot. For an x outside 0
+  to 255, the engine takes the column in the left or right room. Such a cell stops the
+  registration of the character.
 - **Waits for a hit**: the current state has a `received` of that hit message, or a `hit` check
   on that side (not `from_front_unannounced`).
 
@@ -470,8 +473,10 @@ name of the behavior file, for example `guard.zon`. OP is the name of an operati
 | --- | --- |
 | The file is not valid ZON (two fields with the same name included) | `FILE: not valid ZON` |
 | The root is not a struct literal | `FILE: expected a struct` |
+| The root has a field that is not `key`, `links`, `numbers` or `states` | `FILE: unknown field F` |
 | `states` is absent | `FILE: no states` |
 | `states` or a rule is not a struct literal | `FILE: expected a struct` |
+| A state has a field that is not `animation` or `rules` | `FILE: STATE: unknown field F` |
 | A state has no `animation` | `FILE: STATE has no animation` |
 | `animation` is not an integer from 0 to 65535 | `FILE: STATE has an invalid animation` |
 | A state has no `rules` | `FILE: STATE has no rules` |
@@ -491,6 +496,7 @@ name of the behavior file, for example `guard.zon`. OP is the name of an operati
 | An integer argument is out of -4096 to 4096 | `FILE: OP must lie within -4096 and 4096` |
 | `chance` is less than 1 | `FILE: chance must be at least 1` |
 | A boolean argument is not `true` or `false` | `FILE: OP needs true or false` |
+| A struct argument has a field that the vocabulary does not give | `FILE: OP has no field F` |
 | A field of a struct argument is absent | `FILE: OP needs .F` |
 | A name argument is not an enum literal | `FILE: OP needs a name` |
 | A link name is not in `links` | `FILE: unknown link L` |

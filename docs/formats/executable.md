@@ -121,7 +121,7 @@ code part of the unpacked image:
 | 9283 | `0x2443` | Prefix byte 5, XOR `0x55`. |
 | 9291 | `0x244b` | Prefix byte 6, as is. |
 
-`level_pack` uses the prefix.
+`level_pack` and `scenes/ending` use the prefix.
 
 ### Library list
 
@@ -150,8 +150,8 @@ alien_surface, alien_base. The difficulties are in this order: easy, normal, exp
 code follows the table, at offset 4928.
 
 To decode a code, XOR each of its bytes with `0x55`. The text of the code ends at its first 0
-byte. Each of the 21 codes must contain a 0 byte, so it has at most 6 characters. The reader does
-not check the eighth code for a 0 byte. A code can contain a space.
+byte. Each of the 21 codes and the eighth code must contain a 0 byte, so it has at most 6
+characters. A code can contain a space.
 
 ### Credits stream
 
@@ -193,7 +193,7 @@ The credits are a byte stream with `0xff` at its end. The reader copies it as is
 ### Show the code notice
 
 The level screen shows the prefix, then the 7 bytes of the code for the level and the difficulty.
-The score page of the final films shows the eighth code.
+The score page of the final films shows the prefix, then the eighth code up to its first 0 byte.
 
 ## Checks
 
@@ -214,12 +214,12 @@ The score page of the final films shows the eighth code.
 | A music cue is not `0xff` and is 26 or more, or a music name has no 0 in 9 bytes. | `InvalidSceneTable` |
 | The final scene list has more than 16 scenes, or a scene of 76 or more. | `InvalidEndingList` |
 | An item of the credits stream starts at byte 4,094 or after. | `InvalidCredits` |
-| One of the 21 level codes has no 0 byte. | `InvalidLevelCode` |
+| One of the 21 level codes, or the eighth code, has no 0 byte. | `InvalidLevelCode` |
 
 ## Quirks
 
-The music cue table has 75 entries, for scenes 0-74, and the film name table follows it. Scene 75
-has a film but no cue. The reader gives it no music.
+The music cue table has 75 entries, for scenes 0-74, and the film name table follows it. Thus
+scene 75 has no cue, and the reader gives it no music. In the original file, scene 75 has no film.
 
 ## What the extractor takes
 

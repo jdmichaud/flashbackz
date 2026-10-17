@@ -126,10 +126,10 @@ after that gets 0xffff.
 
 1. It reads and checks the overlay. Then, for each level, it collects the rule groups that the
    placements use.
-2. For each group, it computes the key and finds the first behavior entry with that key.
+2. For each group, it computes the key and finds the behavior entry with that key.
 3. The behavior name is the name of the entry, or `behavior_G` with G the group number. The
    file name is the behavior name. When two or more groups of a level get the same name, each
-   file name gets `_G` after the name.
+   file name gets `_G` after the name. Two groups of a level must not get the same file name.
 4. Each state gets `state_N`, with N its animation number. A state entry with its ordinal
    replaces that name.
 5. A parameter (0 to 3) is a link when the reachable rules use it as a link. It is also a link
@@ -157,9 +157,11 @@ The report gives how many behaviors and states the overlay names ([data-set.md](
 - Take the key from the `.key` field of a generated behavior file, and the ordinals from its
   `// ordinal N` comments.
 - The state names of one behavior must differ from each other and from its `state_N` names.
+- The overlay must not give one thing two entries, or two things of one list the same name (see
+  [Checks](#checks)).
 - A message entry must not have the value 1, 2, 3, 4 or 12. The engine knows these messages only
-  by their engine names (`hit_behind_high` to `hit_front_low`, `acknowledged`), and an entry
-  replaces that name.
+  by their engine names (`hit_behind_high` to `hit_front_low`, `acknowledged`). The reader
+  refuses such an entry.
 - A change to the encoded record of the key changes all keys. Then each entry must get its new
   key.
 
@@ -169,11 +171,18 @@ The report gives how many behaviors and states the overlay names ([data-set.md](
 | --- | --- |
 | The overlay is not valid ZON or does not match its types, for example an unknown field or a value out of range | `ParseZon`; the extractor logs the ZON diagnostic with `naming overlay` |
 | A name is not a plain identifier | `InvalidOverlayName` |
+| Two behavior entries have the same key | `DuplicateOverlayEntry` |
+| Two state entries of one behavior have the same ordinal or the same name | `DuplicateOverlayEntry` |
+| Two link entries, or two number entries, of one behavior have the same parameter or the same name | `DuplicateOverlayEntry` |
+| Two message entries have the same level and the same value | `DuplicateOverlayEntry` |
+| A message entry has the value 1, 2, 3, 4 or 12 | `FixedMessageName` |
 | Two states of one behavior get the same name | `DuplicateStateName` |
+| Two behaviors of a level get the same file name, for example `guard_5` from an entry and from a `guard` of group 5 | `DuplicateBehaviorFile` |
 
-With `--extract`, the game prints `PROGRAM: extraction failed: ERROR` and stops. With the
-extraction in memory, the game logs `data set not extracted: ERROR` and runs with no data set
-([data-set.md](data-set.md)).
+With `--extract`, the game prints `PROGRAM: extraction failed: ERROR` and stops. When it cannot
+read the `--names` file, it prints `PROGRAM: cannot open the names file FILE: WHY` and stops. WHY
+is `not found`, `permission denied` or `read error`. With the extraction in memory, the game logs
+`data set not extracted: ERROR` and runs with no data set ([data-set.md](data-set.md)).
 
 ## Sources
 

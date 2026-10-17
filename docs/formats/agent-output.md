@@ -48,7 +48,7 @@ only one time.
 | `--save F:SLOT` | | After the update of frame F, save the level in play into the record SLOT. |
 | `--load F:SLOT` | | After the update of frame F, load the record SLOT. |
 | `--stall F:MS` | MS: 0 to 3600000 | Before the update of frame F, advance the clock by MS milliseconds. |
-| `--trace` | | Write the trace lines on standard error. |
+| `--trace` | | Write the trace lines on standard error: the state hash of the level after each host frame in which it walked. |
 | `--pcm FILE` | | Write the audio that the game queued into FILE. |
 
 The values use this syntax:
@@ -60,7 +60,8 @@ The values use this syntax:
   [sdl-event-log.md](sdl-event-log.md) lists the names.
 - `BUTTON` is a name of `platform.ControllerButton`, for example `a` or `dpad_left`.
 - `AXIS` is a name of `platform.ControllerAxis`, for example `left_x`.
-- `SLOT` is a record name. The game uses `QUICK` and `SAVE1` to `SAVE8`.
+- `SLOT` is a record name. The game uses `QUICK` and `SAVE1` to `SAVE8`. A `--save` slot has at
+  most 59 characters ([save.md](save.md#slots)).
 
 An example: `--key-down 5:escape --key-up 8:escape` holds Escape from frame 5 to frame 8. The
 events are of the kinds that [sdl-event-log.md](sdl-event-log.md#kinds) gives.
@@ -108,11 +109,12 @@ on a slot page, does not change it.
 
 The state hash is a Wyhash of the state of the scene in play. The function `stateHash` of each
 scene gives the bytes. For `level`, the seed is the level index (`jungle` 0 to `alien_base` 6).
-For the other scenes, the seed is 0. The hash covers these values:
+For the other scenes, the seed is 0. Each scene hashes its integers little-endian, so the hash is
+the same on every machine. The hash covers these values:
 
 | Scene | Values |
 |---|---|
-| `level` | For each character: state, cursor, x, y, room, health, counter, active, direction, sprite, mirrored, first item and next item. Then the score, the view room and the random state. |
+| `level` | For each character, as `i32`: state, cursor, x, y, room, health, counter, active, direction, sprite, mirrored, first item and next item (-1 for none). Then, as `u32`: the score, the view room and the random state. |
 | `menu` | The stage, the page, the selected row, the difficulty, the next difficulty, the selected level, the typed code, the part of the introduction and the frame of the film in play. |
 | `continue_game` | The choice, the pulse and its direction, the countdown, the pending and held presses, the view, the score, the clock, the result and the queued events. |
 | `ending` | The stage, the end flag, the film, the frame of the film, and the step and the typed characters of the credits. |
@@ -149,14 +151,21 @@ With `--trace`, the host writes these lines during the run:
 
 | Line | When |
 |---|---|
-| `{"frame":F,"walks":W,"state_hash":"H"}` | After the update of frame F, when a level is in play and its walk count is not the last count written. |
-| `{"frame":F,"save":"SLOT"}` | After each `--save` of frame F, also when the save fails. |
-| `{"frame":F,"load":"SLOT"}` | After each `--load` of frame F, also when the load fails. |
+| `{"frame":F,"walks":W,"state_hash":"H"}` | After the update of frame F, when a level is in play and the walk total of the game is not the last total. |
+| `{"frame":F,"save":SLOT}` | After each `--save` of frame F, also when the save fails. |
+| `{"frame":F,"load":SLOT}` | After each `--load` of frame F, also when the load fails. |
 
+- The walk total (`Game.playedWalks`) is the count of walks of the game: the walks of the levels
+  before and of the level in play. The last total is the total at the last walk line, or after
+  the last `--load` that succeeded. A `--load` that fails does not change it.
+- A new game or a demo counts its walks from none again. When the total falls below the last
+  total, the last total becomes 0, and the next line comes after the next walk.
+- Thus a host frame in which the level walked gives one line, also when the level walked more
+  than one time in it.
 - `W` is the count of walks of the level since it started or loaded. It can increase by more than
-  1 between two lines, because one update can walk the characters more than one time.
+  1 between two lines.
 - `H` is the state hash of the level after the update, as in line 1.
-- `SLOT` is the text of the option, without JSON escapes.
+- `SLOT` is the text of the option as a JSON string, for example `"a\"b"` for the text `a"b`.
 
 ### Other lines
 
@@ -198,12 +207,21 @@ tools/agent_sessions.sh AGENT DISK1 DISK2 | diff tools/agent_sessions.txt -
 For each session, the script:
 
 1. Makes a new save directory in a temporary directory, and gives it with `--saves`.
-2. Runs the agent with the session options and the two disks. It merges standard error into
-   standard output.
-3. Writes `NAME: "state_hash":"H","frame_hash":"F" LINE2`. The hashes come from the first line of
-   the output, and `LINE2` is the last line.
-4. Writes `  settings: RECORD` when the session wrote a `SETTINGS` record. `RECORD` is the record
+2. Runs the agent with the session options and the two disks. It reads standard output and
+   standard error apart.
+3. Checks the exit status (0) and standard output (exactly two lines, with the hashes in line 1).
+4. If the check fails, writes `NAME: FAILED (exit status N)` and the agent's messages, each with 2
+   spaces in front. Then it goes to the next session.
+5. Writes `NAME: "state_hash":"H","frame_hash":"F" LINE2`. The hashes come from line 1 of
+   standard output, and `LINE2` is line 2.
+6. Writes each of the agent's messages as `  stderr: LINE`.
+7. Writes `  settings: RECORD` when the session wrote a `SETTINGS` record. `RECORD` is the record
    without spaces and newlines.
+
+The agent's messages are the lines of standard error that do not start with `info:`.
+
+After the last session, if a session failed, the script writes `agent_sessions.sh: a session
+failed` on standard error and stops with status 1.
 
 Most sessions start with `--key-down 5:escape --key-up 8:escape`: this skips the film at the
 start of the level. The script deletes the temporary directory at the end.
@@ -221,12 +239,18 @@ tools/agent_traces.sh AGENT DISK1 DISK2 | diff tools/agent_traces.txt -
    150 frames, with 30 frames between groups. The groups are, in order: `right`; `left_shift`
    and `right`; `space`; `left`; `down`; `up`; `right`; `space` and `right`; `left`.
 2. For each of the seven levels, empty the save directory and run the agent with
-   `--scene LEVEL --frames 2400 --trace`.
-3. Merge standard error into standard output, and remove the lines that start with `info:`.
-4. Write `LEVEL: N lines, H`. `N` is the count of the lines. `H` is the first 16 hexadecimal
+   `--scene LEVEL --frames 2400 --trace`. Read standard output and standard error apart.
+3. Check the exit status (0) and standard output (exactly two lines).
+4. If the check fails, write `LEVEL: FAILED (exit status N)`. Then write the lines of standard
+   error that do not start with `info:`, each with 2 spaces in front. Go to the next level.
+5. Take the lines of standard error that do not start with `info:`, then the two lines of
+   standard output.
+6. Write `LEVEL: N lines, H`. `N` is the count of the lines. `H` is the first 16 hexadecimal
    digits of the SHA-256 of the lines, each with its newline.
+7. After the last level, if a level failed, write `agent_traces.sh: a level failed` on standard
+   error and stop with status 1.
 
-The lines of step 3 include the trace lines and the two lines of standard output.
+The lines of step 5 include the trace lines and the two lines of standard output.
 
 ## Checks
 
@@ -245,9 +269,8 @@ lines on standard error, and stops with status 2.
 | The command line has more than two `ASSET_PATH`. | `unexpected argument ARGUMENT` |
 | `--scene` gives a level, and the command line has no `ASSET_PATH`. | `missing ASSET_PATH (--scene with a level needs the disks)` |
 
-The tools refuse nothing. `tools/agent_sessions.sh` ignores the exit status of the agent. When the
-agent fails, the session line has no hashes, and the last error line takes the place of line 2.
-`tools/agent_traces.sh` counts and hashes the error lines as it does the trace lines.
+The tools give a run that fails a `FAILED` line with the agent's messages ([Tools](#tools)). They
+go on with the next run, and then stop with status 1.
 
 ## Sources
 

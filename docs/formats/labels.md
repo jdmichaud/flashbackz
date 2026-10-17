@@ -45,7 +45,8 @@ a level loads, the game refuses a label with a character that one of these fonts
 1. Read `DATA/name.TBN`, where `name` is the file name of the level. The file must have at most
    16384 bytes.
 2. For each placement, read the label of its label number (byte 30 of the record,
-   [placements.md](placements.md)).
+   [placements.md](placements.md)). If the label does not read, use an empty label and add a
+   note to `report.txt`.
 3. If the label is not empty, write it in the field `label` of the character.
 4. If the label number is not 0, write it in the field `label_number`.
 5. Make the name of the character. If the naming overlay names its behavior, start with that
@@ -64,7 +65,8 @@ a level loads, the game refuses a label with a character that one of these fonts
 | The label has more than 256 bytes. | `error.StringTooLong` |
 
 An error of the file read, for example `error.TooLarge`, stops the extraction. For the errors of
-a label, the extractor uses an empty label and writes no note.
+a label, the extractor uses an empty label and writes the note `L: placement P: label N does not
+read (ERROR)` ([data-set.md](data-set.md#reporttxt)). The report counts it as unexpected.
 
 ## Quirks
 
@@ -74,7 +76,7 @@ a label, the extractor uses an empty label and writes no note.
 
 ## Sources
 
-- `src/extract/string_table.zig`, `src/extract/level.zig` (`labelOf`, `characterId` and
+- `src/extract/string_table.zig`, `src/extract/level.zig` (`extract`, `characterId` and
   `writeCharacters`) and `src/extract/root.zig`.
 - `src/shared/scenes/level_screen.zig` (`drawLabel`), `src/shared/scenes/level.zig` (the inventory
   and `checkContent`) and `src/shared/behavior/original_memory.zig`.

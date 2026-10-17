@@ -225,7 +225,7 @@ code. For an unknown code, it writes `.unknown_N = argument` and adds a note to 
 | Hit side | 0 for a hit from behind, 1 for a hit from the front. Another value accepts a hit from the front, but a shot or a blow never finds that the character waits for it. |
 | Height | 0 for standing, 1 for crouched. |
 | Flag | 0 for false, 1 for true. |
-| Kind and `x` | A second condition. It reads the argument of the first condition as a kind, also when the code of the first condition is 0. Its own argument is `x`. |
+| Kind and `x` | A second condition. It reads the argument of the first condition as a kind, also when the code of the first condition is 0. Its own argument is `x`. In another position, the extractor writes `.name_raw = argument` and adds a note to `report.txt`. |
 
 The extractor names a message value from the naming overlay
 ([naming-overlay.md](naming-overlay.md)). If the overlay has no name for it, the extractor uses
@@ -286,8 +286,9 @@ naming overlay finds a behavior by its key.
 | The offset of the group is in the directory or past the end of the file, or fewer than 2 bytes follow it. | `error.InvalidRuleOffset` |
 | The rules go past the end of the file. | `error.TruncatedRules` |
 
-The extractor does not refuse unknown codes or unexpected arguments. It writes a field with the
-raw value, `.unknown_N` or `.name_raw`, and adds a note to `report.txt`.
+The extractor does not refuse unknown codes, unexpected arguments or a "Kind and `x`" operation
+that is not the second condition. It writes a field with the raw value, `.unknown_N` or
+`.name_raw`, and adds a note to `report.txt`.
 
 ## Quirks
 

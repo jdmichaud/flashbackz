@@ -145,7 +145,7 @@ An operator record has 13 words (u16):
 |---|---|---|---|
 | 0 | 2 | u16 | Key scale level |
 | 2 | 2 | u16 | Frequency multiple |
-| 4 | 2 | u16 | Feedback. The reader ignores it in the carrier. |
+| 4 | 2 | u16 | Feedback. The original files use 0 to 7. The reader ignores it in the carrier. |
 | 6 | 2 | u16 | Attack rate |
 | 8 | 2 | u16 | Sustain level |
 | 10 | 2 | u16 | Sustain: not 0 keeps the note at the sustain level |
@@ -155,7 +155,7 @@ An operator record has 13 words (u16):
 | 18 | 2 | u16 | Tremolo: not 0 is on |
 | 20 | 2 | u16 | Vibrato: not 0 is on |
 | 22 | 2 | u16 | Key scale rate: not 0 is on |
-| 24 | 2 | u16 | Connection: 0 makes the two operators sound in parallel. The reader ignores it in the carrier. |
+| 24 | 2 | u16 | Connection: 0 makes the two operators sound in parallel. The original files use 0 or 1. The reader ignores it in the carrier. |
 
 ### The OPL2 registers
 
@@ -207,6 +207,10 @@ modulator's connection is 0. Else the modulator keeps its total level. For regis
 tests the whole connection word, but for the volume it tests only the low byte (offset 26 of the
 file).
 
+With the connections and the feedbacks of the original files, the two tests give the same result,
+and the player agrees with the original. No measurement compares other values with the original.
+For them, the two tests can differ, and a feedback above 7 sets bits 4 to 7 of register 0xc0.
+
 ### The frequency of a note
 
 For a pitch p, the F-number is entry p mod 12 of this table, and the block is ⌊p / 12⌋.
@@ -223,7 +227,7 @@ For a pitch p, the F-number is entry p mod 12 of this table, and the block is �
   channel 6 (bass drum), 7 (snare drum, hi-hat) or 8 (tom-tom, cymbal). Then it sets its bit in
   register 0xbd: bit 4 bass drum, bit 3 snare drum, bit 2 tom-tom, bit 1 cymbal, bit 0 hi-hat.
   Bit 5 of that register sets the rhythm mode, and each drum write sets it.
-- The player does not limit the block to 3 bits. A pitch of 96 or more gives a block above 7.
+- The player does not limit the block to 3 bits (see the quirks).
 
 ## Playback
 
@@ -286,6 +290,10 @@ At each tick, the player does these steps:
   bend writes a block one lower than the block of the note.
 - A note that finds no free channel does not play. The player does not take the channel of a note
   that sounds.
+- The block of a note is not limited to 3 bits. A pitch of 96 or more gives a block above 7, which
+  sets bit 5 of register 0xb0, the key-on bit. Thus the release of a melodic note of that pitch
+  does not stop it. The original does the same: the cue of the title menu plays such notes, and
+  its register writes agree with the original (flashback-re `docs/floppy-music.md`).
 
 ## Sources
 

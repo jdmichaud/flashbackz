@@ -168,7 +168,8 @@ Do these steps for each cell, cell 0 first:
 | --- | --- |
 | The MAP file and the LEV or BNQ file are absent. | `NotFound` |
 | The file is larger than 1,048,576 bytes. | `TooLarge` |
-| The file is shorter than 256 bytes. | `InvalidRoomDirectory` |
+| The room number is 64 or more. | `RoomOutOfRange` |
+| The file is shorter than 256 bytes, the size of the room directory. | `InvalidRoomDirectory` |
 | An end offset is less than the previous end offset, or less than 256. | `InvalidRoomRange` |
 | The end offset is equal to the previous end offset. | `AbsentRoom` (not a failure: no room) |
 | The stream is not a valid packed stream. | See [packed-stream.md](packed-stream.md#checks) |

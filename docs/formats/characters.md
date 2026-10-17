@@ -19,7 +19,8 @@ and the value is a struct literal with the fields below.
 - The position of a character in the file is its index. The engine updates the characters in
   index order.
 - A level has at most 256 characters.
-- The first character must be of kind `player`. The engine finds Conrad as character 0.
+- The first character must be of kind `player`. The engine finds Conrad as character 0. Its
+  `room` must be 0 to 63: the level takes its colors and its first view from that room.
 - Each character name must be unique. The behavior tables and the links refer to characters by
   name.
 
@@ -59,7 +60,8 @@ The "Placement" column gives the byte of the original placement record that the 
 | `numbers` | Struct literal | All 0 | 10 to 17 | Gives the numbers of the behavior ([Numbers](#numbers)). |
 
 The label comes from the labels file, at the label number in bytes 30 and 31. The extractor
-writes `label` when the label is not empty, and `label_number` when the number is not 0.
+writes `label` when the label is not empty, and `label_number` when the number is not 0. A label
+that does not read gives an empty label and a note in the report ([labels.md](labels.md)).
 
 The extractor writes a field with a default value only when the value is not the default. It
 always writes `active`. It writes `sprite_library` for each enemy and for each character of
@@ -196,6 +198,7 @@ character name.
 | --- | --- |
 | More than 256 characters | `characters.zon: N characters; a level holds at most 256` |
 | No character, or the first is not of kind `player` | `characters.zon: the first character must be the player` |
+| The `room` of the first character is more than 63, or `.outside` | `characters.zon: the player must start in a room from 0 to 63` |
 | The root is not a struct literal | `characters.zon: expected a struct` |
 | The file is not valid ZON, for example two characters have the same name | `characters.zon: not valid ZON` |
 | A field is not in the list of fields | `CHAR: unknown field F` |

@@ -61,9 +61,9 @@ An input byte has one bit for each control:
 1. Read the descriptor of the demo. Read the file `DATA/NAME`, where NAME is the file name. The
    names compare without case ([floppy-image.md](floppy-image.md#asset-names)).
 2. Load the level of the descriptor at the normal difficulty, with a fixed random state.
-3. If the start room is not negative, put Conrad in that room at (x, y). Do not play the start
-   scene of the level.
-4. Do not show the code notice.
+3. If the start room is not negative, put Conrad in that room at (x, y).
+4. Do not play the opening scene of the level, and do not show the code notice. This applies to
+   each demo, with a start position or without.
 5. For each update, read the next input byte in place of the keys.
 6. While a world message or the inventory is open, read the next byte at each poll.
 7. When the game needs a byte after the last input byte, stop the demo.

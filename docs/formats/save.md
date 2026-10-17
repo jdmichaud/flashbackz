@@ -24,7 +24,8 @@ rows. Row 0 is the quick slot. Row r is slot r.
 | 1 to 8 | `SAVE1` to `SAVE8` | `SAVE1.INFO` to `SAVE8.INFO` | None. |
 
 The agent host can save and load under any valid record name (see
-[agent-output.md](agent-output.md)).
+[agent-output.md](agent-output.md)). A save needs a slot name of at most 59 characters. The INFO
+record name has 5 more characters, and the name rules allow at most 64 (see [Storage](#storage)).
 
 ## Storage
 
@@ -258,17 +259,16 @@ All the fields must be present.
 
 ### Fingerprint
 
-1. Take the `.zon` files of the data set ([data-set.md](data-set.md)). The name of a file is its
-   path in the data set directory, with `/` between the parts.
-2. Keep the first 1024 files in the order of the list.
-3. Sort the files by name, byte by byte, in ascending order.
-4. For each file, append its name, a `0x00` byte, its contents and a `0x00` byte.
-5. Hash the result with Wyhash (Zig `std.hash.Wyhash`), seed 0.
-6. Write the 64-bit hash as 16 lower-case hexadecimal digits, with zeros on the left as necessary.
+1. Take all the `.zon` files of the data set ([data-set.md](data-set.md)). The name of a file is
+   its path in the data set directory, with `/` between the parts.
+2. Sort the files by name, byte by byte, in ascending order.
+3. For each file, append its name, a `0x00` byte, its contents and a `0x00` byte.
+4. Hash the result with Wyhash (Zig `std.hash.Wyhash`), seed 0.
+5. Write the 64-bit hash as 16 lower-case hexadecimal digits, with zeros on the left as necessary.
 
 A data set from `--data` and a data set that the host extracts in memory have the same
-fingerprint when they have the same files. With more than 1024 files, the result also depends on
-the order of the list (step 2).
+fingerprint when they have the same files. The order in which the host lists the files does not
+change the fingerprint.
 
 ### Picture
 
@@ -294,13 +294,15 @@ message. A save with the options dialog open is possible. The game also needs th
 the data set. Else the save gives `error.NothingToSave`, `error.NoStorage` or
 `error.DataSetRequired`.
 
-1. Write the save record under the slot name.
-2. Make the picture and the date.
-3. Write the INFO record under the slot name with `.INFO` at the end.
-4. Read the slot list again when a slot page needs it.
+1. Make the INFO record name: the slot name with `.INFO` at the end. If it has more than 64
+   characters, stop with `error.InvalidName`.
+2. Write the save record under the slot name.
+3. Make the picture and the date.
+4. Write the INFO record under the INFO record name.
+5. Read the slot list again when a slot page needs it.
 
-If step 1 fails, the old records stay. If step 3 fails, the new save record stays with the old
-INFO record, or with none.
+If step 1 or 2 fails, the old records stay. If step 4 fails, the new save record stays with the
+old INFO record, or with none.
 
 ### Load
 
@@ -358,12 +360,18 @@ A load of a save record refuses these conditions:
 | A hex string has a character that is not a hexadecimal digit. | `error.InvalidSave` |
 | `terrain.changes` (also in `checkpoint`) has more than 254 items. | `error.InvalidSave` |
 | `checkpoint.characters` does not have one item for each character of the level. | `error.InvalidSave` |
+| A `state` (also in `checkpoint`) is not a state of the behavior of its character. | `error.InvalidSave` |
+| A character link is not `null` and not less than the count of characters: `owner`, `first_item`, `next_item`, `next_in_room` (also in `checkpoint`), an item of `room_lists`, the `character` of an entry or the `sender` of a letter. | `error.InvalidSave` |
+| `contacts.entry_count` is more than 256, or a contact link is 256 or more: the `next` of an entry or an item of `contacts.slots`. | `error.InvalidSave` |
+| A letter link is 256 or more: the `next` of a letter, `free_letter` or an item of `inbox`. | `error.InvalidSave` |
+| A change in `terrain` (also in `checkpoint`) has saved bytes past the end of `saved`. | `error.InvalidSave` |
+| `terrain.used_words` (also in `checkpoint`) is less than 3 × the count of changes, or less than half the count of bytes in `saved`. | `error.InvalidSave` |
 | The record name breaks the name rules. | `error.InvalidName` |
 | The record is missing. | `error.NotFound` |
 
-The reader checks the lengths of the lists, not the values in them. For example, it does not
-check that a state index or a letter link is in range. A writer must keep each value in the range
-that the engine uses.
+The game never writes a value outside these ranges. An edited record can, and the engine trusts
+the values that it loads. The reader does not check the other values, for example `room` or
+`view_room`. A writer must keep each value in the range that the engine uses.
 
 The reader refuses a record of another version. It does not convert it.
 

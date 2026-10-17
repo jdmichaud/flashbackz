@@ -166,12 +166,11 @@ game's files. The reader of `FB.EXE` checks the edition ([executable.md](executa
 | FAT 2 is not equal to FAT 1. | `FatCopiesDiffer` |
 | The high cluster word is not 0, or attribute bit 6 or 7 is set. | `InvalidDirectory` |
 | A directory has a size that is not 0. | `InvalidDirectory` |
-| A name is not a valid asset name. | `InvalidName` |
+| A name is not a valid asset name, for example a name of more than 8 components. | `InvalidName` |
 | An empty file has a first cluster that is not 0. | `InvalidChain` |
 | A chain has a cluster out of range (for example 0, 1 or `0xff7`). | `InvalidChain` |
 | Two chains use the same cluster, or a chain has a loop. | `CrossLinkedCluster` |
 | A chain has more or fewer clusters than the file size needs. | `InvalidChainLength` |
-| A directory is more than 8 levels below the root. | `DirectoryTooDeep` |
 | Two files have the same name (any case) and different bytes. | `ConflictingAsset` |
 | The set has more than 4,096 files or 32 MiB. | `TooLarge` |
 

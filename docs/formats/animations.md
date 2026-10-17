@@ -60,7 +60,8 @@ entries give the end of the file, and no state uses them.
 - **No sprite.** A frame with the sprite 0xffff does not move the character, and the character
   keeps its last sprite.
 - **Movement.** For a character that faces left, the engine adds `dx` to `x`. For a character
-  that faces right, it subtracts `dx`. It always adds `dy` to `y`.
+  that faces right, it subtracts `dx` as a 16-bit value: a `dx` of -128 adds 128. It always adds
+  `dy` to `y`.
 
 ## Procedures
 
@@ -117,12 +118,14 @@ of the file are not valid.
   the cursor, after the last frame. In the original files, these 4 bytes are the start of the
   header of the next animation. Past the end of the file, the engine uses a frame with no sprite.
   A new file must keep the same bytes after each animation, to show the same frames as the
-  original.
+  original. Such a frame can name a sprite that the level does not decode, and that sprite draws
+  nothing. Play with the original files never shows this frame: the trace sessions of the seven
+  levels and the three demos show none.
 - **The mirror of a shown frame.** When the engine shows a frame without its movement, it ignores
   bit 15 of the sprite. It mirrors the sprite only if the character faces right.
-- **A signed frame count.** In play, the engine compares the low byte of the frame count with the
-  cursor as `i8`. Thus a count from 128 to 257 plays only frame 0. The frame count must be from 1
-  to 127. In the original files, the largest count is 93.
+- **A signed frame count.** In play, and when a message stops an animation, the engine compares
+  the low byte of the frame count with the cursor as `i8`. Thus a count from 128 to 257 plays only
+  frame 0. The frame count must be from 1 to 127. In the original files, the largest count is 93.
 
 ## Sources
 

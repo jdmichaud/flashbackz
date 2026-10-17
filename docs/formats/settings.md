@@ -7,7 +7,7 @@ game reads it at start and writes it after a setting changes.
 |---|---|
 | Files | `SETTINGS` |
 | Place | The save directory, with the saves. [save.md](save.md) gives the directory, the name rules and the replacement procedure. |
-| Format | ZON text in ASCII, with a newline (`0x0a`) at the end. At most 2048 bytes. |
+| Format | ZON text in ASCII, with a newline (`0x0a`) at the end. At most 4096 bytes. |
 | Byte order | Not applicable: the record is text. |
 | Reader | `src/shared/settings.zig` (`load`, `decode`), called by `Game.initWithEntry` in `src/shared/game.zig` |
 | Writer | `src/shared/settings.zig` (`save`, `encode`), called by `Game.keepSettings` in `src/shared/game.zig` |
@@ -75,12 +75,15 @@ The game reads the record once, when it starts:
 1. Without storage, use the defaults.
 2. Read the record `SETTINGS`. If the read fails (for example, the record is missing), use the
    defaults.
-3. If the record has more than 2048 bytes, use the defaults.
+3. If the record has more than 4096 bytes, use the defaults.
 4. Parse the ZON text. If the parse fails, use the defaults.
 5. If `version` is not 2, `volume` is more than 100, or `pads` has more than 8 items, use the
    defaults.
-6. If a `model` does not have exactly 32 bytes, use the defaults.
-7. Else use the values of the record.
+6. If a `model` does not have exactly 32 bytes, or occurs a second time in `pads`, use the
+   defaults.
+7. If a pad gives one button to two actions, or gives a D-pad button to an action, use the
+   defaults.
+8. Else use the values of the record.
 
 The reader never keeps a part of a record: a refused record gives all the defaults. It does not
 write the defaults back. The record stays as it is until a setting changes.
@@ -111,15 +114,17 @@ memory, and the record does not stay after the run.
 | Condition | Result |
 |---|---|
 | The record is missing or does not read from the storage. | The defaults. |
-| The record has more than 2048 bytes. | The defaults. |
+| The record has more than 4096 bytes. | The defaults. |
 | The text is not valid ZON, a field is missing or unknown, or a value has a wrong type or range. | The defaults. |
 | `version` is not 2. | The defaults. |
 | `volume` is more than 100. | The defaults. |
 | `pads` has more than 8 items. | The defaults. |
 | A `model` does not have exactly 32 bytes. | The defaults. |
+| A `model` occurs two times in `pads`. | The defaults. |
+| Two actions of a pad have the same button. | The defaults. |
+| An action of a pad has a D-pad button (`dpad_up`, `dpad_down`, `dpad_left` or `dpad_right`). | The defaults. |
 
-The reader does not check that the five buttons of a pad are different or that they are not D-pad
-buttons. It does not check that a model occurs only one time.
+The writer never writes these pads (see [Pad list](#pad-list)).
 
 The reader refuses a record of another version. It does not convert it.
 

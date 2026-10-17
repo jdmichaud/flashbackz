@@ -35,7 +35,7 @@ DIR/
 | Path | Content | Specification |
 | --- | --- | --- |
 | `<level>/characters.zon` | Every placement of the level | [characters.md](characters.md) |
-| `<level>/behaviors/<name>.zon` | One behavior table. `<name>` is the behavior name. | [behaviors.md](behaviors.md) |
+| `<level>/behaviors/<name>.zon` | One behavior table. `<name>` is the behavior name. The loader reads only the files directly in `behaviors/`. | [behaviors.md](behaviors.md) |
 | `messages.zon` | The world messages | This document |
 | `scenes.zon` | The film of each scene, the opening scene of each level, and the ending | This document |
 | `report.txt` | The extraction report. No code reads it. | This document |
@@ -131,7 +131,7 @@ The root is a struct literal with three fields. All three are necessary.
 
 | Field | Type | Content |
 | --- | --- | --- |
-| `openings` | Struct | For each level directory name, the scene that the level asks for when it starts, or `null`. A demo that sets its own start position plays no opening scene. |
+| `openings` | Struct | For each level directory name, the scene that the level asks for when it starts, or `null`. A demo plays no opening scene ([demo.md](demo.md)). |
 | `films` | List of film or `null` | Element N is the film of scene N: the number that `play_scene` gives. `null`, or a number past the end of the list: the scene plays no film. A request for scene 61 in a level starts the ending. |
 | `ending` | Struct | The scenes and the credits of the ending |
 
@@ -211,6 +211,8 @@ The report is plain text. `--extract` also prints it.
 | `L: F uses parameter P both as a link and as a number` | No | One placement parameter is a link and a number of behavior F |
 | `L: F uses unknown operation C` | Yes | The extractor writes `.{ .unknown_C = A }`, which the loader refuses |
 | `L: F gives N the unexpected argument A` | Yes | The extractor writes `.{ .N_raw = A }`, which the loader refuses |
+| `L: F has N where no first condition gives its kind` | Yes | N takes its kind from the first condition, but it is not the second condition ([rule-groups.md](rule-groups.md#arguments)). The extractor writes `.{ .N_raw = A }`, which the loader refuses |
+| `L: placement P: label N does not read (ERROR)` | Yes | The labels file gives no valid label N ([labels.md](labels.md#checks)). The extractor writes no `label` |
 
 An unexpected note is a note on data that the extractor does not understand. The supported edition
 gives none.
@@ -238,7 +240,7 @@ directory. `--names FILE` replaces the built-in naming overlay; it is valid only
 | Time | Files |
 | --- | --- |
 | The game starts, with a data set | `scenes.zon`. The game also imports each film that it names, one time for each film and entry. |
-| A level or a demo starts | `<level>/characters.zon`, all files in `<level>/behaviors/`, `messages.zon`, `scenes.zon` |
+| A level or a demo starts | `<level>/characters.zon`, the `.zon` files directly in `<level>/behaviors/`, `messages.zon`, `scenes.zon` |
 | The ending starts | `scenes.zon` |
 
 The loader reads the behavior files of a level in the byte order of their names. This order gives
@@ -260,7 +262,7 @@ of the texts below. A text of the loader has at most 256 bytes. [characters.md](
 | The level has no `characters.zon` | `the data set has no <level>/characters.zon` |
 | A level file is not valid ZON | `FILE: not valid ZON` |
 | A glyph of a message is not in the level font | `message N: the font has no character B` |
-| Scene 61 and the scenes of `ending.scenes` have no film | `scenes.zon: no film for the ending (scene 61)` |
+| Scene 61 and the scenes of `ending.scenes` have no film | `scenes.zon: no film for the ending (scene 61 and the scenes of ending)` |
 | A glyph of the credits is not in the font | `scenes.zon: the font has no character B of the credits` |
 
 Other failures have other texts:
@@ -270,10 +272,14 @@ Other failures have other texts:
 | At start, a film of `scenes.zon` cannot play | `scene N: film F entry E cannot play: ERROR` |
 | The `--data` directory or one of its `.zon` files cannot be read | `PROGRAM: cannot open the data set DIR: not a data set written by --extract` |
 | The `--extract` directory is not empty | `PROGRAM: DIR must be a new or empty directory` |
+| The `--names` file cannot be read | `PROGRAM: cannot open the names file FILE: WHY`, with WHY `not found`, `permission denied` or `read error` |
+| `--extract` fails for another cause | `PROGRAM: extraction failed: ERROR` |
 
-A save records a hash of the names and bytes of the `.zon` files, at most 1024 files. A change
-to any `.zon` file, a comment included, makes the game refuse the older saves
-([save.md](save.md)).
+The extraction stops with `DuplicateBehaviorFile` when two behaviors of a level get the same file
+name ([naming-overlay.md](naming-overlay.md#how-the-extractor-applies-the-overlay)).
+
+A save records a hash of the names and bytes of all the `.zon` files. A change to any `.zon` file,
+a comment included, makes the game refuse the older saves ([save.md](save.md#fingerprint)).
 
 ## Sources
 

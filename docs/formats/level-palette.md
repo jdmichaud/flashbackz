@@ -87,7 +87,7 @@ the sprites shows the slot 2 colors of the first room.
 | The file is larger than 8,192 bytes. | `TooLarge` |
 | The file is empty, or its size is not a multiple of 32. | `InvalidPaletteLength` |
 | A room selects a bank that the file does not have. | `InvalidPaletteBank` |
-| The room where Conrad starts is absent. | `AbsentRoom` |
+| The room where Conrad starts is 64 or more, or is absent. | `AbsentRoom` |
 
 ## Quirks
 

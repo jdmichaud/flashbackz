@@ -112,6 +112,8 @@ The extractor does not refuse these values. It writes a note in `report.txt`:
 
 - A room above 64.
 - A start state that no rule of the group names. The character then waits in that state.
+- A label number that gives no valid label ([labels.md](labels.md#checks)). The character then
+  has no label.
 
 ## Quirks
 
