@@ -52,6 +52,8 @@ pub const Ending = struct {
     /// "SCORE  ", followed by the score's eight digits.
     score_label: [48]u8,
     code: [7]u8,
+    /// The text before the code, as the level's code notice has it (`FB.EXE`).
+    code_prefix: [6]u8,
     font: font_mod.Font,
     /// Keys held when a screen starts must be released before they count.
     held: std.EnumSet(platform.Key) = .{},
@@ -108,6 +110,7 @@ pub const Ending = struct {
             .text_colors = interface.text_colors,
             .score_label = interface.continue_labels[4],
             .code = interface.ending_code,
+            .code_prefix = interface.password_prefix,
             .font = try font_mod.decode(allocator, font_file.bytes),
         };
         errdefer ending.font.deinit();
@@ -120,9 +123,10 @@ pub const Ending = struct {
             }
         }
         if (ending.film_count == 0) {
-            std.log.err("data set: scenes.zon: no film for the ending (scene {d})", .{
-                ending_scene,
-            });
+            std.log.err(
+                "data set: scenes.zon: no film for the ending (scene {d} and the scenes of ending)",
+                .{ ending_scene },
+            );
             return error.NoEndingFilm;
         }
         for (scenes.ending.credits) |credit| {
@@ -374,7 +378,8 @@ pub const Ending = struct {
                 });
                 try self.write(indices, text, 40, 0xe5);
                 var code_line: [16]u8 = undefined;
-                const code = try std.fmt.bufPrint(&code_line, "CODE: {s}", .{
+                const code = try std.fmt.bufPrint(&code_line, "{s}{s}", .{
+                    &self.code_prefix,
                     std.mem.sliceTo(&self.code, 0),
                 });
                 try self.write(indices, code, 16, 0xe7);
