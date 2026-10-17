@@ -622,16 +622,15 @@ pub const World = struct {
                 if (!awaits(rule, letter.message)) continue;
                 const character = &self.characters[index];
                 const animation = try self.animationOf(index);
-                // The original compares `k` and the count as signed bytes. This unsigned loop
-                // gives the same frames while both stay below 128.
-                var k: usize = character.cursor;
-                while (k < animation.count()) : (k += 1) {
+                // The original compares `k` and the count as signed bytes, as `playFrame` does.
+                var k = character.cursor;
+                while (signedByte(k) < signedByte(animation.count())) : (k +%= 1) {
                     const frame = animation.frame(k);
                     if (frame.sprite == null) continue;
-                    character.x +%= if (character.facing_right) -frame.dx else frame.dx;
+                    character.x +%= towardBack(frame.dx, character.facing_right);
                     character.y +%= frame.dy;
                 }
-                character.cursor = @intCast(animation.count());
+                character.cursor = @truncate(animation.count());
                 self.column = grid.columnOf(character.x);
                 // This path sign-extends the tier, unlike the walk.
                 self.band = grid.bandSignExtended(character.y);
@@ -663,7 +662,7 @@ pub const World = struct {
         const frame = animation.frame(character.cursor);
         character.cursor +%= 1;
         const sprite = frame.sprite orelse return;
-        character.x +%= if (character.facing_right) -frame.dx else frame.dx;
+        character.x +%= towardBack(frame.dx, character.facing_right);
         character.y +%= frame.dy;
         // Sprites face left; facing right shows them mirrored.
         character.look = .{
@@ -688,6 +687,14 @@ pub const World = struct {
             .mirrored = character.facing_right,
             .composed = animation.composition,
         };
+    }
+
+    /// A frame's horizontal movement for a character facing that way. Sprites face left, so the
+    /// movement turns over for a character facing right. It widens first, as the original does:
+    /// -128 gives +128.
+    fn towardBack(dx: i8, facing_right: bool) i16 {
+        const wide: i16 = dx;
+        return if (facing_right) -wide else wide;
     }
 
     fn signedByte(value: usize) i8 {
@@ -1003,6 +1010,12 @@ pub const World = struct {
         }
     }
 };
+
+test "a frame's movement turns over for a character facing right, -128 included" {
+    try std.testing.expectEqual(@as(i16, -128), World.towardBack(-128, false));
+    try std.testing.expectEqual(@as(i16, 128), World.towardBack(-128, true));
+    try std.testing.expectEqual(@as(i16, -127), World.towardBack(127, true));
+}
 
 test "a catch-up walk keeps the world message the first walk asked for, until the draw" {
     const rules = [_]vocabulary.Rule{.{ .then = .{ .show_message = 7 }, .next = 1 }};
