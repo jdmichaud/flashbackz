@@ -837,7 +837,7 @@ flashback-re MD1–MD3.
       unchecked.
     - The music player's bend also writes to drum voices (ignored registers, and key-on bits
       on channels 7 and 8); not checked against the original.
-- [ ] **DOC-2 — A specification for each file format** (user, 2026-10-17: "For each different
+- [x] **DOC-2 — A specification for each file format** (user, 2026-10-17: "For each different
   format we need a technical specification document written in STE"). One document for each
   format that the game, the extractor or the atlas reads or writes, in `docs/formats/`, with
   an index: the original's files (disk images, archives, rooms, sprites, films, sound, the
@@ -846,6 +846,61 @@ flashback-re MD1–MD3.
   change. No original content: no bytes, texts or level codes from the files; synthetic
   examples only. Gate: every fact checked against the code that reads or writes the format;
   the index lists every file that the code opens.
+  - 2026-10-17, `6f27a57`: 36 documents and the index. Each one checked twice against its
+    reader and writer (a writer, then another agent), every change reviewed against the code.
+    FB.EXE unpacked by `executable.md` alone gives the documented sizes. A count of the
+    executable's codes, labels, messages and credits in the documents finds none; it found a
+    level code in an old PLAN note (removed, `bfbb2a3`; commit `e3ff092`'s message still holds
+    it). Links, anchors, line widths and modal verbs checked by script. `DESIGN.md` facts fixed
+    (`a27cadb`).
+  - Found while specifying, not fixed (code; each needs its own item):
+    - Panics: `flashbackz-agent --save F:SLOT` with a slot of 12 characters or more (the `.INFO`
+      name buffer, reproduced; the record stays without its INFO); a settings record with 8 pad
+      models and long button names (2,149 bytes for a 2,048-byte buffer); a data-set start room
+      of 64 or more (`level_pack` indexes 64 rooms); a frame dx of -128 on a character that
+      faces right (`playFrame`, `skipToAwaitedRule` negate an `i8`; no such frame in the files).
+    - `save.restoreWorld` and `restoreTerrain` check the lengths of lists, not their values: an
+      edited save can index out of range.
+    - The music player does not limit the block to 3 bits: a pitch of 96 or more sets key-on in
+      0xb0, so the release does not stop the note. Not checked against the original.
+    - The extractor: `labelOf` turns every label error into an empty label without a note; an
+      operation that takes its kind from the first condition gets kind 0 in another slot,
+      without a note; behavior file names can collide (the second overwrites the first);
+      `names.parse` does not refuse duplicate keys, link or number names; an overlay name for
+      message 1-4 or 12 would break the hits or `acknowledged`.
+    - The data-set reader ignores unknown fields in behavior roots, states and struct
+      arguments, but refuses them elsewhere; it loads `.zon` files at any depth under
+      `behaviors/`, and two with one file name bind characters to the first.
+    - The hosts: a missing `--names` file shows "extraction failed: FileNotFound", not the
+      prepared message; a failed in-memory extraction is logged at info level, which release
+      builds hide.
+    - The agent: `--trace` writes at most one line a host frame, not one a walk as its help
+      says; a failed `--load` resets the walk count; trace lines do not escape SLOT; the level
+      `stateHash` uses the machine's byte order, the other scenes little-endian.
+    - The tools: `agent_sessions.sh` takes the hashes from the first line of the merged output,
+      so a log line empties them; `agent_traces.sh` uses `set -e` without `pipefail`.
+    - Wrong comments or names: scene 75 has no film (`floppy_interface.zig`); archives accept
+      gaps between files (`archive.zig`); band 254 is y -107 to -36 (`grid.zig`); a failed
+      settings write retries at each update (`game.zig` `keepSettings`); demos skip the
+      opening scene only with a start position (`level.zig` `loadWithStart`; no effect with
+      the supplied data); `Screen.init`'s `demo` receives `start != null`; the ending's error
+      names scene 61 but fails only when no ending scene has a film.
+    - `ending.zig` writes the code notice's prefix as a literal; `level_pack` reads it from
+      FB.EXE.
+    - Unreachable or unchecked: `DirectoryTooDeep` (`floppy.zig`); the eighth level code has no
+      0-byte check; `floppy_rooms.decode` calls a room past 63 `InvalidRoomDirectory`.
+    - `character_art` decodes only the frames inside each animation, but `showFrame` can show
+      the frame after the last one: drawn as nothing if no animation decodes its sprite. Not
+      checked against the original data.
+    - `music.zig`: register 0xc0 tests the whole connection word, the volume only its low byte;
+      the feedback is not masked to 3 bits. No effect with the supplied files.
+  - flashback-re documents that the code contradicts (for that repository's plan):
+    `sprite-port-map.md` (raw records), `rule-vocabulary.md` (names of codes 68 and 135,
+    arguments of six operations, `strike`'s second hit, codes 72 and 95 always true, carrier
+    248), `rules/engine-level.md` 1.4 (bit 2 of byte 0x15), `animation-port-map.md` (pose byte),
+    `rules/engine-update.md` 3 (a byte, not a word), `falls-and-continue.md` (the SCORE
+    decoder), `reference-environment.md` (three archives), `gameplay-sound.md` (35 ms queue),
+    `floppy-demo.md` (the opening scene).
 
 ## Historical CD implementation/research milestones
 
