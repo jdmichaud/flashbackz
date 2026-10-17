@@ -908,9 +908,13 @@ The user, on DOC-2's list: "Fix the bug, update the docs, strengthen the scripts
 keeps play unchanged unless it says so: the gate of each is `zig build test`, smoke and verify,
 zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reproduced.
 
-- [ ] **FX-1 — No crash on unusual input.** A slot name of any length (`--save`), a settings
+- [x] **FX-1 — No crash on unusual input.** A slot name of any length (`--save`), a settings
   record of 8 pads with long button names, a start room of 64 or more, a frame dx of -128: each
   is refused with an error or handled, never a panic. A test for each.
+  - 2026-10-17, `0937521`..`0e6ed02`: the four, plus two of DOC-1's list (`skipToAwaitedRule`'s
+    unsigned loop and its cast; `Contacts.cellKey`'s negative column). A test for each; the
+    contacts case fails without its fix. The agent with a 60-character slot reports InvalidName
+    and writes nothing. Tests 279/279, smoke and verify, sessions and traces unchanged.
 - [ ] **FX-2 — Bad data is refused, not let through.** The save reader checks the values it
   restores, not only the lengths. The extractor notes a label error and a missing kind, and
   refuses two behaviors with one file name; the naming overlay refuses duplicate keys, link and
