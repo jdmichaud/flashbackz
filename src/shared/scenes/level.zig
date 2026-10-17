@@ -177,7 +177,10 @@ pub const Scene = struct {
         );
         errdefer scene.deinit();
         scene.demo = .{ .bytes = recording.controls };
+        // A demo shows no code notice and plays no opening scene, with a start position or
+        // without (flashback-re docs/floppy-demo.md).
         scene.screen.password_frames = 0;
+        scene.requested_scene = null;
         // Demos replay from a fixed random state.
         scene.world.random = .{};
         return scene;
@@ -253,7 +256,7 @@ pub const Scene = struct {
         );
         errdefer world.deinit();
         const screen = try allocator.create(Screen);
-        screen.* = .init(start != null);
+        screen.* = .init();
         return .{
             .allocator = allocator,
             .arena = arena,
@@ -261,8 +264,7 @@ pub const Scene = struct {
             .data = data,
             .messages = messages,
             .scenes = scenes,
-            // Demos start without their level's opening scene.
-            .requested_scene = if (start != null) null else openingScene(scenes, level),
+            .requested_scene = openingScene(scenes, level),
             .pack = pack,
             .world = world,
             .screen = screen,

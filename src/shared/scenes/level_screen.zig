@@ -107,8 +107,10 @@ pub const Screen = struct {
         }
     };
 
-    pub fn init(demo: bool) Screen {
-        return .{ .password_frames = if (demo) 0 else 150 };
+    /// A level shows its code notice for its first 150 frames; a demo shows none
+    /// (`Scene.loadDemo`).
+    pub fn init() Screen {
+        return .{ .password_frames = 150 };
     }
 
     /// Composes the frame for the engine's state after an update (the original's draw
