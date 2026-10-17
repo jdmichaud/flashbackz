@@ -1,5 +1,9 @@
-//! Floppy startup presentation, title menu and game-entry transitions.
-//! Scene transitions own their resources; inputs are never forwarded into a new scene.
+//! The title scene: the floppy edition's logos and introduction, the title menu with its
+//! pages, and the game over film. A scene change frees this scene's resources, and no input
+//! goes on into the new scene.
+//!
+//! The scene ends when it sets `stage` to `ready`, `demo_ready`, `ending_ready` or `quit`.
+//! Game reads `stage` after each `update`, and `load_page.outcome` on the LOAD page.
 const std = @import("std");
 const platform = @import("../platform.zig");
 const menu_art = @import("../content/menu_artwork.zig");
@@ -21,7 +25,9 @@ pub const Stage = enum {
     introduction,
     game_over,
     menu,
+    /// START or a level code chose a level: Game loads `selected_level`.
     ready,
+    /// DEMO or the idle timer: Game plays the next demo, or the introduction after the third.
     demo_ready,
     /// The eighth level code was entered: the ending plays.
     ending_ready,
@@ -81,6 +87,7 @@ pub const Scene = struct {
         return .{ .allocator = allocator, .source = source, .assets = assets };
     }
 
+    /// Starts the logos film. It first checks that the introduction's files are there.
     pub fn intro(self: *Scene) !void {
         for ([_][]const u8{
             "DATA/INTRO1.CMD",
@@ -181,6 +188,7 @@ pub const Scene = struct {
         return .{ .width = 256, .height = 224 };
     }
 
+    /// Runs the password's cursor, the main page's idle timer, the film in play and the music.
     pub fn update(self: *Scene, p: *platform.Platform) !void {
         if (self.view == .password) {
             self.blinkCursor(p.nowNs());
@@ -203,6 +211,8 @@ pub const Scene = struct {
                 self.skip_requested = false;
             }
             const skipped = self.skip_requested;
+            // A film ended or was skipped. The logos lead to INTRO1, INTRO1 to INTRO2 (unless
+            // skipped), and the other films to the menu.
             if (skipped or try player.update(p.nowNs())) {
                 if (self.stage == .game_over) {
                     player.deinit();
@@ -276,6 +286,8 @@ pub const Scene = struct {
         self.stage = .game_over;
     }
 
+    /// A device event: the host's quit event quits, a film takes its skip keys, and the menu's
+    /// pages take the key presses.
     pub fn event(self: *Scene, input: platform.Event) !void {
         if (input.payload == .quit) {
             self.stage = .quit;

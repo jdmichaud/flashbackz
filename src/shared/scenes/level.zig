@@ -1,6 +1,15 @@
-//! A level run entirely by the behavior engine (DESIGN.md section 4): every character, Conrad
-//! included, follows its behavior table, and the screen shows the engine's state the way the
-//! original presents it (flashback-re docs/rules/engine-presentation.md).
+//! The level scene: one level in play (DESIGN.md section 4). It joins the world
+//! (behavior/world.zig), the screen (level_screen.zig), the sound effects and the films that the
+//! world requests. The screen shows the world as the original does (flashback-re
+//! docs/rules/engine-presentation.md).
+//!
+//! One play frame:
+//! 1. `step` reads the input byte: the keys held at the deadline, or the next demo byte.
+//! 2. A film that the last frame requested plays now, before the walk (see `film`).
+//! 3. `walks` gives the byte to the world: one walk, or two after a late frame.
+//! 4. `finishFrame` serves a world message, Esc and the inventory key, then flips the screen.
+//!
+//! The scene ends when it sets `outcome`. Game reads `outcome` after each `update`.
 const std = @import("std");
 const behavior = @import("../behavior/root.zig");
 const level_pack = @import("../content/level_pack.zig");
@@ -49,7 +58,7 @@ pub const Outcome = union(enum) {
     ending,
 };
 
-/// A level being played: the engine, the screen, the player's keys and the sound effects.
+/// A level in play: the world, the screen, the player's keys and the sound effects.
 pub const Scene = struct {
     allocator: std.mem.Allocator,
     /// Owns the level's data set.
@@ -64,10 +73,13 @@ pub const Scene = struct {
     keys: input_mod.Tracker = .{},
     /// A demo replays its recorded input bytes instead of the keys.
     demo: ?Demo = null,
+    /// The play clock (`step_clock.level`). It starts at the first `update`.
     clock: ?step_clock.Clock = null,
-    /// While a world message shows, the keys are polled every three display refreshes and the
-    /// world waits.
+    /// While a world message shows, the scene reads the keys every three display refreshes,
+    /// and the world waits.
     message_clock: ?step_clock.Clock = null,
+    /// The device events not read yet, in time order. Each poll takes the events up to its
+    /// deadline.
     pending: std.ArrayList(platform.Event) = .empty,
     effects: audio_effects.Player,
     outcome: Outcome = .playing,
@@ -83,8 +95,10 @@ pub const Scene = struct {
     frame_controls: u8 = 0,
     /// The scene the last update requested: it plays at the start of the next one.
     requested_scene: ?i16 = null,
-    /// A film the game must play now; the update waits for it with its input latched.
+    /// A film the game must play now; the update waits for it with its input latched. Game
+    /// plays the film, then calls `finishFilm`.
     film: ?data_set.Film = null,
+    /// The input byte read before the film. The walk after the film uses it.
     after_film: u8 = 0,
     /// The last frame ended late: this one walks the characters twice and draws once.
     catch_up_due: bool = false,
@@ -92,7 +106,8 @@ pub const Scene = struct {
     caught_up: bool = false,
     /// The catch-up walks run so far: how often the host fell behind.
     catch_up_walks: u32 = 0,
-    /// The walks run so far in this scene, for tests that follow them one by one.
+    /// The walks that this scene ran. Game adds them to the play time that a save keeps, and
+    /// tests follow them one by one.
     walk_count: u64 = 0,
 
     const Options = struct {
@@ -111,6 +126,8 @@ pub const Scene = struct {
         const max_items = 32;
     };
 
+    /// A demo's recorded input bytes. Each walk, and each poll of a world message or the
+    /// inventory, reads the next byte. `cursor` is the index of that byte.
     pub const Demo = struct {
         bytes: []u8,
         cursor: usize = 0,
@@ -280,14 +297,21 @@ pub const Scene = struct {
         }
     }
 
-    /// Runs the updates due by `now_ns`, at the original's cadence.
     /// Runs the updates due by `now_ns`, at the original's cadence, with the game's `settings`
     /// (the options dialog changes them).
+    ///
+    /// One loop iteration serves one clock. The order of priority:
+    /// 1. the options dialog, a poll every display refresh;
+    /// 2. the inventory, a poll every display refresh;
+    /// 3. a world message, a poll every three display refreshes;
+    /// 4. play, a frame every two timer ticks (three after the first frame or a catch-up walk).
+    /// One call runs at most 8 iterations; the next calls run the rest. When a modal screen
+    /// closes, its open time moves the play clock's origin, so play resumes where it stopped.
     pub fn update(self: *Scene, now_ns: u64, settings: *Settings) !void {
         if (self.clock == null) {
             self.clock = try step_clock.Clock.init(step_clock.level, now_ns);
-            // The automatic zoom option lasts for the program run; a permanent zoom does not
-            // survive a new game or a continue.
+            // The SETTINGS record keeps the zoom row, but a level takes only AUTO from it. A
+            // permanent zoom does not survive a new level, a new game or a continue.
             self.screen.zoom.automatic = settings.zoom == .auto;
         }
         var work: usize = 0;
@@ -332,6 +356,9 @@ pub const Scene = struct {
     /// A frame that ends a tick after its wait was due leaves a catch-up walk to the next
     /// frame, which follows at once; the time lost is dropped. Modal screens and films do not
     /// count: the original stops or restarts its tick counter for them.
+    ///
+    /// A host that calls `update` at least every three ticks (about 23 times a second) never
+    /// makes a frame late. A slower host loses time, because one catch-up walk cannot make it up.
     fn checkLate(self: *Scene, now_ns: u64) !void {
         if (!self.clock.?.behind(now_ns, 1)) return;
         self.catch_up_due = true;
@@ -348,6 +375,7 @@ pub const Scene = struct {
         try self.afterMessage(now_ns, settings);
     }
 
+    /// The frame after its world message, or with no message: the zoom's timers, then Esc.
     fn afterMessage(self: *Scene, now_ns: u64, settings: *Settings) !void {
         self.screen.afterDraw();
         if (self.keys.escape) {
@@ -368,13 +396,16 @@ pub const Scene = struct {
         try self.afterOptions(now_ns);
     }
 
+    /// The end of the frame, after the options dialog or with no dialog: the inventory key, or
+    /// else the flip.
     fn afterOptions(self: *Scene, now_ns: u64) !void {
         if (try self.openInventory(self.frame_controls, now_ns)) return;
         self.screen.flip(&self.pack, &self.world);
     }
 
-    /// The options dialog takes key presses; resuming applies its settings, and abandoning the
-    /// game leads to the continue screen, as a defeat does.
+    /// The options dialog takes key presses and changes the settings at once. When it closes,
+    /// the screen takes its zoom row. ABORT GAME leads to the continue screen, as a defeat
+    /// does.
     fn pollOptions(self: *Scene, deadline: u64, settings: *Settings) !void {
         const options = &self.options.?;
         while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
@@ -400,6 +431,7 @@ pub const Scene = struct {
         }
         const outcome = options.menu.outcome orelse return;
         self.screen.zoom.setRow(@backingInt(settings.zoom));
+        // The play clock skips the time that the dialog was open.
         const paused = deadline -| options.clock.origin_ns;
         self.options = null;
         self.keys.unlatch();
@@ -411,6 +443,7 @@ pub const Scene = struct {
         try self.afterOptions(deadline);
     }
 
+    /// The deadline of the clock that `update` serves next, in the same order of priority.
     pub fn nextDeadline(self: *const Scene) ?u64 {
         if (self.options) |options| return options.clock.deadline();
         if (self.inventory) |inventory| return inventory.clock.deadline();
@@ -418,7 +451,8 @@ pub const Scene = struct {
         return if (self.clock) |clock| clock.deadline() else null;
     }
 
-    /// The world message takes the keyboard: keys held now count only once released.
+    /// The world message takes the keyboard: keys held now count only once released. Its
+    /// first poll comes three display refreshes later.
     fn openMessage(self: *Scene, now_ns: u64) !void {
         var cadence = step_clock.inventory;
         cadence.initial_gap_ticks = 3;
@@ -456,12 +490,14 @@ pub const Scene = struct {
             self.message_clock == null;
     }
 
+    /// True when a poll or a frame is due by `now_ns`. A film or an outcome stops the clocks.
     pub fn needsCatchup(self: *const Scene, now_ns: u64) bool {
         if (self.outcome != .playing or self.film != null) return false;
         return if (self.nextDeadline()) |time| now_ns >= time else false;
     }
 
-    /// One update with the input held at `deadline`; returns the input byte it used last.
+    /// One play frame with the input held at `deadline`: a requested scene, or the walks.
+    /// Returns the input byte that it read last.
     fn step(self: *Scene, deadline: u64, settings: Settings) !u8 {
         const held = self.takeKeys(deadline, settings.joystick);
         // Tab or Backspace ends a demo.
@@ -487,6 +523,7 @@ pub const Scene = struct {
     }
 
     /// The demo's next input byte, or the keys `held`. Null when the demo has ended.
+    /// `keys.collapse` then removes a diagonal: the byte keeps the last single direction.
     fn input(self: *Scene, held: u8) ?u8 {
         const raw = if (self.demo) |*demo| byte: {
             if (demo.cursor == demo.bytes.len) {
@@ -500,7 +537,8 @@ pub const Scene = struct {
     }
 
     /// The frame's walk, and after a late frame a catch-up walk with the input read again,
-    /// unless the inventory key is held. Returns the input byte read last.
+    /// unless the inventory key is held. Of two walks, the first (`.first_of_two`) is not
+    /// drawn; the second is `.catch_up`. Returns the input byte read last.
     fn walks(self: *Scene, controls: u8, deadline: u64, settings: Settings) !u8 {
         const twice = self.catch_up_due and controls & 0x80 == 0;
         try self.walk(controls, if (twice) .first_of_two else .only, self.soundEnabled(settings));
@@ -557,6 +595,9 @@ pub const Scene = struct {
         self.frameWait();
     }
 
+    /// One walk of the world with the input byte `controls`, as `World.Controls`. Its bits
+    /// must match the order of `input.Action` and the masks of operations/input.zig. After the
+    /// walk, the walk's sounds go to the effects player, then the scene acts on the outcome.
     fn walk(
         self: *Scene,
         controls: u8,
@@ -674,6 +715,7 @@ pub const Scene = struct {
                 }
             }
         }
+        // A demo replays one recorded byte at each poll: its bits replace the keys.
         if (self.demo) |*demo| {
             if (demo.cursor == demo.bytes.len) {
                 self.outcome = .aborted;
@@ -693,6 +735,7 @@ pub const Scene = struct {
             .stay => {},
             .choose => |index| {
                 self.world.selectItem(0, inventory.items[index]);
+                // The play clock skips the time that the inventory was open.
                 const paused = deadline -| inventory.clock.origin_ns;
                 self.inventory = null;
                 self.inventory_delay = 10;
@@ -780,6 +823,8 @@ pub const Scene = struct {
         return &self.screen.colors;
     }
 
+    /// Writes the displayed picture, with the inventory or the options dialog over it, as
+    /// palette indices and as RGBA.
     pub fn draw(self: *const Scene, indices: []u8, rgba: []u8, settings: Settings) !void {
         // Most frames draw nothing over the picture: no copy then.
         if (self.inventory == null and self.options == null) {

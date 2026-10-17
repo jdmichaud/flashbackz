@@ -1,4 +1,8 @@
-//! Continue/Abort presentation and bounded display-clock polling after a defeat.
+//! The continue screen after a defeat: the player retries the level or abandons the game
+//! before a countdown runs out. It polls the keys once every display refresh
+//! (`step_clock.inventory`).
+//!
+//! The scene ends when it sets `menu.outcome`. Game reads it after each `update`.
 const std = @import("std");
 const platform = @import("../platform.zig");
 const artwork = @import("../content/continue_artwork.zig");
@@ -6,6 +10,7 @@ const palette = @import("../content/palette.zig");
 const text = @import("../render/text.zig");
 const timing = @import("../step_clock.zig");
 const input = @import("../input.zig");
+/// The keys that confirm the row chosen.
 const confirm_keys = [_]platform.Key{
     .enter,
     .space,
@@ -16,6 +21,7 @@ const confirm_keys = [_]platform.Key{
     .right_ctrl,
 };
 pub const Choice = enum { retry, abort };
+/// What the screen shows: the row chosen, the countdown and the highlight's brightness.
 pub const View = struct {
     choice: Choice = .retry,
     seconds: i16 = 10,
@@ -24,19 +30,31 @@ pub const View = struct {
 pub const Menu = struct {
     allocator: std.mem.Allocator,
     score: u32,
+    /// The row that a confirmation takes.
     choice: Choice = .retry,
+    /// The countdown: from 10 to 0 on the screen; at -1 the game is abandoned.
     seconds: i16 = 10,
+    /// The highlight's brightness: from 0 to 62, in steps of 2.
     pulse: u8 = 0,
     brightening: bool = true,
+    /// What the screen shows. Each poll copies `choice` and `seconds` into it before it
+    /// changes them, so the view lags one poll.
     view: View = .{},
     outcome: ?Choice = null,
+    /// The confirmation key that the last poll found held.
     activation_key: ?platform.Key = null,
+    /// Escape, Up and Down, held. A poll uses up an Up or a Down; a release before the poll
+    /// loses it.
     cancel_pending: bool = false,
     up_pending: bool = false,
     down_pending: bool = false,
+    /// The keys of `confirm_keys` held, in the same order.
     held_confirmation: [confirm_keys.len]bool = @splat(false),
+    /// The poll clock. It starts at the first `update`.
     clock: ?timing.Clock = null,
+    /// The timer tick of the last countdown step.
     last_second_tick: u64 = 0,
+    /// The key events not polled yet, in time order.
     events: std.ArrayList(platform.Event) = .empty,
     pub fn init(allocator: std.mem.Allocator, score: u32) Menu {
         return .{ .allocator = allocator, .score = score };
@@ -45,6 +63,7 @@ pub const Menu = struct {
         self.events.deinit(self.allocator);
         self.* = undefined;
     }
+    /// Queues a key event or a focus loss for the polls; the other events do not count.
     pub fn event(self: *Menu, event_in: platform.Event) !void {
         switch (event_in.payload) {
             .key_up, .key_down, .focus_lost => {},
@@ -104,6 +123,12 @@ pub const Menu = struct {
                 .{ .key_up = .{ .key = key } },
         });
     }
+    /// Runs the polls due by `now`, at most 8 in one call. Each poll, in this order:
+    /// 1. It applies the key events up to its deadline.
+    /// 2. Escape, or the countdown at -1, abandons the game, also over a confirmation.
+    /// 3. A confirmation key ends the screen with `choice`.
+    /// 4. `view` takes `choice` and `seconds`, then Up or Down changes `choice`.
+    /// 5. The pulse moves 2 steps, and the countdown drops when its time has come.
     pub fn update(self: *Menu, now: u64) !void {
         if (self.clock == null) {
             self.clock = try timing.Clock.init(timing.inventory, now);
@@ -129,6 +154,7 @@ pub const Menu = struct {
                 self.outcome = self.choice;
                 return;
             }
+            // The view takes the values before this poll changes them: it lags one poll.
             self.view.choice = self.choice;
             self.view.seconds = self.seconds;
             if (self.up_pending) {
@@ -138,6 +164,7 @@ pub const Menu = struct {
                 self.choice = .abort;
                 self.down_pending = false;
             }
+            // The pulse goes up to 62 and down to 0, in steps of 2.
             if (self.pulse >= 61) {
                 self.brightening = false;
             }
@@ -146,6 +173,7 @@ pub const Menu = struct {
             }
             self.pulse = if (self.brightening) self.pulse + 2 else self.pulse - 2;
             self.view.pulse = self.pulse;
+            // A second of the countdown lasts 60 timer ticks: about 0.86 s.
             const tick = timing.ticksIn(deadline - self.clock.?.origin_ns);
             if (tick - self.last_second_tick >= 60) {
                 self.seconds -= 1;
@@ -203,6 +231,7 @@ pub const Menu = struct {
         return hash.final();
     }
 };
+/// The continue screen: its art and its menu.
 pub const Scene = struct {
     assets: artwork.Assets,
     menu: Menu,
@@ -237,6 +266,8 @@ pub const Scene = struct {
     }
 };
 
+/// Draws `view`: the title, the countdown, the two rows and the score. The chosen row has
+/// color 0xe4, whose green and blue follow the pulse.
 pub fn drawView(
     art: *const artwork.Assets,
     view: View,

@@ -1,4 +1,6 @@
 //! A film with its music, shown while the world waits.
+//!
+//! The film ends when `update` returns true. Game reads the result and then resumes the level.
 const std = @import("std");
 const platform = @import("../platform.zig");
 const vector = @import("vector_player.zig");

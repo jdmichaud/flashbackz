@@ -2,6 +2,9 @@
 //! play time, and under them the selected one's picture and date. Choosing a slot saves into it,
 //! asking first over a save, or loads it; a save of another version or data set is shown and
 //! not loaded. The game reads the slots, draws the picture and saves or loads.
+//!
+//! The page ends when it sets `outcome`. Game reads it and sets it back to null; the title
+//! scene does the same for `back` on its LOAD page.
 const std = @import("std");
 const input = @import("../input.zig");
 const save = @import("../save.zig");
@@ -11,7 +14,7 @@ const content_level = @import("../content/level.zig");
 const step_clock = @import("../step_clock.zig");
 
 pub const Mode = enum { save, load };
-/// The quick slot, then the eight others.
+/// The quick slot, then the eight others. Row 0 is QUICK, and row r is SAVE r.
 pub const row_count = 1 + save.slot_count;
 pub const Outcome = union(enum) {
     back,
@@ -22,7 +25,8 @@ pub const Outcome = union(enum) {
 pub const picture_x = 16;
 pub const picture_y = 158;
 
-/// The storage name of row `row`.
+/// The storage name of row `row`: QUICK for row 0, SAVE r for row r. `save.slotName` counts
+/// its slots from 0 (slot 0 is SAVE1), so row r gives it r - 1.
 pub fn slotName(row: usize, buffer: *[8]u8) []const u8 {
     return if (row == 0) save.quick_slot else save.slotName(row - 1, buffer);
 }
@@ -59,7 +63,7 @@ pub const Page = struct {
         }
     }
 
-    /// A pad's B: no to the question, or back.
+    /// A pad's START, through `game_options.Menu.back`: no to the question, or back.
     pub fn back(self: *Page) void {
         self.refused = false;
         if (self.confirming) {

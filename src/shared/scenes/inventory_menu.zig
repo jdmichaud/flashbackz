@@ -1,5 +1,7 @@
-//! Inventory navigation and presentation. The visible selection precedes the next input
-//! transition; closing chooses the last displayed item, including while showing the score.
+//! The inventory: its navigation and its picture. Each poll shows the selection first, then the
+//! input moves it. The close button chooses the item shown last, also while the score shows.
+//!
+//! The inventory ends when `poll` returns `.choose`. The level scene reads the result.
 const std = @import("std");
 const sprite = @import("../content/sprite.zig");
 const font_mod = @import("../content/font.zig");
@@ -23,9 +25,9 @@ const Directions = struct {
     down: bool = false,
 };
 
-/// Navigation consumes a make, including a repeated key-down event. The buttons remain held,
-/// as the input byte's bits: Shift, Space or Return shows the score, Tab or Backspace closes.
-/// Mixed axes retain the preceding sampled directions, as in gameplay input.
+/// Each direction press gives one move, and so does a repeated key-down. The buttons stay
+/// held, as the input byte's bits: Shift, Space or Return shows the score, and Tab or
+/// Backspace closes. A diagonal keeps the directions of the sample before, as in play.
 pub const Keys = struct {
     directions: Directions = .{},
     previous: Directions = .{},
@@ -48,6 +50,8 @@ pub const Keys = struct {
         }
     }
 
+    /// The input of one poll. It uses up the direction that it gives: the next poll needs a
+    /// new press.
     pub fn sample(self: *Keys) Input {
         const d = self.directions;
         if (!((d.left or d.right) and (d.up or d.down))) {
@@ -111,8 +115,11 @@ pub const Artwork = struct {
 
 pub const Menu = struct {
     count: usize,
+    /// The item that the input selects. The view shows it at the next poll.
     cursor: usize = 0,
+    /// The item that the view showed last; the close button chooses it.
     last_displayed: usize = 0,
+    /// A score button was held at the last poll: the next poll shows the score.
     score_next: bool = false,
     view: View = .{ .items = 0 },
 
@@ -121,6 +128,8 @@ pub const Menu = struct {
         return .{ .count = count };
     }
 
+    /// One poll. The close button chooses the item shown last. Else the view takes the cursor
+    /// (or the score), and then the input moves the cursor in its row of four or by a row.
     pub fn poll(self: *Menu, input: Input) Result {
         if (input.close) return .{ .choose = self.last_displayed };
         self.view = if (self.score_next) .score else .{ .items = self.cursor };

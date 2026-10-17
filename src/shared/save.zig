@@ -20,6 +20,8 @@ pub const version = 2;
 pub const quick_slot = "QUICK";
 pub const slot_count = 8;
 
+/// The storage name of slot `slot`, counted from 0: slot 0 is SAVE1. The slots page shows
+/// QUICK on row 0, so its row r is slot r - 1 (`save_slots.slotName`).
 pub fn slotName(slot: usize, buffer: *[8]u8) []const u8 {
     return std.fmt.bufPrint(buffer, "SAVE{d}", .{ slot + 1 }) catch unreachable;
 }
@@ -226,7 +228,8 @@ pub fn readSlot(
     };
 }
 
-/// The data set's fingerprint: its files, in name order, hashed.
+/// The data set's fingerprint: its files, in name order, hashed. Only the first 1024 files
+/// that `files` lists count; the others do not change the fingerprint.
 pub fn fingerprint(files: *const data_set.Files) u64 {
     var names_buffer: [1024][]const u8 = undefined;
     const count = @min(files.count(), names_buffer.len);

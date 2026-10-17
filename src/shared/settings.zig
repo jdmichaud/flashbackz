@@ -102,6 +102,7 @@ pub const PadModel = struct {
 };
 pub const max_pad_models = 8;
 
+/// The player's settings. Game owns them and gives them to the scenes.
 pub const Settings = struct {
     /// The master volume, in percent.
     volume: u8 = 100,
@@ -109,8 +110,9 @@ pub const Settings = struct {
     music: bool = true,
     /// The original's Joystick option: the pads drive Conrad.
     joystick: bool = false,
-    /// The zoom view (flashback-re engine-presentation 4.3). Only the automatic zoom lasts
-    /// beyond a level: a permanent zoom does not survive a new game or a continue.
+    /// The zoom view (flashback-re engine-presentation 4.3). The record keeps it, but only the
+    /// automatic zoom lasts beyond a level: a level that starts takes only AUTO from it. A
+    /// permanent zoom does not survive a new level, a new game or a continue.
     zoom: Zoom = .off,
     /// The pad models given a layout other than the fixed one.
     pads: [max_pad_models]?PadModel = @splat(null),

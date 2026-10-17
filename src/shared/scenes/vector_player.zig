@@ -1,5 +1,9 @@
-//! Cinematic presentation owns one imported film. A logical hold clock and presentation
-//! cadence are independent of the host's refresh rate; no DOS program state is retained.
+//! The film player: it owns one imported film and presents its pictures at the original's
+//! cadence. The film's own clock counts from its first `update`, so the host's refresh rate
+//! does not change it. No DOS program state is kept.
+//!
+//! A film ends when `update` returns true. Its owner (a Story, the title or the ending) reads
+//! the result and then closes the film.
 const std = @import("std");
 const platform = @import("../platform.zig");
 const content = @import("../content/vector_cinematic.zig");
@@ -8,6 +12,8 @@ const palette = @import("../content/palette.zig");
 const step_clock = @import("../step_clock.zig");
 
 /// When a film presents: a present waits for its timer ticks, then for the next display refresh.
+/// `deadline_ns` counts from the film's start, and the display refreshes fall at whole
+/// multiples of `refresh_ns` from that start.
 pub const Cadence = struct {
     // English reference profile: calibrated hold ticks and the measured video cadence.
     const timer_numerator: u64 = step_clock.counts_per_tick * std.time.ns_per_s;
@@ -15,11 +21,15 @@ pub const Cadence = struct {
     const refresh_ns = step_clock.vga_frame_ns;
     deadline_ns: u64 = 0,
 
-    /// Timer ticks elapsed at the deadline.
+    /// Whole timer ticks elapsed at the deadline.
     pub fn elapsedTicks(self: Cadence) u64 {
         return self.deadline_ns * timer_denominator / timer_numerator;
     }
 
+    /// Moves the deadline to `ticks` timer ticks after the last whole tick at or before it.
+    /// The exact time of that tick, rounded up to the nanosecond, then goes to the next
+    /// display refresh strictly after it. Zero ticks keep the deadline. A deadline above one
+    /// hour is an error; `Player.rebase` keeps a long wait below it.
     pub fn hold(self: *Cadence, ticks: u32) !void {
         if (ticks == 0) return;
         if (self.deadline_ns > 3600 * std.time.ns_per_s) return error.CinematicDurationTooLarge;
@@ -54,16 +64,23 @@ pub fn skips(input: platform.Event.Payload, joystick: bool) bool {
     };
 }
 
+/// A film in play: its pictures, the picture shown and the film's clock.
 pub const Player = struct {
     movie: content.OwnedFilm,
     playback: film.Playback,
+    /// The deadline of the next present, after `origin_ns`.
     cadence: Cadence,
+    /// The film's start on the host's clock; null before the first `update`. A pause, a
+    /// static wait and `rebase` move it forward.
     origin_ns: ?u64 = null,
+    /// The player answered the page that waits for input.
     confirmed: bool = false,
     /// P's toggle as the film last saw it.
     pause_requested: bool = false,
     /// Since when the film stands still for P.
     paused_at: ?u64 = null,
+    /// True while the film waits for an answer: on a frame that a confirmation ends, or in an
+    /// input loop.
     pub fn awaitingInput(self: *const Player) bool {
         if (self.playback.finished or self.confirmed) return false;
         if (self.movie.frames[self.playback.frame].confirm_ends) return true;
@@ -74,6 +91,7 @@ pub const Player = struct {
         }
         return false;
     }
+    /// A page that waits for its answer without animation: its loop is itself, of 0 ticks.
     fn staticInputWait(self: *const Player) bool {
         const frame = self.movie.frames[self.playback.frame];
         return frame.input_loop_start == self.playback.frame and frame.loop_ticks == 0;
@@ -128,6 +146,8 @@ pub const Player = struct {
         self.movie.deinit();
         self.* = undefined;
     }
+    /// Presents at most one picture, when its deadline has come. The first call starts the
+    /// film's clock. Returns true when the film has ended.
     pub fn update(self: *Player, now_ns: u64) !bool {
         if (self.paused_at != null) return self.playback.finished;
         if (self.origin_ns == null) {
@@ -141,6 +161,11 @@ pub const Player = struct {
         return self.playback.finished;
     }
 
+    /// Presents the next picture:
+    /// 1. On a frame that a confirmation ends, a confirmation ends the film.
+    /// 2. In an input loop with no confirmation, the film goes back to the loop's start.
+    /// 3. Else the film advances one picture and holds it. When the film leaves a loop, it
+    ///    uses up the confirmation. After a static wait, the hold counts from now.
     fn present(self: *Player, now_ns: u64) !void {
         if (self.movie.frames[self.playback.frame].confirm_ends and self.confirmed) {
             self.playback.finished = true;
@@ -162,9 +187,9 @@ pub const Player = struct {
             try self.cadence.hold(self.shownTicks());
         }
     }
-    /// A page waits for its answer as long as the player does. After ten minutes the film's
-    /// time origin moves forward, its next deadline staying where it is, so that the cadence's
-    /// arithmetic stays within its bound.
+    /// A page waits for its answer as long as the player does. After 600 s of film, the origin
+    /// moves forward and the deadline moves back by the same whole refreshes. The deadline
+    /// keeps its time on the host's clock, and the cadence's arithmetic stays within its bound.
     fn rebase(self: *Player) void {
         const origin = &(self.origin_ns orelse return);
         if (self.cadence.deadline_ns < 600 * std.time.ns_per_s) return;
@@ -173,6 +198,8 @@ pub const Player = struct {
         origin.* += shift;
     }
 
+    /// True when the next picture is due. A paused or finished film, or a static wait with no
+    /// answer, is never due.
     pub fn needsCatchup(self: *const Player, now_ns: u64) bool {
         if (self.paused_at != null) return false;
         if (self.staticInputWait() and !self.confirmed) return false;

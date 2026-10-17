@@ -1,5 +1,7 @@
 //! The in-game options dialog, while the world is paused: it changes the game's settings as
 //! they are chosen.
+//!
+//! The dialog ends when it sets `outcome`. The level scene reads it at each poll.
 const std = @import("std");
 const input = @import("../input.zig");
 const font = @import("../content/font.zig");
@@ -50,8 +52,9 @@ pub const Menu = struct {
     saved: bool = false,
     outcome: ?Outcome = null,
     free_memory_mb: ?u64 = null,
-    /// A press of `action`: up and down choose the row, left and right change it, and a button
-    /// or Escape closes the dialog, abandoning the game on ABORT GAME.
+    /// A press of `action`: up and down choose the row, and left and right change it. Escape,
+    /// USE, GUN or ACT chooses the row: most rows close the dialog, and ABORT GAME abandons the
+    /// game. CONTROLS, and SAVE GAME without Escape, open their pages instead.
     pub fn press(self: *Menu, action: input.Action, settings: *Settings) void {
         if (self.page == .save) {
             // Until the game has read the slots, the page only waits.
@@ -120,8 +123,9 @@ pub const Menu = struct {
         }
     }
 
-    /// A pad's B or START: on the CONTROLS page as any button, or play resumes, never
-    /// abandoned (PLAN GS-3).
+    /// A pad's START (its pause action): on the CONTROLS page as any button, on the save page
+    /// back, or play resumes, never abandoned (PLAN GS-3). A pad's B is not START: with the
+    /// fixed layout, it comes to `press` as GUN.
     pub fn back(self: *Menu) void {
         switch (self.page) {
             .rows => self.outcome = .resume_game,
@@ -401,7 +405,7 @@ test "options wrap, cycle with horizontal arrows, and apply on Escape or action"
     abort.press(.up, &settings);
     abort.press(.use, &settings);
     try std.testing.expectEqual(@as(?Outcome, .abort_game), abort.outcome);
-    // A pad's B resumes, even on ABORT GAME.
+    // A pad's START resumes, even on ABORT GAME.
     var pad: Menu = .{};
     pad.press(.up, &settings);
     pad.back();

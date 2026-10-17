@@ -1,6 +1,13 @@
-//! The ending (flashback-re docs/rules/engine-ending-zoom.md 1-5): the ending film and the
-//! ending list under one music, with the credits typed over them, then, when the game was
-//! finished, scene 73 and the final score until a button is pressed.
+//! The ending (flashback-re docs/rules/engine-ending-zoom.md 1-5): the ending film, then the
+//! ending list, under one music. The credits show over the list only, not over the ending film.
+//! When the game was finished in play, scene 73 and the final score follow until a button press.
+//!
+//! The films stage has two modes (`Replay`). The ending film plays in normal mode: each
+//! picture once, for its hold. The list plays in replay mode: each picture shows again while
+//! the film waits, and `Credits` types one step at each present. The ending's own clock
+//! (`cadence`) times this stage. Scene 73 plays on the clock of its own `vector.Player`.
+//!
+//! The scene ends when it sets `finished`. Game reads it after each `update`.
 const std = @import("std");
 const platform = @import("../platform.zig");
 const data_set = @import("../behavior/data_set.zig");
@@ -171,6 +178,8 @@ pub const Ending = struct {
         self.* = undefined;
     }
 
+    /// Runs the presents due now: in the films stage at most 16, and a pause stops after the
+    /// present in progress. Scene 73 presents through its player.
     pub fn update(self: *Ending, p: *platform.Platform) !void {
         const now = p.nowNs();
         switch (self.stage) {
@@ -232,7 +241,9 @@ pub const Ending = struct {
         return self.presentAfter(self.elapsed_ticks);
     }
 
-    /// The next present, `elapsed` timer ticks after the previous one.
+    /// The next present, `elapsed` timer ticks after the previous one. A new picture or a page
+    /// draws its picture; a hold keeps the image. In replay mode `Credits` can type one step
+    /// over the image. Then the present holds for its period, to the next display refresh.
     pub fn presentAfter(self: *Ending, elapsed: u32) !bool {
         const player = &(self.player orelse return false);
         const step = self.replay.next(player.movie.frames) orelse return false;
@@ -412,8 +423,8 @@ pub const Ending = struct {
     }
 };
 
-/// The credits typed over the ending's films: one step of the stream per present unless a hold
-/// is running, drawn from the film origin (8, 50) in ink 0xef. Holds count timer ticks.
+/// The credits typed over the ending list: one step of the stream at each present, unless a
+/// hold runs, drawn from the film origin (8, 50) in ink 0xef. Holds count timer ticks.
 pub const Credits = struct {
     steps: []const data_set.Credit,
     step: usize = 0,
@@ -527,7 +538,9 @@ pub const Credits = struct {
     }
 };
 
-/// The presents of one film, in order.
+/// The presents of one film, in order. In normal mode each picture presents once, for its
+/// hold ticks. In replay mode each picture presents for its `present_ticks`, then again
+/// `held_presents` times, every 2 ticks.
 pub const Replay = struct {
     /// Normal mode: each picture presented once, held for its waits.
     normal: bool = false,

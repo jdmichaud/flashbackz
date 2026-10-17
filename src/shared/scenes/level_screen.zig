@@ -1,5 +1,12 @@
 //! The screen of a level: how the original presents the engine's state after each update
 //! (flashback-re docs/rules/engine-presentation.md, engine-ending-zoom.md).
+//!
+//! In each frame, `draw` composes the frame, `afterDraw` counts the zoom's timers, and `flip`
+//! shows the frame. A modal screen holds the flip until it closes. Three pictures exist:
+//! 1. `picture`: the frame that `draw` composes (the back page).
+//! 2. `displayed`: the frame that the last flip showed.
+//! 3. The output of `display`: `displayed`, or a copy with the inventory or the options
+//!    dialog over it, moved down by the screen shake.
 const std = @import("std");
 const behavior = @import("../behavior/root.zig");
 const Kind = behavior.vocabulary.Kind;
@@ -31,8 +38,11 @@ pub const Screen = struct {
     /// Room loads already shown.
     room_loads: u32 = 0,
     /// After a room load, the screen keeps the old picture for two updates and shows the new
-    /// room, with its colors, on the third. The zoom's delayed entry uses the same countdown.
+    /// room, with its colors, on the third. A room load sets 3. `draw` composes nothing while
+    /// the count is above 1, and the flip that sets 0 shows the frame and sets the colors.
+    /// The zoom's delayed entry uses the same countdown from 2: it shows one update later.
     room_countdown: u8 = 0,
+    /// The flips count `room_countdown` down and show nothing until it reaches 0.
     deferred: bool = false,
     /// This update composed no frame (the first updates after a room load).
     hidden: bool = false,
@@ -66,7 +76,7 @@ pub const Screen = struct {
     /// A new HUD icon reaches the picture when it is flipped, after any message.
     hud_unshown: bool = false,
     /// The screen shake moves the displayed picture down by 0 to 3 rows. Each flip takes the
-    /// value computed after the previous one.
+    /// value computed after the previous one, so the shake lags one flip.
     shake_rows: u2 = 0,
     next_shake_rows: u2 = 0,
     /// The icon beside the message: what Conrad touched while one was pending (it can be
@@ -102,7 +112,9 @@ pub const Screen = struct {
     }
 
     /// Composes the frame for the engine's state after an update (the original's draw
-    /// section). A world message opens here; the frame is shown by `flip`.
+    /// section). A world message opens here; `flip` shows the frame. The order: the room's
+    /// background, the characters, the label of what Conrad touches, the password, our
+    /// notice, the HUD icon (into the background), then a world message that waits.
     pub fn draw(
         self: *Screen,
         pack: *const level_pack.Pack,

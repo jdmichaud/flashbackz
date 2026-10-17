@@ -1,5 +1,6 @@
-//! Main-menu presentation and selection in game terms. Artwork and labels are supplied by
-//! content; this scene neither opens legacy files nor interprets the original program.
+//! The title menu's main page: its rows and the selected row, in game terms. The content gives
+//! the art and the labels; this file does not open the original's files or read its program.
+//! The title scene (front_end.zig) owns the page and reads `selected`.
 const std = @import("std");
 const bitmap = @import("../content/bitmap.zig");
 const palette = @import("../content/palette.zig");
@@ -28,6 +29,7 @@ pub const Artwork = struct {
     }
 };
 
+/// Where the rows show and their colors.
 pub const Layout = struct {
     left: i32 = 160,
     top: i32 = 112,

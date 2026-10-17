@@ -195,10 +195,12 @@ pub const Pads = struct {
 /// It sees every event, whatever screen is open, so a key released during a modal screen is
 /// armed again, as in the original's latch (engine-presentation 6.4).
 pub const Tracker = struct {
+    /// The keyboard's input byte: the keys that count now.
     held: u8 = 0,
     /// Keys physically down, and those of them released by a modal screen.
     down: u8 = 0,
     ignored: u8 = 0,
+    /// The last input byte with no diagonal (`collapse`). A save keeps it.
     last_direction: u8 = 0,
     /// Escape held, in play: a level, as the original's (engine-presentation 6.1). Modal
     /// screens take Escape themselves and leave it.
@@ -242,7 +244,8 @@ pub const Tracker = struct {
     }
 
     /// A modal screen latches the keys, or a press registered under its latch: what is held
-    /// now counts again only once released (or, for a key, repeated by the keyboard).
+    /// now counts again only once released (or, for a key, repeated by the keyboard). All the
+    /// pads' bits held now, directions and buttons, go into `pad_latched`.
     pub fn latch(self: *Tracker) void {
         self.ignored |= self.down;
         self.held = 0;
@@ -255,7 +258,8 @@ pub const Tracker = struct {
     pub fn unlatch(self: *Tracker) void {
         self.ignored |= self.down;
         self.held = 0;
-        // Directions go on at once; buttons wait for their release.
+        // Directions go on at once; buttons wait for their release. The mask 0xf0 keeps the
+        // pads' button bits held now and frees their direction bits (0x0f).
         self.pad_latched = self.pads.held() & 0xf0;
     }
 
@@ -282,7 +286,9 @@ pub const Tracker = struct {
     }
 
     /// Holding a vertical and a horizontal direction keeps the last single direction, with the
-    /// buttons held now.
+    /// buttons held now. In the input byte, 0x03 is up and down, 0x0c is left and right, and
+    /// 0xf0 is the buttons. A byte with no diagonal becomes `last_direction`; only its low
+    /// four bits count later.
     pub fn collapse(self: *Tracker, raw: u8) u8 {
         if (raw & 0x03 != 0 and raw & 0x0c != 0) return (raw & 0xf0) | (self.last_direction & 0x0f);
         self.last_direction = raw;
