@@ -4,9 +4,9 @@
 //! reproduced exactly, here and nowhere else:
 //!
 //! - The collision grid (`grid.Grid.bytes`): four 64-entry neighbor tables, then 64 rooms of 7
-//!   rows by 16 columns, from DS:0x3d46. A read past a room's last row or column reads the next
-//!   room's cells (`grid.Grid.cell`); one past the grid reads the variables that follow it,
-//!   where the updating character's facing, column and tier sit (`outsideByte`). The terrain
+//!   rows by 16 columns, at `grid_address`. A read past a room's last row or column reads the
+//!   next room's cells (`grid.Grid.cell`); one past the grid reads the variables that follow it,
+//!   where the updating character's facing, column and band sit (`outsideByte`). The terrain
 //!   writers return a cell's address, and rules test its low byte (`addressLowByte`).
 //! - The leftward sight scan: after examining another awake character, the original keeps
 //!   reading backward through that character's 32-byte placement record and the wake list
@@ -41,8 +41,9 @@ pub fn read(world: *World, probe: grid.Read) i8 {
     };
 }
 
-/// A byte the original reads past the grid: the updating character's facing, column and tier
-/// sit there. Other addresses are counted, so a run that depends on them is visible.
+/// A byte the original reads past the grid: the updating character's facing, column and band
+/// sit there (`World.updating_facing_right`, `World.column`, `World.band`). Other addresses are
+/// counted, so a run that depends on them is visible.
 pub fn outsideByte(world: *World, address: u16) i8 {
     const facing: u16 = if (world.updating_facing_right) 0xffff else 0;
     const word: ?u16 = switch (address & 0xfffe) {
@@ -109,8 +110,9 @@ pub fn mailboxSlot(world: *World, index: i32) ?u8 {
 
 /// The byte `before` bytes ahead of a placement's record in the original's placement table,
 /// rebuilt from the data set. Before the first record lies the wake list: a word per character,
-/// zero while it sleeps, else the address of its live record. Null for bytes 2-17, which a scan
-/// of 16 cells never reaches.
+/// zero while it sleeps, else the address of its live record. Null for bytes 2 to 17. A scan
+/// of 16 cells reads only bytes 17 to 31 of a record, and byte 17 only when it starts past
+/// column 15 (as from x 248 to 255).
 pub fn placementByte(world: *const World, record: u16, before: i32) ?u8 {
     const position = @as(i32, record) * placement_record_size - before;
     if (position >= 0) {

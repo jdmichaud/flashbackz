@@ -1,12 +1,13 @@
 //! Which characters share which cells. Before each update every relevant character
 //! registers the cells it covers: from its position, `width` cells to the right, on its tier.
-//! Cells shared by several characters form a slot; checks such as `touching` and `sees`
-//! read the slots. The model keeps the original's storage (flashback-re engine notes,
-//! section 2): slots are numbered by first appearance, a slot lists its newest registration
-//! first, and slots beyond this update's count keep their older contents.
+//! Each cell in use is a slot, which lists the characters registered there; checks such as
+//! `touching` and `sees` read the slots. The model keeps the original's storage (flashback-re
+//! engine notes, section 2): slots are numbered by first appearance, a slot lists its newest
+//! registration first, and slots beyond this update's count keep their older contents.
 const std = @import("std");
 const grid = @import("grid.zig");
 
+/// A cell: room * 64 + tier * 16 + column.
 pub const Key = u16;
 pub const no_slot: u8 = 0xff;
 pub const capacity = 256;
@@ -27,6 +28,8 @@ pub const Shared = struct {
     }
 };
 
+/// One registered cell of one character. An entry is on two links: `next` runs through the
+/// characters of one slot, newest first; `next_slot` runs through the cells of one character.
 pub const Entry = struct {
     key: Key = 0,
     /// The next entry in the same slot.
@@ -36,6 +39,14 @@ pub const Entry = struct {
     next_slot: ?u8 = null,
 };
 
+/// The checks read the slots in three ways:
+/// - From `Character.contact`, the first slot of the character's last registration, along the
+///   `next_slot` links: the contact checks and the carriers.
+/// - Through the window: `sees` and `enemy_in_line`. The update builds the window before the
+///   walk. `World.followConrad` builds it again when Conrad changes room in the walk;
+///   `transport` does not.
+/// - By a search of this update's slots for a key, in any room: `shoot`, `strike` and the
+///   unhittable-target checks.
 pub const Contacts = struct {
     entries: [capacity]Entry = @splat(.{}),
     entry_count: u16 = 0,
@@ -50,8 +61,11 @@ pub const Contacts = struct {
         self.slot_count = 0;
     }
 
-    /// The cell key at `x + offset`, or null where the original has none: after crossing
-    /// into a neighbor on one axis only, on column 16 or outside the three tiers.
+    /// The cell key of a position in `room_in`, or null where the original has none. As in the
+    /// original, the position crosses into a neighbor on one axis only. Null for:
+    /// - a room past 127, or a missing neighbor;
+    /// - column 16 (x from 248 to 255, or from -8 to -1 before a crossing);
+    /// - a contact tier outside 0 to 2.
     pub fn cellKey(collision: *const grid.Grid, room_in: u8, x_in: i16, y_in: i16) ?Key {
         var room = room_in;
         var x: i32 = x_in;
@@ -78,9 +92,12 @@ pub const Contacts = struct {
     }
 
     /// Registers `width` cells from `x` (at most a room's columns, as the data-set loader
-    /// checks), adding to `shared` the characters that meet in a cell. Returns the first slot,
-    /// or null when the pool is full before the first cell (the original then keeps the
-    /// character's old slot).
+    /// checks), adding to `shared` the characters that meet in a cell. Each cell uses an entry,
+    /// also a cell without a key, which ends the registration. Returns:
+    /// - the first slot;
+    /// - `no_slot` when the width is 0 or the first cell has no key;
+    /// - null when the pool is full before the first cell (the original then keeps the
+    ///   character's old slot).
     pub fn register(
         self: *Contacts,
         collision: *const grid.Grid,

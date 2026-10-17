@@ -3,7 +3,10 @@
 //! argument is read. Meanings: flashback-re `docs/rule-vocabulary.md`.
 const std = @import("std");
 
-/// A message, interned per level. The engine fixes the meaning of a few (see `Message.fixed`).
+/// A message, interned per level by the data-set loader. The engine fixes the meaning of a few
+/// (see `Message.fixed`), with the original's values: the hits are 1 to 4 and `acknowledged`
+/// is 12. Every other name gets an id from 256, in the order the loader first reads it. These
+/// ids are not the original's numbers.
 pub const Message = enum(u16) {
     hit_behind_high = 1,
     hit_behind_low = 2,

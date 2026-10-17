@@ -115,8 +115,9 @@ pub fn columnOf(x: i16) i16 {
 // five ways, each kept where the original uses it; they differ for heights above the room
 // (negative y) and near a tier's top (see the test below).
 
-/// The character's tier as a row index (0, 2 or 4): `(y / 36) & ~1`, truncating. The update
-/// loop zero-extends the quotient's low byte, so heights from -71 to -36 give row 254.
+/// The character's tier as a row index (0, 2 or 4): `(y / 36) & ~1`, truncating. This band is
+/// the tier's top row (2 * tier); its body row is band + 1 and its floor row band + 2. The
+/// update loop zero-extends the quotient's low byte, so heights from -71 to -36 give row 254.
 pub fn bandOf(y: i16) i16 {
     const quotient: u8 = @truncate(@as(u16, @bitCast(@divTrunc(y, 36))));
     return quotient & 0xfe;

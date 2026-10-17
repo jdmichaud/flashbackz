@@ -1,7 +1,9 @@
 //! Terrain around the character. Every check reads cells relative to the character's column
-//! and tier at the start of its update; "ahead" follows its facing. Rows: 0 is the ceiling
-//! slab, 1 the body layer, 2 the floor the character stands on, 4 the floor of the tier
-//! below, -1 the body layer of the tier above. Any nonzero cell is solid.
+//! and band at the start of its update (`World.column`, `World.band`). The band is the row
+//! index of the tier's top row. Rows from the band: 0 is the ceiling slab, 1 the body layer,
+//! 2 the floor the character stands on, 4 the floor of the tier below, -1 the body layer of
+//! the tier above. "Ahead" follows the character's current facing, not the facing at the
+//! start of the update that perception uses. Any nonzero cell is solid.
 const world_module = @import("../world.zig");
 const original_memory = @import("../original_memory.zig");
 const World = world_module.World;

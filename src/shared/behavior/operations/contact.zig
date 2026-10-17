@@ -30,7 +30,8 @@ pub fn touchingFacingSame(world: *World, actor: u16, kind: vocabulary.Kind) !boo
 }
 
 /// Touching a character of that kind whose animation has that pose; the character itself
-/// counts. The kind is the argument of the rule's first condition.
+/// counts. The engine reads the operation's own `kind`. The extractor takes it from the
+/// argument of the original rule's first condition.
 pub fn touchingKindInPose(
     world: *World,
     actor: u16,
@@ -216,8 +217,11 @@ pub fn appearAtSender(world: *World, actor: u16, message: vocabulary.Message) !b
 // Searches ---------------------------------------------------------------------------------
 
 /// Everyone registered in the character's cells, cell by cell along its footprint and newest
-/// arrival first within a cell. The character meets itself in each of its cells, where its own
-/// entry names its next cell; someone sharing several cells is met once per cell.
+/// arrival first within a cell. The walk starts at `Character.contact` and follows two links:
+/// `next` through the entries of a slot, and the `next_slot` of the character's own entry to
+/// its next cell, once the current slot ends. So the character meets itself in each of its
+/// cells, and someone sharing several cells is met once per cell. A slot without the
+/// character's own entry ends the walk.
 const CellMates = struct {
     contacts: *const contacts.Contacts,
     actor: u16,

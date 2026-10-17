@@ -22,6 +22,9 @@ const groups = .{
 
 pub const Error = error{ InvalidAnimation };
 
+/// Runs one condition or effect for `actor`. The dispatch is by name, at compile time: the
+/// first group in `groups` that declares the camel-case name runs the operation. A name that
+/// no group declares stops the build.
 pub fn perform(world: *World, actor: u16, operation: vocabulary.Operation) Error!bool {
     switch (operation) {
         inline else => |argument, tag| {

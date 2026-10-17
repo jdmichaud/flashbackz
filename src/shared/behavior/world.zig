@@ -1,8 +1,8 @@
-//! A level's characters running their behavior tables (DESIGN.md section 4). Each update
-//! registers who touches whom, then walks the active characters in placement order. A
-//! character either plays the next frame of its animation or, when the animation is done,
-//! tries its state's rules in order. The order of every step follows the original
-//! (flashback-re `docs/rules/engine-update.md`).
+//! The characters of a level and the engine that runs their behavior tables (DESIGN.md
+//! section 4). Each update registers who touches whom, then walks the active characters in
+//! index order. A character either plays the next frame of its animation or, when the
+//! animation is done, tries its state's rules in order. The order of every step follows the
+//! original (flashback-re `docs/rules/engine-update.md`).
 const std = @import("std");
 const vocabulary = @import("vocabulary.zig");
 const data_set = @import("data_set.zig");
@@ -208,8 +208,9 @@ pub const TerrainHistory = struct {
 /// What `checkpoint` saves for a continue: every character's live state, the score, the
 /// collision grid and the terrain history (flashback-re `docs/rules/engine-level.md` 3.3).
 /// The original also saves the level and the difficulty, which cannot differ within a World.
-/// A continue restores these, rebuilds the room lists in placement order and the awake set
-/// from the saved `active` flags, then restarts as after any continue (engine-level.md 3.4).
+/// A continue restores these and rebuilds the room lists as at level start (descending index
+/// order). The saved `active` flags give the awake set. Then the restart that follows any
+/// continue runs (engine-level.md 3.4).
 /// Not saved: the random state, messages, countdowns, weapon mode, protection, shake.
 pub const Checkpoint = struct {
     characters: [data_set.max_characters]Character,
@@ -219,6 +220,9 @@ pub const Checkpoint = struct {
 };
 
 /// Every character's live state, and the walk that runs their behavior tables.
+///
+/// A character's index is its position in the level's `characters.zon`. The walk updates the
+/// characters in index order.
 ///
 /// Conrad is character 0: the original finds him by index for the hit protection, the
 /// inventory, the `player_*` checks and the view, and the data-set loader checks that character
@@ -263,7 +267,11 @@ pub const World = struct {
     /// rows, so -1 shows as 3.
     shake: i8 = 0,
     requests: Requests = .{},
-    /// The updating character's column, tier and facing at the start of its update.
+    /// The updating character's column, band and facing at the start of its update. The band is
+    /// the row index of the tier's top row (2 * tier): the body row is band + 1, the floor row
+    /// band + 2. `skipToAwaitedRule` sets the column and band again; the facing stays.
+    /// Perception and the terrain writers read this facing. The terrain checks read the
+    /// character's current facing.
     column: i16 = 0,
     band: i16 = 0,
     updating_facing_right: bool = false,
@@ -294,6 +302,13 @@ pub const World = struct {
         inherited: []const Inherited = &.{},
     };
 
+    /// Starts the level from the data set:
+    /// - A character is present when its minimum difficulty is at most `difficulty`. At expert
+    ///   or above, enemies start with double health.
+    /// - A present character starts awake when it is marked `active`, or when it wakes when near
+    ///   and its room is Conrad's placement room.
+    /// - A character that is not present keeps its flags from the previous level.
+    /// - Only present characters join the room lists.
     pub fn init(
         allocator: std.mem.Allocator,
         level: *const data_set.Level,
@@ -347,7 +362,8 @@ pub const World = struct {
             characters[0].x = conrad.x;
             characters[0].y = conrad.y;
         }
-        // Lists start in descending placement order: each placement goes to the front.
+        // Each character goes to the front of its room's list, so the lists start in descending
+        // index order.
         for (characters, 0..) |character, index| {
             if (!character.present) continue;
             world.pushToRoom(@intCast(index), character.room);
@@ -387,8 +403,8 @@ pub const World = struct {
         self.view_dirty = true;
     }
 
-    /// A continue: back to the last checkpoint, with the room lists rebuilt in placement order
-    /// and the restart that follows any continue. False when no checkpoint was saved; the
+    /// A continue: back to the last checkpoint, with the room lists rebuilt in descending index
+    /// order and the restart that follows any continue. False when no checkpoint was saved; the
     /// level then starts again.
     pub fn restoreCheckpoint(self: *World) bool {
         const saved = &(self.checkpoint orelse return false);
@@ -427,8 +443,15 @@ pub const World = struct {
 
     // The update ---------------------------------------------------------------------------
 
-    /// One update: the defeat countdown, contacts, then every active character in order, and
-    /// the view follows Conrad into another room.
+    /// One update of the level's characters (one walk):
+    /// 1. Clear the requests. A catch-up walk keeps the world message and the hits.
+    /// 2. Except in a catch-up walk, count down the protection and the defeat countdown. A
+    ///    defeat countdown that reaches 0 stops the update with `.defeated`.
+    /// 3. Build the contacts, then the window of the view room.
+    /// 4. Update each active character in index order.
+    /// 5. A level change returns `.level_changed` now, before the view moves.
+    /// 6. Except in a `.first_of_two` walk, move the view to Conrad's room if it must move. A
+    ///    view in `Room.nowhere` plays the fall scene and starts a defeat countdown of 1.
     pub fn update(self: *World, controls: Controls, walk: Walk) !Outcome {
         self.controls = controls;
         const catch_up = walk == .catch_up;
@@ -446,6 +469,7 @@ pub const World = struct {
         if (!catch_up and self.protection != 0) {
             self.protection -= 1;
         }
+        // The original tests only the low byte, so a countdown of 256 never runs out.
         if (!catch_up and self.defeat_countdown & 0xff != 0) {
             self.defeat_countdown -%= 1;
             if (self.defeat_countdown == 0) {
@@ -457,7 +481,8 @@ pub const World = struct {
         self.contacts.buildWindow(&self.grid, self.view_room);
         for (0..self.characters.len) |i| {
             const index: u16 = @intCast(i);
-            // Read when reached: characters woken during the walk run in it if they come later.
+            // The flag is read when the loop reaches the character: a character that wakes
+            // during the walk runs in it if its index is higher.
             if (!self.characters[index].active) continue;
             try self.updateCharacter(index);
         }
@@ -477,6 +502,7 @@ pub const World = struct {
 
     /// Every character in the view room's list registers its cells (and may wake there), then
     /// every other active character registers. Sharing a cell wakes those that wake on contact.
+    /// An active character in the view room that is missing from its list registers nowhere.
     fn buildContacts(self: *World) void {
         self.contacts.begin();
         if (self.view_room < 0x80) {
@@ -551,6 +577,14 @@ pub const World = struct {
         }
     }
 
+    /// One character's update:
+    /// 1. Save the start facing, column, band and room.
+    /// 2. If a letter waits, a rule waiting for it can end the animation now.
+    /// 3. If the animation has frames left, play the next frame. Else the first rule whose
+    ///    checks hold fires: its effect (`then`), then `enter`, the new animation's entry sound,
+    ///    `afterRule` and the first frame. `afterRule` is the only place for room crossings.
+    ///    If no rule fires, the character stays on its last frame.
+    /// 4. Clear the inbox, on every path.
     fn updateCharacter(self: *World, index: u16) !void {
         const character = &self.characters[index];
         self.entry_sound = true;
@@ -562,6 +596,7 @@ pub const World = struct {
             try self.skipToAwaitedRule(index);
         }
         const animation = try self.animationOf(index);
+        // The original compares the frame count and the cursor as signed bytes.
         if (signedByte(animation.count()) > signedByte(character.cursor)) {
             self.playFrame(index, animation);
         } else if (try self.fireFirstRule(index)) {
@@ -578,7 +613,8 @@ pub const World = struct {
     }
 
     /// A message the current state has a rule waiting for ends the animation now: its
-    /// remaining movement applies and the rules run in this update.
+    /// remaining movement applies and the rules run in this update. The skip does not change
+    /// the look and does not cross rooms. The letter stays for the rules to read.
     fn skipToAwaitedRule(self: *World, index: u16) !void {
         for (self.stateOf(index).rules) |rule| {
             var letters = self.mailbox(index);
@@ -586,6 +622,8 @@ pub const World = struct {
                 if (!awaits(rule, letter.message)) continue;
                 const character = &self.characters[index];
                 const animation = try self.animationOf(index);
+                // The original compares `k` and the count as signed bytes. This unsigned loop
+                // gives the same frames while both stay below 128.
                 var k: usize = character.cursor;
                 while (k < animation.count()) : (k += 1) {
                     const frame = animation.frame(k);
@@ -728,8 +766,14 @@ pub const World = struct {
         return false;
     }
 
-    /// After a rule fires: cross into a neighbor room (one axis, left from x = -10), move the
-    /// view with Conrad, and move the character to its new room's list.
+    /// After a rule fires:
+    /// 1. Cross into a neighbor room on one axis only, the first that applies: x <= -10 (not
+    ///    x < 0), x >= 256, y < 0, y >= 216. An x from -9 to -1 stays until a later rule.
+    /// 2. A room past 127 does not change; only the position wraps. Rooms 64 to 127 read past
+    ///    the end of the link table, as the original does.
+    /// 3. A character of the player kind that crosses takes the view with it (`followConrad`).
+    /// 4. Move the character to the list of its new room. This also commits a room change that
+    ///    the rule's checks or effect made.
     fn afterRule(self: *World, index: u16, start_room: u8) void {
         const character = &self.characters[index];
         const side: ?grid.Side = if (character.x <= -10) blk: {
@@ -759,8 +803,14 @@ pub const World = struct {
         }
     }
 
-    /// Conrad's new room becomes the view at once; characters there wake, and so do some in
-    /// the rooms above and below (the original's height filters are kept as coded).
+    /// Conrad's new room becomes the view at once, and the window is built again from this
+    /// update's slots. In a room below 64, these characters that wake when near wake:
+    /// - all in the new room's list;
+    /// - in the room above, those that are not enemies, at y 48 or more;
+    /// - in the room below, those that are not enemies, at y 176 or more.
+    /// These height filters are the original's, kept as coded.
+    /// A sleeper that wakes here and comes later in the walk runs in it, with the `contact` of
+    /// an older update.
     fn followConrad(self: *World, room: u8) void {
         self.view_room = room;
         self.contacts.buildWindow(&self.grid, room);
@@ -777,6 +827,8 @@ pub const World = struct {
         }
     }
 
+    /// Wakes the characters in `room`'s list that wake when near. With `minimum_y`, only those
+    /// that are not enemies and stand at that y or more.
     fn wakeRoom(self: *World, room: u8, minimum_y: ?i16) void {
         var cursor = self.room_lists[room];
         while (cursor) |index| : (cursor = self.characters[index].next_in_room) {
@@ -894,9 +946,14 @@ pub const World = struct {
         self.free_letter = 0;
     }
 
-    /// Deliver a message, as the original does: an inactive recipient is woken if it can
-    /// be (even when the message is then dropped), hits only reach a recipient in the
-    /// sender's room and not a protected Conrad, and a full pool drops the message.
+    /// Delivers a message in the original's order:
+    /// 1. A recipient that is not awake wakes if it wakes on messages. If not, the send stops.
+    /// 2. A hit stops the send unless the recipient is in the sender's room and is not a
+    ///    protected Conrad.
+    /// 3. A hit goes into `requests.hits` (at most 16), before the pool check.
+    /// 4. A full pool drops the message. If not, the letter goes to the front of the inbox.
+    /// A recipient woken in step 1 stays awake when a later step drops the message. Letters to
+    /// a `stale_awake` character stay until a restart: nothing updates it or clears its inbox.
     pub fn send(self: *World, sender: u16, recipient: u16, message: vocabulary.Message) void {
         const to = &self.characters[recipient];
         if (!self.awake(recipient)) {
@@ -921,7 +978,8 @@ pub const World = struct {
         self.inbox[recipient] = slot;
     }
 
-    /// The character's pending messages, newest first.
+    /// The character's pending messages, newest first. The rules of the character's update read
+    /// them; the end of that update clears them.
     pub fn mailbox(self: *const World, index: u16) Mailbox {
         return .{ .world = self, .next = self.inbox[index] };
     }

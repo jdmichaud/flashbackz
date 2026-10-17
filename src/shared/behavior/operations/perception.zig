@@ -300,6 +300,7 @@ pub fn sees(world: *World, actor: u16, argument: @FieldType(vocabulary.Operation
     const tier = grid.tierOf(observer.y);
     if (tier < 0 or tier > 2) return false;
     const row = tier * 2 + 1;
+    // Screen directions: negative `cells` look right, positive look left.
     const cells = if (world.updating_facing_right) -%argument.cells else argument.cells;
     const steps = @max(@min(@abs(cells), 16), 1);
     const own: i32 = third * 48 + tier * 16 + column;
@@ -330,6 +331,9 @@ pub fn sees(world: *World, actor: u16, argument: @FieldType(vocabulary.Operation
         return false;
     }
 
+    // `read` is the cell that a step reads. `cursor` is where the next step starts: after
+    // another awake character it moves to that character's placement record. A room edge
+    // goes back 32 from `read`, so it drops a move made in the step before.
     var read: Cursor = .{ .strip = own };
     var cursor = read;
     for (0..steps) |_| {
@@ -388,6 +392,8 @@ pub fn enemyInLine(world: *World, actor: u16, cells: i16) !bool {
                 third -= 1;
                 if (third < 0) return false;
                 room = world.grid.neighbor(room, .left) orelse return false;
+                // With the decrements below, the strip moves back 32 and the terrain column
+                // becomes 15: the contact cell is two columns right of the terrain cell.
                 counter = 15;
                 terrain_column = 16;
                 strip -= 31;

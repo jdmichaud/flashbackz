@@ -25,7 +25,8 @@ pub fn sendToSelectedItem(world: *World, actor: u16, message: vocabulary.Message
     return true;
 }
 
-/// Reply `acknowledged` to the sender of the first waiting message with that value.
+/// Replies `acknowledged` to the sender of the newest waiting message with that value. The
+/// message stays. True even when the reply is dropped.
 pub fn acknowledge(world: *World, actor: u16, message: vocabulary.Message) !bool {
     var letters = world.mailbox(actor);
     while (letters.nextLetter()) |letter| {

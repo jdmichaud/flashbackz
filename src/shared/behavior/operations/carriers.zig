@@ -97,7 +97,13 @@ pub fn boardTouching(world: *World, actor: u16, kind: vocabulary.Kind) !bool {
 }
 
 /// No item (kind 3) sharing one of the character's cells is anything but its own rider.
+/// The check walks the character's cells along the `next_slot` links. It stops:
+/// - false at the first loose item;
+/// - true after the character's last cell or at an empty slot;
+/// - true when a slot does not lead to a different slot.
 pub fn noLooseCargo(world: *World, actor: u16, _: void) !bool {
+    // `slot` moves to the next cell when the inner loop meets the character's own entry. The
+    // inner loop still checks the rest of the current slot.
     var slot = world.characters[actor].contact;
     while (slot != contacts.no_slot) {
         // An empty slot ends the check, even with further cells to go.
