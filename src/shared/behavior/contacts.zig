@@ -64,7 +64,9 @@ pub const Contacts = struct {
     /// The cell key of a position in `room_in`, or null where the original has none. As in the
     /// original, the position crosses into a neighbor on one axis only. Null for:
     /// - a room past 127, or a missing neighbor;
-    /// - column 16 (x from 248 to 255, or from -8 to -1 before a crossing);
+    /// - column 16 (x from 248 to 255, or from -8 to -1 before a crossing), or a column below 0
+    ///   (x below -264): an off-grid cell, which ends a registration in the original
+    ///   (flashback-re docs/rules/codes-034-072.md);
     /// - a contact tier outside 0 to 2.
     pub fn cellKey(collision: *const grid.Grid, room_in: u8, x_in: i16, y_in: i16) ?Key {
         var room = room_in;
@@ -85,7 +87,7 @@ pub const Contacts = struct {
             y -= 216;
         }
         const column = (x + 8) >> 4;
-        if (column > 15) return null;
+        if (column < 0 or column > 15) return null;
         const band = grid.contactTierOf(@intCast(y));
         if (band < 0 or band > 2) return null;
         return @intCast(@as(i32, room) * 64 + band * 16 + column);
@@ -206,6 +208,13 @@ test "cell keys cross one axis and reject column 16" {
     );
     try std.testing.expectEqual(@as(?Key, null), Contacts.cellKey(&collision, 3, 250, 214));
     try std.testing.expectEqual(@as(?Key, null), Contacts.cellKey(&collision, 3, -16, 214));
+    // Far to the left: past the left neighbor by more than a cell. Room 1's left neighbor is
+    // room 0, where a negative column would give a negative key.
+    layout[192 + 4] = 3;
+    layout[192 + 1] = 0;
+    const crossed = try grid.Grid.init(&layout);
+    try std.testing.expectEqual(@as(?Key, null), Contacts.cellKey(&crossed, 4, -300, 214));
+    try std.testing.expectEqual(@as(?Key, null), Contacts.cellKey(&crossed, 1, -4096, 214));
 }
 
 test "shared cells form one slot, newest registration first" {
