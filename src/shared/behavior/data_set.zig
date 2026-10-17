@@ -95,7 +95,11 @@ pub fn loadLevel(
     defer behaviors.deinit(gpa);
     for (files.keys(), files.values()) |path, source| {
         if (!std.mem.startsWith(u8, path, prefix)) continue;
-        try behaviors.append(gpa, .{ .name = path[prefix.len..], .source = source });
+        const name = path[prefix.len..];
+        // Only the files directly in `behaviors/`: a behavior is named by its file, and two
+        // folders could hold two files of one name.
+        if (std.mem.indexOfScalar(u8, name, '/') != null) continue;
+        try behaviors.append(gpa, .{ .name = name, .source = source });
     }
     std.mem.sort(
         BehaviorSource,
@@ -412,6 +416,8 @@ const Loader = struct {
         if (root != .struct_literal) {
             return fail(self.diagnostic, "{s}: expected a struct", .{ file });
         }
+        const root_fields: Fields = .{ .loader = self, .tree = &tree, .node = root, .owner = file };
+        try root_fields.known(&.{ "key", "links", "numbers", "states" });
         const links = try self.nameList(tree, tree.field(root, "links"), file);
         const numbers = try self.nameList(tree, tree.field(root, "numbers"), file);
         const states_index = tree.field(root, "states") orelse
@@ -434,6 +440,14 @@ const Loader = struct {
         };
         for (states, 0..) |*state, index| {
             const value = tree.get(states_node.vals.at(@intCast(index)));
+            const owner = try std.fmt.allocPrint(self.arena, "{s}: {s}", .{ file, state.name });
+            const state_fields: Fields = .{
+                .loader = self,
+                .tree = &tree,
+                .node = value,
+                .owner = owner,
+            };
+            try state_fields.known(&.{ "animation", "rules" });
             const animation = tree.field(value, "animation") orelse
                 return fail(self.diagnostic, "{s}: {s} has no animation", .{ file, state.name });
             state.animation = std.math.cast(u16, tree.int(animation) orelse -1) orelse
@@ -654,6 +668,21 @@ const Loader = struct {
             var result: T = undefined;
             const node = tree.get(index);
             const info = @typeInfo(T).@"struct";
+            if (node == .struct_literal) {
+                for (node.struct_literal.names) |string| {
+                    const given = tree.name(string);
+                    const known = inline for (info.field_names) |field_name| {
+                        if (std.mem.eql(u8, given, field_name)) break true;
+                    } else false;
+                    if (!known) {
+                        return fail(self.diagnostic, "{s}: {s} has no field {s}", .{
+                            context.file,
+                            operation,
+                            given,
+                        });
+                    }
+                }
+            }
             inline for (info.field_names, info.field_types) |field_name, field_type| {
                 const value = tree.field(node, field_name) orelse
                     return fail(self.diagnostic, "{s}: {s} needs .{s}", .{
@@ -1103,6 +1132,16 @@ fn expectRejected(characters: [:0]const u8, rules: []const u8, message: []const 
         .{ rules },
         0,
     );
+    try expectBehaviorRejected(characters, behavior, message);
+}
+
+fn expectBehaviorRejected(
+    characters: [:0]const u8,
+    behavior: [:0]const u8,
+    message: []const u8,
+) !void {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
     var diagnostic: Diagnostic = .{};
     const result = load(
         std.testing.allocator,
@@ -1176,6 +1215,22 @@ test "the loader refuses what the engine cannot run, saying why" {
         ".{ .forward = 5000 }",
         "guard.zon: forward must be a number in range",
     );
+    // A misspelt field is refused, not ignored: in the root, in a state, in an argument.
+    try expectRejected(
+        ".{}",
+        ".{ .when = .{.{ .sees = .{ .kind = .player, .cells = 16, .cell = 8 } }} }",
+        "guard.zon: sees has no field cell",
+    );
+    try expectBehaviorRejected(
+        ".{}",
+        ".{ .state = 1, .states = .{ .idle = .{ .animation = 1, .rules = .{} } } }",
+        "guard.zon: unknown field state",
+    );
+    try expectBehaviorRejected(
+        ".{}",
+        ".{ .states = .{ .idle = .{ .animation = 1, .rule = .{}, .rules = .{} } } }",
+        "guard.zon: idle: unknown field rule",
+    );
 
     var many: std.ArrayList(u8) = .empty;
     defer many.deinit(std.testing.allocator);
@@ -1191,6 +1246,33 @@ test "the loader refuses what the engine cannot run, saying why" {
         "",
         "characters.zon: 257 characters; a level holds at most 256",
     );
+}
+
+test "a level reads only the behavior files directly in its folder" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    var files: Files = .empty;
+    try files.put(
+        arena.allocator(),
+        "city/characters.zon",
+        ".{ .conrad = .{ " ++ conrad ++ player ++ " } }",
+    );
+    try files.put(
+        arena.allocator(),
+        "city/behaviors/guard.zon",
+        ".{ .states = .{ .idle = .{ .animation = 1, .rules = .{} } } }",
+    );
+    // Not read: it would not parse.
+    try files.put(arena.allocator(), "city/behaviors/old/guard.zon", "not a behavior");
+    var diagnostic: Diagnostic = .{};
+    const level = try loadLevel(
+        std.testing.allocator,
+        arena.allocator(),
+        &files,
+        "city",
+        &diagnostic,
+    );
+    try std.testing.expectEqual(@as(usize, 1), level.behaviors.len);
 }
 
 test "a credit with no text is refused" {
