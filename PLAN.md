@@ -983,6 +983,12 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
     port matches both on every update (300/300, 107/107 characters). Conrad's table gives the
     step back only for a wall (`wall_starts 0`, `wall_ahead 1`) or with Shift alone held over a
     gap (code 52). Open: the situation the user saw, to measure it.
+  - The user: "Check the megadrive version then. I know he does that in this one." The
+    cartridge holds the same rule group; its code 52 reads Enter where the DOS executable reads
+    Shift (it prepares Enter, then reads the Shift entry). By the user's decision code 52 tests
+    Enter (`use_over_gap`): at the edge, Conrad steps back, throws and stays on the ledge.
+  - [x] `53f6b04`: the engine and the documents.
+  - [ ] The SDL game played at a ledge (user).
 - [ ] **BUG-2 — The menu and the inventory do not interrupt a Mega Drive tune** (user,
   2026-10-17: "An in-game megadrive music should no be interrupted by the opening of the menu
   or the inventory"). A user decision on the cartridge's music, our addition: the options
