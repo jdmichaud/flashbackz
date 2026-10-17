@@ -924,13 +924,19 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   - 2026-10-17, `c0715e5` (settings), `c118f47`, `85beec8`, `a04a6d7`: each refusal has a test;
     a save made by the previous build loads (same fingerprint); every level loads from a data
     set extracted to disk. Tests 283/283, smoke and verify, sessions and traces unchanged.
-- [ ] **FX-3 — The hosts and the agent say what happens.** A missing `--names` file and a failed
+- [x] **FX-3 — The hosts and the agent say what happens.** A missing `--names` file and a failed
   extraction show their reason in every build. `--trace` keeps its help true, a failed `--load`
   leaves the walk count, trace lines escape the slot name, and the level's state hash has one
   byte order on every machine.
-- [ ] **FX-4 — The scripts fail loudly.** `agent_sessions.sh` and `agent_traces.sh` read the
+  - 2026-10-17, `c9215a6`..`bfc0150`: the --names message checked by a run; a refused slot
+    with a quote gives a trace line that a JSON reader takes. The failed extraction's info log
+    is shown in release builds already (Zig 0.17's default level is info): unchanged. Sessions
+    and traces unchanged.
+- [x] **FX-4 — The scripts fail loudly.** `agent_sessions.sh` and `agent_traces.sh` read the
   agent's standard output and standard error apart, check its exit status, and stop with a
   message when a run fails, rather than print empty or partial hashes.
+  - 2026-10-17, `169ad7f`: both reproduce their accepted outputs; three fake agents (failing,
+    logging first, logging only) give FAILED lines and exit 1, or the accepted output.
 - [ ] **FX-5 — True comments and names, no dead code.** The wrong comments listed under DOC-2,
   the ending's code notice read from FB.EXE, the eighth level code checked like the others, no
   unreachable error, error names that match their condition.
