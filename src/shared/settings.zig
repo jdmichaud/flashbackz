@@ -175,7 +175,9 @@ const RecordPad = struct {
     pause: Button,
 };
 
-const max_record = 2048;
+/// Room for the largest record: 8 pad models whose layouts use the longest button names take
+/// about 2,150 bytes (test "the largest record ...").
+const max_record = 4096;
 
 /// The settings kept in `storage`, or the defaults.
 pub fn load(storage: ?platform.Storage) Settings {
@@ -249,6 +251,16 @@ fn decode(bytes: []const u8) ?Settings {
     };
     for (record.pads, 0..) |pad, i| {
         if (pad.model.len != 32) return null;
+        // The writer keeps each model once, with five different buttons, none of the D-pad's
+        // (`PadLayout.bind`); a record that breaks this was not written by it.
+        for (record.pads[0..i]) |earlier| {
+            if (std.mem.eql(u8, earlier.model, pad.model)) return null;
+        }
+        const buttons = [_]Button{ pad.act, pad.gun, pad.use, pad.inventory, pad.pause };
+        for (buttons, 0..) |button, b| {
+            if (button.isDirection()) return null;
+            if (std.mem.indexOfScalar(Button, buttons[0..b], button) != null) return null;
+        }
         settings.pads[i] = .{
             .guid = pad.model[0..32].*,
             .layout = .{
@@ -287,6 +299,10 @@ test "settings come back as saved, and a record of another version or that does 
         ".{ .version = 2, .volume = 40, .sound_fx = false, .music = false, .zoom = .auto, .pads = .{} }",
         ".{ .version = 2, .volume = 40, .sound_fx = false, .music = false, .joystick = true, .zoom = .auto, .pads = .{}, .extra = 1 }",
         ".{ .version = 2, .volume = 40, .sound_fx = false, .music = false, .joystick = true, .zoom = .auto, .pads = .{ .{ .model = \"short\", .act = .a, .gun = .b, .use = .x, .inventory = .y, .pause = .start } } }",
+        // A button twice, a D-pad button, a model twice.
+        ".{ .version = 2, .volume = 40, .sound_fx = false, .music = false, .joystick = true, .zoom = .auto, .pads = .{ .{ .model = \"00000000000000000000000000000001\", .act = .a, .gun = .a, .use = .x, .inventory = .y, .pause = .start } } }",
+        ".{ .version = 2, .volume = 40, .sound_fx = false, .music = false, .joystick = true, .zoom = .auto, .pads = .{ .{ .model = \"00000000000000000000000000000001\", .act = .dpad_up, .gun = .b, .use = .x, .inventory = .y, .pause = .start } } }",
+        ".{ .version = 2, .volume = 40, .sound_fx = false, .music = false, .joystick = true, .zoom = .auto, .pads = .{ .{ .model = \"00000000000000000000000000000001\", .act = .b, .gun = .a, .use = .x, .inventory = .y, .pause = .start }, .{ .model = \"00000000000000000000000000000001\", .act = .y, .gun = .b, .use = .x, .inventory = .a, .pause = .start } } }",
         "50\n",
         "",
     };
@@ -294,6 +310,27 @@ test "settings come back as saved, and a record of another version or that does 
         try store.storage().save(record_name, record);
         try std.testing.expectEqual(Settings{}, load(store.storage()));
     }
+}
+
+test "the largest record fits and reads back" {
+    // Every model with the five longest names a layout can hold.
+    const layout: PadLayout = .{
+        .act = .right_shoulder,
+        .gun = .left_shoulder,
+        .use = .right_stick,
+        .inventory = .left_stick,
+        .pause = .guide,
+    };
+    var largest: Settings = .{ .volume = 100, .zoom = .auto };
+    for (0..max_pad_models) |i| {
+        var model: [32]u8 = @splat('f');
+        model[0] = @intCast('a' + i);
+        largest.setPadLayout(model, layout);
+    }
+    var buffer: [max_record]u8 = undefined;
+    const record = encode(largest, &buffer);
+    try std.testing.expect(record.len > 2048);
+    try std.testing.expectEqual(largest, decode(record).?);
 }
 
 test "a pad layout stands its buttons for the fixed layout's, and a bound button swaps places" {
