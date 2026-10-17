@@ -974,11 +974,25 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   port departs from it, fix it in the engine or the data, not in a Conrad-specific branch.
   Gate: the capture compared update by update (`engine_regression.py`) matches; the SDL game
   played at a ledge.
+  - 2026-10-17: two original captures, jungle room 34, the first stone picked up, then thrown
+    (`capture_floppy_gameplay.py --level jungle --spawn 34:144:142:right --key 60:shift:1 --key
+    80:shift:0 --use-item 28`, with `--key 100:left:1 --key 160:left:0 --use-after 190` or
+    `--key 100:right:1 --key 130:right:0 --use-after 170`, `--updates 300`). Facing the hole's
+    edge (floor empty one cell ahead), the original throws without a step back, its throw moves
+    Conrad 16 pixels forward, and he falls. Facing a wall, it steps back twice, then throws. The
+    port matches both on every update (300/300, 107/107 characters). Conrad's table gives the
+    step back only for a wall (`wall_starts 0`, `wall_ahead 1`) or with Shift alone held over a
+    gap (code 52). Open: the situation the user saw, to measure it.
 - [ ] **BUG-2 — The menu and the inventory do not interrupt a Mega Drive tune** (user,
   2026-10-17: "An in-game megadrive music should no be interrupted by the opening of the menu
   or the inventory"). A user decision on the cartridge's music, our addition: the options
   dialog and the inventory leave a playing tune to go on. Gate: an agent run with the
   cartridge records the tune through both (`--pcm`); a test; the SDL game played.
+  - [x] `e873232`: the options dialog no longer turns the tunes off. Agent, cartridge, the
+    effects off: the tune through the dialog equals the tune without it; the inventory never
+    cut it (identical samples before and after). Tests 284/284; sessions and traces unchanged.
+  - [ ] The SDL game played with the cartridge, a tune through the menu and the inventory
+    (user).
 
 ## Historical CD implementation/research milestones
 
