@@ -8,17 +8,23 @@ pub const Overlay = struct {
     messages: []const Message = &.{},
 
     pub fn behavior(self: Overlay, key: []const u8) ?Behavior {
-        for (self.behaviors) |entry| if (std.mem.eql(u8, entry.key, key)) return entry;
+        for (self.behaviors) |entry| {
+            if (std.mem.eql(u8, entry.key, key)) return entry;
+        }
         return null;
     }
 
     /// A level's own name for a message wins over a name for all levels.
     pub fn message(self: Overlay, level: []const u8, value: i16) ?[]const u8 {
         var everywhere: ?[]const u8 = null;
-        for (self.messages) |entry| if (entry.value == value) {
-            if (std.mem.eql(u8, entry.level, level)) return entry.name;
-            if (std.mem.eql(u8, entry.level, "all")) everywhere = entry.name;
-        };
+        for (self.messages) |entry| {
+            if (entry.value == value) {
+                if (std.mem.eql(u8, entry.level, level)) return entry.name;
+                if (std.mem.eql(u8, entry.level, "all")) {
+                    everywhere = entry.name;
+                }
+            }
+        }
         return everywhere;
     }
 };
@@ -33,10 +39,20 @@ pub const Behavior = struct {
     numbers: []const Parameter = &.{},
 };
 
-pub const State = struct { ordinal: u16, name: []const u8 };
-pub const Parameter = struct { parameter: u2, name: []const u8 };
+pub const State = struct {
+    ordinal: u16,
+    name: []const u8,
+};
+pub const Parameter = struct {
+    parameter: u2,
+    name: []const u8,
+};
 /// `level` is a level name, or `all`.
-pub const Message = struct { level: []const u8, value: i16, name: []const u8 };
+pub const Message = struct {
+    level: []const u8,
+    value: i16,
+    name: []const u8,
+};
 
 /// Parse and validate an overlay. Results live in `arena`.
 pub fn parse(gpa: std.mem.Allocator, arena: std.mem.Allocator, source: [:0]const u8) !Overlay {
@@ -47,16 +63,26 @@ pub fn parse(gpa: std.mem.Allocator, arena: std.mem.Allocator, source: [:0]const
         .source = source,
         .diagnostics = &diagnostics,
     }) catch |err| {
-        if (err == error.ParseZon) diagnostics.log("naming overlay");
+        if (err == error.ParseZon) {
+            diagnostics.log("naming overlay");
+        }
         return err;
     };
     for (overlay.behaviors) |entry| {
         try plain(entry.name);
-        for (entry.states) |state| try plain(state.name);
-        for (entry.links) |link| try plain(link.name);
-        for (entry.numbers) |number| try plain(number.name);
+        for (entry.states) |state| {
+            try plain(state.name);
+        }
+        for (entry.links) |link| {
+            try plain(link.name);
+        }
+        for (entry.numbers) |number| {
+            try plain(number.name);
+        }
     }
-    for (overlay.messages) |entry| try plain(entry.name);
+    for (overlay.messages) |entry| {
+        try plain(entry.name);
+    }
     return overlay;
 }
 

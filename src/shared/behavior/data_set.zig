@@ -68,7 +68,10 @@ pub const Level = struct {
     message_names: []const []const u8,
 };
 
-pub const BehaviorSource = struct { name: []const u8, source: [:0]const u8 };
+pub const BehaviorSource = struct {
+    name: []const u8,
+    source: [:0]const u8,
+};
 
 /// The data set's files by path (`city/characters.zon`, `city/behaviors/NAME.zon`), as the host
 /// provides them: read from the user's directory or extracted in memory.
@@ -83,26 +86,34 @@ pub fn loadLevel(
     level: []const u8,
     diagnostic: *Diagnostic,
 ) Error!Level {
-    const characters_path = try std.fmt.allocPrint(arena, "{s}/characters.zon", .{level});
+    const characters_path = try std.fmt.allocPrint(arena, "{s}/characters.zon", .{ level });
     const characters = files.get(characters_path) orelse
-        return fail(diagnostic, "the data set has no {s}", .{characters_path});
-    const prefix = try std.fmt.allocPrint(arena, "{s}/behaviors/", .{level});
+        return fail(diagnostic, "the data set has no {s}", .{ characters_path });
+    const prefix = try std.fmt.allocPrint(arena, "{s}/behaviors/", .{ level });
     var behaviors: std.ArrayList(BehaviorSource) = .empty;
     defer behaviors.deinit(gpa);
     for (files.keys(), files.values()) |path, source| {
         if (!std.mem.startsWith(u8, path, prefix)) continue;
         try behaviors.append(gpa, .{ .name = path[prefix.len..], .source = source });
     }
-    std.mem.sort(BehaviorSource, behaviors.items, {}, struct {
-        fn less(_: void, a: BehaviorSource, b: BehaviorSource) bool {
-            return std.mem.lessThan(u8, a.name, b.name);
-        }
-    }.less);
+    std.mem.sort(
+        BehaviorSource,
+        behaviors.items,
+        {},
+        struct {
+            fn less(_: void, a: BehaviorSource, b: BehaviorSource) bool {
+                return std.mem.lessThan(u8, a.name, b.name);
+            }
+        }.less,
+    );
     return load(gpa, arena, characters, behaviors.items, diagnostic);
 }
 
 /// One line of a world message, drawn in its ink.
-pub const Line = struct { text: []const u8, ink: u8 };
+pub const Line = struct {
+    text: []const u8,
+    ink: u8,
+};
 /// World messages by number: each is a list of pages, each page a list of lines.
 pub const Messages = []const []const []const Line;
 
@@ -190,9 +201,11 @@ pub fn loadScenes(
         error.OutOfMemory => error.OutOfMemory,
         else => fail(diagnostic, "scenes.zon: not openings and films", .{}),
     };
-    for (scenes.ending.credits) |credit| if (credit == .text and credit.text.len == 0) {
-        return fail(diagnostic, "scenes.zon: a credit's text is empty", .{});
-    };
+    for (scenes.ending.credits) |credit| {
+        if (credit == .text and credit.text.len == 0) {
+            return fail(diagnostic, "scenes.zon: a credit's text is empty", .{});
+        }
+    }
     return scenes;
 }
 
@@ -216,15 +229,18 @@ pub fn load(
     diagnostic: *Diagnostic,
 ) Error!Level {
     var loader: Loader = .{ .gpa = gpa, .arena = arena, .diagnostic = diagnostic };
-    for (vocabulary.Message.fixed) |message| try loader.setMessageName(message, @tagName(message));
+    for (vocabulary.Message.fixed) |message| {
+        try loader.setMessageName(message, @tagName(message));
+    }
     var characters_tree = try Tree.parse(gpa, characters_source, "characters.zon", diagnostic);
     defer characters_tree.deinit(gpa);
     const character_root = try loader.expectStruct(characters_tree, .root, "characters.zon");
-    if (character_root.names.len > max_characters) return fail(
-        diagnostic,
-        "characters.zon: {d} characters; a level holds at most {d}",
-        .{ character_root.names.len, max_characters },
-    );
+    if (character_root.names.len > max_characters) {
+        return fail(diagnostic, "characters.zon: {d} characters; a level holds at most {d}", .{
+            character_root.names.len,
+            max_characters,
+        });
+    }
     loader.character_names = character_root.names;
     loader.characters_tree = &characters_tree;
 
@@ -270,7 +286,7 @@ const Tree = struct {
         const zoir = try std.zig.ZonGen.generate(gpa, ast, .{});
         if (ast.errors.len != 0 or zoir.hasCompileErrors()) {
             zoir.deinit(gpa);
-            return fail(diagnostic, "{s}: not valid ZON", .{file});
+            return fail(diagnostic, "{s}: not valid ZON", .{ file });
         }
         return .{ .ast = ast, .zoir = zoir };
     }
@@ -344,7 +360,7 @@ const Loader = struct {
         return switch (tree.get(index)) {
             .struct_literal => |s| s,
             .empty_literal => .{ .names = &.{}, .vals = .{ .start = index, .len = 0 } },
-            else => fail(self.diagnostic, "{s}: expected a struct", .{where}),
+            else => fail(self.diagnostic, "{s}: expected a struct", .{ where }),
         };
     }
 
@@ -366,42 +382,39 @@ const Loader = struct {
         const names = try self.arena.alloc([]const u8, self.next_message);
         @memset(names, "");
         var iterator = self.message_ids.iterator();
-        while (iterator.next()) |entry| names[@backingInt(entry.value_ptr.*)] = entry.key_ptr.*;
+        while (iterator.next()) |entry| {
+            names[@backingInt(entry.value_ptr.*)] = entry.key_ptr.*;
+        }
         return names;
     }
 
     fn characterIndex(self: *Loader, name: []const u8) ?vocabulary.Character {
         for (self.character_names, 0..) |candidate, index| {
-            if (std.mem.eql(
-                u8,
-                self.characters_tree.name(candidate),
-                name,
-            )) return @fromBackingInt(@as(u16, @intCast(index)));
+            if (std.mem.eql(u8, self.characters_tree.name(candidate), name)) {
+                return @fromBackingInt(@as(u16, @intCast(index)));
+            }
         }
         return null;
     }
 
     fn parseBehavior(self: *Loader, tree: Tree, file: []const u8) Error!vocabulary.Behavior {
         const root = tree.get(.root);
-        if (root != .struct_literal) return fail(
-            self.diagnostic,
-            "{s}: expected a struct",
-            .{file},
-        );
+        if (root != .struct_literal) {
+            return fail(self.diagnostic, "{s}: expected a struct", .{ file });
+        }
         const links = try self.nameList(tree, tree.field(root, "links"), file);
         const numbers = try self.nameList(tree, tree.field(root, "numbers"), file);
-        const states_index = tree.field(root, "states") orelse return fail(
-            self.diagnostic,
-            "{s}: no states",
-            .{file},
-        );
+        const states_index = tree.field(root, "states") orelse
+            return fail(self.diagnostic, "{s}: no states", .{ file });
         const states_node = try self.expectStruct(tree, states_index, file);
         const states = try self.arena.alloc(vocabulary.State, states_node.names.len);
-        for (states, states_node.names) |*state, name| state.* = .{
-            .name = try self.arena.dupe(u8, tree.name(name)),
-            .animation = 0,
-            .rules = &.{},
-        };
+        for (states, states_node.names) |*state, name| {
+            state.* = .{
+                .name = try self.arena.dupe(u8, tree.name(name)),
+                .animation = 0,
+                .rules = &.{},
+            };
+        }
         const context: Context = .{
             .tree = &tree,
             .file = file,
@@ -411,33 +424,24 @@ const Loader = struct {
         };
         for (states, 0..) |*state, index| {
             const value = tree.get(states_node.vals.at(@intCast(index)));
-            const animation = tree.field(value, "animation") orelse return fail(
-                self.diagnostic,
-                "{s}: {s} has no animation",
-                .{ file, state.name },
-            );
+            const animation = tree.field(value, "animation") orelse
+                return fail(self.diagnostic, "{s}: {s} has no animation", .{ file, state.name });
             state.animation = std.math.cast(u16, tree.int(animation) orelse -1) orelse
-                return fail(
-                    self.diagnostic,
-                    "{s}: {s} has an invalid animation",
-                    .{ file, state.name },
-                );
-            const rules_index = tree.field(value, "rules") orelse return fail(
-                self.diagnostic,
-                "{s}: {s} has no rules",
-                .{ file, state.name },
-            );
-            const rule_nodes = tree.list(rules_index) orelse return fail(
-                self.diagnostic,
-                "{s}: {s} rules must be a list",
-                .{ file, state.name },
-            );
+                return fail(self.diagnostic, "{s}: {s} has an invalid animation", .{
+                    file,
+                    state.name,
+                });
+            const rules_index = tree.field(value, "rules") orelse
+                return fail(self.diagnostic, "{s}: {s} has no rules", .{ file, state.name });
+            const rule_nodes = tree.list(rules_index) orelse
+                return fail(self.diagnostic, "{s}: {s} rules must be a list", .{
+                    file,
+                    state.name,
+                });
             const rules = try self.arena.alloc(vocabulary.Rule, rule_nodes.len);
-            for (rules, 0..) |*rule, r| rule.* = try self.parseRule(
-                context,
-                rule_nodes.at(@intCast(r)),
-                @intCast(index),
-            );
+            for (rules, 0..) |*rule, r| {
+                rule.* = try self.parseRule(context, rule_nodes.at(@intCast(r)), @intCast(index));
+            }
             state.rules = rules;
         }
         return .{
@@ -455,23 +459,15 @@ const Loader = struct {
         file: []const u8,
     ) Error![]const []const u8 {
         const at = index orelse return &.{};
-        const range = tree.list(at) orelse return fail(
-            self.diagnostic,
-            "{s}: links and numbers must be lists",
-            .{file},
-        );
-        if (range.len > 4) return fail(
-            self.diagnostic,
-            "{s}: at most four links or numbers",
-            .{file},
-        );
+        const range = tree.list(at) orelse
+            return fail(self.diagnostic, "{s}: links and numbers must be lists", .{ file });
+        if (range.len > 4) {
+            return fail(self.diagnostic, "{s}: at most four links or numbers", .{ file });
+        }
         const names = try self.arena.alloc([]const u8, range.len);
         for (names, 0..) |*name, i| {
-            const text = tree.enumName(range.at(@intCast(i))) orelse return fail(
-                self.diagnostic,
-                "{s}: names must be enum literals",
-                .{file},
-            );
+            const text = tree.enumName(range.at(@intCast(i))) orelse
+                return fail(self.diagnostic, "{s}: names must be enum literals", .{ file });
             name.* = try self.arena.dupe(u8, text);
         }
         return names;
@@ -500,11 +496,8 @@ const Loader = struct {
             const name = tree.name(name_string);
             const value = fields.vals.at(@intCast(i));
             if (std.mem.eql(u8, name, "when")) {
-                const range = tree.list(value) orelse return fail(
-                    self.diagnostic,
-                    "{s}: when must be a list",
-                    .{context.file},
-                );
+                const range = tree.list(value) orelse
+                    return fail(self.diagnostic, "{s}: when must be a list", .{ context.file });
                 const checks = try self.arena.alloc(vocabulary.Operation, range.len);
                 for (checks, 0..) |*check, c| {
                     check.* = try self.parseOperation(context, range.at(@intCast(c)));
@@ -513,49 +506,50 @@ const Loader = struct {
             } else if (std.mem.eql(u8, name, "then")) {
                 result.then = try self.parseOperation(context, value);
             } else if (std.mem.eql(u8, name, "next")) {
-                const target = tree.enumName(value) orelse return fail(
-                    self.diagnostic,
-                    "{s}: next must name a state",
-                    .{context.file},
-                );
+                const target = tree.enumName(value) orelse
+                    return fail(self.diagnostic, "{s}: next must name a state", .{ context.file });
                 result.next = for (context.states, 0..) |candidate, s| {
                     if (std.mem.eql(u8, candidate.name, target)) break @intCast(s);
-                } else return fail(
-                    self.diagnostic,
-                    "{s}: unknown state {s}",
-                    .{ context.file, target },
-                );
-            } else inline for (.{ "turn", "damage", "heal", "kill" }) |flag| {
-                if (std.mem.eql(u8, name, flag)) {
-                    @field(result, flag) = switch (tree.get(value)) {
-                        .true => true,
-                        .false => false,
-                        else => return fail(
-                            self.diagnostic,
-                            "{s}: {s} must be true or false",
-                            .{ context.file, name },
-                        ),
-                    };
-                    break;
-                }
-            } else inline for (.{ "score", "forward", "down" }) |number| {
-                if (std.mem.eql(u8, name, number)) {
-                    const FieldType = @FieldType(vocabulary.Rule, number);
-                    @field(result, number) = std.math.cast(
-                        FieldType,
-                        tree.int(value) orelse return self.badNumber(context, name),
-                    ) orelse
-                        return self.badNumber(context, name);
-                    if (FieldType == i16 and @abs(@field(result, number)) > number_limit) {
-                        return self.badNumber(context, name);
+                } else return fail(self.diagnostic, "{s}: unknown state {s}", .{
+                    context.file,
+                    target,
+                });
+            } else {
+                inline for (.{ "turn", "damage", "heal", "kill" }) |flag| {
+                    if (std.mem.eql(u8, name, flag)) {
+                        @field(result, flag) = switch (tree.get(value)) {
+                            .true => true,
+                            .false => false,
+                            else => return fail(
+                                self.diagnostic,
+                                "{s}: {s} must be true or false",
+                                .{ context.file, name },
+                            ),
+                        };
+                        break;
                     }
-                    break;
+                } else {
+                    inline for (.{ "score", "forward", "down" }) |number| {
+                        if (std.mem.eql(u8, name, number)) {
+                            const FieldType = @FieldType(vocabulary.Rule, number);
+                            @field(result, number) = std.math.cast(
+                                FieldType,
+                                tree.int(value) orelse return self.badNumber(context, name),
+                            ) orelse
+                                return self.badNumber(context, name);
+                            if (FieldType == i16 and @abs(@field(result, number)) > number_limit) {
+                                return self.badNumber(context, name);
+                            }
+                            break;
+                        }
+                    } else {
+                        return fail(self.diagnostic, "{s}: unknown rule field {s}", .{
+                            context.file,
+                            name,
+                        });
+                    }
                 }
-            } else return fail(
-                self.diagnostic,
-                "{s}: unknown rule field {s}",
-                .{ context.file, name },
-            );
+            }
         }
         return result;
     }
@@ -577,17 +571,16 @@ const Loader = struct {
                 const matches = field_type == void and std.mem.eql(u8, field_name, name);
                 if (matches) return @unionInit(vocabulary.Operation, field_name, {});
             }
-            return fail(
-                self.diagnostic,
-                "{s}: unknown condition or effect {s}",
-                .{ context.file, name },
-            );
+            return fail(self.diagnostic, "{s}: unknown condition or effect {s}", .{
+                context.file,
+                name,
+            });
         }
         if (node != .struct_literal or node.struct_literal.names.len != 1) {
             return fail(
                 self.diagnostic,
                 "{s}: a condition or effect is a name or .{{ .name = argument }}",
-                .{context.file},
+                .{ context.file },
             );
         }
         const name = tree.name(node.struct_literal.names[0]);
@@ -598,16 +591,19 @@ const Loader = struct {
                 const value = try self.parseArgument(field_type, context, argument, name);
                 // One draw in `value`: the draw is divided by it.
                 if (comptime std.mem.eql(u8, field_name, "chance")) {
-                    if (value < 1) return fail(self.diagnostic, "{s}: chance must be at least 1", .{context.file});
+                    if (value < 1) {
+                        return fail(self.diagnostic, "{s}: chance must be at least 1", .{
+                            context.file,
+                        });
+                    }
                 }
                 return @unionInit(vocabulary.Operation, field_name, value);
             }
         }
-        return fail(
-            self.diagnostic,
-            "{s}: unknown condition or effect {s}",
-            .{ context.file, name },
-        );
+        return fail(self.diagnostic, "{s}: unknown condition or effect {s}", .{
+            context.file,
+            name,
+        });
     }
 
     fn parseArgument(
@@ -620,59 +616,67 @@ const Loader = struct {
         const tree = context.tree;
         if (T == i16) {
             const value = tree.int(index) orelse
-                return fail(self.diagnostic, "{s}: {s} needs a number", .{ context.file, operation });
-            if (@abs(value) > number_limit) return fail(
-                self.diagnostic,
-                "{s}: {s} must lie within -{d} and {d}",
-                .{ context.file, operation, number_limit, number_limit },
-            );
+                return fail(self.diagnostic, "{s}: {s} needs a number", .{
+                    context.file,
+                    operation,
+                });
+            if (@abs(value) > number_limit) {
+                return fail(self.diagnostic, "{s}: {s} must lie within -{d} and {d}", .{
+                    context.file,
+                    operation,
+                    number_limit,
+                    number_limit,
+                });
+            }
             return @intCast(value);
         }
-        if (T == bool) return switch (tree.get(index)) {
-            .true => true,
-            .false => false,
-            else => fail(self.diagnostic, "{s}: {s} needs true or false", .{
-                context.file, operation,
-            }),
-        };
+        if (T == bool) {
+            return switch (tree.get(index)) {
+                .true => true,
+                .false => false,
+                else => fail(self.diagnostic, "{s}: {s} needs true or false", .{
+                    context.file,
+                    operation,
+                }),
+            };
+        }
         if (@typeInfo(T) == .@"struct") {
             var result: T = undefined;
             const node = tree.get(index);
             const info = @typeInfo(T).@"struct";
             inline for (info.field_names, info.field_types) |field_name, field_type| {
                 const value = tree.field(node, field_name) orelse
-                    return fail(
-                        self.diagnostic,
-                        "{s}: {s} needs .{s}",
-                        .{ context.file, operation, field_name },
-                    );
+                    return fail(self.diagnostic, "{s}: {s} needs .{s}", .{
+                        context.file,
+                        operation,
+                        field_name,
+                    });
                 const parsed = try self.parseArgument(field_type, context, value, operation);
                 @field(result, field_name) = parsed;
             }
             return result;
         }
-        const name = tree.enumName(index) orelse return fail(
-            self.diagnostic,
-            "{s}: {s} needs a name",
-            .{ context.file, operation },
-        );
+        const name = tree.enumName(index) orelse
+            return fail(self.diagnostic, "{s}: {s} needs a name", .{ context.file, operation });
         if (T == vocabulary.Message) return self.internMessage(name);
-        if (T == vocabulary.Link) return slot(vocabulary.Link, context.links, name) orelse
-            fail(self.diagnostic, "{s}: unknown link {s}", .{ context.file, name });
-        if (T == vocabulary.Number) return slot(vocabulary.Number, context.numbers, name) orelse
-            fail(self.diagnostic, "{s}: unknown number {s}", .{ context.file, name });
-        if (T == vocabulary.Character) return self.characterIndex(name) orelse
-            fail(self.diagnostic, "{s}: unknown character {s}", .{ context.file, name });
-        if (T == vocabulary.Kind) return kind(name) orelse fail(
-            self.diagnostic,
-            "{s}: unknown kind {s}",
-            .{ context.file, name },
-        );
-        return std.meta.stringToEnum(T, name) orelse fail(
-            self.diagnostic,
-            "{s}: {s} cannot be {s}",
-            .{ context.file, operation, name },
-        );
+        if (T == vocabulary.Link) {
+            return slot(vocabulary.Link, context.links, name) orelse
+                fail(self.diagnostic, "{s}: unknown link {s}", .{ context.file, name });
+        }
+        if (T == vocabulary.Number) {
+            return slot(vocabulary.Number, context.numbers, name) orelse
+                fail(self.diagnostic, "{s}: unknown number {s}", .{ context.file, name });
+        }
+        if (T == vocabulary.Character) {
+            return self.characterIndex(name) orelse
+                fail(self.diagnostic, "{s}: unknown character {s}", .{ context.file, name });
+        }
+        if (T == vocabulary.Kind) {
+            return kind(name) orelse
+                fail(self.diagnostic, "{s}: unknown kind {s}", .{ context.file, name });
+        }
+        return std.meta.stringToEnum(T, name) orelse
+            fail(self.diagnostic, "{s}: {s} cannot be {s}", .{ context.file, operation, name });
     }
 
     fn parseCharacter(
@@ -708,11 +712,8 @@ const Loader = struct {
         var result: Character = .{
             .name = name,
             .placement = try fields.integer(u16, "placement"),
-            .kind = kind(kind_name) orelse return fail(
-                self.diagnostic,
-                "{s}: unknown kind {s}",
-                .{ name, kind_name },
-            ),
+            .kind = kind(kind_name) orelse
+                return fail(self.diagnostic, "{s}: unknown kind {s}", .{ name, kind_name }),
             .behavior = behavior_index,
             .start = behavior.stateIndex(start_name) orelse
                 return fail(self.diagnostic, "{s}: unknown start state {s}", .{ name, start_name }),
@@ -729,15 +730,19 @@ const Loader = struct {
             .behind_player = try fields.flag("behind_player"),
             .minimum_difficulty = try fields.difficulty(),
         };
-        if (result.width > max_width) return fail(
-            self.diagnostic,
-            "{s}: width {d}; a footprint covers at most {d} columns",
-            .{ name, result.width, max_width },
-        );
-        if (tree.field(fields.node, "label")) |label| result.label = switch (tree.get(label)) {
-            .string_literal => |text| try self.arena.dupe(u8, text),
-            else => return fail(self.diagnostic, "{s}: label must be a string", .{name}),
-        };
+        if (result.width > max_width) {
+            return fail(
+                self.diagnostic,
+                "{s}: width {d}; a footprint covers at most {d} columns",
+                .{ name, result.width, max_width },
+            );
+        }
+        if (tree.field(fields.node, "label")) |label| {
+            result.label = switch (tree.get(label)) {
+                .string_literal => |text| try self.arena.dupe(u8, text),
+                else => return fail(self.diagnostic, "{s}: label must be a string", .{ name }),
+            };
+        }
         if (tree.field(fields.node, "label_number") != null) {
             result.label_number = try fields.integer(u16, "label_number");
         }
@@ -758,7 +763,9 @@ const Loader = struct {
             }
         }
         const node = fields.node;
-        if (tree.field(node, "links")) |links| try self.bindLinks(&result, tree, links, behavior);
+        if (tree.field(node, "links")) |links| {
+            try self.bindLinks(&result, tree, links, behavior);
+        }
         if (tree.field(node, "numbers")) |numbers| {
             try self.bindNumbers(&result, tree, numbers, behavior);
         }
@@ -769,11 +776,11 @@ const Loader = struct {
     fn room(self: *Loader, fields: Fields) Error!?u8 {
         const value = try fields.required("room");
         const name = fields.tree.enumName(value) orelse return try fields.integer(u8, "room");
-        if (!std.mem.eql(u8, name, "outside")) return fail(
-            self.diagnostic,
-            "{s}: room must be a number or .outside",
-            .{fields.owner},
-        );
+        if (!std.mem.eql(u8, name, "outside")) {
+            return fail(self.diagnostic, "{s}: room must be a number or .outside", .{
+                fields.owner,
+            });
+        }
         return null;
     }
 
@@ -788,24 +795,21 @@ const Loader = struct {
         for (fields.names, 0..) |link_name, i| {
             const link = tree.name(link_name);
             const position = slot(vocabulary.Link, behavior.links, link) orelse
-                return fail(
-                    self.diagnostic,
-                    "{s}: behavior has no link {s}",
-                    .{ character.name, link },
-                );
+                return fail(self.diagnostic, "{s}: behavior has no link {s}", .{
+                    character.name,
+                    link,
+                });
             const target = tree.enumName(fields.vals.at(@intCast(i))) orelse
-                return fail(
-                    self.diagnostic,
-                    "{s}: link {s} must name a character",
-                    .{ character.name, link },
-                );
+                return fail(self.diagnostic, "{s}: link {s} must name a character", .{
+                    character.name,
+                    link,
+                });
             if (std.mem.eql(u8, target, "none")) continue;
             character.links[@backingInt(position)] = self.characterIndex(target) orelse
-                return fail(
-                    self.diagnostic,
-                    "{s}: unknown character {s}",
-                    .{ character.name, target },
-                );
+                return fail(self.diagnostic, "{s}: unknown character {s}", .{
+                    character.name,
+                    target,
+                });
         }
     }
 
@@ -820,21 +824,23 @@ const Loader = struct {
         for (fields.names, 0..) |number_name, i| {
             const number = tree.name(number_name);
             const given = tree.int(fields.vals.at(@intCast(i))) orelse number_limit + 1;
-            if (@abs(given) > number_limit) return fail(
-                self.diagnostic,
-                "{s}: number {s} must lie within -{d} and {d}",
-                .{ character.name, number, number_limit, number_limit },
-            );
+            if (@abs(given) > number_limit) {
+                return fail(self.diagnostic, "{s}: number {s} must lie within -{d} and {d}", .{
+                    character.name,
+                    number,
+                    number_limit,
+                    number_limit,
+                });
+            }
             const value: i16 = @intCast(given);
             if (slot(vocabulary.Number, behavior.numbers, number)) |position| {
                 character.numbers[@backingInt(position)] = value;
             } else if (unusedParameter(number)) {
                 // A placement number no rule uses: accepted, not kept.
-            } else return fail(
-                self.diagnostic,
-                "{s}: behavior has no number {s}",
-                .{ character.name, number },
-            );
+            } else return fail(self.diagnostic, "{s}: behavior has no number {s}", .{
+                character.name,
+                number,
+            });
         }
     }
 };
@@ -876,11 +882,14 @@ const Fields = struct {
     /// A number within `number_limit`.
     fn bounded(self: Fields, comptime field: []const u8) Error!i16 {
         const value = try self.integer(i16, field);
-        if (@abs(value) > number_limit) return fail(
-            self.loader.diagnostic,
-            "{s}: {s} must lie within -{d} and {d}",
-            .{ self.owner, field, number_limit, number_limit },
-        );
+        if (@abs(value) > number_limit) {
+            return fail(self.loader.diagnostic, "{s}: {s} must lie within -{d} and {d}", .{
+                self.owner,
+                field,
+                number_limit,
+                number_limit,
+            });
+        }
         return value;
     }
 
@@ -890,7 +899,10 @@ const Fields = struct {
         return switch (self.tree.get(value)) {
             .true => true,
             .false => false,
-            else => fail(self.loader.diagnostic, "{s}: {s} must be true or false", .{ self.owner, field }),
+            else => fail(self.loader.diagnostic, "{s}: {s} must be true or false", .{
+                self.owner,
+                field,
+            }),
         };
     }
 
@@ -901,7 +913,12 @@ const Fields = struct {
             const field = self.tree.name(string);
             for (names) |candidate| {
                 if (std.mem.eql(u8, candidate, field)) break;
-            } else return fail(self.loader.diagnostic, "{s}: unknown field {s}", .{ self.owner, field });
+            } else {
+                return fail(self.loader.diagnostic, "{s}: unknown field {s}", .{
+                    self.owner,
+                    field,
+                });
+            }
         }
     }
 
@@ -926,7 +943,10 @@ const Fields = struct {
 
 /// `parameter_0` to `parameter_3`: a placement number no rule uses.
 fn unusedParameter(name: []const u8) bool {
-    return name.len == 11 and std.mem.startsWith(u8, name, "parameter_") and name[10] >= '0' and name[10] <= '3';
+    return name.len == 11 and
+        std.mem.startsWith(u8, name, "parameter_") and
+        name[10] >= '0' and
+        name[10] <= '3';
 }
 
 fn slot(comptime T: type, names: []const []const u8, name: []const u8) ?T {
@@ -973,7 +993,9 @@ test "a behavior and its characters load with every name resolved" {
     var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
     defer arena.deinit();
     var diagnostic: Diagnostic = .{};
-    const level = load(std.testing.allocator, arena.allocator(),
+    const level = load(
+        std.testing.allocator,
+        arena.allocator(),
         \\.{
         \\    .conrad = .{
         \\        .placement = 0, .kind = .player, .behavior = .guest, .start = .waiting,
@@ -990,32 +1012,38 @@ test "a behavior and its characters load with every name resolved" {
         \\        .numbers = .{ .room_to_appear = 19, .parameter_3 = 7 },
         \\    },
         \\}
-    , &.{.{ .name = "guest.zon", .source =
-        \\.{
-        \\    .key = "0011", .links = .{.friend}, .numbers = .{.room_to_appear},
-        \\    .states = .{
-        \\        .waiting = .{ .animation = 768, .rules = .{
-        \\            .{
-        \\                .when = .{.{ .received = .call }},
-        \\                .then = .{ .reveal = .room_to_appear },
-        \\            },
-        \\            .{
-        \\                .when = .{ .out_of_view, .{ .chance = 5 } },
-        \\                .then = .{ .send = .{ .to = .friend, .message = .hit_front_high } },
-        \\                .turn = true,
-        \\                .forward = -16,
-        \\                .next = .fleeing,
-        \\            },
-        \\            .{},
-        \\        } },
-        \\        .fleeing = .{ .animation = 767, .rules = .{.{
-        \\            .when = .{.{ .sees = .{ .kind = .player, .cells = 16 } }},
-        \\            .next = .waiting,
-        \\        }} },
-        \\    },
-        \\}
-    }}, &diagnostic) catch |err| {
-        std.debug.print("{s}\n", .{diagnostic.message()});
+    ,
+        &.{.{
+            .name = "guest.zon",
+            .source =
+            \\.{
+            \\    .key = "0011", .links = .{.friend}, .numbers = .{.room_to_appear},
+            \\    .states = .{
+            \\        .waiting = .{ .animation = 768, .rules = .{
+            \\            .{
+            \\                .when = .{.{ .received = .call }},
+            \\                .then = .{ .reveal = .room_to_appear },
+            \\            },
+            \\            .{
+            \\                .when = .{ .out_of_view, .{ .chance = 5 } },
+            \\                .then = .{ .send = .{ .to = .friend, .message = .hit_front_high } },
+            \\                .turn = true,
+            \\                .forward = -16,
+            \\                .next = .fleeing,
+            \\            },
+            \\            .{},
+            \\        } },
+            \\        .fleeing = .{ .animation = 767, .rules = .{.{
+            \\            .when = .{.{ .sees = .{ .kind = .player, .cells = 16 } }},
+            \\            .next = .waiting,
+            \\        }} },
+            \\    },
+            \\}
+            ,
+        }},
+        &diagnostic,
+    ) catch |err| {
+        std.debug.print("{s}\n", .{ diagnostic.message() });
         return err;
     };
     const guest = level.behaviors[0];
@@ -1042,10 +1070,13 @@ test "unknown names fail with a readable diagnostic" {
     var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
     defer arena.deinit();
     var diagnostic: Diagnostic = .{};
-    const guard: BehaviorSource = .{ .name = "guard.zon", .source =
+    const guard: BehaviorSource = .{
+        .name = "guard.zon",
+        .source =
         \\.{ .states = .{ .idle = .{ .animation = 1, .rules = .{.{ .when = .{.levitating} }} } } }
+        ,
     };
-    const result = load(std.testing.allocator, arena.allocator(), ".{}", &.{guard}, &diagnostic);
+    const result = load(std.testing.allocator, arena.allocator(), ".{}", &.{ guard }, &diagnostic);
     try std.testing.expectError(error.InvalidDataSet, result);
     try std.testing.expectEqualStrings(
         "guard.zon: unknown condition or effect levitating",
@@ -1059,14 +1090,17 @@ fn expectRejected(characters: [:0]const u8, rules: []const u8, message: []const 
     const behavior = try std.fmt.allocPrintSentinel(
         arena.allocator(),
         ".{{ .states = .{{ .idle = .{{ .animation = 1, .rules = .{{ {s} }} }} }} }}",
-        .{rules},
+        .{ rules },
         0,
     );
     var diagnostic: Diagnostic = .{};
-    const result = load(std.testing.allocator, arena.allocator(), characters, &.{.{
-        .name = "guard.zon",
-        .source = behavior,
-    }}, &diagnostic);
+    const result = load(
+        std.testing.allocator,
+        arena.allocator(),
+        characters,
+        &.{.{ .name = "guard.zon", .source = behavior }},
+        &diagnostic,
+    );
     try std.testing.expectError(error.InvalidDataSet, result);
     try std.testing.expectEqualStrings(message, diagnostic.message());
 }
@@ -1077,42 +1111,70 @@ const conrad = ".placement = 0, .behavior = .guard, .start = .idle, .room = 1, .
 const player = ".kind = .player, .position = .{ .x = 10, .y = 70 }, .width = 1, .active = true";
 
 test "the loader refuses what the engine cannot run, saying why" {
-    try expectRejected(".{ .conrad = .{ " ++ conrad ++ player ++ ", .activ = true } }", "", "conrad: unknown field activ");
     try expectRejected(
-        ".{ .conrad = .{ " ++ conrad ++ ".kind = .player, .position = .{ .x = 10, .y = 70 }, .width = 1, .active = 1 } }",
+        ".{ .conrad = .{ " ++ conrad ++ player ++ ", .activ = true } }",
+        "",
+        "conrad: unknown field activ",
+    );
+    try expectRejected(
+        ".{ .conrad = .{ " ++
+            conrad ++
+            ".kind = .player, .position = .{ .x = 10, .y = 70 }, .width = 1, .active = 1 } }",
         "",
         "conrad: active must be true or false",
     );
     try expectRejected(
-        ".{ .conrad = .{ " ++ conrad ++ ".kind = .player, .position = .{ .x = 10, .y = 70 }, .width = 17 } }",
+        ".{ .conrad = .{ " ++
+            conrad ++
+            ".kind = .player, .position = .{ .x = 10, .y = 70 }, .width = 17 } }",
         "",
         "conrad: width 17; a footprint covers at most 16 columns",
     );
     try expectRejected(
-        ".{ .conrad = .{ " ++ conrad ++ ".kind = .player, .position = .{ .x = 5000, .y = 70 }, .width = 1 } }",
+        ".{ .conrad = .{ " ++
+            conrad ++
+            ".kind = .player, .position = .{ .x = 5000, .y = 70 }, .width = 1 } }",
         "",
         "conrad: x must lie within -4096 and 4096",
     );
     try expectRejected(
-        ".{ .conrad = .{ " ++ conrad ++ ".kind = .enemy, .position = .{ .x = 10, .y = 70 }, .width = 1 } }",
+        ".{ .conrad = .{ " ++
+            conrad ++
+            ".kind = .enemy, .position = .{ .x = 10, .y = 70 }, .width = 1 } }",
         "",
         "characters.zon: the first character must be the player",
     );
     try expectRejected(".{}", "", "characters.zon: the first character must be the player");
-    try expectRejected(".{}", ".{ .when = .{.{ .wall_ahead = -32768 }} }", "guard.zon: wall_ahead must lie within -4096 and 4096");
-    try expectRejected(".{}", ".{ .when = .{.{ .chance = -1 }} }", "guard.zon: chance must be at least 1");
-    try expectRejected(".{}", ".{ .forward = 5000 }", "guard.zon: forward must be a number in range");
+    try expectRejected(
+        ".{}",
+        ".{ .when = .{.{ .wall_ahead = -32768 }} }",
+        "guard.zon: wall_ahead must lie within -4096 and 4096",
+    );
+    try expectRejected(
+        ".{}",
+        ".{ .when = .{.{ .chance = -1 }} }",
+        "guard.zon: chance must be at least 1",
+    );
+    try expectRejected(
+        ".{}",
+        ".{ .forward = 5000 }",
+        "guard.zon: forward must be a number in range",
+    );
 
     var many: std.ArrayList(u8) = .empty;
     defer many.deinit(std.testing.allocator);
     try many.appendSlice(std.testing.allocator, ".{ .conrad = .{ " ++ conrad ++ player ++ " }, ");
     for (1..max_characters + 1) |i| {
-        try many.print(std.testing.allocator, ".c{d} = ", .{i});
+        try many.print(std.testing.allocator, ".c{d} = ", .{ i });
         try many.appendSlice(std.testing.allocator, ".{ " ++ conrad ++ player ++ " }, ");
     }
     try many.appendSlice(std.testing.allocator, "}");
     try many.append(std.testing.allocator, 0);
-    try expectRejected(many.items[0 .. many.items.len - 1 :0], "", "characters.zon: 257 characters; a level holds at most 256");
+    try expectRejected(
+        many.items[0..many.items.len - 1 :0],
+        "",
+        "characters.zon: 257 characters; a level holds at most 256",
+    );
 }
 
 test "a credit with no text is refused" {
@@ -1129,5 +1191,8 @@ test "a credit with no text is refused" {
         error.InvalidDataSet,
         loadScenes(std.testing.allocator, arena.allocator(), &files, &diagnostic),
     );
-    try std.testing.expectEqualStrings("scenes.zon: a credit's text is empty", diagnostic.message());
+    try std.testing.expectEqualStrings(
+        "scenes.zon: a credit's text is empty",
+        diagnostic.message(),
+    );
 }

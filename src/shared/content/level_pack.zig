@@ -40,10 +40,16 @@ pub const Pack = struct {
     inventory: inventory_artwork.Assets,
 
     pub fn deinit(self: *Pack) void {
-        for (&self.rooms) |*slot| if (slot.*) |*art| art.deinit();
+        for (&self.rooms) |*slot| {
+            if (slot.*) |*art| {
+                art.deinit();
+            }
+        }
         self.characters.deinit();
         self.animation_file.deinit();
-        for (self.icons) |*icon| icon.deinit();
+        for (self.icons) |*icon| {
+            icon.deinit();
+        }
         self.allocator.free(self.icons);
         self.font.deinit();
         self.sounds.deinit();
@@ -92,7 +98,9 @@ pub fn load(
     defer icon_file.deinit();
     const icons = try loadIcons(allocator, icon_file.bytes);
     errdefer {
-        for (icons) |*icon| icon.deinit();
+        for (icons) |*icon| {
+            icon.deinit();
+        }
         allocator.free(icons);
     }
     var font_file = try source.readAll("DATA/FB_TXT.FNT", 16384);
@@ -107,7 +115,9 @@ pub fn load(
     );
     errdefer inventory.deinit();
     var library_colors: [4]palette.Bank = undefined;
-    for (&library_colors, interface.actor_libraries) |*colors, library| colors.* = library.colors;
+    for (&library_colors, interface.actor_libraries) |*colors, library| {
+        colors.* = library.colors;
+    }
     var password: [13]u8 = undefined;
     @memcpy(password[0..6], &interface.password_prefix);
     @memcpy(password[6..], &interface.passwords[@backingInt(id)][@backingInt(difficulty)]);
@@ -136,7 +146,9 @@ fn loadIcons(allocator: std.mem.Allocator, file: []const u8) ![]sprite.Frame {
     const count = std.mem.readInt(u16, file[0..2], .little) / 2;
     var icons: std.ArrayList(sprite.Frame) = .empty;
     errdefer {
-        for (icons.items) |*icon| icon.deinit();
+        for (icons.items) |*icon| {
+            icon.deinit();
+        }
         icons.deinit(allocator);
     }
     for (0..count) |index| {
@@ -162,7 +174,11 @@ fn loadRooms(
     var colors = try readLevel(source, files.rooms, "PAL", 8192);
     defer colors.deinit();
     for (rooms, 0..) |*slot, index| {
-        slot.* = room_files.decode(allocator, colors.bytes, @intCast(index)) catch |err| switch (err) {
+        slot.* = room_files.decode(
+            allocator,
+            colors.bytes,
+            @intCast(index),
+        ) catch |err| switch (err) {
             error.AbsentRoom => null,
             else => return err,
         };
@@ -171,13 +187,15 @@ fn loadRooms(
     const first = rooms[first_room] orelse return error.AbsentRoom;
     const reference_bank = first.palette_banks[2];
     const icon_colors = try palette.decodeLevelBank(colors.bytes, reference_bank);
-    for (rooms) |*slot| if (slot.*) |*art| {
-        const alternate = art.palette_banks[2] != reference_bank;
-        @memcpy(art.colors[0x40..0x50], &interface.actor_colors[@intFromBool(alternate)]);
-        @memcpy(art.colors[0xa0..0xb0], &icon_colors);
-        @memcpy(art.colors[0xe0..0xf0], &interface.text_colors);
-        @memcpy(art.colors[0xf0..0x100], &interface.interface_colors);
-    };
+    for (rooms) |*slot| {
+        if (slot.*) |*art| {
+            const alternate = art.palette_banks[2] != reference_bank;
+            @memcpy(art.colors[0x40..0x50], &interface.actor_colors[@intFromBool(alternate)]);
+            @memcpy(art.colors[0xa0..0xb0], &icon_colors);
+            @memcpy(art.colors[0xe0..0xf0], &interface.text_colors);
+            @memcpy(art.colors[0xf0..0x100], &interface.interface_colors);
+        }
+    }
 }
 
 fn readLevel(

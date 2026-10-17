@@ -32,15 +32,17 @@ pub const RgbaFrame = struct {
 
     pub const bytes_per_pixel: usize = 4;
 
-    pub const ValidateError = error{InvalidFrame};
+    pub const ValidateError = error{ InvalidFrame };
 
     /// Checks for positive dimensions, `stride >= width * 4`, and enough bytes for every active
     /// pixel. All arithmetic is checked.
     pub fn validate(f: RgbaFrame) ValidateError!void {
         if (f.width == 0 or f.height == 0) return error.InvalidFrame;
-        const row_bytes = std.math.mul(usize, f.width, bytes_per_pixel) catch return error.InvalidFrame;
+        const row_bytes = std.math.mul(usize, f.width, bytes_per_pixel) catch
+            return error.InvalidFrame;
         if (f.stride < row_bytes) return error.InvalidFrame;
-        const padded_rows = std.math.mul(usize, f.stride, f.height - 1) catch return error.InvalidFrame;
+        const padded_rows = std.math.mul(usize, f.stride, f.height - 1) catch
+            return error.InvalidFrame;
         const needed = std.math.add(usize, padded_rows, row_bytes) catch return error.InvalidFrame;
         if (f.pixels.len < needed) return error.InvalidFrame;
     }
@@ -48,11 +50,14 @@ pub const RgbaFrame = struct {
     /// The active bytes of row `y` (no padding).
     pub fn row(f: RgbaFrame, y: u32) []const u8 {
         const start = @as(usize, y) * f.stride;
-        return f.pixels[start..][0 .. @as(usize, f.width) * bytes_per_pixel];
+        return f.pixels[start..][0..@as(usize, f.width) * bytes_per_pixel];
     }
 };
 
-pub const AudioFormat = struct { channels: u8 = 2, sample_rate: u32 = 44100 };
+pub const AudioFormat = struct {
+    channels: u8 = 2,
+    sample_rate: u32 = 44100,
+};
 
 pub const AudioStatus = struct {
     queued_frames: u64 = 0,
@@ -180,7 +185,13 @@ pub const ControllerModel = struct {
 };
 
 /// The user's local date and time, as their system keeps it.
-pub const LocalTime = struct { year: u16, month: u8, day: u8, hour: u8, minute: u8 };
+pub const LocalTime = struct {
+    year: u16,
+    month: u8,
+    day: u8,
+    hour: u8,
+    minute: u8,
+};
 
 pub const ControllerAxis = enum(u8) {
     left_x,
@@ -192,15 +203,24 @@ pub const ControllerAxis = enum(u8) {
     _,
 };
 
-pub const Size = struct { width: u32, height: u32 };
+pub const Size = struct {
+    width: u32,
+    height: u32,
+};
 
 /// One device event, in order, with a time stamp from the host's monotonic clock.
 pub const Event = struct {
     time_ns: u64,
     payload: Payload,
 
-    pub const KeyEvent = struct { key: Key, repeat: bool = false };
-    pub const ControllerButtonEvent = struct { controller: ControllerId, button: ControllerButton };
+    pub const KeyEvent = struct {
+        key: Key,
+        repeat: bool = false,
+    };
+    pub const ControllerButtonEvent = struct {
+        controller: ControllerId,
+        button: ControllerButton,
+    };
     pub const ControllerAxisEvent = struct {
         controller: ControllerId,
         axis: ControllerAxis,
@@ -322,7 +342,9 @@ pub const OwnedNames = struct {
     allocator: std.mem.Allocator,
 
     pub fn deinit(self: *OwnedNames) void {
-        for (self.names) |n| self.allocator.free(n);
+        for (self.names) |n| {
+            self.allocator.free(n);
+        }
         self.allocator.free(self.names);
         self.* = undefined;
     }
@@ -333,7 +355,10 @@ pub const OwnedSaveNames = OwnedNames;
 
 pub const AssetHandle = enum(u32) { _ };
 
-pub const OpenedAsset = struct { handle: AssetHandle, length: u64 };
+pub const OpenedAsset = struct {
+    handle: AssetHandle,
+    length: u64,
+};
 
 pub const AssetError = error{
     NotFound,
@@ -381,7 +406,9 @@ pub const AssetSource = struct {
         const opened = try a.open(path);
         defer a.close(opened.handle);
         if (opened.length > max_bytes or
-            opened.length > std.math.maxInt(usize)) return error.TooLarge;
+            opened.length > std.math.maxInt(usize)) {
+            return error.TooLarge;
+        }
         const len: usize = @intCast(opened.length);
         const buf = a.allocator.alloc(u8, len) catch return error.OutOfMemory;
         errdefer a.allocator.free(buf);
@@ -433,7 +460,7 @@ pub const max_name_len = 64;
 /// from letters, digits, `.`, `_` and `-`; no `.` at the start or the end; no `..`; not a
 /// Windows device name (`CON`, `NUL`, `COM1`..., with an extension or not). A name that breaks a
 /// rule is an error; no code corrects it.
-pub fn validateName(name: []const u8) error{InvalidName}!void {
+pub fn validateName(name: []const u8) error{ InvalidName }!void {
     if (name.len == 0 or name.len > max_name_len) return error.InvalidName;
     if (name[0] == '.' or name[name.len - 1] == '.') return error.InvalidName;
     if (std.mem.indexOf(u8, name, "..") != null) return error.InvalidName;
@@ -441,13 +468,17 @@ pub fn validateName(name: []const u8) error{InvalidName}!void {
         const ok = std.ascii.isAlphanumeric(ch) or ch == '.' or ch == '_' or ch == '-';
         if (!ok) return error.InvalidName;
     }
-    const stem = name[0 .. std.mem.indexOfScalar(u8, name, '.') orelse name.len];
+    const stem = name[0..std.mem.indexOfScalar(u8, name, '.') orelse name.len];
     for ([_][]const u8{ "CON", "PRN", "AUX", "NUL" }) |device| {
         if (std.ascii.eqlIgnoreCase(stem, device)) return error.InvalidName;
     }
-    if (stem.len == 4 and std.ascii.isDigit(stem[3]) and stem[3] != '0' and
-        (std.ascii.eqlIgnoreCase(stem[0..3], "COM") or std.ascii.eqlIgnoreCase(stem[0..3], "LPT")))
+    if (stem.len == 4 and
+        std.ascii.isDigit(stem[3]) and
+        stem[3] != '0' and
+        (std.ascii.eqlIgnoreCase(stem[0..3], "COM") or
+            std.ascii.eqlIgnoreCase(stem[0..3], "LPT"))) {
         return error.InvalidName;
+    }
 }
 
 /// The separator between the directory components of a logical asset name.
@@ -463,7 +494,7 @@ pub const max_asset_depth = 8;
 /// `max_asset_name_len` bytes. Providers match names DOS-style, that is ASCII case-insensitive
 /// (`assetNameEql`), so `game.cfg` opens `GAME.CFG`. Listings return the upper-case form
 /// (`canonicalAssetName`), and `list` matches its prefix the same way.
-pub fn validateAssetName(name: []const u8) error{InvalidName}!void {
+pub fn validateAssetName(name: []const u8) error{ InvalidName }!void {
     if (name.len == 0 or name.len > max_asset_name_len) return error.InvalidName;
     var depth: usize = 0;
     var it = std.mem.splitScalar(u8, name, asset_separator);

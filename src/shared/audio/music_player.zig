@@ -4,10 +4,25 @@ const std = @import("std");
 const score_mod = @import("../content/score.zig");
 const opl = @import("opl.zig");
 
-pub const RegisterWrite = struct { tick: u64, register: u8, value: u8 };
-pub const Observer = struct { context: *anyopaque, write: *const fn (*anyopaque, RegisterWrite) void };
-const Voice = struct { part: u4, pitch: u8, channel: u8, percussion: bool };
-const Cursor = struct { event: usize = 0, origin: u64 = 0 };
+pub const RegisterWrite = struct {
+    tick: u64,
+    register: u8,
+    value: u8,
+};
+pub const Observer = struct {
+    context: *anyopaque,
+    write: *const fn (*anyopaque, RegisterWrite) void,
+};
+const Voice = struct {
+    part: u4,
+    pitch: u8,
+    channel: u8,
+    percussion: bool,
+};
+const Cursor = struct {
+    event: usize = 0,
+    origin: u64 = 0,
+};
 // Equal-tempered pitches measured at the original chip boundary.
 const frequencies = [_]u16{ 343, 364, 385, 408, 433, 459, 486, 515, 546, 579, 614, 650 };
 const operators = [_][2]u8{
@@ -49,20 +64,37 @@ pub const Player = struct {
         return self;
     }
     fn write(self: *Player, register: u8, value: u8) void {
-        if (self.observer) |observer| observer.write(
-            observer.context,
-            .{ .tick = self.tick, .register = register, .value = value },
-        );
+        if (self.observer) |observer| {
+            observer.write(observer.context, .{
+                .tick = self.tick,
+                .register = register,
+                .value = value,
+            });
+        }
         opl.write(&self.chip, register, value);
     }
     pub fn silence(self: *Player) void {
-        for (0..6) |i| self.write(0xb0 + @as(u8, @intCast(i)), 1);
-        for (6..11) |i| self.releaseDrum(@intCast(i));
+        for (0..6) |i| {
+            self.write(0xb0 + @as(u8, @intCast(i)), 1);
+        }
+        for (6..11) |i| {
+            self.releaseDrum(@intCast(i));
+        }
         self.write(8, 0x40);
-        for (all_operators) |op| self.write(0x40 + op, 0x3f);
-        for (0..9) |i| self.write(0xb0 + @as(u8, @intCast(i)), 0);
-        for (0..9) |i| self.write(0xc0 + @as(u8, @intCast(i)), 0);
-        for ([_]u8{ 0x60, 0x80, 0x20, 0xe0 }) |base| for (all_operators) |op| self.write(base + op, 0);
+        for (all_operators) |op| {
+            self.write(0x40 + op, 0x3f);
+        }
+        for (0..9) |i| {
+            self.write(0xb0 + @as(u8, @intCast(i)), 0);
+        }
+        for (0..9) |i| {
+            self.write(0xc0 + @as(u8, @intCast(i)), 0);
+        }
+        for ([_]u8{ 0x60, 0x80, 0x20, 0xe0 }) |base| {
+            for (all_operators) |op| {
+                self.write(base + op, 0);
+            }
+        }
         self.write(1, 0x20);
         self.write(1, 0);
         for (0..9) |i| {
@@ -78,10 +110,10 @@ pub const Player = struct {
     }
     fn level(self: *const Player, op: score_mod.Operator, velocity: u7, scale: bool) u8 {
         const volume: i32 = (@as(i32, velocity) * self.master_volume) >> 6;
-        const attenuation = if (scale) 63 - @divTrunc(
-            2 * (63 - @as(i32, op.attenuation)) * volume + 127,
-            254,
-        ) else op.attenuation;
+        const attenuation = if (scale)
+            63 - @divTrunc(2 * (63 - @as(i32, op.attenuation)) * volume + 127, 254)
+        else
+            op.attenuation;
         return op.key_scale | @as(u8, @intCast(attenuation));
     }
     fn configure(self: *Player, instrument: score_mod.Instrument, channel: u8, velocity: u7) void {
@@ -104,13 +136,19 @@ pub const Player = struct {
         self.write(0x0e + pair[1], op.waveform);
     }
     fn channelBusy(self: *const Player, channel: u8) bool {
-        for (self.voices) |entry| if (entry) |voice| if (voice.channel == channel) return true;
+        for (self.voices) |entry| {
+            if (entry) |voice| {
+                if (voice.channel == channel) return true;
+            }
+        }
         return false;
     }
     fn play(self: *Player, part: u4, note: score_mod.Note) void {
         const instrument = self.score.instruments[note.instrument] orelse return;
         const channel: u8 = if (instrument.percussion) |drum| @backingInt(drum) else find: {
-            for (0..6) |i| if (!self.channelBusy(@intCast(i))) break :find @intCast(i);
+            for (0..6) |i| {
+                if (!self.channelBusy(@intCast(i))) break :find @intCast(i);
+            }
             return; // The original drops excess notes; it does not steal sounding voices.
         };
         if (self.channelBusy(channel)) return;
@@ -141,55 +179,66 @@ pub const Player = struct {
         }
     }
     fn release(self: *Player, part: u4, pitch: u8) void {
-        for (&self.voices) |*entry| if (entry.*) |voice| {
-            if (voice.part != part or voice.pitch != pitch) continue;
-            if (voice.percussion) self.releaseDrum(voice.channel) else self.write(
-                0xb0 + voice.channel,
-                @truncate((@as(u16, pitch / 12) << 2) | (frequencies[pitch % 12] >> 8)),
-            );
-            entry.* = null;
-            return;
-        };
+        for (&self.voices) |*entry| {
+            if (entry.*) |voice| {
+                if (voice.part != part or voice.pitch != pitch) continue;
+                if (voice.percussion) {
+                    self.releaseDrum(voice.channel);
+                } else {
+                    self.write(
+                        0xb0 + voice.channel,
+                        @truncate((@as(u16, pitch / 12) << 2) | (frequencies[pitch % 12] >> 8)),
+                    );
+                }
+                entry.* = null;
+                return;
+            }
+        }
     }
     fn bend(self: *Player, part: u4, amount: u14) void {
         // Preserve the original asymmetric bend and octave rounding, including neutral no-op.
         if (amount == 8192) return;
         const signed: i32 = if (amount & 8192 != 0) -@as(i32, amount & 8191) else amount;
-        for (self.voices) |entry| if (entry) |voice| {
-            if (voice.part != part) continue;
-            var semitone: i32 = @as(i32, voice.pitch % 12) + @divTrunc(signed, 8192);
-            var octave: i32 = voice.pitch / 12;
-            if (semitone < 0) {
+        for (self.voices) |entry| {
+            if (entry) |voice| {
+                if (voice.part != part) continue;
+                var semitone: i32 = @as(i32, voice.pitch % 12) + @divTrunc(signed, 8192);
+                var octave: i32 = voice.pitch / 12;
+                if (semitone < 0) {
+                    octave -= 1;
+                    semitone = -semitone;
+                } else if (semitone > 12) {
+                    octave += 1;
+                    semitone -= 12;
+                }
                 octave -= 1;
-                semitone = -semitone;
-            } else if (semitone > 12) {
-                octave += 1;
-                semitone -= 12;
+                const product: i16 = @truncate(@rem(signed, 8192) * 25);
+                const detune = @divTrunc(@as(i32, product), 8192);
+                const frequency: u16 = @intCast(
+                    @as(i32, frequencies[@intCast(@rem(semitone, 12))]) + detune,
+                );
+                self.write(0xa0 + voice.channel, @truncate(frequency));
+                self.write(
+                    0xb0 + voice.channel,
+                    @truncate(@as(u32, @bitCast(octave * 4)) | 0x20 | (frequency >> 8)),
+                );
             }
-            octave -= 1;
-            const product: i16 = @truncate(@rem(signed, 8192) * 25);
-            const detune = @divTrunc(@as(i32, product), 8192);
-            const frequency: u16 = @intCast(@as(
-                i32,
-                frequencies[@intCast(@rem(semitone, 12))],
-            ) + detune);
-            self.write(0xa0 + voice.channel, @truncate(frequency));
-            self.write(
-                0xb0 + voice.channel,
-                @truncate(@as(u32, @bitCast(octave * 4)) | 0x20 | (frequency >> 8)),
-            );
-        };
+        }
     }
     pub fn advanceTick(self: *Player) void {
         self.tick += 1;
         var local_tick = self.tick - self.score_origin;
-        if (self.score.restart_after_ticks) |period| if (local_tick >= period) {
-            self.silence();
-            self.cursors = @splat(.{});
-            self.score_origin = self.tick;
-            local_tick = 0;
-        };
-        if (self.score.stop_after_ticks) |limit| if (local_tick > limit) return;
+        if (self.score.restart_after_ticks) |period| {
+            if (local_tick >= period) {
+                self.silence();
+                self.cursors = @splat(.{});
+                self.score_origin = self.tick;
+                local_tick = 0;
+            }
+        }
+        if (self.score.stop_after_ticks) |limit| {
+            if (local_tick > limit) return;
+        }
         for (self.score.parts, 0..) |part, i| {
             if (part.events.len == 0) continue;
             const cursor = &self.cursors[i];
@@ -200,8 +249,8 @@ pub const Player = struct {
                 }
             }
             while (cursor.event < part.events.len and
-                part.events[cursor.event].tick + cursor.origin <= local_tick) : (cursor.event += 1)
-            {
+                part.events[cursor.event].tick + cursor.origin <=
+                    local_tick) : (cursor.event += 1) {
                 switch (part.events[cursor.event].action) {
                     .play => |note| self.play(@intCast(i), note),
                     .release => |pitch| self.release(@intCast(i), pitch),
@@ -220,7 +269,7 @@ pub const Player = struct {
                 continue;
             }
             const count: usize = @intCast(@min(stereo.len / 2 - frames, next - self.samples));
-            opl.render(&self.chip, stereo[frames * 2 ..][0 .. count * 2]);
+            opl.render(&self.chip, stereo[frames * 2..][0..count * 2]);
             self.samples += count;
             frames += count;
         }
@@ -261,7 +310,9 @@ test "music rendering is independent of host buffer sizes" {
     var a: [10000]i16 = undefined;
     var b: [10000]i16 = undefined;
     whole.render(&a);
-    for (0..100) |i| split.render(b[i * 100 ..][0..100]);
+    for (0..100) |i| {
+        split.render(b[i * 100..][0..100]);
+    }
     try std.testing.expectEqualSlices(i16, &a, &b);
     try std.testing.expect(!std.mem.allEqual(i16, &a, 0));
 }

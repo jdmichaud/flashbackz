@@ -10,7 +10,10 @@ const art_bank = @import("art_bank.zig");
 const actor_art = @import("actor_art.zig");
 const animations = @import("animations.zig");
 
-pub const Key = struct { sprite: u15, composed: bool };
+pub const Key = struct {
+    sprite: u15,
+    composed: bool,
+};
 
 pub const Art = struct {
     allocator: std.mem.Allocator,
@@ -18,7 +21,9 @@ pub const Art = struct {
 
     pub fn deinit(self: *Art) void {
         var frames = self.frames.valueIterator();
-        while (frames.next()) |frame| frame.deinit();
+        while (frames.next()) |frame| {
+            frame.deinit();
+        }
         self.frames.deinit(self.allocator);
     }
 
@@ -75,7 +80,11 @@ pub fn load(
                 &monsters,
                 key.sprite,
             )) catch |err| switch (err) {
-                error.MissingSprite, error.MissingObjectArt, error.MissingObjectArtBankBinding, error.MissingArtBank => {
+                error.MissingSprite,
+                error.MissingObjectArt,
+                error.MissingObjectArtBankBinding,
+                error.MissingArtBank,
+                => {
                     missing += 1;
                     continue;
                 },
@@ -85,7 +94,12 @@ pub fn load(
             try art.frames.put(allocator, key, frame);
         }
     }
-    if (missing != 0) std.log.info("{d} sprites the animations name are in none of the level's files; they are not drawn", .{missing});
+    if (missing != 0) {
+        std.log.info(
+            "{d} sprites the animations name are in none of the level's files; they are not drawn",
+            .{ missing },
+        );
+    }
     return art;
 }
 

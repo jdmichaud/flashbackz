@@ -29,8 +29,9 @@ pub const Font = struct {
 pub fn decode(allocator: std.mem.Allocator, bytes: []const u8) !Font {
     if (bytes.len == 0 or
         bytes.len % glyph_bytes != 0 or
-        bytes.len / glyph_bytes > 256 - @as(usize, first_character))
+        bytes.len / glyph_bytes > 256 - @as(usize, first_character)) {
         return error.InvalidFontLength;
+    }
     const pixels = try allocator.alloc(u8, bytes.len * 2);
     for (bytes, 0..) |value, i| {
         pixels[i * 2] = value >> 4;
@@ -54,7 +55,7 @@ test "glyph lookup maps characters and expands high nibble first" {
 
 test "font length must describe whole addressable glyphs" {
     try std.testing.expectError(error.InvalidFontLength, decode(std.testing.allocator, &.{}));
-    try std.testing.expectError(error.InvalidFontLength, decode(std.testing.allocator, &.{1}));
+    try std.testing.expectError(error.InvalidFontLength, decode(std.testing.allocator, &.{ 1 }));
     const too_many: [225 * 32]u8 = @splat(0);
     try std.testing.expectError(error.InvalidFontLength, decode(std.testing.allocator, &too_many));
 }

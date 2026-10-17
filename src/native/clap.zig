@@ -84,7 +84,9 @@ pub const Diagnostic = struct {
 pub fn processArguments(allocator: std.mem.Allocator, args: std.process.Args) ![]const []const u8 {
     const all = try args.toSlice(allocator);
     const rest = try allocator.alloc([]const u8, all.len -| 1);
-    for (rest, all[@min(1, all.len)..]) |*out, arg| out.* = arg;
+    for (rest, all[@min(1, all.len)..]) |*out, arg| {
+        out.* = arg;
+    }
     return rest;
 }
 
@@ -104,7 +106,10 @@ pub fn Parser(comptime spec: Spec) type {
         /// Every positional argument, in order; the groups are parts of it.
         arguments: []const []const u8 = &.{},
 
-        pub const Given = struct { option: usize, value: []const u8 };
+        pub const Given = struct {
+            option: usize,
+            value: []const u8,
+        };
 
         /// The index of option `long` in the description, for comparing with `Given.option`.
         pub fn index(comptime long: []const u8) usize {
@@ -116,7 +121,9 @@ pub fn Parser(comptime spec: Spec) type {
 
         const flags = names: {
             var all: [spec.options.len][]const u8 = undefined;
-            for (spec.options, &all) |option, *flag_name| flag_name.* = "--" ++ option.long;
+            for (spec.options, &all) |option, *flag_name| {
+                flag_name.* = "--" ++ option.long;
+            }
             break :names all;
         };
 
@@ -171,14 +178,20 @@ pub fn Parser(comptime spec: Spec) type {
                 .float => std.fmt.parseFloat(T, text) catch null,
                 else => @compileError("number: an integer or float type"),
             };
-            if (result) |n| if (n >= min and n <= max) return n;
+            if (result) |n| {
+                if (n >= min and n <= max) return n;
+            }
             diagnostic.* = .{ .argument = "--" ++ long, .value = text };
             return error.InvalidValue;
         }
 
         /// Parses `args`, the arguments after the program's name. The values point into `args`;
         /// the lists belong to the result (`deinit`).
-        pub fn parse(allocator: std.mem.Allocator, args: []const []const u8, diagnostic: *Diagnostic) Error!Self {
+        pub fn parse(
+            allocator: std.mem.Allocator,
+            args: []const []const u8,
+            diagnostic: *Diagnostic,
+        ) Error!Self {
             var lists: [spec.options.len]std.ArrayList([]const u8) = @splat(.empty);
             defer for (&lists) |*list| list.deinit(allocator);
             var given: std.ArrayList(Given) = .empty;
@@ -189,7 +202,7 @@ pub fn Parser(comptime spec: Spec) type {
             while (i < args.len) : (i += 1) {
                 const arg = args[i];
                 if (std.mem.eql(u8, arg, "--")) {
-                    try loose.appendSlice(allocator, args[i + 1 ..]);
+                    try loose.appendSlice(allocator, args[i + 1..]);
                     break;
                 }
                 if (spec.help and (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h"))) {
@@ -204,11 +217,15 @@ pub fn Parser(comptime spec: Spec) type {
                 if (comptime spec.options.len == 0) {
                     diagnostic.* = .{ .argument = arg };
                     return error.UnknownOption;
-                } else try takeOption(allocator, args, &i, &lists, &given, diagnostic);
+                } else {
+                    try takeOption(allocator, args, &i, &lists, &given, diagnostic);
+                }
             }
             var result: Self = .{};
             errdefer result.deinit(allocator);
-            for (&result.option_values, &lists) |*out, *list| out.* = try list.toOwnedSlice(allocator);
+            for (&result.option_values, &lists) |*out, *list| {
+                out.* = try list.toOwnedSlice(allocator);
+            }
             result.given = try given.toOwnedSlice(allocator);
             result.arguments = try loose.toOwnedSlice(allocator);
             try distribute(&result, diagnostic);
@@ -229,8 +246,9 @@ pub fn Parser(comptime spec: Spec) type {
             const long_form = arg[1] == '-';
             const name, const inline_value = if (long_form) split: {
                 const rest = arg[2..];
-                const equals = std.mem.indexOfScalar(u8, rest, '=') orelse break :split .{ rest, null };
-                break :split .{ rest[0..equals], rest[equals + 1 ..] };
+                const equals = std.mem.indexOfScalar(u8, rest, '=') orelse
+                    break :split .{ rest, null };
+                break :split .{ rest[0..equals], rest[equals + 1..] };
             } else .{ arg[1..], null };
             const found = find(name, long_form) orelse {
                 diagnostic.* = .{ .argument = arg };
@@ -260,7 +278,9 @@ pub fn Parser(comptime spec: Spec) type {
         }
 
         pub fn deinit(self: *Self, allocator: std.mem.Allocator) void {
-            for (self.option_values) |list| allocator.free(list);
+            for (self.option_values) |list| {
+                allocator.free(list);
+            }
             allocator.free(self.given);
             allocator.free(self.arguments);
             self.* = undefined;
@@ -282,14 +302,16 @@ pub fn Parser(comptime spec: Spec) type {
             var at: usize = 0;
             inline for (spec.positionals, 0..) |group, g| {
                 comptime var later_min: usize = 0;
-                inline for (spec.positionals[g + 1 ..]) |later| later_min += later.min;
+                inline for (spec.positionals[g + 1..]) |later| {
+                    later_min += later.min;
+                }
                 const available = loose.len - at;
                 if (available < group.min) {
                     diagnostic.* = .{ .argument = group.name };
                     return error.MissingArgument;
                 }
                 const take = @min(group.max, @max(group.min, available -| later_min));
-                result.positional_values[g] = loose[at .. at + take];
+                result.positional_values[g] = loose[at..at + take];
                 at += take;
             }
             if (at != loose.len) {
@@ -300,64 +322,101 @@ pub fn Parser(comptime spec: Spec) type {
 
         pub fn writeUsage(w: *std.Io.Writer) std.Io.Writer.Error!void {
             try w.writeAll("usage: " ++ spec.name);
-            if (spec.options.len != 0 or spec.help) try w.writeAll(" [OPTIONS]");
+            if (spec.options.len != 0 or spec.help) {
+                try w.writeAll(" [OPTIONS]");
+            }
             inline for (spec.positionals) |group| {
                 const repeated = if (group.max > 1) "..." else "";
                 if (group.min == 0) {
                     try w.writeAll(" [" ++ group.name ++ repeated ++ "]");
-                } else try w.writeAll(" " ++ group.name ++ repeated);
+                } else {
+                    try w.writeAll(" " ++ group.name ++ repeated);
+                }
             }
             try w.writeByte('\n');
         }
 
         pub fn writeHelp(w: *std.Io.Writer) std.Io.Writer.Error!void {
             try writeUsage(w);
-            if (spec.description.len != 0) try w.writeAll(spec.description ++ "\n");
+            if (spec.description.len != 0) {
+                try w.writeAll(spec.description ++ "\n");
+            }
             if (spec.positionals.len != 0) {
                 try w.writeAll("\nArguments:\n");
-                inline for (spec.positionals) |group| try writeEntry(w, group.name, group.help);
+                inline for (spec.positionals) |group| {
+                    try writeEntry(w, group.name, group.help);
+                }
             }
             if (spec.options.len != 0 or spec.help) {
                 try w.writeAll("\nOptions:\n");
-                if (spec.help) try writeEntry(w, "-h, --help", "show this help");
-                inline for (spec.options) |option| try writeEntry(w, comptime label(option), option.help);
+                if (spec.help) {
+                    try writeEntry(w, "-h, --help", "show this help");
+                }
+                inline for (spec.options) |option| {
+                    try writeEntry(w, comptime label(option), option.help);
+                }
             }
         }
 
         /// `program: message`, the usage line and a pointer to the help, for `err`.
-        pub fn writeError(w: *std.Io.Writer, err: Error, diagnostic: Diagnostic) std.Io.Writer.Error!void {
+        pub fn writeError(
+            w: *std.Io.Writer,
+            err: Error,
+            diagnostic: Diagnostic,
+        ) std.Io.Writer.Error!void {
             try w.writeAll(spec.name ++ ": ");
             const argument = diagnostic.argument;
             switch (err) {
-                error.UnknownOption => try w.print("unknown option {s}\n", .{argument}),
-                error.MissingValue => try w.print("{s} needs a value\n", .{argument}),
-                error.UnexpectedValue => try w.print("{s} takes no value\n", .{argument}),
-                error.RepeatedOption => try w.print("{s} may be given only once\n", .{argument}),
-                error.InvalidValue => try w.print("invalid value for {s}: {s}\n", .{ argument, diagnostic.value }),
-                error.NeedsOption => try w.print("{s} needs {s}\n", .{ argument, diagnostic.value }),
-                error.ExcludedOption => try w.print("{s} cannot be used with {s}\n", .{ argument, diagnostic.value }),
-                error.TooManyArguments => try w.print("unexpected argument {s}\n", .{argument}),
-                error.MissingArgument => try w.print("missing {s}\n", .{argument}),
+                error.UnknownOption => try w.print("unknown option {s}\n", .{ argument }),
+                error.MissingValue => try w.print("{s} needs a value\n", .{ argument }),
+                error.UnexpectedValue => try w.print("{s} takes no value\n", .{ argument }),
+                error.RepeatedOption => try w.print("{s} may be given only once\n", .{ argument }),
+                error.InvalidValue => try w.print("invalid value for {s}: {s}\n", .{
+                    argument,
+                    diagnostic.value,
+                }),
+                error.NeedsOption => try w.print("{s} needs {s}\n", .{
+                    argument,
+                    diagnostic.value,
+                }),
+                error.ExcludedOption => try w.print("{s} cannot be used with {s}\n", .{
+                    argument,
+                    diagnostic.value,
+                }),
+                error.TooManyArguments => try w.print("unexpected argument {s}\n", .{ argument }),
+                error.MissingArgument => try w.print("missing {s}\n", .{ argument }),
                 error.OutOfMemory => try w.writeAll("out of memory\n"),
             }
             try writeUsage(w);
-            if (spec.help) try w.writeAll("Run `" ++ spec.name ++ " --help` for the options.\n");
+            if (spec.help) {
+                try w.writeAll("Run `" ++ spec.name ++ " --help` for the options.\n");
+            }
         }
 
         const column = blk: {
             var widest: usize = if (spec.help) "-h, --help".len else 0;
-            for (spec.positionals) |group| widest = @max(widest, group.name.len);
-            for (spec.options) |option| widest = @max(widest, label(option).len);
+            for (spec.positionals) |group| {
+                widest = @max(widest, group.name.len);
+            }
+            for (spec.options) |option| {
+                widest = @max(widest, label(option).len);
+            }
             break :blk @min(widest, 26) + 4;
         };
 
-        fn writeEntry(w: *std.Io.Writer, name: []const u8, help: []const u8) std.Io.Writer.Error!void {
+        fn writeEntry(
+            w: *std.Io.Writer,
+            name: []const u8,
+            help: []const u8,
+        ) std.Io.Writer.Error!void {
             try w.writeAll("  ");
             try w.writeAll(name);
             if (name.len + 2 >= column) {
                 try w.writeByte('\n');
                 try w.splatByteAll(' ', column);
-            } else try w.splatByteAll(' ', column - 2 - name.len);
+            } else {
+                try w.splatByteAll(' ', column - 2 - name.len);
+            }
             var lines = std.mem.splitScalar(u8, help, '\n');
             try w.writeAll(lines.first());
             while (lines.next()) |line| {
@@ -371,7 +430,7 @@ pub fn Parser(comptime spec: Spec) type {
 }
 
 fn label(comptime option: Option) []const u8 {
-    const short = if (option.short) |letter| "-" ++ [_]u8{letter} ++ ", " else "    ";
+    const short = if (option.short) |letter| "-" ++ [_]u8{ letter } ++ ", " else "    ";
     const value = if (option.value) |name| " " ++ name else "";
     return short ++ "--" ++ option.long ++ value;
 }
@@ -381,17 +440,21 @@ fn validate(comptime spec: Spec) void {
         if (spec.help and (std.mem.eql(u8, option.long, "help") or option.short == 'h')) {
             @compileError(spec.name ++ ": --help and -h belong to the parser");
         }
-        for (spec.options[i + 1 ..]) |other| {
+        for (spec.options[i + 1..]) |other| {
             if (std.mem.eql(u8, option.long, other.long)) {
                 @compileError(spec.name ++ ": --" ++ option.long ++ " is described twice");
             }
             if (option.short != null and option.short == other.short) {
-                @compileError(spec.name ++ ": -" ++ [_]u8{option.short.?} ++ " is described twice");
+                @compileError(
+                    spec.name ++ ": -" ++ [_]u8{ option.short.? } ++ " is described twice",
+                );
             }
         }
     }
     for (spec.positionals) |group| {
-        if (group.min > group.max) @compileError(spec.name ++ ": " ++ group.name ++ " has min above max");
+        if (group.min > group.max) {
+            @compileError(spec.name ++ ": " ++ group.name ++ " has min above max");
+        }
     }
 }
 
@@ -401,7 +464,12 @@ const Example = Parser(.{
     .options = &.{
         .{ .long = "verbose", .short = 'v', .help = "say more" },
         .{ .long = "level", .value = "N", .help = "a level, 1 to 9" },
-        .{ .long = "key", .value = "F:KEY", .help = "press KEY at frame F\nrepeat for more keys", .repeats = true },
+        .{
+            .long = "key",
+            .value = "F:KEY",
+            .help = "press KEY at frame F\nrepeat for more keys",
+            .repeats = true,
+        },
         .{ .long = "a-very-long-option-name", .value = "VALUE", .help = "long" },
     },
     .positionals = &.{
@@ -416,7 +484,10 @@ fn parseExample(args: []const []const u8, diagnostic: *Diagnostic) !Example {
 
 test "options, values and positional groups" {
     var diagnostic: Diagnostic = .{};
-    var args = try parseExample(&.{ "out", "-v", "--level=4", "--key", "1:a", "in1", "--key", "2:b", "in2" }, &diagnostic);
+    var args = try parseExample(
+        &.{ "out", "-v", "--level=4", "--key", "1:a", "in1", "--key", "2:b", "in2" },
+        &diagnostic,
+    );
     defer args.deinit(std.testing.allocator);
     try std.testing.expect(!args.help);
     try std.testing.expect(args.flag("verbose"));
@@ -452,9 +523,15 @@ test "the first group left short is the one reported missing" {
         },
     });
     var diagnostic: Diagnostic = .{};
-    try std.testing.expectError(error.MissingArgument, Two.parse(std.testing.allocator, &.{"out"}, &diagnostic));
+    try std.testing.expectError(
+        error.MissingArgument,
+        Two.parse(std.testing.allocator, &.{ "out" }, &diagnostic),
+    );
     try std.testing.expectEqualStrings("INPUT", diagnostic.argument);
-    try std.testing.expectError(error.MissingArgument, Two.parse(std.testing.allocator, &.{}, &diagnostic));
+    try std.testing.expectError(
+        error.MissingArgument,
+        Two.parse(std.testing.allocator, &.{}, &diagnostic),
+    );
     try std.testing.expectEqualStrings("OUTPUT", diagnostic.argument);
     var args = try Two.parse(std.testing.allocator, &.{ "out", "a", "b" }, &diagnostic);
     defer args.deinit(std.testing.allocator);
@@ -474,14 +551,30 @@ test "help is asked before anything is checked" {
 
 test "every mistake is an error naming the argument at fault" {
     const cases = [_]struct { args: []const []const u8, err: Error, argument: []const u8 }{
-        .{ .args = &.{ "out", "--frobnicate" }, .err = error.UnknownOption, .argument = "--frobnicate" },
+        .{
+            .args = &.{ "out", "--frobnicate" },
+            .err = error.UnknownOption,
+            .argument = "--frobnicate",
+        },
         .{ .args = &.{ "out", "-x" }, .err = error.UnknownOption, .argument = "-x" },
         .{ .args = &.{ "out", "-vv" }, .err = error.UnknownOption, .argument = "-vv" },
         .{ .args = &.{ "out", "--level" }, .err = error.MissingValue, .argument = "--level" },
-        .{ .args = &.{ "out", "--verbose=yes" }, .err = error.UnexpectedValue, .argument = "--verbose=yes" },
-        .{ .args = &.{ "out", "--level", "1", "--level", "2" }, .err = error.RepeatedOption, .argument = "--level" },
+        .{
+            .args = &.{ "out", "--verbose=yes" },
+            .err = error.UnexpectedValue,
+            .argument = "--verbose=yes",
+        },
+        .{
+            .args = &.{ "out", "--level", "1", "--level", "2" },
+            .err = error.RepeatedOption,
+            .argument = "--level",
+        },
         .{ .args = &.{}, .err = error.MissingArgument, .argument = "OUTPUT" },
-        .{ .args = &.{ "out", "a", "b", "c", "d" }, .err = error.TooManyArguments, .argument = "d" },
+        .{
+            .args = &.{ "out", "a", "b", "c", "d" },
+            .err = error.TooManyArguments,
+            .argument = "d",
+        },
     };
     for (cases) |case| {
         var diagnostic: Diagnostic = .{};
@@ -492,7 +585,10 @@ test "every mistake is an error naming the argument at fault" {
     for ([_][]const u8{ "0", "10", "x" }) |level| {
         var args = try parseExample(&.{ "out", "--level", level }, &diagnostic);
         defer args.deinit(std.testing.allocator);
-        try std.testing.expectError(error.InvalidValue, args.number(u8, "level", 1, 9, &diagnostic));
+        try std.testing.expectError(
+            error.InvalidValue,
+            args.number(u8, "level", 1, 9, &diagnostic),
+        );
         try std.testing.expectEqualStrings(level, diagnostic.value);
     }
 }
@@ -520,8 +616,14 @@ test "the help and the messages come from the description" {
         \\
     , w.buffered());
     w = .fixed(&buffer);
-    try Example.writeError(&w, error.ExcludedOption, .{ .argument = "--level", .value = "--verbose" });
-    try std.testing.expectStringStartsWith(w.buffered(), "example: --level cannot be used with --verbose\n");
+    try Example.writeError(&w, error.ExcludedOption, .{
+        .argument = "--level",
+        .value = "--verbose",
+    });
+    try std.testing.expectStringStartsWith(
+        w.buffered(),
+        "example: --level cannot be used with --verbose\n",
+    );
     w = .fixed(&buffer);
     try Example.writeError(&w, error.MissingValue, .{ .argument = "--level" });
     try std.testing.expectEqualStrings(

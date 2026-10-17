@@ -38,8 +38,8 @@ pub fn write(
     defer allocator.free(zero);
     @memset(zero, 0);
     for (0..height) |y| {
-        const row = rgb[y * stride ..][0..stride];
-        const above = if (y == 0) zero else rgb[(y - 1) * stride ..][0..stride];
+        const row = rgb[y * stride..][0..stride];
+        const above = if (y == 0) zero else rgb[(y - 1) * stride..][0..stride];
         try zlib.writer.writeAll(bestFilter(filtered, row, above));
     }
     try zlib.finish();
@@ -64,7 +64,7 @@ fn bestFilter(scratch: []u8, row: []const u8, above: []const u8) []const u8 {
     var best: usize = 0;
     var best_cost: u64 = std.math.maxInt(u64);
     for (0..5) |kind| {
-        const out = scratch[kind * size ..][0..size];
+        const out = scratch[kind * size..][0..size];
         out[0] = @intCast(kind);
         var cost: u64 = 0;
         for (row, above, 0..) |value, up, i| {
@@ -86,7 +86,7 @@ fn bestFilter(scratch: []u8, row: []const u8, above: []const u8) []const u8 {
             best_cost = cost;
         }
     }
-    return scratch[best * size ..][0..size];
+    return scratch[best * size..][0..size];
 }
 
 fn paeth(a: u8, b: u8, c: u8) u8 {
@@ -104,7 +104,9 @@ test "a written image has its header, valid chunk checksums and its pixels back"
     const width = 7;
     const height = 5;
     var rgb: [width * height * channels]u8 = undefined;
-    for (&rgb, 0..) |*value, i| value.* = @truncate(i * 37 + i / 21);
+    for (&rgb, 0..) |*value, i| {
+        value.* = @truncate(i * 37 + i / 21);
+    }
 
     var encoded: std.Io.Writer.Allocating = .init(allocator);
     defer encoded.deinit();
@@ -118,18 +120,23 @@ test "a written image has its header, valid chunk checksums and its pixels back"
     var count: usize = 0;
     while (at < bytes.len) {
         const length = std.mem.readInt(u32, bytes[at..][0..4], .big);
-        const kind = bytes[at + 4 ..][0..4];
-        const data = bytes[at + 8 ..][0..length];
+        const kind = bytes[at + 4..][0..4];
+        const data = bytes[at + 8..][0..length];
         var crc: std.hash.Crc32 = .init();
         crc.update(kind);
         crc.update(data);
-        try std.testing.expectEqual(crc.final(), std.mem.readInt(u32, bytes[at + 8 + length ..][0..4], .big));
+        try std.testing.expectEqual(
+            crc.final(),
+            std.mem.readInt(u32, bytes[at + 8 + length..][0..4], .big),
+        );
         if (std.mem.eql(u8, kind, "IHDR")) {
             try std.testing.expectEqual(@as(u32, width), std.mem.readInt(u32, data[0..4], .big));
             try std.testing.expectEqual(@as(u32, height), std.mem.readInt(u32, data[4..8], .big));
             try std.testing.expectEqualSlices(u8, &.{ 8, 2, 0, 0, 0 }, data[8..13]);
         }
-        if (std.mem.eql(u8, kind, "IDAT")) idat = data;
+        if (std.mem.eql(u8, kind, "IDAT")) {
+            idat = data;
+        }
         kinds[count] = kind.*;
         count += 1;
         at += 12 + length;
@@ -149,11 +156,14 @@ test "a written image has its header, valid chunk checksums and its pixels back"
     // Undo the filters and compare.
     var decoded: [width * height * channels]u8 = undefined;
     for (0..height) |y| {
-        const line = raw.written()[y * (1 + stride) ..][0 .. 1 + stride];
+        const line = raw.written()[y * (1 + stride)..][0..1 + stride];
         for (0..stride) |i| {
             const left: u8 = if (i >= channels) decoded[y * stride + i - channels] else 0;
             const up: u8 = if (y > 0) decoded[(y - 1) * stride + i] else 0;
-            const corner: u8 = if (y > 0 and i >= channels) decoded[(y - 1) * stride + i - channels] else 0;
+            const corner: u8 = if (y > 0 and i >= channels)
+                decoded[(y - 1) * stride + i - channels]
+            else
+                0;
             const predicted: u8 = switch (line[0]) {
                 0 => 0,
                 1 => left,

@@ -67,20 +67,24 @@ pub fn moveWithRiders(world: *World, actor: u16, dy: i16) !bool {
 /// Becomes the last rider of the sender of the newest waiting message with that value.
 pub fn boardSender(world: *World, actor: u16, message: vocabulary.Message) !bool {
     var letters = world.mailbox(actor);
-    while (letters.nextLetter()) |letter| if (letter.message == message) {
-        attach(world, letter.sender, actor);
-        return true;
-    };
+    while (letters.nextLetter()) |letter| {
+        if (letter.message == message) {
+            attach(world, letter.sender, actor);
+            return true;
+        }
+    }
     return false;
 }
 
 /// When a message with that value waits, stops riding (if riding at all) and holds.
 pub fn releaseOn(world: *World, actor: u16, message: vocabulary.Message) !bool {
     var letters = world.mailbox(actor);
-    while (letters.nextLetter()) |letter| if (letter.message == message) {
-        detach(world, actor);
-        return true;
-    };
+    while (letters.nextLetter()) |letter| {
+        if (letter.message == message) {
+            detach(world, actor);
+            return true;
+        }
+    }
     return false;
 }
 
@@ -129,7 +133,11 @@ pub fn followCarrierX(world: *World, actor: u16, _: void) !bool {
     const carrier = world.characters[actor].owner orelse return true;
     const r = @rem(world.characters[carrier].x, 256);
     const rider = &world.characters[actor];
-    if (r >= rider.x) rider.x = r else rider.x +%= r;
+    if (r >= rider.x) {
+        rider.x = r;
+    } else {
+        rider.x +%= r;
+    }
     return true;
 }
 
@@ -139,10 +147,16 @@ fn attach(world: *World, owner: u16, item: u16) void {
     const characters = world.characters;
     var last: ?u16 = null;
     var cursor = characters[owner].first_item;
-    while (cursor) |current| : (cursor = characters[current].next_item) last = current;
+    while (cursor) |current| : (cursor = characters[current].next_item) {
+        last = current;
+    }
     characters[item].owner = owner;
     characters[item].next_item = null;
-    if (last) |tail| characters[tail].next_item = item else characters[owner].first_item = item;
+    if (last) |tail| {
+        characters[tail].next_item = item;
+    } else {
+        characters[owner].first_item = item;
+    }
 }
 
 /// Leaves the owner's list, if the character is in it.
@@ -189,7 +203,9 @@ pub fn transport(
     character.x = to.x;
     character.y = to.y;
     character.room = to.room;
-    if (to.room != from_room) world.moveBetweenRooms(moved, from_room, to.room);
+    if (to.room != from_room) {
+        world.moveBetweenRooms(moved, from_room, to.room);
+    }
     const definition = world.level.characters[moved];
     if (definition.behavior == world.level.characters[template].behavior) {
         character.facing_right = to.facing_right;
@@ -241,10 +257,15 @@ pub fn restoreTerrain(world: *World, actor: u16, row: i16) !bool {
     if (history.find(start, false)) |change| {
         const saved = history.savedCells(change.*);
         for (0..change.width) |k| {
-            const cell = original_memory.gridByte(world, start + @as(i32, @intCast(k))) orelse continue;
+            const cell = original_memory.gridByte(world, start + @as(i32, @intCast(k))) orelse
+                continue;
             // A later write at this start made the change wider than what was saved; the
             // original then copies unrelated memory.
-            if (k < saved.len) cell.* = saved[k] else world.unmodeled_reads += 1;
+            if (k < saved.len) {
+                cell.* = saved[k];
+            } else {
+                world.unmodeled_reads += 1;
+            }
         }
     }
     return original_memory.addressLowByte(start) != 0;
@@ -268,7 +289,9 @@ fn changeTerrain(world: *World, actor: u16, row: i16, material: u8) void {
     if (history.find(start, facing_right and width == 1)) |change| {
         change.width = width;
         for (0..width) |k| {
-            if (original_memory.gridByte(world, start + @as(i32, @intCast(k)))) |cell| cell.* = material;
+            if (original_memory.gridByte(world, start + @as(i32, @intCast(k)))) |cell| {
+                cell.* = material;
+            }
         }
         return;
     }
@@ -287,7 +310,8 @@ fn changeTerrain(world: *World, actor: u16, row: i16, material: u8) void {
 /// its column, as the terrain writers compute it: from the character's current position,
 /// with y read as unsigned (a negative y gives a row far below the room).
 fn spanOffset(character: world_module.Character, row: i16) i16 {
-    return (grid.bandUnsigned(character.y) +% row) *% grid.Grid.columns +% grid.columnOf(character.x);
+    return (grid.bandUnsigned(character.y) +% row) *% grid.Grid.columns +%
+        grid.columnOf(character.x);
 }
 
 /// Remembers where a continue resumes: every character, the score, the grid and the terrain
@@ -442,7 +466,7 @@ test "items join the end of the inventory, are selected from the front and dropp
     w.characters[3].y = 70;
     w.characters[3].facing_right = true;
     try std.testing.expect(try dropAt(&w, 2, testing.characterAt(3)));
-    try std.testing.expectEqualSlices(u16, &.{1}, testing.items(&w, 0, &buffer));
+    try std.testing.expectEqualSlices(u16, &.{ 1 }, testing.items(&w, 0, &buffer));
     try std.testing.expectEqual(@as(?u16, null), w.characters[2].owner);
     try std.testing.expectEqual(@as(?u16, null), w.characters[2].next_item);
     try std.testing.expectEqual(@as(i16, 50), w.characters[2].x);
@@ -451,7 +475,7 @@ test "items join the end of the inventory, are selected from the front and dropp
     try std.testing.expect(w.characters[2].facing_right);
     // An item nobody carries is only moved.
     try std.testing.expect(try dropAt(&w, 2, testing.characterAt(0)));
-    try std.testing.expectEqualSlices(u16, &.{1}, testing.items(&w, 0, &buffer));
+    try std.testing.expectEqualSlices(u16, &.{ 1 }, testing.items(&w, 0, &buffer));
 }
 
 test "riders board the sender, move with their carrier and leave on a message" {
@@ -505,7 +529,7 @@ test "riders board the sender, move with their carrier and leave on a message" {
     try std.testing.expect(!try releaseOn(&w, 0, go));
     w.send(1, 0, go);
     try std.testing.expect(try releaseOn(&w, 0, go));
-    try std.testing.expectEqualSlices(u16, &.{2}, testing.items(&w, 1, &buffer));
+    try std.testing.expectEqualSlices(u16, &.{ 2 }, testing.items(&w, 1, &buffer));
     try std.testing.expectEqual(@as(?u16, null), w.characters[0].owner);
     // Not riding: still true, x stays.
     try std.testing.expect(try releaseOn(&w, 0, go));
@@ -515,7 +539,9 @@ test "riders board the sender, move with their carrier and leave on a message" {
 
 test "board_touching rides the first touching character of the kind, except placement 120" {
     var characters: [121]testing.data_set.Character = undefined;
-    for (&characters, 0..) |*c, i| c.* = testing.character(@intCast(i), .enemy, 64);
+    for (&characters, 0..) |*c, i| {
+        c.* = testing.character(@intCast(i), .enemy, 64);
+    }
     characters[0] = testing.character(0, .player, 0);
     characters[5] = testing.character(5, .interactive, 0);
     characters[6] = testing.character(6, .interactive, 0);
@@ -652,15 +678,17 @@ test "the terrain history admits changes while under 762 words" {
     var admitted: u16 = 0;
     var room: u8 = 0;
     outer: while (room < 64) : (room += 1) {
-        for ([_]i16{ 0, 2, 4 }) |row| for ([_]i16{ 16, 80, 144, 208 }) |x| {
-            w.characters[1].room = room;
-            w.characters[1].x = x - 8;
-            w.characters[1].y = 0;
-            const before = w.terrain_history.change_count;
-            try std.testing.expect(try makeSolid(&w, 1, row + 1));
-            if (w.terrain_history.change_count == before) break :outer;
-            admitted += 1;
-        };
+        for ([_]i16{ 0, 2, 4 }) |row| {
+            for ([_]i16{ 16, 80, 144, 208 }) |x| {
+                w.characters[1].room = room;
+                w.characters[1].x = x - 8;
+                w.characters[1].y = 0;
+                const before = w.terrain_history.change_count;
+                try std.testing.expect(try makeSolid(&w, 1, row + 1));
+                if (w.terrain_history.change_count == before) break :outer;
+                admitted += 1;
+            }
+        }
     }
     try std.testing.expectEqual(@as(u16, 153), admitted);
     try std.testing.expectEqual(@as(u16, 765), w.terrain_history.used_words);
@@ -772,7 +800,7 @@ test "transport moves a character to a template, taking its state in the same be
 }
 
 test "snap_to_grid floors x to 16 and puts y on its tier's floor line" {
-    var characters = [_]testing.data_set.Character{testing.character(0, .player, 0)};
+    var characters = [_]testing.data_set.Character{ testing.character(0, .player, 0) };
     const level: testing.data_set.Level = .{
         .behaviors = &testing.behaviors,
         .characters = &characters,
@@ -834,7 +862,7 @@ test "checkpoint saves the characters, score, grid and terrain history" {
 }
 
 test "a continue without a checkpoint restores nothing" {
-    var characters = [_]testing.data_set.Character{testing.character(0, .player, 0)};
+    var characters = [_]testing.data_set.Character{ testing.character(0, .player, 0) };
     const level: testing.data_set.Level = .{
         .behaviors = &testing.behaviors,
         .characters = &characters,

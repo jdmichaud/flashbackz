@@ -5,7 +5,9 @@ const World = @import("../world.zig").World;
 
 /// Ignored while a defeat countdown runs.
 pub fn playScene(world: *World, _: u16, scene: i16) !bool {
-    if (world.defeat_countdown & 0xff == 0) world.requests.scene = scene;
+    if (world.defeat_countdown & 0xff == 0) {
+        world.requests.scene = scene;
+    }
     return true;
 }
 
@@ -50,7 +52,9 @@ pub fn weaponModeIs(world: *World, _: u16, value: i16) !bool {
 }
 
 pub fn startDefeat(world: *World, _: u16, steps: i16) !bool {
-    if (world.defeat_countdown == 0) world.defeat_countdown = steps;
+    if (world.defeat_countdown == 0) {
+        world.defeat_countdown = steps;
+    }
     return true;
 }
 

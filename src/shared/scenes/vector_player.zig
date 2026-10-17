@@ -46,8 +46,10 @@ pub const Cadence = struct {
 /// repeats.
 pub fn skips(input: platform.Event.Payload, joystick: bool) bool {
     return switch (input) {
-        .key_down => |key| !key.repeat and (key.key == .tab or key.key == .backspace or key.key == .escape),
-        .controller_button_down => |change| (joystick and change.button == .y) or change.button == .start,
+        .key_down => |key| !key.repeat and
+            (key.key == .tab or key.key == .backspace or key.key == .escape),
+        .controller_button_down => |change| (joystick and change.button == .y) or
+            change.button == .start,
         else => false,
     };
 }
@@ -65,9 +67,11 @@ pub const Player = struct {
     pub fn awaitingInput(self: *const Player) bool {
         if (self.playback.finished or self.confirmed) return false;
         if (self.movie.frames[self.playback.frame].confirm_ends) return true;
-        for (self.movie.frames, 0..) |frame, end| if (frame.input_loop_start) |start| {
-            if (self.playback.frame >= start and self.playback.frame <= end) return true;
-        };
+        for (self.movie.frames, 0..) |frame, end| {
+            if (frame.input_loop_start) |start| {
+                if (self.playback.frame >= start and self.playback.frame <= end) return true;
+            }
+        }
         return false;
     }
     fn staticInputWait(self: *const Player) bool {
@@ -77,10 +81,15 @@ pub const Player = struct {
     /// How long the frame shown now stays: until its loop starts again while unconfirmed.
     fn shownTicks(self: *const Player) u32 {
         const frame = self.movie.frames[self.playback.frame];
-        return if (frame.input_loop_start != null and !self.confirmed) frame.loop_ticks else frame.hold_ticks;
+        return if (frame.input_loop_start != null and !self.confirmed)
+            frame.loop_ticks
+        else
+            frame.hold_ticks;
     }
     pub fn confirm(self: *Player) void {
-        if (self.awaitingInput()) self.confirmed = true;
+        if (self.awaitingInput()) {
+            self.confirmed = true;
+        }
     }
 
     /// P's toggle, which the original's film player reads between its commands: the film
@@ -90,12 +99,16 @@ pub const Player = struct {
     pub fn setPaused(self: *Player, paused: bool, now_ns: u64) void {
         self.pause_requested = paused;
         if (paused) {
-            if (self.origin_ns == null and self.paused_at == null) self.paused_at = now_ns;
+            if (self.origin_ns == null and self.paused_at == null) {
+                self.paused_at = now_ns;
+            }
             return;
         }
         if (self.paused_at == null) return;
         self.paused_at = null;
-        if (self.origin_ns) |*origin| origin.* = now_ns -| self.cadence.deadline_ns;
+        if (self.origin_ns) |*origin| {
+            origin.* = now_ns -| self.cadence.deadline_ns;
+        }
     }
 
     pub fn open(
@@ -117,10 +130,14 @@ pub const Player = struct {
     }
     pub fn update(self: *Player, now_ns: u64) !bool {
         if (self.paused_at != null) return self.playback.finished;
-        if (self.origin_ns == null) self.origin_ns = now_ns;
+        if (self.origin_ns == null) {
+            self.origin_ns = now_ns;
+        }
         if (!self.needsCatchup(now_ns)) return self.playback.finished;
         try self.present(now_ns);
-        if (self.pause_requested) self.paused_at = now_ns;
+        if (self.pause_requested) {
+            self.paused_at = now_ns;
+        }
         return self.playback.finished;
     }
 
@@ -136,7 +153,9 @@ pub const Player = struct {
                 self.rebase();
                 return;
             }
-            if (self.staticInputWait()) self.origin_ns = now_ns -| self.cadence.deadline_ns;
+            if (self.staticInputWait()) {
+                self.origin_ns = now_ns -| self.cadence.deadline_ns;
+            }
             self.confirmed = false;
         }
         if (self.playback.advance(self.movie.view())) {
@@ -184,7 +203,13 @@ test "confirmation loops keep animating and one confirmation cannot skip the nex
     const colors: palette.Palette = @splat(.{ .r = 0, .g = 0, .b = 0 });
     const frames = [_]film.Frame{
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4 },
-        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 8, .input_loop_start = 0, .loop_ticks = 8 },
+        .{
+            .drawings = &.{},
+            .colors = colors,
+            .hold_ticks = 8,
+            .input_loop_start = 0,
+            .loop_ticks = 8,
+        },
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 0, .input_loop_start = 2 },
     };
     var player: Player = .{
@@ -217,7 +242,13 @@ test "a map terminal's blink repeats until a confirmation, which ends it after t
     // film's last picture: nothing follows it once confirmed).
     const frames = [_]film.Frame{
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4, .confirm_ends = true },
-        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 0, .input_loop_start = 0, .loop_ticks = 4 },
+        .{
+            .drawings = &.{},
+            .colors = colors,
+            .hold_ticks = 0,
+            .input_loop_start = 0,
+            .loop_ticks = 4,
+        },
     };
     for ([_]usize{ 0, 1 }) |confirmed_on| {
         const arena = try allocator.create(std.heap.ArenaAllocator);
@@ -237,7 +268,9 @@ test "a map terminal's blink repeats until a confirmation, which ends it after t
             try std.testing.expect(player.cadence.deadline_ns > shown);
         }
         try std.testing.expectEqual(@as(usize, 0), player.playback.frame);
-        if (confirmed_on == 1) try std.testing.expect(!try player.update(player.cadence.deadline_ns));
+        if (confirmed_on == 1) {
+            try std.testing.expect(!try player.update(player.cadence.deadline_ns));
+        }
         try std.testing.expectEqual(confirmed_on, player.playback.frame);
         try std.testing.expect(player.awaitingInput());
         player.confirm();
@@ -254,7 +287,10 @@ test "only a fresh press of the inventory key or Escape skips a film" {
     for ([_]platform.Key{ .enter, .space, .left_shift, .right_shift, .p }) |key| {
         try std.testing.expect(!skips(.{ .key_down = .{ .key = key } }, false));
     }
-    const y: platform.Event.ControllerButtonEvent = .{ .controller = @fromBackingInt(@intCast(0)), .button = .y };
+    const y: platform.Event.ControllerButtonEvent = .{
+        .controller = @fromBackingInt(@intCast(0)),
+        .button = .y,
+    };
     try std.testing.expect(!skips(.{ .controller_button_down = y }, false));
     try std.testing.expect(skips(.{ .controller_button_down = y }, true));
 }
@@ -266,7 +302,13 @@ test "a page waiting for its answer can wait for hours" {
     const colors: palette.Palette = @splat(.{ .r = 0, .g = 0, .b = 0 });
     const frames = [_]film.Frame{
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4 },
-        .{ .drawings = &.{}, .colors = colors, .hold_ticks = 8, .input_loop_start = 0, .loop_ticks = 8 },
+        .{
+            .drawings = &.{},
+            .colors = colors,
+            .hold_ticks = 8,
+            .input_loop_start = 0,
+            .loop_ticks = 8,
+        },
         .{ .drawings = &.{}, .colors = colors, .hold_ticks = 4 },
     };
     var player: Player = .{
@@ -283,7 +325,9 @@ test "a page waiting for its answer can wait for hours" {
     }
     try std.testing.expect(player.awaitingInput());
     player.confirm();
-    while (!try player.update(now)) now += 50 * std.time.ns_per_ms;
+    while (!try player.update(now)) {
+        now += 50 * std.time.ns_per_ms;
+    }
 }
 
 test "P stops a film after its picture, and the next picture comes at once when P is pressed again" {

@@ -196,7 +196,9 @@ fn absSinAttenuation(index: u32) u32 {
 const waveform: [waveform_length]u16 = blk: {
     @setEvalBranchQuota(10000);
     var w: [waveform_length]u16 = undefined;
-    for (&w, 0..) |*v, i| v.* = @intCast(absSinAttenuation(i) | (bitfield(i, 9, 1) << 15));
+    for (&w, 0..) |*v, i| {
+        v.* = @intCast(absSinAttenuation(i) | (bitfield(i, 9, 1) << 15));
+    }
     break :blk w;
 };
 
@@ -222,7 +224,9 @@ const power_table: [256]u16 = blk: {
         0x02a, 0x028, 0x025, 0x022, 0x01f, 0x01c, 0x019, 0x016, 0x014, 0x011, 0x00e, 0x00b, 0x008, 0x006, 0x003, 0x000,
     };
     var t: [256]u16 = undefined;
-    for (&t, m) |*v, x| v.* = (x | 0x400) << 2;
+    for (&t, m) |*v, x| {
+        v.* = (x | 0x400) << 2;
+    }
     break :blk t;
 };
 
@@ -251,7 +255,9 @@ const signed_volume: [2 * volume_span]i16 = blk: {
 const signed_waveform: [waveform_length]u16 = blk: {
     @setEvalBranchQuota(10000);
     var w: [waveform_length]u16 = undefined;
-    for (&w, waveform) |*v, x| v.* = (x & 0x7fff) + if (x & 0x8000 != 0) volume_span else 0;
+    for (&w, waveform) |*v, x| {
+        v.* = (x & 0x7fff) + if (x & 0x8000 != 0) volume_span else 0;
+    }
     break :blk w;
 };
 
@@ -321,8 +327,12 @@ const lfo_pm_shifts = [8][8]u8{
 fn lfoPmPhaseAdjustment(fnum_bits: u32, pm_sensitivity: u32, lfo_raw_pm: i32) i32 {
     const abs_pm: u32 = @abs(lfo_raw_pm);
     const shifts = lfo_pm_shifts[pm_sensitivity][bitfield(abs_pm, 0, 3)];
-    var adjust: i32 = @bitCast((fnum_bits >> @intCast(shifts & 0xf)) + (fnum_bits >> @intCast(shifts >> 4)));
-    if (pm_sensitivity > 5) adjust <<= @intCast(pm_sensitivity - 5);
+    var adjust: i32 = @bitCast(
+        (fnum_bits >> @intCast(shifts & 0xf)) + (fnum_bits >> @intCast(shifts >> 4)),
+    );
+    if (pm_sensitivity > 5) {
+        adjust <<= @intCast(pm_sensitivity - 5);
+    }
     adjust >>= 2;
     return if (lfo_raw_pm < 0) -adjust else adjust;
 }
@@ -333,7 +343,12 @@ fn lfoPmPhaseAdjustment(fnum_bits: u32, pm_sensitivity: u32, lfo_raw_pm: i32) i3
 const algorithm_ops = blk: {
     const A = struct {
         fn f(op2in: u16, op3in: u16, op4in: u16, op1out: u16, op2out: u16, op3out: u16) u16 {
-            return op2in | (op3in << 1) | (op4in << 4) | (op1out << 7) | (op2out << 8) | (op3out << 9);
+            return op2in |
+                (op3in << 1) |
+                (op4in << 4) |
+                (op1out << 7) |
+                (op2out << 8) |
+                (op3out << 9);
         }
     };
     break :blk [8]u16{
@@ -383,15 +398,21 @@ pub const Ym2612 = struct {
     prepare_count: u32 = 0,
     chans: [channels]Channel = blk: {
         var c: [channels]Channel = undefined;
-        for (&c, 0..) |*ch, i| ch.* = .{ .choffs = channelOffset(i), .ops = operator_map[i] };
+        for (&c, 0..) |*ch, i| {
+            ch.* = .{ .choffs = channelOffset(i), .ops = operator_map[i] };
+        }
         break :blk c;
     },
     ops: [operators]Operator = blk: {
         var o: [operators]Operator = undefined;
-        for (&o, 0..) |*op, i| op.* = .{ .choffs = 0, .opoffs = operatorOffset(i) };
+        for (&o, 0..) |*op, i| {
+            op.* = .{ .choffs = 0, .opoffs = operatorOffset(i) };
+        }
         // Each operator's channel (ymfm's assign_operators).
         for (operator_map, 0..) |list, c| {
-            for (list) |i| o[i].choffs = channelOffset(c);
+            for (list) |i| {
+                o[i].choffs = channelOffset(c);
+            }
         }
         break :blk o;
     },
@@ -408,14 +429,18 @@ pub const Ym2612 = struct {
     /// counters, the address and the DAC keep their values, as in ymfm.
     pub fn reset(y: *Ym2612) void {
         y.regs = @splat(0);
-        for ([_]usize{ 0xb4, 0xb5, 0xb6, 0x1b4, 0x1b5, 0x1b6 }) |r| y.regs[r] = 0xc0;
+        for ([_]usize{ 0xb4, 0xb5, 0xb6, 0x1b4, 0x1b5, 0x1b6 }) |r| {
+            y.regs[r] = 0xc0;
+        }
         y.engineWrite(reg_mode, 0);
         y.modified_channels = all_channels;
         for (&y.chans) |*ch| {
             ch.feedback = .{ 0, 0 };
             ch.feedback_in = 0;
         }
-        for (&y.ops) |*op| op.reset();
+        for (&y.ops) |*op| {
+            op.reset();
+        }
     }
 
     /// A write to port 0 (address, part 1), 1 (data, part 1), 2 (address, part 2) or 3 (data,
@@ -428,7 +453,8 @@ pub const Ym2612 = struct {
                 if (y.address & 0x100 != 0) return;
                 switch (y.address) {
                     // DAC data, the 8 most significant bits.
-                    0x2a => y.dac_data = (y.dac_data & ~@as(u16, 0x1fe)) | (@as(u16, value ^ 0x80) << 1),
+                    0x2a => y.dac_data = (y.dac_data & ~@as(u16, 0x1fe)) |
+                        (@as(u16, value ^ 0x80) << 1),
                     // DAC enable.
                     0x2b => y.dac_enable = value >> 7,
                     // Test register: the DAC's low bit.
@@ -449,7 +475,9 @@ pub const Ym2612 = struct {
         var done: usize = 0;
         while (done < out.len) {
             const n = y.renderChannels(out[done..]);
-            for (out[done..][0..n]) |*f| f.* = y.withDac(f.*);
+            for (out[done..][0..n]) |*f| {
+                f.* = y.withDac(f.*);
+            }
             done += n;
         }
     }
@@ -470,7 +498,10 @@ pub const Ym2612 = struct {
                 .left = if (ch6.output0) dacDiscontinuity(dacval) else dac_zero,
                 .right = if (ch6.output1) dacDiscontinuity(dacval) else dac_zero,
             },
-            .ym3438 => .{ .left = if (ch6.output0) dacval else 0, .right = if (ch6.output1) dacval else 0 },
+            .ym3438 => .{
+                .left = if (ch6.output0) dacval else 0,
+                .right = if (ch6.output1) dacval else 0,
+            },
         };
         return .{ .left = channels_out.left + dac.left, .right = channels_out.right + dac.right };
     }
@@ -478,7 +509,10 @@ pub const Ym2612 = struct {
     /// A sample before the final scaling, scaled as ymfm scales it (`scaled`).
     inline fn scale(y: *const Ym2612, raw: Frame) Frame {
         const table = &scale_tables[@backingInt(y.variant)];
-        return .{ .left = table[@intCast(raw.left + raw_max)], .right = table[@intCast(raw.right + raw_max)] };
+        return .{
+            .left = table[@intCast(raw.left + raw_max)],
+            .right = table[@intCast(raw.right + raw_max)],
+        };
     }
 
     /// The most a sample before the scaling reaches either way: six channels of 9 bits (-257 to
@@ -499,7 +533,12 @@ pub const Ym2612 = struct {
         @setEvalBranchQuota(100000);
         var t: [2][2 * raw_max + 1]i32 = undefined;
         for (0..2) |v| {
-            for (&t[v], 0..) |*x, i| x.* = scaled(@fromBackingInt(@as(u1, @intCast(v))), @as(i32, @intCast(i)) - raw_max);
+            for (&t[v], 0..) |*x, i| {
+                x.* = scaled(
+                    @fromBackingInt(@as(u1, @intCast(v))),
+                    @as(i32, @intCast(i)) - raw_max,
+                );
+            }
         }
         break :blk t;
     };
@@ -547,7 +586,9 @@ pub const Ym2612 = struct {
             base.right += quiet * dac_zero;
         }
         @memset(raw, base);
-        for (0..channels) |c| y.renderChannel(c, &clocks, raw);
+        for (0..channels) |c| {
+            y.renderChannel(c, &clocks, raw);
+        }
         return raw.len;
     }
 
@@ -560,12 +601,16 @@ pub const Ym2612 = struct {
             due = y.prepare_count >= 4096;
             y.prepare_count += 1;
         }
-        if (due) y.prepare();
+        if (due) {
+            y.prepare();
+        }
         var n: usize = 0;
         while (true) {
             // The envelope runs once every 3 samples: the counter's low 2 bits count 0, 1, 2.
             y.env_counter +%= 1;
-            if (bitfield(y.env_counter, 0, 2) == 3) y.env_counter +%= 1;
+            if (bitfield(y.env_counter, 0, 2) == 3) {
+                y.env_counter +%= 1;
+            }
             clocks.env_counter[n] = y.env_counter;
             clocks.lfo_pm[n] = y.clockLfo();
             clocks.lfo_am[n] = y.lfo_am;
@@ -584,7 +629,9 @@ pub const Ym2612 = struct {
         y.lfo_rate = y.lfoRate();
         y.active_channels = 0;
         for (0..channels) |c| {
-            if (y.chPrepare(c)) y.active_channels |= @as(u32, 1) << @intCast(c);
+            if (y.chPrepare(c)) {
+                y.active_channels |= @as(u32, 1) << @intCast(c);
+            }
         }
         y.written = false;
         y.modified_channels = 0;
@@ -597,7 +644,9 @@ pub const Ym2612 = struct {
         const dac = c == 5 and y.dac_enable != 0;
         if (bitfield(y.active_channels, @intCast(c), 1) != 0 and !dac) {
             y.runAudible(&y.chans[c], clocks, raw);
-        } else y.runChannel(&y.chans[c], clocks, raw, false);
+        } else {
+            y.runChannel(&y.chans[c], clocks, raw, false);
+        }
     }
 
     /// An active channel through the block: `runChannel`, which follows ymfm step by step, when
@@ -612,7 +661,10 @@ pub const Ym2612 = struct {
         }
         inline for (algorithm_ops) |algorithm| {
             if (ch.cache.algorithm == algorithm) {
-                return if (am) y.runPlain(ch, clocks, raw, algorithm, true) else y.runPlain(ch, clocks, raw, algorithm, false);
+                return if (am)
+                    y.runPlain(ch, clocks, raw, algorithm, true)
+                else
+                    y.runPlain(ch, clocks, raw, algorithm, false);
             }
         }
         unreachable;
@@ -624,11 +676,23 @@ pub const Ym2612 = struct {
     /// same work in fewer steps: each operator's envelope attenuation is worked out when the
     /// envelope moves or the AM offset changes, the routing is the algorithm's alone, and the
     /// volume is one lookup (`waveVolume`).
-    fn runPlain(y: *Ym2612, ch: *Channel, clocks: *const Clocks, raw: []Frame, comptime algorithm: u16, comptime am: bool) void {
+    fn runPlain(
+        y: *Ym2612,
+        ch: *Channel,
+        clocks: *const Clocks,
+        raw: []Frame,
+        comptime algorithm: u16,
+        comptime am: bool,
+    ) void {
         const rshift = 5;
         const clipmax: i32 = 256;
         const clipmin = -clipmax - 1;
-        const op = [4]*Operator{ &y.ops[ch.ops[0]], &y.ops[ch.ops[1]], &y.ops[ch.ops[2]], &y.ops[ch.ops[3]] };
+        const op = [4]*Operator{
+            &y.ops[ch.ops[0]],
+            &y.ops[ch.ops[1]],
+            &y.ops[ch.ops[2]],
+            &y.ops[ch.ops[3]],
+        };
         const distort = y.variant == .ym2612;
         const output0 = ch.cache.output0;
         const output1 = ch.cache.output1;
@@ -653,7 +717,9 @@ pub const Ym2612 = struct {
             if (live & bit != 0) {
                 op[n].ssg_inverted = 0;
                 step[n] = cache.phase_step;
-                if (cache.phase_step == OpCache.phase_step_dynamic) dynamic |= bit;
+                if (cache.phase_step == OpCache.phase_step_dynamic) {
+                    dynamic |= bit;
+                }
                 env_mask[n] = envelopeMask(op[n]);
             }
             base[n] = op[n].env_attenuation + cache.total_level;
@@ -664,7 +730,9 @@ pub const Ym2612 = struct {
         var am_offset: u32 = 0;
         if (am) {
             am_offset = (@as(u32, clocks.lfo_am[0]) << 1) >> am_shift;
-            inline for (0..4) |n| eg4[n] = envelope4(base[n] + (am_offset & am_mask[n]));
+            inline for (0..4) |n| {
+                eg4[n] = envelope4(base[n] + (am_offset & am_mask[n]));
+            }
         }
         var fb0: i32 = ch.feedback[0];
         var fb1: i32 = ch.feedback[1];
@@ -688,7 +756,9 @@ pub const Ym2612 = struct {
                     }
                 }
             }
-            inline for (0..4) |n| phase[n] +%= step[n];
+            inline for (0..4) |n| {
+                phase[n] +%= step[n];
+            }
             const env_counter = clocks.env_counter[i];
             if (env_counter & 3 == 0 and live != 0) {
                 const counter = env_counter >> 2;
@@ -711,13 +781,17 @@ pub const Ym2612 = struct {
                 const offset = (@as(u32, clocks.lfo_am[i]) << 1) >> am_shift;
                 if (offset != am_offset) {
                     am_offset = offset;
-                    inline for (0..4) |n| eg4[n] = envelope4(base[n] + (am_offset & am_mask[n]));
+                    inline for (0..4) |n| {
+                        eg4[n] = envelope4(base[n] + (am_offset & am_mask[n]));
+                    }
                 }
             }
 
             // The output: O1 with its feedback, then the algorithm's routing.
             var mod1: i32 = 0;
-            if (feedback != 0) mod1 = (fb0 + fb1) >> @intCast(10 - feedback);
+            if (feedback != 0) {
+                mod1 = (fb0 + fb1) >> @intCast(10 - feedback);
+            }
             fb_in = @truncate(waveVolume((phase[0] >> 10) +% @as(u32, @bitCast(mod1)), eg4[0]));
             // With both outputs off, only the feedback is computed.
             if (!output0 and !output1) {
@@ -728,12 +802,31 @@ pub const Ym2612 = struct {
                 continue;
             }
             const o1: i16 = fb_in;
-            const o2: i16 = @truncate(waveVolume((phase[1] >> 10) +% modulation(bitfield(algorithm, 0, 1), o1, 0, 0), eg4[1]));
-            const o3: i16 = @truncate(waveVolume((phase[2] >> 10) +% modulation(bitfield(algorithm, 1, 3), o1, o2, 0), eg4[2]));
-            var result = waveVolume((phase[3] >> 10) +% modulation(bitfield(algorithm, 4, 3), o1, o2, o3), eg4[3]) >> rshift;
-            if (comptime bitfield(algorithm, 7, 1) != 0) result = @max(@min(result + (@as(i32, o1) >> rshift), clipmax), clipmin);
-            if (comptime bitfield(algorithm, 8, 1) != 0) result = @max(@min(result + (@as(i32, o2) >> rshift), clipmax), clipmin);
-            if (comptime bitfield(algorithm, 9, 1) != 0) result = @max(@min(result + (@as(i32, o3) >> rshift), clipmax), clipmin);
+            const o2: i16 = @truncate(
+                waveVolume(
+                    (phase[1] >> 10) +% modulation(bitfield(algorithm, 0, 1), o1, 0, 0),
+                    eg4[1],
+                ),
+            );
+            const o3: i16 = @truncate(
+                waveVolume(
+                    (phase[2] >> 10) +% modulation(bitfield(algorithm, 1, 3), o1, o2, 0),
+                    eg4[2],
+                ),
+            );
+            var result = waveVolume(
+                (phase[3] >> 10) +% modulation(bitfield(algorithm, 4, 3), o1, o2, o3),
+                eg4[3],
+            ) >> rshift;
+            if (comptime bitfield(algorithm, 7, 1) != 0) {
+                result = @max(@min(result + (@as(i32, o1) >> rshift), clipmax), clipmin);
+            }
+            if (comptime bitfield(algorithm, 8, 1) != 0) {
+                result = @max(@min(result + (@as(i32, o2) >> rshift), clipmax), clipmin);
+            }
+            if (comptime bitfield(algorithm, 9, 1) != 0) {
+                result = @max(@min(result + (@as(i32, o3) >> rshift), clipmax), clipmin);
+            }
 
             const left = if (output0) result else 0;
             const right = if (output1) result else 0;
@@ -746,7 +839,9 @@ pub const Ym2612 = struct {
             }
         }
         inline for (0..4) |n| {
-            if (ch.live & (@as(u4, 1) << n) != 0) op[n].phase = phase[n];
+            if (ch.live & (@as(u4, 1) << n) != 0) {
+                op[n].phase = phase[n];
+            }
         }
         ch.live = live;
         ch.feedback = .{ @intCast(fb0), @intCast(fb1) };
@@ -790,8 +885,19 @@ pub const Ym2612 = struct {
     /// The channel's clock and, with `output`, its output by its algorithm, 9 bits after the shift
     /// of 5, added to the sides it is panned to (ymfm's `clock` and `output_4op` with rshift 5,
     /// clipmax 256), for each sample of the block.
-    fn runChannel(y: *Ym2612, ch: *Channel, clocks: *const Clocks, raw: []Frame, comptime output: bool) void {
-        const op = [4]*Operator{ &y.ops[ch.ops[0]], &y.ops[ch.ops[1]], &y.ops[ch.ops[2]], &y.ops[ch.ops[3]] };
+    fn runChannel(
+        y: *Ym2612,
+        ch: *Channel,
+        clocks: *const Clocks,
+        raw: []Frame,
+        comptime output: bool,
+    ) void {
+        const op = [4]*Operator{
+            &y.ops[ch.ops[0]],
+            &y.ops[ch.ops[1]],
+            &y.ops[ch.ops[2]],
+            &y.ops[ch.ops[3]],
+        };
         if (!output and ch.live == 0) {
             // Nothing to clock, nothing to output: the feedback's history only moves.
             ch.feedback[0] = if (raw.len == 1) ch.feedback[1] else ch.feedback_in;
@@ -814,7 +920,9 @@ pub const Ym2612 = struct {
                     const bit = @as(u4, 1) << n;
                     if (ch.live & bit != 0) {
                         opClock(op[n], env_counter, lfo_raw_pm);
-                        if (opSilent(op[n])) ch.live &= ~bit;
+                        if (opSilent(op[n])) {
+                            ch.live &= ~bit;
+                        }
                     }
                 }
             }
@@ -824,8 +932,13 @@ pub const Ym2612 = struct {
 
             // O1's feedback.
             var opmod: i32 = 0;
-            if (cache.feedback != 0) opmod = (@as(i32, ch.feedback[0]) + ch.feedback[1]) >> @intCast(10 - cache.feedback);
-            ch.feedback_in = @truncate(opComputeVolume(op[0], op[0].phaseInt() +% @as(u32, @bitCast(opmod)), am_offset));
+            if (cache.feedback != 0) {
+                opmod = (@as(i32, ch.feedback[0]) + ch.feedback[1]) >>
+                    @intCast(10 - cache.feedback);
+            }
+            ch.feedback_in = @truncate(
+                opComputeVolume(op[0], op[0].phaseInt() +% @as(u32, @bitCast(opmod)), am_offset),
+            );
 
             // With both outputs off, only the feedback is computed.
             if (!cache.output0 and !cache.output1) {
@@ -841,21 +954,35 @@ pub const Ym2612 = struct {
             opout[1] = ch.feedback_in;
 
             opmod = opout[bitfield(algorithm, 0, 1)] >> 1;
-            opout[2] = @truncate(opComputeVolume(op[1], op[1].phaseInt() +% @as(u32, @bitCast(opmod)), am_offset));
+            opout[2] = @truncate(
+                opComputeVolume(op[1], op[1].phaseInt() +% @as(u32, @bitCast(opmod)), am_offset),
+            );
             opout[5] = opout[1] +% opout[2];
 
             opmod = opout[bitfield(algorithm, 1, 3)] >> 1;
-            opout[3] = @truncate(opComputeVolume(op[2], op[2].phaseInt() +% @as(u32, @bitCast(opmod)), am_offset));
+            opout[3] = @truncate(
+                opComputeVolume(op[2], op[2].phaseInt() +% @as(u32, @bitCast(opmod)), am_offset),
+            );
             opout[6] = opout[1] +% opout[3];
             opout[7] = opout[2] +% opout[3];
 
             opmod = opout[bitfield(algorithm, 4, 3)] >> 1;
-            var result = opComputeVolume(op[3], op[3].phaseInt() +% @as(u32, @bitCast(opmod)), am_offset);
+            var result = opComputeVolume(
+                op[3],
+                op[3].phaseInt() +% @as(u32, @bitCast(opmod)),
+                am_offset,
+            );
             result >>= rshift;
 
-            if (bitfield(algorithm, 7, 1) != 0) result = std.math.clamp(result + (@as(i32, opout[1]) >> rshift), clipmin, clipmax);
-            if (bitfield(algorithm, 8, 1) != 0) result = std.math.clamp(result + (@as(i32, opout[2]) >> rshift), clipmin, clipmax);
-            if (bitfield(algorithm, 9, 1) != 0) result = std.math.clamp(result + (@as(i32, opout[3]) >> rshift), clipmin, clipmax);
+            if (bitfield(algorithm, 7, 1) != 0) {
+                result = std.math.clamp(result + (@as(i32, opout[1]) >> rshift), clipmin, clipmax);
+            }
+            if (bitfield(algorithm, 8, 1) != 0) {
+                result = std.math.clamp(result + (@as(i32, opout[2]) >> rshift), clipmin, clipmax);
+            }
+            if (bitfield(algorithm, 9, 1) != 0) {
+                result = std.math.clamp(result + (@as(i32, opout[3]) >> rshift), clipmin, clipmax);
+            }
 
             const left = if (cache.output0) result else 0;
             const right = if (cache.output1) result else 0;
@@ -964,7 +1091,10 @@ pub const Ym2612 = struct {
         return y.byte(0x90, 0, 3, opoffs);
     }
 
-    const KeyOn = struct { channel: u32, opmask: u32 };
+    const KeyOn = struct {
+        channel: u32,
+        opmask: u32,
+    };
 
     /// Stores a register write; the frequency registers go through their latches. Returns the
     /// key-on event of a write to $28.
@@ -1023,16 +1153,22 @@ pub const Ym2612 = struct {
         }
         const subcount: u32 = y.lfo_counter & 0xff;
         y.lfo_counter +%= 1;
-        if (subcount >= lfo_max_count[y.lfo_rate]) y.lfo_counter +%= 0x101 - subcount;
+        if (subcount >= lfo_max_count[y.lfo_rate]) {
+            y.lfo_counter +%= 0x101 - subcount;
+        }
         y.lfo_am = @intCast(bitfield(y.lfo_counter, 8, 6));
-        if (bitfield(y.lfo_counter, 8 + 6, 1) == 0) y.lfo_am ^= 0x3f;
+        if (bitfield(y.lfo_counter, 8 + 6, 1) == 0) {
+            y.lfo_am ^= 0x3f;
+        }
         return lfoRawPm(y.lfo_counter);
     }
 
     /// The LFO's raw PM value at a position of its counter: -7 to 7.
     fn lfoRawPm(lfo_counter: u32) i32 {
         var pm: i32 = @intCast(bitfield(lfo_counter, 10, 3));
-        if (bitfield(lfo_counter, 10 + 3, 1) != 0) pm ^= 7;
+        if (bitfield(lfo_counter, 10 + 3, 1) != 0) {
+            pm ^= 7;
+        }
         return if (bitfield(lfo_counter, 10 + 4, 1) != 0) -pm else pm;
     }
 
@@ -1065,7 +1201,9 @@ pub const Ym2612 = struct {
 
         cache.detune = detuneAdjustment(y.opDetune(opoffs), keycode);
         cache.multiple = y.opMultiple(opoffs) * 2;
-        if (cache.multiple == 0) cache.multiple = 1;
+        if (cache.multiple == 0) {
+            cache.multiple = 1;
+        }
 
         cache.pm_sensitivity = y.chLfoPmSens(choffs);
         cache.pm_value = OpCache.pm_none;
@@ -1086,10 +1224,22 @@ pub const Ym2612 = struct {
         cache.eg_sustain <<= 5;
 
         const ksrval = keycode >> @intCast(y.opKsr(opoffs) ^ 3);
-        cache.eg_rate[@backingInt(EnvelopeState.attack)] = effectiveRate(y.opAttackRate(opoffs) * 2, ksrval);
-        cache.eg_rate[@backingInt(EnvelopeState.decay)] = effectiveRate(y.opDecayRate(opoffs) * 2, ksrval);
-        cache.eg_rate[@backingInt(EnvelopeState.sustain)] = effectiveRate(y.opSustainRate(opoffs) * 2, ksrval);
-        cache.eg_rate[@backingInt(EnvelopeState.release)] = effectiveRate(y.opReleaseRate(opoffs) * 4 + 2, ksrval);
+        cache.eg_rate[@backingInt(EnvelopeState.attack)] = effectiveRate(
+            y.opAttackRate(opoffs) * 2,
+            ksrval,
+        );
+        cache.eg_rate[@backingInt(EnvelopeState.decay)] = effectiveRate(
+            y.opDecayRate(opoffs) * 2,
+            ksrval,
+        );
+        cache.eg_rate[@backingInt(EnvelopeState.sustain)] = effectiveRate(
+            y.opSustainRate(opoffs) * 2,
+            ksrval,
+        );
+        cache.eg_rate[@backingInt(EnvelopeState.release)] = effectiveRate(
+            y.opReleaseRate(opoffs) * 4 + 2,
+            ksrval,
+        );
     }
 
     fn effectiveRate(rawrate: u32, ksr: u32) u8 {
@@ -1100,7 +1250,9 @@ pub const Ym2612 = struct {
         var fnum = bitfield(cache.block_freq, 0, 11) << 1;
         const pm_sensitivity = cache.pm_sensitivity;
         if (pm_sensitivity != 0) {
-            fnum +%= @bitCast(lfoPmPhaseAdjustment(bitfield(cache.block_freq, 4, 7), pm_sensitivity, lfo_raw_pm));
+            fnum +%= @bitCast(
+                lfoPmPhaseAdjustment(bitfield(cache.block_freq, 4, 7), pm_sensitivity, lfo_raw_pm),
+            );
             fnum &= 0xfff;
         }
         const block: u5 = @intCast(bitfield(cache.block_freq, 11, 3));
@@ -1115,7 +1267,9 @@ pub const Ym2612 = struct {
 
     /// `modified`: the operator's registers changed since its data was cached.
     fn opPrepare(y: *Ym2612, op: *Operator, modified: bool) bool {
-        if (modified) y.cacheOperatorData(op.choffs, op.opoffs, &op.cache);
+        if (modified) {
+            y.cacheOperatorData(op.choffs, op.opoffs, &op.cache);
+        }
         opClockKeystate(op, @intFromBool(op.keyon_live != 0));
         op.keyon_live &= ~@as(u8, 1 << keyon_csm);
         return op.env_state != .release or op.env_attenuation < eg_quiet;
@@ -1127,7 +1281,9 @@ pub const Ym2612 = struct {
         } else {
             op.ssg_inverted = 0;
         }
-        if (bitfield(env_counter, 0, 2) == 0) opClockEnvelope(op, env_counter >> 2);
+        if (bitfield(env_counter, 0, 2) == 0) {
+            opClockEnvelope(op, env_counter >> 2);
+        }
         var phase_step = op.cache.phase_step;
         if (phase_step == OpCache.phase_step_dynamic) {
             // A function of the cached data and the PM value: computed again when the value
@@ -1146,22 +1302,29 @@ pub const Ym2612 = struct {
         if (op.env_attenuation > eg_quiet) return 0;
         const sin_attenuation: u32 = waveform[phase & (waveform_length - 1)];
         const env_attenuation = opEnvelopeAttenuation(op, am_offset) << 2;
-        const result: i32 = @intCast(attenuationToVolume((sin_attenuation & 0x7fff) + env_attenuation));
+        const result: i32 = @intCast(
+            attenuationToVolume((sin_attenuation & 0x7fff) + env_attenuation),
+        );
         return if (bitfield(sin_attenuation, 15, 1) != 0) -result else result;
     }
 
     fn opKeyOnOff(op: *Operator, on: u32, kind: u3) void {
-        op.keyon_live = (op.keyon_live & ~(@as(u8, 1) << kind)) | (@as(u8, @intCast(on & 1)) << kind);
+        op.keyon_live = (op.keyon_live & ~(@as(u8, 1) << kind)) |
+            (@as(u8, @intCast(on & 1)) << kind);
     }
 
     fn opStartAttack(op: *Operator, is_restart: bool) void {
         if (op.env_state == .attack) return;
         op.env_state = .attack;
         if (!is_restart) {
-            op.ssg_inverted = @intCast(@intFromBool(op.cache.ssg_eg_enable) & bitfield(op.cache.ssg_eg_mode, 2, 1));
+            op.ssg_inverted = @intCast(
+                @intFromBool(op.cache.ssg_eg_enable) & bitfield(op.cache.ssg_eg_mode, 2, 1),
+            );
             op.phase = 0;
         }
-        if (op.cache.eg_rate[@backingInt(EnvelopeState.attack)] >= 62) op.env_attenuation = 0;
+        if (op.cache.eg_rate[@backingInt(EnvelopeState.attack)] >= 62) {
+            op.env_attenuation = 0;
+        }
     }
 
     fn opStartRelease(op: *Operator) void {
@@ -1190,20 +1353,32 @@ pub const Ym2612 = struct {
         if (bitfield(mode, 0, 1) != 0) {
             // Hold modes (1, 3, 5, 7).
             op.ssg_inverted = @intCast(bitfield(mode, 2, 1) ^ bitfield(mode, 1, 1));
-            if (op.env_state != .attack) op.env_attenuation = if (op.ssg_inverted != 0) 0x200 else 0x3ff;
+            if (op.env_state != .attack) {
+                op.env_attenuation = if (op.ssg_inverted != 0) 0x200 else 0x3ff;
+            }
         } else {
             // Continuous modes (0, 2, 4, 6).
             op.ssg_inverted ^= @intCast(bitfield(mode, 1, 1));
-            if (op.env_state == .decay or op.env_state == .sustain) opStartAttack(op, true);
-            if (bitfield(mode, 1, 1) == 0) op.phase = 0;
+            if (op.env_state == .decay or op.env_state == .sustain) {
+                opStartAttack(op, true);
+            }
+            if (bitfield(mode, 1, 1) == 0) {
+                op.phase = 0;
+            }
         }
-        if (op.env_state == .release) op.env_attenuation = 0x3ff;
+        if (op.env_state == .release) {
+            op.env_attenuation = 0x3ff;
+        }
     }
 
     fn opClockEnvelope(op: *Operator, env_counter_in: u32) void {
-        if (op.env_state == .attack and op.env_attenuation == 0) op.env_state = .decay;
+        if (op.env_state == .attack and op.env_attenuation == 0) {
+            op.env_state = .decay;
+        }
         // Right after the attack, so that a sustain level of 0 skips the decay.
-        if (op.env_state == .decay and op.env_attenuation >= op.cache.eg_sustain) op.env_state = .sustain;
+        if (op.env_state == .decay and op.env_attenuation >= op.cache.eg_sustain) {
+            op.env_state = .sustain;
+        }
 
         const rate: u32 = op.cache.eg_rate[@backingInt(op.env_state)];
         const rate_shift: u5 = @intCast(rate >> 2);
@@ -1225,14 +1400,20 @@ pub const Ym2612 = struct {
             } else if (op.env_attenuation < 0x200) {
                 op.env_attenuation +%= @intCast(4 * increment);
             }
-            if (op.env_attenuation >= 0x400) op.env_attenuation = 0x3ff;
+            if (op.env_attenuation >= 0x400) {
+                op.env_attenuation = 0x3ff;
+            }
         }
     }
 
     inline fn opEnvelopeAttenuation(op: *const Operator, am_offset: u32) u32 {
         var result: u32 = op.env_attenuation;
-        if (op.ssg_inverted != 0) result = (0x200 -% result) & 0x3ff;
-        if (op.cache.lfo_am_enable) result += am_offset;
+        if (op.ssg_inverted != 0) {
+            result = (0x200 -% result) & 0x3ff;
+        }
+        if (op.cache.lfo_am_enable) {
+            result += am_offset;
+        }
         result += op.cache.total_level;
         return @min(result, 0x3ff);
     }
@@ -1242,12 +1423,18 @@ pub const Ym2612 = struct {
     fn chPrepare(y: *Ym2612, c: usize) bool {
         const ch = &y.chans[c];
         const modified = bitfield(y.modified_channels, @intCast(c), 1) != 0;
-        if (modified) y.cacheChannelData(ch.choffs, &ch.cache);
+        if (modified) {
+            y.cacheChannelData(ch.choffs, &ch.cache);
+        }
         var active: u32 = 0;
         ch.live = 0;
         for (ch.ops, 0..) |i, n| {
-            if (y.opPrepare(&y.ops[i], modified)) active |= @as(u32, 1) << @intCast(n);
-            if (!opSilent(&y.ops[i])) ch.live |= @as(u4, 1) << @intCast(n);
+            if (y.opPrepare(&y.ops[i], modified)) {
+                active |= @as(u32, 1) << @intCast(n);
+            }
+            if (!opSilent(&y.ops[i])) {
+                ch.live |= @as(u4, 1) << @intCast(n);
+            }
         }
         return active != 0;
     }
@@ -1274,7 +1461,9 @@ pub const Ym2612 = struct {
             return;
         }
         if (y.regsWrite(regnum, data)) |k| {
-            for (y.chans[k.channel].ops, 0..) |i, n| opKeyOnOff(&y.ops[i], bitfield(k.opmask, @intCast(n), 1), keyon_normal);
+            for (y.chans[k.channel].ops, 0..) |i, n| {
+                opKeyOnOff(&y.ops[i], bitfield(k.opmask, @intCast(n), 1), keyon_normal);
+            }
         }
     }
 };
@@ -1291,13 +1480,25 @@ fn writeReg(y: *Ym2612, part: u1, reg: u8, value: u8) void {
 /// A sine tone on channel 1: algorithm 7, only O4 audible, the others at TL $7F.
 fn sineVoice(y: *Ym2612, block: u8, fnum: u16, ar: u8, d1r: u8, d1l: u8, rr: u8) void {
     writeReg(y, 0, 0xb0, 0x07);
-    for ([_]u8{ 0x30, 0x34, 0x38, 0x3c }) |r| writeReg(y, 0, r, 0x01); // DT 0, MUL 1
-    for ([_]u8{ 0x40, 0x44, 0x48 }) |r| writeReg(y, 0, r, 0x7f);
+    for ([_]u8{ 0x30, 0x34, 0x38, 0x3c }) |r| {
+        writeReg(y, 0, r, 0x01); // DT 0, MUL 1
+    }
+    for ([_]u8{ 0x40, 0x44, 0x48 }) |r| {
+        writeReg(y, 0, r, 0x7f);
+    }
     writeReg(y, 0, 0x4c, 0x00);
-    for ([_]u8{ 0x50, 0x54, 0x58, 0x5c }) |r| writeReg(y, 0, r, ar);
-    for ([_]u8{ 0x60, 0x64, 0x68, 0x6c }) |r| writeReg(y, 0, r, d1r);
-    for ([_]u8{ 0x70, 0x74, 0x78, 0x7c }) |r| writeReg(y, 0, r, 0);
-    for ([_]u8{ 0x80, 0x84, 0x88, 0x8c }) |r| writeReg(y, 0, r, (d1l << 4) | rr);
+    for ([_]u8{ 0x50, 0x54, 0x58, 0x5c }) |r| {
+        writeReg(y, 0, r, ar);
+    }
+    for ([_]u8{ 0x60, 0x64, 0x68, 0x6c }) |r| {
+        writeReg(y, 0, r, d1r);
+    }
+    for ([_]u8{ 0x70, 0x74, 0x78, 0x7c }) |r| {
+        writeReg(y, 0, r, 0);
+    }
+    for ([_]u8{ 0x80, 0x84, 0x88, 0x8c }) |r| {
+        writeReg(y, 0, r, (d1l << 4) | rr);
+    }
     writeReg(y, 0, 0xa4, (block << 3) | @as(u8, @intCast(fnum >> 8)));
     writeReg(y, 0, 0xa0, @intCast(fnum & 0xff));
 }
@@ -1308,7 +1509,9 @@ fn risingCrossings(y: *Ym2612, n: usize) usize {
     var prev: i32 = y.sampleRaw().left;
     for (0..n) |_| {
         const v = y.sampleRaw().left;
-        if (prev < 0 and v >= 0) count += 1;
+        if (prev < 0 and v >= 0) {
+            count += 1;
+        }
         prev = v;
     }
     return count;
@@ -1368,10 +1571,14 @@ test "the envelope: instant attack, decay to the sustain level, release" {
     // The release goes to silence and the channel becomes inactive.
     writeReg(&y, 0, 0x28, 0x00);
     i = 0;
-    while (i < 200000 and op.env_attenuation < 0x3ff) : (i += 1) _ = y.sampleRaw();
+    while (i < 200000 and op.env_attenuation < 0x3ff) : (i += 1) {
+        _ = y.sampleRaw();
+    }
     try testing.expectEqual(EnvelopeState.release, op.env_state);
     try testing.expectEqual(@as(u16, 0x3ff), op.env_attenuation);
-    for (0..5000) |_| _ = y.sampleRaw();
+    for (0..5000) |_| {
+        _ = y.sampleRaw();
+    }
     try testing.expectEqual(@as(u32, 0), y.active_channels & 1);
 }
 
@@ -1448,13 +1655,17 @@ test "a silent operator's clock changes only what its key on sets afresh" {
         op.cache.ssg_eg_enable = r.boolean();
         op.cache.ssg_eg_mode = r.uintLessThan(u32, 8);
         op.cache.phase_step = r.uintLessThan(u32, 0x20000);
-        for (&op.cache.eg_rate) |*rate| rate.* = r.uintLessThan(u8, 64);
+        for (&op.cache.eg_rate) |*rate| {
+            rate.* = r.uintLessThan(u8, 64);
+        }
         try testing.expect(Ym2612.opSilent(&op));
         var clocked = op;
         var env_counter = r.int(u32);
         for (0..r.uintLessThan(usize, 3000)) |_| {
             env_counter +%= 1;
-            if (bitfield(env_counter, 0, 2) == 3) env_counter +%= 1;
+            if (bitfield(env_counter, 0, 2) == 3) {
+                env_counter +%= 1;
+            }
             Ym2612.opClock(&clocked, env_counter, 0);
             try testing.expect(Ym2612.opSilent(&clocked));
         }
@@ -1482,7 +1693,9 @@ test "the phase step with the LFO's PM: the step of the sample's PM value" {
             const pm = Ym2612.lfoRawPm(y.lfo_counter);
             try testing.expectEqual(OpCache.phase_step_dynamic, op.cache.phase_step);
             try testing.expectEqual(Ym2612.computePhaseStep(&op.cache, pm), op.phase -% before);
-            if (pm != last_pm) changes += 1;
+            if (pm != last_pm) {
+                changes += 1;
+            }
             last_pm = pm;
         }
     }
@@ -1495,7 +1708,12 @@ test "the phase step with the LFO's PM: the step of the sample's PM value" {
 fn randomWrite(y: *Ym2612, r: std.Random) void {
     const part: u1 = r.int(u1);
     switch (r.uintLessThan(u8, 10)) {
-        0, 1 => writeReg(y, 0, 0x28, (r.int(u8) & 0xf0) | r.uintLessThan(u8, 3) | (@as(u8, r.int(u1)) << 2)),
+        0, 1 => writeReg(
+            y,
+            0,
+            0x28,
+            (r.int(u8) & 0xf0) | r.uintLessThan(u8, 3) | (@as(u8, r.int(u1)) << 2),
+        ),
         2 => writeReg(y, 0, 0x22, r.int(u8) & 0x0f),
         3 => writeReg(y, part, 0x80 + r.uintLessThan(u8, 16), r.int(u8) | 0x0c),
         4 => writeReg(y, part, 0x90 + r.uintLessThan(u8, 16), r.int(u8) & 0x0f),
@@ -1512,10 +1730,14 @@ test "the operators clocked are those not silent" {
     var woken: usize = 0;
     var slept: usize = 0;
     for (0..3000) |_| {
-        for (0..r.uintLessThan(u8, 4)) |_| randomWrite(&y, r);
+        for (0..r.uintLessThan(u8, 4)) |_| {
+            randomWrite(&y, r);
+        }
         for (0..r.uintLessThan(u16, 300)) |_| {
             var before: [channels]u4 = undefined;
-            for (y.chans, 0..) |ch, c| before[c] = ch.live;
+            for (y.chans, 0..) |ch, c| {
+                before[c] = ch.live;
+            }
             _ = y.sampleRaw();
             for (y.chans, 0..) |ch, c| {
                 for (ch.ops, 0..) |i, n| {

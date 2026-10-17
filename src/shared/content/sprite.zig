@@ -24,15 +24,17 @@ pub fn fromArchive(
     index: u16,
 ) !Frame {
     if (sprites.len < 12 or
-        !std.mem.eql(u8, sprites[0..3], "SPP")) return error.InvalidSpriteArchive;
+        !std.mem.eql(u8, sprites[0..3], "SPP")) {
+        return error.InvalidSpriteArchive;
+    }
     if (offsets.len < 2 or
         (offsets.len - 2) % 6 != 0 or
-        (offsets.len - 2) / 6 > 4096) return error.InvalidSpriteDirectory;
-    if (std.mem.readInt(
-        u16,
-        offsets[offsets.len - 2 ..][0..2],
-        .little,
-    ) != 0xffff) return error.InvalidSpriteDirectory;
+        (offsets.len - 2) / 6 > 4096) {
+        return error.InvalidSpriteDirectory;
+    }
+    if (std.mem.readInt(u16, offsets[offsets.len - 2..][0..2], .little) != 0xffff) {
+        return error.InvalidSpriteDirectory;
+    }
     var found: ?u32 = null;
     var cursor: usize = 0;
     while (cursor + 2 < offsets.len) : (cursor += 6) {
@@ -40,7 +42,7 @@ pub fn fromArchive(
         if (id == 0xffff) return error.InvalidSpriteDirectory;
         if (id == index) {
             if (found != null) return error.DuplicateSprite;
-            found = std.mem.readInt(u32, offsets[cursor + 2 ..][0..4], .little);
+            found = std.mem.readInt(u32, offsets[cursor + 2..][0..4], .little);
         }
     }
     const offset = found orelse return error.MissingSprite;
@@ -66,14 +68,18 @@ pub fn fromIcons(allocator: std.mem.Allocator, file: []const u8, index: u16) !Fr
     const directory_length = std.mem.readInt(u16, file[0..2], .little);
     if (directory_length < 2 or
         directory_length % 2 != 0 or
-        directory_length > file.len) return error.InvalidIconDirectory;
+        directory_length > file.len) {
+        return error.InvalidIconDirectory;
+    }
     if (index >= directory_length / 2) return error.MissingIcon;
-    const offset: usize = std.mem.readInt(u16, file[@as(usize, index) * 2 ..][0..2], .little);
+    const offset: usize = std.mem.readInt(u16, file[@as(usize, index) * 2..][0..2], .little);
     if (offset < directory_length or
         offset > file.len or
-        file.len - offset < 130) return error.TruncatedIcon;
+        file.len - offset < 130) {
+        return error.TruncatedIcon;
+    }
     const pixels = try allocator.alloc(u8, 256);
-    for (file[offset + 2 ..][0..128], 0..) |byte, i| {
+    for (file[offset + 2..][0..128], 0..) |byte, i| {
         pixels[i * 2] = byte >> 4;
         pixels[i * 2 + 1] = byte & 15;
     }
@@ -111,7 +117,9 @@ pub fn decode(allocator: std.mem.Allocator, record: []const u8) !Frame {
         const row_major = try allocator.alloc(u8, area);
         defer allocator.free(row_major);
         for (0..height) |y| {
-            for (0..width) |x| row_major[y * width + x] = pixels[x * height + y];
+            for (0..width) |x| {
+                row_major[y * width + x] = pixels[x * height + y];
+            }
         }
         @memcpy(pixels, row_major);
     }
@@ -151,7 +159,7 @@ fn decodePixels(allocator: std.mem.Allocator, encoded: []const u8, pixels: []u8)
         workspace[token_base + i * 2] = byte >> 4;
         workspace[token_base + i * 2 + 1] = byte & 15;
     }
-    var input: Tokens = .{ .values = workspace[token_base..][0 .. encoded.len * 2] };
+    var input: Tokens = .{ .values = workspace[token_base..][0..encoded.len * 2] };
     var written: usize = 0;
     while (input.remaining() != 0) {
         var color = try input.next();
@@ -190,12 +198,16 @@ test "short and long nibble runs, padding and truncation" {
     var pixels: [264]u8 = undefined;
     // f,2,1 => five 2s; f,f,f,f,3 => 259 3s.
     try decodePixels(allocator, &.{ 0xf2, 0x1f, 0xff, 0xf3 }, &pixels);
-    for (pixels[0..5]) |color| try std.testing.expectEqual(@as(u8, 2), color);
-    for (pixels[5..]) |color| try std.testing.expectEqual(@as(u8, 3), color);
-    try decodePixels(allocator, &.{0x10}, pixels[0..1]);
+    for (pixels[0..5]) |color| {
+        try std.testing.expectEqual(@as(u8, 2), color);
+    }
+    for (pixels[5..]) |color| {
+        try std.testing.expectEqual(@as(u8, 3), color);
+    }
+    try decodePixels(allocator, &.{ 0x10 }, pixels[0..1]);
     try std.testing.expectError(
         error.TruncatedSpriteRun,
-        decodePixels(allocator, &.{0xf2}, pixels[0..5]),
+        decodePixels(allocator, &.{ 0xf2 }, pixels[0..5]),
     );
     try std.testing.expectError(
         error.SpriteRunOverflow,
@@ -207,7 +219,7 @@ test "short and long nibble runs, padding and truncation" {
     );
     try std.testing.expectError(
         error.TrailingSpriteData,
-        decodePixels(allocator, &.{0x12}, pixels[0..1]),
+        decodePixels(allocator, &.{ 0x12 }, pixels[0..1]),
     );
 }
 
@@ -220,7 +232,9 @@ test "long output can replace a later token before it is decoded" {
         &.{ 0xff, 0xff, 0x0f, 0xff, 0xf0, 0xff, 0xff, 0x0f, 0xff, 0xf0, 0xf0, 0x83 },
         &pixels,
     );
-    for (pixels) |color| try std.testing.expectEqual(@as(u8, 0), color);
+    for (pixels) |color| {
+        try std.testing.expectEqual(@as(u8, 0), color);
+    }
 }
 
 test "truncated records and absent archive entries are checked" {
@@ -274,7 +288,7 @@ test "explicit null artwork becomes transparent while an absent identifier stays
     const offsets = [_]u8{ 7, 0, 255, 255, 255, 255, 255, 255 };
     var frame = try fromArchive(std.testing.allocator, &archive, &offsets, 7);
     defer frame.deinit();
-    try std.testing.expectEqualSlices(u8, &.{0}, frame.image.pixels);
+    try std.testing.expectEqualSlices(u8, &.{ 0 }, frame.image.pixels);
     try std.testing.expectError(
         error.MissingSprite,
         fromArchive(std.testing.allocator, &archive, &offsets, 8),

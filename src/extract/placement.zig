@@ -1,7 +1,10 @@
 //! The placement records of a level's PGE file, as the extractor reads them.
 const std = @import("std");
 
-pub const Position = struct { x: i16, y: i16 };
+pub const Position = struct {
+    x: i16,
+    y: i16,
+};
 
 pub const Record = struct {
     initial_state: u16,
@@ -32,13 +35,15 @@ pub const Table = struct {
         if (bytes.len < 2) return error.InvalidPlacementTable;
         const count = word(bytes, 0);
         if (count > 256 or
-            bytes.len != 2 + @as(usize, count) * 32) return error.InvalidPlacementTable;
+            bytes.len != 2 + @as(usize, count) * 32) {
+            return error.InvalidPlacementTable;
+        }
         return .{ .bytes = bytes[2..], .count = count };
     }
 
     pub fn record(self: Table, index: u16) !Record {
         if (index >= self.count) return error.MissingPlacement;
-        const bytes = self.bytes[@as(usize, index) * 32 ..][0..32];
+        const bytes = self.bytes[@as(usize, index) * 32..][0..32];
         return .{
             .initial_state = word(bytes, 0),
             .position = .{ .x = @bitCast(word(bytes, 2)), .y = @bitCast(word(bytes, 4)) },

@@ -44,7 +44,7 @@ pub fn Args(comptime program: []const u8) type {
                 .help = "the fallback pacer's rate, 1 to 1000 (default 60)",
             },
         }),
-        .positionals = &.{native.cli.assets},
+        .positionals = &.{ native.cli.assets },
     });
 }
 
@@ -89,7 +89,11 @@ pub fn run(
 
     var ver_buf: [32]u8 = undefined;
     const check = version.checkVersion(&ver_buf);
-    err.print("{s}: SDL2 {s} linked (pinned {s})\n", .{ name, check.linked, check.pinned }) catch {};
+    err.print("{s}: SDL2 {s} linked (pinned {s})\n", .{
+        name,
+        check.linked,
+        check.pinned,
+    }) catch {};
     err.flush() catch {};
 
     // The providers: the save directory, and the game directory of the positional argument. They
@@ -97,15 +101,16 @@ pub fn run(
     var providers: native.cli.Providers = .empty;
     defer providers.deinit();
     providers.open(gpa, io, environ, options.providers) catch |e| {
-        err.print("{s}: ", .{name}) catch {};
+        err.print("{s}: ", .{ name }) catch {};
         providers.writeFailure(e, err) catch {};
         err.flush() catch {};
         return 1;
     };
-    err.print(
-        "{s}: assets: {s}, saves: {s}\n",
-        .{ name, @tagName(providers.kind), providers.saves_path },
-    ) catch {};
+    err.print("{s}: assets: {s}, saves: {s}\n", .{
+        name,
+        @tagName(providers.kind),
+        providers.saves_path,
+    }) catch {};
     err.flush() catch {};
 
     // The backend is made before the game and released after it.
@@ -122,7 +127,9 @@ pub fn run(
     var out_writer = std.Io.File.stdout().writerStreaming(io, &out_buf);
     const out = &out_writer.interface;
     defer out.flush() catch {};
-    if (options.event_log_ns != null) backend.event_log = out;
+    if (options.event_log_ns != null) {
+        backend.event_log = out;
+    }
 
     var game = flashbackz.Game.initWithEntry(
         gpa,
@@ -136,7 +143,9 @@ pub fn run(
                 "a required game resource is missing; supply both disk1.img and disk2.img, or a complete extracted directory",
                 .{},
             );
-        } else std.log.err("cannot load game: {s}", .{@errorName(e)});
+        } else {
+            std.log.err("cannot load game: {s}", .{ @errorName(e) });
+        }
         return 1;
     };
     defer game.deinit();
@@ -150,7 +159,7 @@ pub fn run(
     while (true) {
         const frames_before = game.frames_presented;
         const result = game.update(&p) catch |e| {
-            std.log.err("game update failed: {s}", .{@errorName(e)});
+            std.log.err("game update failed: {s}", .{ @errorName(e) });
             out.flush() catch {};
             return 1;
         };
@@ -174,13 +183,19 @@ pub fn run(
             }) catch {};
             err.flush() catch {};
         }
-        if (backend.event_log != null) out.flush() catch {};
+        if (backend.event_log != null) {
+            out.flush() catch {};
+        }
         if (result == .finished) break;
         const now = p.nowNs();
         if (deadline_limit) |limit| {
             // The deadline starts when the platform is up, so a slow start does not use log time.
-            if (deadline_ns == null and backend.started) deadline_ns = now + limit;
-            if (deadline_ns) |d| if (now >= d) break;
+            if (deadline_ns == null and backend.started) {
+                deadline_ns = now + limit;
+            }
+            if (deadline_ns) |d| {
+                if (now >= d) break;
+            }
         }
         // The display paces an iteration only if the iteration presented a frame.
         if (game.needsCatchup(now)) continue;
@@ -195,15 +210,12 @@ pub fn run(
         game.events_consumed,
         if (backend.vsync) "the display" else "the fallback clock",
     }) catch {};
-    err.print(
-        "{s}: audio {s}, {d} frames played, {d} still queued\n",
-        .{
-            name,
-            if (audio.running) "open" else "closed",
-            audio.played_frames,
-            audio.queued_frames,
-        },
-    ) catch {};
+    err.print("{s}: audio {s}, {d} frames played, {d} still queued\n", .{
+        name,
+        if (audio.running) "open" else "closed",
+        audio.played_frames,
+        audio.queued_frames,
+    }) catch {};
     err.flush() catch {};
     out.flush() catch {};
     return 0;
@@ -223,15 +235,19 @@ pub const Pacer = struct {
         }
         // Keep the ideal grid, so the next sleep makes up for a sleep that overran. Only an update
         // more than one full period late resynchronises, so no burst of instant frames follows.
-        if (self.next_ns == 0 or now_ns > self.next_ns + self.period_ns) self.next_ns = now_ns;
+        if (self.next_ns == 0 or now_ns > self.next_ns + self.period_ns) {
+            self.next_ns = now_ns;
+        }
         self.next_ns += self.period_ns;
         if (self.next_ns <= now_ns) return;
         const ms = (self.next_ns - now_ns) / std.time.ns_per_ms;
-        if (ms > 0) c.SDL_Delay(@intCast(ms));
+        if (ms > 0) {
+            c.SDL_Delay(@intCast(ms));
+        }
     }
 };
 
-pub const ArgError = clap.Error || error{MissingAssets};
+pub const ArgError = clap.Error || error{ MissingAssets };
 
 /// Parses `args`, the arguments after the program's name; the options point into them.
 /// `built_in` are the standalone build's files, which stand in for paths not given.
@@ -278,24 +294,26 @@ fn testParse(args: []const []const u8) ArgError!Options {
 }
 
 test "the host options are parsed, bounded and defaulted" {
-    const defaults = try testParse(&.{"game"});
+    const defaults = try testParse(&.{ "game" });
     try std.testing.expectEqual(@as(?u32, null), defaults.scale);
     try std.testing.expectEqual(@as(?bool, null), defaults.vsync);
     try std.testing.expectEqual(@as(?u64, null), defaults.deadlineNs());
 
-    const all = try testParse(&.{
-        "--scale",
-        "2",
-        "--no-vsync",
-        "--software",
-        "--event-log",
-        "1.5",
-        "--run-for",
-        "1",
-        "game",
-        "--saves",
-        "saves",
-    });
+    const all = try testParse(
+        &.{
+            "--scale",
+            "2",
+            "--no-vsync",
+            "--software",
+            "--event-log",
+            "1.5",
+            "--run-for",
+            "1",
+            "game",
+            "--saves",
+            "saves",
+        },
+    );
     try std.testing.expectEqual(@as(?u32, 2), all.scale);
     try std.testing.expectEqual(@as(?bool, false), all.vsync);
     try std.testing.expect(all.software);
@@ -311,26 +329,24 @@ test "the host options are parsed, bounded and defaulted" {
         &.{ "--fps", "0" },
         &.{ "--scene", "unknown", "game" },
         &.{ "--data", "" },
-    }) |args| try std.testing.expectError(error.InvalidValue, testParse(args));
-    try std.testing.expectError(error.UnknownOption, testParse(&.{"--frobnicate"}));
+    }) |args| {
+        try std.testing.expectError(error.InvalidValue, testParse(args));
+    }
+    try std.testing.expectError(error.UnknownOption, testParse(&.{ "--frobnicate" }));
     // Without the game's files the game does not start.
     try std.testing.expectError(error.MissingAssets, testParse(&.{}));
     try std.testing.expectError(error.MissingAssets, testParse(&.{ "--scene", "jungle" }));
     try std.testing.expect((try testParse(&.{ "--scale", "2", "--help" })).help);
     const data = try testParse(&.{ "--data", "set", "disk1.img" });
     try std.testing.expectEqualStrings("set", data.providers.data.?);
-    const disks = try testParse(&.{
-        "disk1.img",
-        "disk2.img",
-    });
+    const disks = try testParse(&.{ "disk1.img", "disk2.img" });
     try std.testing.expectEqualStrings("disk1.img", disks.providers.assets.?);
     try std.testing.expectEqualStrings("disk2.img", disks.providers.second_assets.?);
-    try std.testing.expectError(error.TooManyArguments, testParse(&.{ "disk1.img", "disk2.img", "disk3.img" }));
-    const jungle_options = try testParse(&.{
-        "--scene",
-        "jungle",
-        "game.ima",
-    });
+    try std.testing.expectError(
+        error.TooManyArguments,
+        testParse(&.{ "disk1.img", "disk2.img", "disk3.img" }),
+    );
+    const jungle_options = try testParse(&.{ "--scene", "jungle", "game.ima" });
     try std.testing.expectEqual(
         flashbackz.game.Entry{ .level_development = .jungle },
         jungle_options.providers.entry,

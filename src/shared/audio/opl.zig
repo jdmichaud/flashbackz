@@ -214,7 +214,8 @@ pub const Chip = struct {
     ) void {
         const c1 = self.op[hihat].tcount / fixedpt_int;
         const c3 = self.op[cymbal].tcount / fixedpt_int;
-        const phasebit: u32 = if ((((c1 & 0x88) ^ ((c1 << 5) & 0x80)) | ((c3 ^ (c3 << 2)) & 0x20)) != 0) 0x02 else 0x00;
+        const phasebit: u32 = if ((((c1 & 0x88) ^ ((c1 << 5) & 0x80)) |
+            ((c3 ^ (c3 << 2)) & 0x20)) != 0) 0x02 else 0x00;
         const noisebit = self.noiseBit();
         const snare_phase_bit: u32 = ((self.op[hihat].tcount / fixedpt_int) / 0x100) & 1;
 
@@ -244,8 +245,10 @@ pub const Chip = struct {
         const sum: u32 = o.wfpos +% @as(u32, @bitCast(modulator));
         const i: u32 = sum / fixedpt_int;
         const sample = self.wavtable[o.cur_wform + (i & o.cur_wmask)];
-        o.cval = toI32(o.step_amp * o.vol * @as(f64, @floatFromInt(sample)) *
-            @as(f64, @floatFromInt(trem)) / 16.0);
+        o.cval = toI32(
+            o.step_amp * o.vol * @as(f64, @floatFromInt(sample)) *
+                @as(f64, @floatFromInt(trem)) / 16.0,
+        );
     }
 
     fn operatorSustain(o: *Operator) void {
@@ -255,7 +258,9 @@ pub const Chip = struct {
     }
 
     fn operatorRelease(o: *Operator) void {
-        if (o.amp > 0.00000001) o.amp *= o.releasemul;
+        if (o.amp > 0.00000001) {
+            o.amp *= o.releasemul;
+        }
         const num_steps_add = o.generator_pos / fixedpt_int;
         var ct: u32 = 0;
         while (ct < num_steps_add) : (ct += 1) {
@@ -263,7 +268,9 @@ pub const Chip = struct {
             if ((o.cur_env_step & @as(u32, @bitCast(o.env_step_r))) == 0) {
                 if (o.amp <= 0.00000001) {
                     o.amp = 0.0;
-                    if (o.op_state == .release) o.op_state = .off;
+                    if (o.op_state == .release) {
+                        o.op_state = .off;
+                    }
                 }
                 o.step_amp = o.amp;
             }
@@ -272,7 +279,9 @@ pub const Chip = struct {
     }
 
     fn operatorDecay(o: *Operator) void {
-        if (o.amp > o.sustain_level) o.amp *= o.decaymul;
+        if (o.amp > o.sustain_level) {
+            o.amp *= o.decaymul;
+        }
         const num_steps_add = o.generator_pos / fixedpt_int;
         var ct: u32 = 0;
         while (ct < num_steps_add) : (ct += 1) {
@@ -305,8 +314,12 @@ pub const Chip = struct {
                     o.step_amp = 1.0;
                 }
                 o.step_skip_pos = o.step_skip_pos *% 2;
-                if (o.step_skip_pos == 0) o.step_skip_pos = 1;
-                if ((@as(i32, o.step_skip_pos) & o.env_step_skip_a) != 0) o.step_amp = o.amp;
+                if (o.step_skip_pos == 0) {
+                    o.step_skip_pos = 1;
+                }
+                if ((@as(i32, o.step_skip_pos) & o.env_step_skip_a) != 0) {
+                    o.step_amp = o.amp;
+                }
             }
         }
         o.generator_pos -%= num_steps_add *% fixedpt_int;
@@ -360,7 +373,9 @@ const step_skip_mask = [5]u8{ 0xff, 0xfe, 0xee, 0xba, 0xaa };
 pub fn changeAttackRate(chip: *Chip, regbase: usize, o: *Operator) void {
     const attackrate: i32 = chip.adlibreg[arc_attr_decr + regbase] >> 4;
     if (attackrate != 0) {
-        const f = pow2(@as(f64, @floatFromInt(attackrate)) + @as(f64, @floatFromInt(o.toff >> 2)) - 1) *
+        const f = pow2(
+            @as(f64, @floatFromInt(attackrate)) + @as(f64, @floatFromInt(o.toff >> 2)) - 1,
+        ) *
             attackconst[o.toff & 3] * chip.recipsamp;
         o.a0 = 0.0377 * f;
         o.a1 = 10.73 * f + 1;
@@ -422,12 +437,17 @@ pub fn changeReleaseRate(chip: *Chip, regbase: usize, o: *Operator) void {
 
 pub fn changeSustainLevel(chip: *Chip, regbase: usize, o: *Operator) void {
     const sustainlevel: i32 = chip.adlibreg[arc_susl_relr + regbase] >> 4;
-    o.sustain_level = if (sustainlevel < 15) pow2(@as(f64, @floatFromInt(sustainlevel)) * -0.5) else 0.0;
+    o.sustain_level = if (sustainlevel < 15)
+        pow2(@as(f64, @floatFromInt(sustainlevel)) * -0.5)
+    else
+        0.0;
 }
 
 pub fn changeWaveform(chip: *Chip, regbase_in: usize, o: *Operator) void {
     var regbase = regbase_in;
-    if (regbase >= arc_secondset) regbase -= (arc_secondset - 22);
+    if (regbase >= arc_secondset) {
+        regbase -= (arc_secondset - 22);
+    }
     o.cur_wmask = wavemask[chip.wave_sel[regbase]];
     o.cur_wform = waveform[chip.wave_sel[regbase]];
 }
@@ -435,9 +455,13 @@ pub fn changeWaveform(chip: *Chip, regbase_in: usize, o: *Operator) void {
 pub fn changeKeepSustain(chip: *Chip, regbase: usize, o: *Operator) void {
     o.sus_keep = (chip.adlibreg[arc_tvs_ksr_mul + regbase] & 0x20) > 0;
     if (o.op_state == .sustain) {
-        if (!o.sus_keep) o.op_state = .sustain_nokeep;
+        if (!o.sus_keep) {
+            o.op_state = .sustain_nokeep;
+        }
     } else if (o.op_state == .sustain_nokeep) {
-        if (o.sus_keep) o.op_state = .sustain;
+        if (o.sus_keep) {
+            o.op_state = .sustain;
+        }
     }
 }
 
@@ -461,7 +485,9 @@ pub fn changeFrequency(chip: *Chip, chanbase: usize, regbase: usize, o: *Operato
     o.toff = ((frn >> 9) & (note_sel ^ 1)) | ((frn >> 8) & note_sel);
     o.toff += (oct << 1);
 
-    if ((chip.adlibreg[arc_tvs_ksr_mul + regbase] & 0x10) == 0) o.toff >>= 2;
+    if ((chip.adlibreg[arc_tvs_ksr_mul + regbase] & 0x10) == 0) {
+        o.toff >>= 2;
+    }
 
     const shifted: f64 = @floatFromInt(frn << @intCast(oct));
     o.tinc = toU32(shifted * @as(f64, chip.frqmul[chip.adlibreg[arc_tvs_ksr_mul + regbase] & 15]));
@@ -479,7 +505,9 @@ pub fn changeFrequency(chip: *Chip, chanbase: usize, regbase: usize, o: *Operato
 pub fn enableOperator(chip: *Chip, regbase: usize, o: *Operator, act_type: u32) void {
     if (o.act_state == op_act_off) {
         var wselbase = regbase;
-        if (wselbase >= arc_secondset) wselbase -= (arc_secondset - 22);
+        if (wselbase >= arc_secondset) {
+            wselbase -= (arc_secondset - 22);
+        }
         o.tcount = wavestart[chip.wave_sel[wselbase]] *% fixedpt_int;
         o.op_state = .attack;
         o.act_state |= act_type;
@@ -490,7 +518,9 @@ pub fn disableOperator(o: *Operator, act_type: u32) void {
     if (o.act_state != op_act_off) {
         o.act_state &= ~act_type;
         if (o.act_state == op_act_off) {
-            if (o.op_state != .off) o.op_state = .release;
+            if (o.op_state != .off) {
+                o.op_state = .release;
+            }
         }
     }
 }
@@ -510,7 +540,8 @@ fn buildWaveTable(pi: f64) [waveprec * 3]i16 {
     var table: [waveprec * 3]i16 = @splat(0);
     for (0..waveprec >> 1) |n| {
         const a = 16384.0 * @sin(@as(f64, @floatFromInt(n << 1)) * pi * 2 / @as(f64, waveprec));
-        const b = 16384.0 * @sin(@as(f64, @floatFromInt((n << 1) + 1)) * pi * 2 / @as(f64, waveprec));
+        const b = 16384.0 *
+            @sin(@as(f64, @floatFromInt((n << 1) + 1)) * pi * 2 / @as(f64, waveprec));
         table[(n << 1) + waveprec] = @intCast(toI32(a));
         table[(n << 1) + 1 + waveprec] = @intCast(toI32(b));
         table[n] = table[(n << 1) + waveprec];
@@ -545,38 +576,52 @@ pub fn init(samplerate_in: u32) Chip {
     var i: usize = 16;
     while (i > 0) {
         i -= 1;
-        chip.frqmul[i] = @floatCast(frqmul_tab[i] * intfrequ / @as(f64, waveprec) * fixedpt * chip.recipsamp);
+        chip.frqmul[i] = @floatCast(
+            frqmul_tab[i] * intfrequ / @as(f64, waveprec) * fixedpt * chip.recipsamp,
+        );
     }
 
     chip.vib_table[0] = 8;
     chip.vib_table[1] = 4;
     chip.vib_table[2] = 0;
     chip.vib_table[3] = -4;
-    for (4..vibtab_size) |n| chip.vib_table[n] = chip.vib_table[n - 4] * -1;
+    for (4..vibtab_size) |n| {
+        chip.vib_table[n] = chip.vib_table[n - 4] * -1;
+    }
 
     // The order of the C expression is important: `VIBTAB_SIZE * FIXEDPT_LFO / 8192` is integer.
-    chip.vibtab_add = toU32(@as(f64, @floatFromInt(@as(u64, vibtab_size) * 0x1000000 / 8192)) *
-        intfrequ / @as(f64, @floatFromInt(chip.int_samplerate)));
+    chip.vibtab_add = toU32(
+        @as(f64, @floatFromInt(@as(u64, vibtab_size) * 0x1000000 / 8192)) *
+            intfrequ / @as(f64, @floatFromInt(chip.int_samplerate)),
+    );
     chip.vibtab_pos = 0;
     chip.vibval_const = @splat(0);
 
     var trem_table_int: [tremtab_size]i32 = undefined;
-    for (0..14) |n| trem_table_int[n] = @as(i32, @intCast(n)) - 13;
-    for (14..41) |n| trem_table_int[n] = -@as(i32, @intCast(n)) + 14;
-    for (41..53) |n| trem_table_int[n] = @as(i32, @intCast(n)) - 40 - 26;
+    for (0..14) |n| {
+        trem_table_int[n] = @as(i32, @intCast(n)) - 13;
+    }
+    for (14..41) |n| {
+        trem_table_int[n] = -@as(i32, @intCast(n)) + 14;
+    }
+    for (41..53) |n| {
+        trem_table_int[n] = @as(i32, @intCast(n)) - 40 - 26;
+    }
 
     for (0..tremtab_size) |n| {
         const trem_val1 = @as(f64, @floatFromInt(trem_table_int[n])) * 4.8 / 26.0 / 6.0;
-        const trem_val2 = @as(
-            f64,
-            @floatFromInt(@divTrunc(trem_table_int[n], 4)),
-        ) * 1.2 / 6.0 / 6.0;
+        const trem_val2 = @as(f64, @floatFromInt(@divTrunc(trem_table_int[n], 4))) *
+            1.2 /
+            6.0 /
+            6.0;
         chip.trem_table[n] = toI32(pow2(trem_val1) * fixedpt);
         chip.trem_table[tremtab_size + n] = toI32(pow2(trem_val2) * fixedpt);
     }
 
-    chip.tremtab_add = toU32(@as(f64, tremtab_size) * trem_freq * fixedpt_lfo /
-        @as(f64, @floatFromInt(chip.int_samplerate)));
+    chip.tremtab_add = toU32(
+        @as(f64, tremtab_size) * trem_freq * fixedpt_lfo /
+            @as(f64, @floatFromInt(chip.int_samplerate)),
+    );
     chip.tremtab_pos = 0;
     chip.tremval_const = @splat(toI32(fixedpt));
 
@@ -584,7 +629,9 @@ pub fn init(samplerate_in: u32) Chip {
 
     // The key scale level table. It is the table of the book, times 8/3.
     chip.kslev[7] = .{ 0, 24, 32, 37, 40, 43, 45, 47, 48, 0, 0, 0, 0, 0, 0, 0 };
-    for (9..16) |n| chip.kslev[7][n] = @intCast(n + 41);
+    for (9..16) |n| {
+        chip.kslev[7][n] = @intCast(n + 41);
+    }
     var j: usize = 7;
     while (j > 0) {
         j -= 1;
@@ -833,7 +880,9 @@ fn vibValue(lut: i32, freq_high: i32) i32 {
 }
 
 fn fillVib(out: *[blockbuf_size]i32, r: *const Render, freq_high: i32) void {
-    for (0..r.end) |i| out[i] = vibValue(r.vib_lut[i], freq_high);
+    for (0..r.end) |i| {
+        out[i] = vibValue(r.vib_lut[i], freq_high);
+    }
 }
 
 pub fn getSample(chip: *Chip, dst: []i16, numsamples: usize) void {
@@ -844,24 +893,32 @@ pub fn getSample(chip: *Chip, dst: []i16, numsamples: usize) void {
         r.end = @min(numsamples - cursmp, blockbuf_size);
         r.opl3 = (chip.adlibreg[0x105] & 1) != 0;
         @memset(r.outbufl[0..r.end], 0);
-        if (r.opl3) @memset(r.outbufr[0..r.end], 0);
+        if (r.opl3) {
+            @memset(r.outbufr[0..r.end], 0);
+        }
 
         // The vibrato and tremolo tables for this block.
         const vib_tshift: u5 = if ((chip.adlibreg[arc_perc_mode] & 0x40) == 0) 1 else 0;
         for (0..r.end) |i| {
             chip.vibtab_pos +%= chip.vibtab_add;
-            if (chip.vibtab_pos / 0x1000000 >= vibtab_size) chip.vibtab_pos -%= vibtab_size * 0x1000000;
+            if (chip.vibtab_pos / 0x1000000 >= vibtab_size) {
+                chip.vibtab_pos -%= vibtab_size * 0x1000000;
+            }
             r.vib_lut[i] = chip.vib_table[chip.vibtab_pos / 0x1000000] >> vib_tshift;
 
             chip.tremtab_pos +%= chip.tremtab_add;
-            if (chip.tremtab_pos / 0x1000000 >= tremtab_size) chip.tremtab_pos -%= tremtab_size * 0x1000000;
+            if (chip.tremtab_pos / 0x1000000 >= tremtab_size) {
+                chip.tremtab_pos -%= tremtab_size * 0x1000000;
+            }
             r.trem_lut[i] = if ((chip.adlibreg[arc_perc_mode] & 0x80) != 0)
                 chip.trem_table[chip.tremtab_pos / 0x1000000]
             else
                 chip.trem_table[tremtab_size + chip.tremtab_pos / 0x1000000];
         }
 
-        if ((chip.adlibreg[arc_perc_mode] & 0x20) != 0) renderPercussion(chip, &r);
+        if ((chip.adlibreg[arc_perc_mode] & 0x20) != 0) {
+            renderPercussion(chip, &r);
+        }
         renderChannels(chip, &r);
 
         // The output always has two channels. In OPL2 mode the left buffer goes to both.
@@ -942,8 +999,7 @@ fn renderPercussion(chip: *Chip, r: *Render) void {
     // Hi-hat, snare and cymbal, which share a phase generator.
     if (chip.op[7].op_state != .off or
         chip.op[16].op_state != .off or
-        chip.op[17].op_state != .off)
-    {
+        chip.op[17].op_state != .off) {
         const v1: []const i32 = if (chip.op[7].vibrato and chip.op[7].op_state != .off) blk: {
             fillVib(&chip.vibval_var1, r, chip.op[7].freq_high);
             break :blk &chip.vibval_var1;
@@ -1094,7 +1150,8 @@ fn armFeedbackOnly(chip: *Chip, r: *Render, b: usize, off: usize) void {
     for (0..r.end) |i| {
         chip.operatorAdvance(&chip.op[b + off], v1[i]);
         Chip.operatorStep(&chip.op[b + off]);
-        const feedback = (chip.op[b + off].lastcval +% chip.op[b + off].cval) *% chip.op[b + off].mfbi;
+        const feedback = (chip.op[b + off].lastcval +% chip.op[b + off].cval) *%
+            chip.op[b + off].mfbi;
         chip.operatorOutput(&chip.op[b + off], @divTrunc(feedback, 2), t1[i]);
         r.out(i, chip.op[b + off].cval, &chip.op[b]);
     }
@@ -1134,7 +1191,9 @@ fn armPlain(chip: *Chip, r: *Render, b: usize, off: usize) void {
 /// op2 -> op3 -> op4: the second half of the AM-FM arm.
 fn armChain3(chip: *Chip, r: *Render, b: usize) void {
     if (chip.op[b + 9].op_state == .off and chip.op[b + 3].op_state == .off and
-        chip.op[b + 3 + 9].op_state == .off) return;
+        chip.op[b + 3 + 9].op_state == .off) {
+        return;
+    }
     const v1 = pickVib(chip, r, b + 9, &chip.vibval_var1, true);
     const t1 = pickTrem(chip, r, b + 9);
     const t2 = pickTrem(chip, r, b + 3);
@@ -1198,7 +1257,9 @@ fn armPairPlain(chip: *Chip, r: *Render, b: usize, off: usize) void {
 /// op1[fb] * op2 * op3 * op4: the whole four-operator chain.
 fn armChain4(chip: *Chip, r: *Render, b: usize) void {
     if (chip.op[b].op_state == .off and chip.op[b + 9].op_state == .off and
-        chip.op[b + 3].op_state == .off and chip.op[b + 3 + 9].op_state == .off) return;
+        chip.op[b + 3].op_state == .off and chip.op[b + 3 + 9].op_state == .off) {
+        return;
+    }
     const v1 = pickVib(chip, r, b + 0, &chip.vibval_var1, true);
     const v2 = pickVib(chip, r, b + 9, &chip.vibval_var2, true);
     const t1 = pickTrem(chip, r, b + 0);
@@ -1231,9 +1292,15 @@ fn armChain4(chip: *Chip, r: *Render, b: usize) void {
 
 fn statusRefresh(chip: *Chip) void {
     var s: u8 = 0;
-    if (chip.timers[0].overflow) s |= 0x40;
-    if (chip.timers[1].overflow) s |= 0x20;
-    if (s != 0) s |= 0x80;
+    if (chip.timers[0].overflow) {
+        s |= 0x40;
+    }
+    if (chip.timers[1].overflow) {
+        s |= 0x20;
+    }
+    if (s != 0) {
+        s |= 0x80;
+    }
     chip.chip_status = s;
 }
 
@@ -1243,7 +1310,9 @@ fn timerStart(chip: *Chip, t: usize) void {
     tm.running = true;
     const rate: u64 = @intCast(chip.int_samplerate);
     tm.period = ((@as(u64, 256 - @as(u64, tm.counter)) * timer_scale_us[t] * rate) << 16) / 1000000;
-    if (tm.period == 0) tm.period = 1;
+    if (tm.period == 0) {
+        tm.period = 1;
+    }
     tm.expiry = (chip.chip_frames << 16) + tm.period;
 }
 
@@ -1253,7 +1322,9 @@ fn timersUpdate(chip: *Chip) void {
         if (tm.running and now >= tm.expiry) {
             const k = (now - tm.expiry) / tm.period + 1;
             tm.expiry += k * tm.period;
-            if (!tm.masked) tm.overflow = true;
+            if (!tm.masked) {
+                tm.overflow = true;
+            }
         }
     }
     statusRefresh(chip);
@@ -1269,12 +1340,24 @@ fn timerWrite(chip: *Chip, reg: usize, val: u8) void {
                 chip.timers[0].overflow = false;
                 chip.timers[1].overflow = false;
             } else {
-                if ((val & 0x01) != 0) timerStart(chip, 0) else chip.timers[0].running = false;
+                if ((val & 0x01) != 0) {
+                    timerStart(chip, 0);
+                } else {
+                    chip.timers[0].running = false;
+                }
                 chip.timers[0].masked = (val & 0x40) != 0;
-                if (chip.timers[0].masked) chip.timers[0].overflow = false;
-                if ((val & 0x02) != 0) timerStart(chip, 1) else chip.timers[1].running = false;
+                if (chip.timers[0].masked) {
+                    chip.timers[0].overflow = false;
+                }
+                if ((val & 0x02) != 0) {
+                    timerStart(chip, 1);
+                } else {
+                    chip.timers[1].running = false;
+                }
                 chip.timers[1].masked = (val & 0x20) != 0;
-                if (chip.timers[1].masked) chip.timers[1].overflow = false;
+                if (chip.timers[1].masked) {
+                    chip.timers[1].overflow = false;
+                }
             }
         },
         else => {},
@@ -1312,7 +1395,9 @@ test "a fresh chip is silent and its tables are built" {
     var chip = init(44100);
     var out: [128]i16 = undefined;
     render(&chip, &out);
-    for (out) |s| try testing.expectEqual(@as(i16, 0), s);
+    for (out) |s| {
+        try testing.expectEqual(@as(i16, 0), s);
+    }
     // The waveform table is a sine with the value 16384 at a quarter turn.
     try testing.expectEqual(@as(i16, 16384), chip.wavtable[waveprec + (waveprec >> 2)]);
     try testing.expect(chip.generator_add > 0);
@@ -1342,32 +1427,48 @@ test "pow2 is pow with a base known only at run time, to the bit" {
     // Every exponent of the handlers: the volumes in eighths, the sustain levels in halves, the
     // tremolo tables, and the decay and release rates at the rates that an output can have.
     var eighths: i32 = -8 * 64;
-    while (eighths <= 8 * 64) : (eighths += 1) try Check.same(
-        base,
-        @as(f64, @floatFromInt(eighths)) / 8.0,
-    );
-    for (0..64) |tl| for (kslmul) |m| for (0..64) |level| {
-        const vol_in = @as(f64, @floatFromInt(tl)) + m * @as(f64, @floatFromInt(level));
-        try Check.same(base, vol_in * -0.125 - 14);
-    };
-    for (0..15) |level| try Check.same(base, @as(f64, @floatFromInt(level)) * -0.5);
+    while (eighths <= 8 * 64) : (eighths += 1) {
+        try Check.same(base, @as(f64, @floatFromInt(eighths)) / 8.0);
+    }
+    for (0..64) |tl| {
+        for (kslmul) |m| {
+            for (0..64) |level| {
+                const vol_in = @as(f64, @floatFromInt(tl)) + m * @as(f64, @floatFromInt(level));
+                try Check.same(base, vol_in * -0.125 - 14);
+            }
+        }
+    }
+    for (0..15) |level| {
+        try Check.same(base, @as(f64, @floatFromInt(level)) * -0.5);
+    }
     for (0..tremtab_size) |n| {
-        const t: i32 = if (n < 14) @as(i32, @intCast(n)) - 13 else if (n < 41) -@as(i32, @intCast(n)) + 14 else @as(i32, @intCast(n)) - 66;
+        const t: i32 = if (n < 14)
+            @as(i32, @intCast(n)) - 13
+        else if (n < 41)
+            -@as(i32, @intCast(n)) + 14
+        else
+            @as(i32, @intCast(n)) - 66;
         try Check.same(base, @as(f64, @floatFromInt(t)) * 4.8 / 26.0 / 6.0);
         try Check.same(base, @as(f64, @floatFromInt(@divTrunc(t, 4))) * 1.2 / 6.0 / 6.0);
     }
     for ([_]u32{ 8000, 11025, 22050, 32000, 44100, 48000, 88200, 96000, 192000 }) |rate| {
         const recipsamp = 1.0 / @as(f64, @floatFromInt(rate));
-        for (decrelconst) |c| for (0..24) |k| {
-            const f = -7.4493 * c * recipsamp;
-            try Check.same(base, f * pow2(@floatFromInt(k)));
-        };
+        for (decrelconst) |c| {
+            for (0..24) |k| {
+                const f = -7.4493 * c * recipsamp;
+                try Check.same(base, f * pow2(@floatFromInt(k)));
+            }
+        }
     }
     // And a sweep of other values.
     var prng = std.Random.DefaultPrng.init(0x5eed_0f_2);
     const random = prng.random();
-    for (0..200_000) |_| try Check.same(base, (random.float(f64) - 0.5) * 128.0);
-    for (0..20_000) |_| try Check.same(base, (random.float(f64) - 0.5) * 2048.0);
+    for (0..200_000) |_| {
+        try Check.same(base, (random.float(f64) - 0.5) * 128.0);
+    }
+    for (0..20_000) |_| {
+        try Check.same(base, (random.float(f64) - 0.5) * 2048.0);
+    }
 }
 
 test "a note in OPL3 mode needs a panning bit, which is the trap the oracle caught" {
@@ -1378,25 +1479,33 @@ test "a note in OPL3 mode needs a panning bit, which is the trap the oracle caug
     };
     // With no panning bit the channel reaches neither output.
     var muted = init(44100);
-    for (script) |w| write(&muted, w[0], @intCast(w[1]));
+    for (script) |w| {
+        write(&muted, w[0], @intCast(w[1]));
+    }
     write(&muted, 0xc0, 0x01);
     var out: [256]i16 = undefined;
     render(&muted, &out);
     var loud: usize = 0;
-    for (out) |s| if (s != 0) {
-        loud += 1;
-    };
+    for (out) |s| {
+        if (s != 0) {
+            loud += 1;
+        }
+    }
     try testing.expectEqual(@as(usize, 0), loud);
 
     // With both, it sounds.
     var chip = init(44100);
-    for (script) |w| write(&chip, w[0], @intCast(w[1]));
+    for (script) |w| {
+        write(&chip, w[0], @intCast(w[1]));
+    }
     write(&chip, 0xc0, 0x31);
     render(&chip, &out);
     loud = 0;
-    for (out) |s| if (s != 0) {
-        loud += 1;
-    };
+    for (out) |s| {
+        if (s != 0) {
+            loud += 1;
+        }
+    }
     try testing.expect(loud > 64);
 }
 
@@ -1431,14 +1540,19 @@ fn fnv1a(seed: u64, bytes: []const u8) u64 {
 
 const fnv_offset: u64 = 1469598103934665603;
 
-const Observation = struct { n: []const u8, v: []const u8 };
-const ValueFile = struct { observations: []Observation };
+const Observation = struct {
+    n: []const u8,
+    v: []const u8,
+};
+const ValueFile = struct {
+    observations: []Observation,
+};
 
 fn obsText(obs: []const Observation, name: []const u8) ![]const u8 {
     for (obs) |o| {
         if (!std.mem.eql(u8, o.n, name)) continue;
         const colon = std.mem.indexOfScalar(u8, o.v, ':') orelse return error.MalformedValue;
-        return o.v[colon + 1 ..];
+        return o.v[colon + 1..];
     }
     return error.MissingObservation;
 }
@@ -1493,24 +1607,24 @@ test "the translation is the same chip as the emulator it came from" {
                 10,
             );
             if (frames == 0 or frames > 4096) return error.MalformedScript;
-            const slice = buffer[0 .. frames * 2];
+            const slice = buffer[0..frames * 2];
             render(&chip, slice);
             const bytes = std.mem.sliceAsBytes(slice);
 
             var name: [48]u8 = undefined;
             try testing.expectEqual(
                 @as(u64, frames),
-                try obsNumber(obs, try std.fmt.bufPrint(&name, "render[{d}].frames", .{index})),
+                try obsNumber(obs, try std.fmt.bufPrint(&name, "render[{d}].frames", .{ index })),
             );
             var want: [16]u8 = undefined;
-            const got = try std.fmt.bufPrint(&want, "{x:0>16}", .{fnv1a(fnv_offset, bytes)});
+            const got = try std.fmt.bufPrint(&want, "{x:0>16}", .{ fnv1a(fnv_offset, bytes) });
             try testing.expectEqualStrings(
-                try obsText(obs, try std.fmt.bufPrint(&name, "render[{d}].digest", .{index})),
+                try obsText(obs, try std.fmt.bufPrint(&name, "render[{d}].digest", .{ index })),
                 got,
             );
             try testing.expectEqual(
                 @as(u64, chip.chip_status),
-                try obsNumber(obs, try std.fmt.bufPrint(&name, "render[{d}].status", .{index})),
+                try obsNumber(obs, try std.fmt.bufPrint(&name, "render[{d}].status", .{ index })),
             );
             whole = fnv1a(whole, bytes);
             index += 1;
@@ -1520,10 +1634,10 @@ test "the translation is the same chip as the emulator it came from" {
     var buf: [16]u8 = undefined;
     try testing.expectEqualStrings(
         try obsText(obs, "digest"),
-        try std.fmt.bufPrint(&buf, "{x:0>16}", .{whole}),
+        try std.fmt.bufPrint(&buf, "{x:0>16}", .{ whole }),
     );
     std.debug.print(
         "audio.opl: {d} renders of the emulator's own script reproduced sample for sample -> AGREE\n",
-        .{index},
+        .{ index },
     );
 }

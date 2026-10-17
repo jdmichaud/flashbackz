@@ -11,14 +11,15 @@ pub const Archive = struct {
     count: u8,
 
     pub fn init(bytes: []const u8) !Archive {
-        if (bytes.len == 0 or bytes[0] == 0 or @as(usize, bytes[0]) * 6 > bytes.len)
+        if (bytes.len == 0 or bytes[0] == 0 or @as(usize, bytes[0]) * 6 > bytes.len) {
             return error.InvalidArtBankDirectory;
+        }
         return .{ .bytes = bytes, .count = bytes[0] };
     }
 
     pub fn decode(self: Archive, allocator: std.mem.Allocator, index: u8) ![]u8 {
         if (index >= self.count) return error.MissingArtBank;
-        const entry = self.bytes[@as(usize, index) * 6 ..][0..6];
+        const entry = self.bytes[@as(usize, index) * 6..][0..6];
         // The high half of the first offset carries archive metadata in this DOS format.
         const offset: usize = std.mem.readInt(u16, entry[2..4], .big);
         const units = std.mem.readInt(u16, entry[4..6], .big);
@@ -92,5 +93,7 @@ test "packed banks end at their offset and may follow an unrelated packet" {
     const decoded = try archive.decode(std.testing.allocator, 0);
     defer std.testing.allocator.free(decoded);
     try std.testing.expectEqual(@as(usize, 32), decoded.len);
-    for (decoded, 0..) |value, i| try std.testing.expectEqual(@as(u8, @intCast(i)), value);
+    for (decoded, 0..) |value, i| {
+        try std.testing.expectEqual(@as(u8, @intCast(i)), value);
+    }
 }

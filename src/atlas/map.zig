@@ -84,24 +84,34 @@ pub fn owned(links: *const Links, mine: RoomSet, theirs: ?RoomSet) RoomSet {
     var unclaimed = links.present.differenceWith(result).differenceWith(other);
     var free = unclaimed.iterator(.{});
     while (free.next()) |room| {
-        if (touches(links, @intCast(room), result)) result.set(room);
+        if (touches(links, @intCast(room), result)) {
+            result.set(room);
+        }
     }
     var both = shared.iterator(.{});
     while (both.next()) |room| {
-        if (!touches(links, @intCast(room), result)) result.unset(room);
+        if (!touches(links, @intCast(room), result)) {
+            result.unset(room);
+        }
     }
     return result;
 }
 
 fn touches(links: *const Links, room: u8, rooms: RoomSet) bool {
     for (std.enums.values(Side)) |side| {
-        if (links.neighbor(room, side)) |next| if (rooms.isSet(next)) return true;
+        if (links.neighbor(room, side)) |next| {
+            if (rooms.isSet(next)) return true;
+        }
     }
     return false;
 }
 
 /// A room's piece and its cell in the piece, counted from the piece's top-left room.
-pub const Cell = struct { piece: u8, x: i16, y: i16 };
+pub const Cell = struct {
+    piece: u8,
+    x: i16,
+    y: i16,
+};
 
 /// The rooms laid out as pieces: each piece is flat, its rooms where their links put them (or
 /// beside a transport's room, `rideBeside`).
@@ -135,7 +145,9 @@ pub const Map = struct {
             for (self.cells) |staying_cell| {
                 const staying = staying_cell orelse continue;
                 if (staying.piece != a.piece) continue;
-                if (@abs(moving.x + dx - staying.x) <= 1 and @abs(moving.y + dy - staying.y) <= 1) return false;
+                if (@abs(moving.x + dx - staying.x) <= 1 and @abs(moving.y + dy - staying.y) <= 1) {
+                    return false;
+                }
             }
         }
         const kept = @min(a.piece, b.piece);
@@ -153,7 +165,9 @@ pub const Map = struct {
                 }
             }
         }
-        for (gone..self.piece_count - 1) |piece| self.sizes[piece] = self.sizes[piece + 1];
+        for (gone..self.piece_count - 1) |piece| {
+            self.sizes[piece] = self.sizes[piece + 1];
+        }
         self.piece_count -= 1;
         self.settle(kept);
         return true;
@@ -174,10 +188,12 @@ pub const Map = struct {
             max_y = @max(max_y, cell.y);
         }
         for (&self.cells) |*slot| {
-            if (slot.*) |*cell| if (cell.piece == piece) {
-                cell.x -= min_x;
-                cell.y -= min_y;
-            };
+            if (slot.*) |*cell| {
+                if (cell.piece == piece) {
+                    cell.x -= min_x;
+                    cell.y -= min_y;
+                }
+            }
         }
         self.sizes[piece] = .{ .w = max_x - min_x + 1, .h = max_y - min_y + 1 };
     }
@@ -246,15 +262,19 @@ pub fn seam(pixels: *const Pixels, room: u8, side: Side, to: u8) ?f32 {
     var count: u32 = 0;
     switch (side) {
         .right, .left => for (0..room_height) |y| {
-            const a = first[(y * room_width + room_width - 1) * 3 ..][0..3];
-            const b = second[(y * room_width) * 3 ..][0..3];
-            for (a, b) |p, q| total += @abs(@as(i16, p) - q);
+            const a = first[(y * room_width + room_width - 1) * 3..][0..3];
+            const b = second[(y * room_width) * 3..][0..3];
+            for (a, b) |p, q| {
+                total += @abs(@as(i16, p) - q);
+            }
             count += 3;
         },
         .down, .up => for (0..room_height - room_pitch) |y| {
-            const a = first[(room_pitch + y) * room_width * 3 ..][0 .. room_width * 3];
-            const b = second[y * room_width * 3 ..][0 .. room_width * 3];
-            for (a, b) |p, q| total += @abs(@as(i16, p) - q);
+            const a = first[(room_pitch + y) * room_width * 3..][0..room_width * 3];
+            const b = second[y * room_width * 3..][0..room_width * 3];
+            for (a, b) |p, q| {
+                total += @abs(@as(i16, p) - q);
+            }
             count += room_width * 3;
         },
     }
@@ -282,7 +302,9 @@ pub const Line = struct {
             const room: u8 = @intCast(index);
             for (std.enums.values(Side)) |side| {
                 const next = links.neighbor(room, side) orelse continue;
-                if (self.has(room) or self.has(next)) result[room][@backingInt(side)] = true;
+                if (self.has(room) or self.has(next)) {
+                    result[room][@backingInt(side)] = true;
+                }
             }
         }
         return result;
@@ -303,7 +325,8 @@ pub fn transitLine(links: *const Links, rooms: RoomSet, pixels: *const Pixels) ?
         const length = findRing(links, rooms, @intCast(index), .right, &ring) orelse continue;
         const members = ring[0..length];
         const breaks = for (members, 0..) |room, i| {
-            const break_size = seam(pixels, room, .right, members[(i + 1) % length]) orelse break false;
+            const break_size = seam(pixels, room, .right, members[(i + 1) % length]) orelse
+                break false;
             if (break_size <= usual) break false;
         } else true;
         if (!breaks or !separates(links, rooms, members, .right)) continue;
@@ -312,7 +335,9 @@ pub fn transitLine(links: *const Links, rooms: RoomSet, pixels: *const Pixels) ?
             line.stations[i] = station;
             line.above[i] = null;
             if (links.neighbor(station, .up)) |room| {
-                if (rooms.isSet(room) and std.mem.indexOfScalar(u8, members, room) == null) line.above[i] = room;
+                if (rooms.isSet(room) and std.mem.indexOfScalar(u8, members, room) == null) {
+                    line.above[i] = room;
+                }
             }
         }
         return line;
@@ -321,13 +346,21 @@ pub fn transitLine(links: *const Links, rooms: RoomSet, pixels: *const Pixels) ?
 }
 
 /// The rooms reached from `start` by following `side` until it comes back to `start`.
-fn findRing(links: *const Links, rooms: RoomSet, start: u8, side: Side, ring: *[room_count]u8) ?usize {
+fn findRing(
+    links: *const Links,
+    rooms: RoomSet,
+    start: u8,
+    side: Side,
+    ring: *[room_count]u8,
+) ?usize {
     ring[0] = start;
     var length: usize = 1;
     var room = start;
     while (links.neighbor(room, side)) |next| {
         if (next == start) return if (length >= 2) length else null;
-        if (!rooms.isSet(next) or std.mem.indexOfScalar(u8, ring[0..length], next) != null) return null;
+        if (!rooms.isSet(next) or std.mem.indexOfScalar(u8, ring[0..length], next) != null) {
+            return null;
+        }
         ring[length] = next;
         length += 1;
         room = next;
@@ -411,7 +444,11 @@ fn ringLink(ring: []const u8, side: Side, from: u8, s: Side, to: u8) bool {
 }
 
 /// A place in a room, in the room's pixels.
-pub const Spot = struct { room: u8, x: i16, y: i16 };
+pub const Spot = struct {
+    room: u8,
+    x: i16,
+    y: i16,
+};
 
 /// A join the flat map cannot show: a link between two rooms that are not side by side on it,
 /// or a transport from one room to another.
@@ -451,10 +488,16 @@ pub fn transports(
 ) !void {
     for (level.characters) |character| {
         const behavior = level.behaviors[character.behavior];
-        for (behavior.states) |state| for (state.rules) |rule| {
-            for (rule.when) |operation| try addTransport(allocator, level, map, character, behavior, operation, joins);
-            if (rule.then) |operation| try addTransport(allocator, level, map, character, behavior, operation, joins);
-        };
+        for (behavior.states) |state| {
+            for (state.rules) |rule| {
+                for (rule.when) |operation| {
+                    try addTransport(allocator, level, map, character, behavior, operation, joins);
+                }
+                if (rule.then) |operation| {
+                    try addTransport(allocator, level, map, character, behavior, operation, joins);
+                }
+            }
+        }
     }
 }
 
@@ -481,27 +524,35 @@ fn addTransport(
     if (from_room == to_room) return;
     if (from_room >= room_count or to_room >= room_count) return;
     if (map.cells[from_room] == null or map.cells[to_room] == null) return;
-    for (joins.items) |join| switch (join) {
-        .transport => |t| if (t.from.room == from_room and t.to.room == to_room) return,
-        .link => {},
-    };
-    try joins.append(allocator, .{ .transport = .{
-        .from = .{ .room = from_room, .x = character.x, .y = character.y },
-        .to = .{ .room = to_room, .x = destination.x, .y = destination.y },
-    } });
+    for (joins.items) |join| {
+        switch (join) {
+            .transport => |t| if (t.from.room == from_room and t.to.room == to_room) return,
+            .link => {},
+        }
+    }
+    try joins.append(allocator, .{
+        .transport = .{
+            .from = .{ .room = from_room, .x = character.x, .y = character.y },
+            .to = .{ .room = to_room, .x = destination.x, .y = destination.y },
+        },
+    });
 }
 
 /// The room a character outside the world reveals itself in: `reveal` names it by number.
 fn revealRoom(behavior: vocabulary.Behavior, character: data_set.Character) ?u8 {
-    for (behavior.states) |state| for (state.rules) |rule| {
-        if (rule.then) |operation| switch (operation) {
-            .reveal => |number| {
-                const room = character.numbers[@backingInt(number)];
-                if (room >= 0 and room < room_count) return @intCast(room);
-            },
-            else => {},
-        };
-    };
+    for (behavior.states) |state| {
+        for (state.rules) |rule| {
+            if (rule.then) |operation| {
+                switch (operation) {
+                    .reveal => |number| {
+                        const room = character.numbers[@backingInt(number)];
+                        if (room >= 0 and room < room_count) return @intCast(room);
+                    },
+                    else => {},
+                }
+            }
+        }
+    }
     return null;
 }
 
@@ -510,15 +561,25 @@ const no_skips: Skipped = @splat(@splat(false));
 fn testLinks(comptime rows: []const []const u8) Links {
     // A letter per room on a grid of cells; neighbors are the letters beside each other.
     var links: Links = .{ .present = .empty, .neighbors = @splat(@splat(null)) };
-    for (rows, 0..) |row, y| for (row, 0..) |c, x| {
-        if (c == '.') continue;
-        const room = c - 'a';
-        links.present.set(room);
-        if (y > 0 and x < rows[y - 1].len and rows[y - 1][x] != '.') links.neighbors[room][0] = rows[y - 1][x] - 'a';
-        if (y + 1 < rows.len and x < rows[y + 1].len and rows[y + 1][x] != '.') links.neighbors[room][1] = rows[y + 1][x] - 'a';
-        if (x + 1 < row.len and row[x + 1] != '.') links.neighbors[room][2] = row[x + 1] - 'a';
-        if (x > 0 and row[x - 1] != '.') links.neighbors[room][3] = row[x - 1] - 'a';
-    };
+    for (rows, 0..) |row, y| {
+        for (row, 0..) |c, x| {
+            if (c == '.') continue;
+            const room = c - 'a';
+            links.present.set(room);
+            if (y > 0 and x < rows[y - 1].len and rows[y - 1][x] != '.') {
+                links.neighbors[room][0] = rows[y - 1][x] - 'a';
+            }
+            if (y + 1 < rows.len and x < rows[y + 1].len and rows[y + 1][x] != '.') {
+                links.neighbors[room][1] = rows[y + 1][x] - 'a';
+            }
+            if (x + 1 < row.len and row[x + 1] != '.') {
+                links.neighbors[room][2] = row[x + 1] - 'a';
+            }
+            if (x > 0 and row[x - 1] != '.') {
+                links.neighbors[room][3] = row[x - 1] - 'a';
+            }
+        }
+    }
     return links;
 }
 
@@ -537,7 +598,7 @@ test "a grid of linked rooms lies flat as one piece, from its start room" {
 
 test "a ring of rooms is cut once, and its wrap-around link is a join" {
     // a b c d, and d's right is a: a floor that wraps around.
-    var links = testLinks(&.{"abcd"});
+    var links = testLinks(&.{ "abcd" });
     links.neighbors[3][@backingInt(Side.right)] = 0;
     links.neighbors[0][@backingInt(Side.left)] = 3;
     const map = lay(&links, links.present, 0, &no_skips);
@@ -591,7 +652,7 @@ test "a transport's area stands beside the room the ride leaves from, a cell apa
 test "levels sharing a room file own their characters' rooms and the free rooms beside them" {
     // a b c d e: this level's characters start in a and b, the other's in d and e; c is free
     // and touches b. A shared room cut off from this level's rooms goes to the other.
-    const links = testLinks(&.{"abcde"});
+    const links = testLinks(&.{ "abcde" });
     var mine: RoomSet = .empty;
     mine.set(0);
     mine.set(1);
@@ -610,7 +671,9 @@ test "a ring of stations between districts is a transit line; a ring whose pictu
     // Two districts of three rooms in a row (2 3 4 and 5 6 7), each above a station (0 below
     // 2, 1 below 5); each station leads into the other on both sides.
     var links: Links = .{ .present = .empty, .neighbors = @splat(@splat(null)) };
-    for (0..8) |room| links.present.set(room);
+    for (0..8) |room| {
+        links.present.set(room);
+    }
     const pairs = [_]struct { u8, Side, u8 }{
         .{ 0, .right, 1 }, .{ 1, .right, 0 }, .{ 2, .down, 0 },  .{ 5, .down, 1 },
         .{ 2, .right, 3 }, .{ 3, .right, 4 }, .{ 5, .right, 6 }, .{ 6, .right, 7 },
@@ -635,7 +698,9 @@ test "a ring of stations between districts is a transit line; a ring whose pictu
     try std.testing.expectEqualSlices(u8, &.{ 0, 1 }, line.stations[0..line.len]);
     try std.testing.expectEqualSlices(?u8, &.{ 2, 5 }, line.above[0..line.len]);
     const skipped = line.skipped(&links);
-    try std.testing.expect(skipped[2][@backingInt(Side.down)] and !skipped[2][@backingInt(Side.right)]);
+    try std.testing.expect(
+        skipped[2][@backingInt(Side.down)] and !skipped[2][@backingInt(Side.right)],
+    );
     const map = lay(&links, links.present, 2, &skipped);
     try std.testing.expectEqual(@as(u8, 4), map.piece_count);
     try std.testing.expect(map.cells[0].?.piece != map.cells[2].?.piece);

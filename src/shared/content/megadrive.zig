@@ -58,7 +58,9 @@ pub const Tunes = struct {
         const effects = 0x163CAC;
         const note_table = 0x179D08;
         var result: Tunes = .{ .allocator = allocator, .tunes = undefined, .pitches = undefined };
-        for (&result.pitches, 0..) |*pitch, i| pitch.* = try word(bytes, note_table + 2 * i);
+        for (&result.pitches, 0..) |*pitch, i| {
+            pitch.* = try word(bytes, note_table + 2 * i);
+        }
         var done: usize = 0;
         errdefer for (result.tunes[0..done]) |tune| allocator.free(tune.rows);
         for (&result.tunes, 0..) |*tune, i| {
@@ -74,7 +76,7 @@ pub const Tunes = struct {
             if (rows_end > bytes.len) return error.InvalidCartridge;
             const rows = try allocator.alloc(Row, row_count);
             for (rows, 0..) |*row, r| {
-                row.* = bytes[rows_at + r * @sizeOf(Row) ..][0..@sizeOf(Row)].*;
+                row.* = bytes[rows_at + r * @sizeOf(Row)..][0..@sizeOf(Row)].*;
             }
             tune.* = .{
                 .rows = rows,
@@ -94,18 +96,20 @@ pub const Tunes = struct {
     }
 
     pub fn deinit(self: *Tunes) void {
-        for (self.tunes) |tune| self.allocator.free(tune.rows);
+        for (self.tunes) |tune| {
+            self.allocator.free(tune.rows);
+        }
         self.* = undefined;
     }
 
-    fn word(bytes: []const u8, at: usize) error{InvalidCartridge}!u16 {
+    fn word(bytes: []const u8, at: usize) error{ InvalidCartridge }!u16 {
         if (at + 2 > bytes.len) return error.InvalidCartridge;
         return std.mem.readInt(u16, bytes[at..][0..2], .big);
     }
 
     /// A cartridge address: a 32-bit word, widened so that the offsets added to it cannot
     /// overflow.
-    fn long(bytes: []const u8, at: usize) error{InvalidCartridge}!usize {
+    fn long(bytes: []const u8, at: usize) error{ InvalidCartridge }!usize {
         if (at + 4 > bytes.len) return error.InvalidCartridge;
         return std.mem.readInt(u32, bytes[at..][0..4], .big);
     }

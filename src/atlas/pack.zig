@@ -5,15 +5,34 @@
 //! narrowest. A level with a transit line is placed along it instead (`line`).
 const std = @import("std");
 
-pub const Rect = struct { x: i32, y: i32, w: i32, h: i32 };
-pub const Point = struct { x: i32, y: i32 };
-pub const Size = struct { w: i32, h: i32 };
+pub const Rect = struct {
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+};
+pub const Point = struct {
+    x: i32,
+    y: i32,
+};
+pub const Size = struct {
+    w: i32,
+    h: i32,
+};
 
 /// A piece: its rooms' rectangles from its own origin, and its size.
-pub const Piece = struct { rooms: []const Rect, size: Size };
+pub const Piece = struct {
+    rooms: []const Rect,
+    size: Size,
+};
 
 /// Two points of two pieces that belong near each other, each from its piece's origin.
-pub const Tie = struct { a: usize, a_at: Point, b: usize, b_at: Point };
+pub const Tie = struct {
+    a: usize,
+    a_at: Point,
+    b: usize,
+    b_at: Point,
+};
 
 /// Candidate positions are this far apart, across and down.
 const step_x = 128;
@@ -26,15 +45,27 @@ pub fn pack(pieces: []const Piece, ties: []const Tie, limit: i32, gap: i32, orig
     if (pieces.len == 0) return .{ .w = 0, .h = 0 };
     var order_buffer: [64]usize = undefined;
     const order = order_buffer[0..pieces.len];
-    for (order, 0..) |*o, i| o.* = i;
-    std.sort.insertion(usize, order, pieces, struct {
-        fn larger(p: []const Piece, a: usize, b: usize) bool {
-            return p[a].rooms.len > p[b].rooms.len;
-        }
-    }.larger);
+    for (order, 0..) |*o, i| {
+        o.* = i;
+    }
+    std.sort.insertion(
+        usize,
+        order,
+        pieces,
+        struct {
+            fn larger(p: []const Piece, a: usize, b: usize) bool {
+                return p[a].rooms.len > p[b].rooms.len;
+            }
+        }.larger,
+    );
 
     var placed: [64]bool = @splat(false);
-    var bounds: Rect = .{ .x = 0, .y = 0, .w = pieces[order[0]].size.w, .h = pieces[order[0]].size.h };
+    var bounds: Rect = .{
+        .x = 0,
+        .y = 0,
+        .w = pieces[order[0]].size.w,
+        .h = pieces[order[0]].size.h,
+    };
     origins[order[0]] = .{ .x = 0, .y = 0 };
     placed[order[0]] = true;
     for (order[1..], 1..) |index, placed_count| {
@@ -45,11 +76,15 @@ pub fn pack(pieces: []const Piece, ties: []const Tie, limit: i32, gap: i32, orig
             var x: i32 = 0;
             while (x == 0 or x + size.w <= limit) : (x += step_x) {
                 const at: Point = .{ .x = x, .y = y };
-                if (collides(pieces, origins, order[0..placed_count], pieces[index], at, gap)) continue;
+                if (collides(pieces, origins, order[0..placed_count], pieces[index], at, gap)) {
+                    continue;
+                }
                 const grown = merge(bounds, .{ .x = x, .y = y, .w = size.w, .h = size.h });
                 const distance = tieDistance(ties, origins, &placed, index, at);
                 const key = [5]i64{ grown.h, distance, grown.w, @abs(y), x };
-                if (best == null or std.mem.order(i64, &key, &best.?.key) == .lt) best = .{ .key = key, .at = at };
+                if (best == null or std.mem.order(i64, &key, &best.?.key) == .lt) {
+                    best = .{ .key = key, .at = at };
+                }
             }
         }
         // Below everything, a piece is always free.
@@ -82,7 +117,13 @@ pub const Stop = struct {
 /// district's room to its station: districts close in, a district rising only where that saves
 /// more width than height. The other pieces go below, each under the piece it is tied to where
 /// it can. Sets `origins` and returns the block's size.
-pub fn line(pieces: []const Piece, stops: []const Stop, ties: []const Tie, gap: i32, origins: []Point) Size {
+pub fn line(
+    pieces: []const Piece,
+    stops: []const Stop,
+    ties: []const Tie,
+    gap: i32,
+    origins: []Point,
+) Size {
     std.debug.assert(origins.len == pieces.len);
     // The stations' row is y 0 until the block is moved to its top-left.
     var obstacles: [3 * 64]Obstacle = undefined;
@@ -95,7 +136,12 @@ pub fn line(pieces: []const Piece, stops: []const Stop, ties: []const Tie, gap: 
         const district = stop.district orelse {
             origins[stop.station] = .{ .x = next_station orelse 0, .y = 0 };
             placed[stop.station] = true;
-            const rect: Rect = .{ .x = origins[stop.station].x, .y = 0, .w = station.w, .h = station.h };
+            const rect: Rect = .{
+                .x = origins[stop.station].x,
+                .y = 0,
+                .w = station.w,
+                .h = station.h,
+            };
             obstacles[obstacle_count] = .{ .rect = rect, .way = false };
             obstacle_count += 1;
             bounds = if (bounds) |b| merge(b, rect) else rect;
@@ -104,7 +150,12 @@ pub fn line(pieces: []const Piece, stops: []const Stop, ties: []const Tie, gap: 
         };
         const piece = pieces[district.piece];
         if (!placed[district.piece]) {
-            const below: Rect = .{ .x = district.below.x, .y = district.below.y, .w = station.w, .h = station.h };
+            const below: Rect = .{
+                .x = district.below.x,
+                .y = district.below.y,
+                .w = station.w,
+                .h = station.h,
+            };
             const touching = for (piece.rooms) |room| {
                 if (std.meta.eql(room, district.room)) continue;
                 if (near(room, below, gap)) break false;
@@ -114,8 +165,9 @@ pub fn line(pieces: []const Piece, stops: []const Stop, ties: []const Tie, gap: 
             var lowest = -below.y;
             if (!touching) {
                 for (piece.rooms) |room| {
-                    if (room.x < below.x + below.w + gap and below.x < room.x + room.w + gap)
+                    if (room.x < below.x + below.w + gap and below.x < room.x + room.w + gap) {
                         lowest = @min(lowest, -(room.y + room.h + gap));
+                    }
                 }
             }
             const placement: Placement = .{
@@ -138,9 +190,14 @@ pub fn line(pieces: []const Piece, stops: []const Stop, ties: []const Tie, gap: 
                         if (placement.hits(obstacles[0..obstacle_count], candidate)) {
                             if (touching) break else continue;
                         }
-                        const grown = merge(merge(b, placement.extent(candidate)), placement.station(candidate));
+                        const grown = merge(
+                            merge(b, placement.extent(candidate)),
+                            placement.station(candidate),
+                        );
                         const key = [3]i64{ grown.w + grown.h, lowest - y, x };
-                        if (best == null or std.mem.order(i64, &key, &best.?.key) == .lt) best = .{ .key = key, .at = candidate };
+                        if (best == null or std.mem.order(i64, &key, &best.?.key) == .lt) {
+                            best = .{ .key = key, .at = candidate };
+                        }
                         if (touching) break;
                     }
                 }
@@ -185,7 +242,10 @@ pub fn line(pieces: []const Piece, stops: []const Stop, ties: []const Tie, gap: 
             else
                 continue;
             if (!placed[other]) continue;
-            x = @max(left, @min(origins[other].x + there.x - here.x, block.x + block.w - piece.size.w));
+            x = @max(
+                left,
+                @min(origins[other].x + there.x - here.x, block.x + block.w - piece.size.w),
+            );
             break;
         }
         origins[index] = .{ .x = x, .y = top };
@@ -201,7 +261,10 @@ pub fn line(pieces: []const Piece, stops: []const Stop, ties: []const Tie, gap: 
 }
 
 /// A placed room or station, or the way down to a station, in the block.
-const Obstacle = struct { rect: Rect, way: bool };
+const Obstacle = struct {
+    rect: Rect,
+    way: bool,
+};
 
 /// A district being placed over its station.
 const Placement = struct {
@@ -231,9 +294,16 @@ const Placement = struct {
         const station_rect = self.station(at);
         const way_rect = self.way(at);
         for (obstacles) |obstacle| {
-            for (self.piece.rooms) |room| if (near(moved(room, at), obstacle.rect, self.gap)) return true;
+            for (self.piece.rooms) |room| {
+                if (near(moved(room, at), obstacle.rect, self.gap)) return true;
+            }
             if (near(station_rect, obstacle.rect, self.gap)) return true;
-            if (!self.touching and !obstacle.way and way_rect.h > 0 and near(way_rect, obstacle.rect, self.gap)) return true;
+            if (!self.touching and
+                !obstacle.way and
+                way_rect.h > 0 and
+                near(way_rect, obstacle.rect, self.gap)) {
+                return true;
+            }
         }
         return false;
     }
@@ -258,20 +328,30 @@ fn collides(
 ) bool {
     for (placed) |other| {
         const o = origins[other];
-        for (pieces[other].rooms) |b| for (piece.rooms) |a| {
-            const ax = a.x + at.x;
-            const ay = a.y + at.y;
-            const bx = b.x + o.x;
-            const by = b.y + o.y;
-            if (ax < bx + b.w + gap and bx < ax + a.w + gap and
-                ay < by + b.h + gap and by < ay + a.h + gap) return true;
-        };
+        for (pieces[other].rooms) |b| {
+            for (piece.rooms) |a| {
+                const ax = a.x + at.x;
+                const ay = a.y + at.y;
+                const bx = b.x + o.x;
+                const by = b.y + o.y;
+                if (ax < bx + b.w + gap and bx < ax + a.w + gap and
+                    ay < by + b.h + gap and by < ay + a.h + gap) {
+                    return true;
+                }
+            }
+        }
     }
     return false;
 }
 
 /// How far piece `index`, at `at`, lies from the placed pieces it is tied to.
-fn tieDistance(ties: []const Tie, origins: []const Point, placed: []const bool, index: usize, at: Point) i64 {
+fn tieDistance(
+    ties: []const Tie,
+    origins: []const Point,
+    placed: []const bool,
+    index: usize,
+    at: Point,
+) i64 {
     var total: i64 = 0;
     for (ties) |tie| {
         const here, const there, const other = if (tie.a == index)
@@ -281,7 +361,8 @@ fn tieDistance(ties: []const Tie, origins: []const Point, placed: []const bool, 
         else
             continue;
         if (!placed[other]) continue;
-        total += @abs(at.x + here.x - origins[other].x - there.x) + @abs(at.y + here.y - origins[other].y - there.y);
+        total += @abs(at.x + here.x - origins[other].x - there.x) +
+            @abs(at.y + here.y - origins[other].y - there.y);
     }
     return total;
 }
@@ -289,7 +370,12 @@ fn tieDistance(ties: []const Tie, origins: []const Point, placed: []const bool, 
 fn merge(a: Rect, b: Rect) Rect {
     const x = @min(a.x, b.x);
     const y = @min(a.y, b.y);
-    return .{ .x = x, .y = y, .w = @max(a.x + a.w, b.x + b.w) - x, .h = @max(a.y + a.h, b.y + b.h) - y };
+    return .{
+        .x = x,
+        .y = y,
+        .w = @max(a.x + a.w, b.x + b.w) - x,
+        .h = @max(a.y + a.h, b.y + b.h) - y,
+    };
 }
 
 test "a small piece nests in a large piece's empty corner, a gap away from its rooms" {
@@ -320,7 +406,10 @@ test "a small piece nests in a large piece's empty corner, a gap away from its r
         const ay = a.y + origins[0].y;
         const bx = b.x + origins[1].x;
         const by = b.y + origins[1].y;
-        const apart = ax >= bx + b.w + 160 or bx >= ax + a.w + 160 or ay >= by + b.h + 160 or by >= ay + a.h + 160;
+        const apart = ax >= bx + b.w + 160 or
+            bx >= ax + a.w + 160 or
+            ay >= by + b.h + 160 or
+            by >= ay + a.h + 160;
         try std.testing.expect(apart);
     }
 }
@@ -337,7 +426,12 @@ test "among places as small, a piece goes nearest the piece it is tied to" {
     var origins: [2]Point = undefined;
     _ = pack(&pieces, &.{}, 1024, 64, &origins);
     try std.testing.expectEqual(@as(i32, 0), origins[1].x);
-    const ties = [_]Tie{.{ .a = 0, .a_at = .{ .x = 1024, .y = 112 }, .b = 1, .b_at = .{ .x = 128, .y = 0 } }};
+    const ties = [_]Tie{.{
+        .a = 0,
+        .a_at = .{ .x = 1024, .y = 112 },
+        .b = 1,
+        .b_at = .{ .x = 128, .y = 0 },
+    }};
     _ = pack(&pieces, &ties, 1024, 64, &origins);
     try std.testing.expectEqual(@as(i32, 768), origins[1].x);
 }
@@ -357,10 +451,21 @@ test "along a line, a station clear under its room touches it, and the others sh
         .{ .rooms = &one, .size = .{ .w = 256, .h = 224 } },
     };
     const stops = [_]Stop{
-        .{ .station = 2, .district = .{ .piece = 0, .room = one[0], .below = .{ .x = 0, .y = 216 } } },
-        .{ .station = 3, .district = .{ .piece = 1, .room = one[0], .below = .{ .x = 0, .y = 216 } } },
+        .{
+            .station = 2,
+            .district = .{ .piece = 0, .room = one[0], .below = .{ .x = 0, .y = 216 } },
+        },
+        .{
+            .station = 3,
+            .district = .{ .piece = 1, .room = one[0], .below = .{ .x = 0, .y = 216 } },
+        },
     };
-    const ties = [_]Tie{.{ .a = 4, .a_at = .{ .x = 0, .y = 0 }, .b = 1, .b_at = .{ .x = 0, .y = 0 } }};
+    const ties = [_]Tie{.{
+        .a = 4,
+        .a_at = .{ .x = 0, .y = 0 },
+        .b = 1,
+        .b_at = .{ .x = 0, .y = 0 },
+    }};
     var origins: [5]Point = undefined;
     const size = line(&pieces, &stops, &ties, gap, &origins);
 
@@ -371,6 +476,9 @@ test "along a line, a station clear under its room touches it, and the others sh
     // The second district as near the first as its station allows.
     try std.testing.expectEqual(origins[2].x + 256 + gap, origins[3].x);
     // The piece off the line, under the district it is tied to, below everything.
-    try std.testing.expectEqual(Point{ .x = origins[1].x, .y = origins[3].y + 224 + 2 * gap }, origins[4]);
+    try std.testing.expectEqual(
+        Point{ .x = origins[1].x, .y = origins[3].y + 224 + 2 * gap },
+        origins[4],
+    );
     try std.testing.expectEqual(Size{ .w = 2 * 256 + gap, .h = origins[4].y + 224 }, size);
 }

@@ -22,9 +22,13 @@ pub fn draw(
     style: Style,
 ) !void {
     if (pixels.len != @as(usize, width) * height) return error.InvalidFrameLength;
-    if (style.occlusion) |mask| if (mask.len != pixels.len) return error.InvalidOcclusionMask;
+    if (style.occlusion) |mask| {
+        if (mask.len != pixels.len) return error.InvalidOcclusionMask;
+    }
     const image = &frame.image;
-    if (image.pixels.len != @as(usize, image.width) * image.height) return error.InvalidSpriteLength;
+    if (image.pixels.len != @as(usize, image.width) * image.height) {
+        return error.InvalidSpriteLength;
+    }
     const left: i64 = switch (style.facing) {
         .original => @as(i64, x) - frame.origin_x,
         .mirrored => @as(i64, x) + frame.origin_x - image.width,
@@ -45,9 +49,13 @@ pub fn draw(
             if (frame.color_bits == .local4 and color > 15) return error.InvalidSpriteColor;
             const offset = dy * width + dx;
             const target = &pixels[offset];
-            if (style.foreground == .respect) if (style.occlusion) |mask| if (mask[offset]) {
-                continue;
-            };
+            if (style.foreground == .respect) {
+                if (style.occlusion) |mask| {
+                    if (mask[offset]) {
+                        continue;
+                    }
+                }
+            }
             target.* = (@as(u8, style.palette_bank) << 4) | color;
         }
     }
@@ -90,6 +98,6 @@ test "direct sprite bytes retain full color bits and are bounded before drawing"
     try std.testing.expectEqualSlices(u8, &.{ 0xf3, 7, 0x5f }, &page);
     try std.testing.expectError(
         error.TruncatedSprite,
-        sprites.decode(std.testing.allocator, record[0 .. record.len - 1]),
+        sprites.decode(std.testing.allocator, record[0..record.len - 1]),
     );
 }

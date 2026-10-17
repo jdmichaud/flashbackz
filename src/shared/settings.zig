@@ -87,14 +87,19 @@ pub const PadLayout = struct {
         const own = self.place(action) orelse return;
         for (actions) |other| {
             const other_place = self.place(other).?;
-            if (other != action and other_place.* == button) other_place.* = own.*;
+            if (other != action and other_place.* == button) {
+                other_place.* = own.*;
+            }
         }
         own.* = button;
     }
 };
 
 /// A pad model's layout, by its GUID.
-pub const PadModel = struct { guid: [32]u8, layout: PadLayout };
+pub const PadModel = struct {
+    guid: [32]u8,
+    layout: PadLayout,
+};
 pub const max_pad_models = 8;
 
 pub const Settings = struct {
@@ -112,9 +117,11 @@ pub const Settings = struct {
 
     /// The layout of pad model `guid`.
     pub fn padLayout(self: *const Settings, guid: [32]u8) PadLayout {
-        for (self.pads) |entry| if (entry) |model| {
-            if (std.mem.eql(u8, &model.guid, &guid)) return model.layout;
-        };
+        for (self.pads) |entry| {
+            if (entry) |model| {
+                if (std.mem.eql(u8, &model.guid, &guid)) return model.layout;
+            }
+        }
         return .{};
     }
 
@@ -123,14 +130,16 @@ pub const Settings = struct {
     pub fn setPadLayout(self: *Settings, guid: [32]u8, layout: PadLayout) void {
         var kept: [max_pad_models]?PadModel = @splat(null);
         var count: usize = 0;
-        for (self.pads) |entry| if (entry) |model| {
-            if (std.mem.eql(u8, &model.guid, &guid)) continue;
-            kept[count] = model;
-            count += 1;
-        };
+        for (self.pads) |entry| {
+            if (entry) |model| {
+                if (std.mem.eql(u8, &model.guid, &guid)) continue;
+                kept[count] = model;
+                count += 1;
+            }
+        }
         if (!std.meta.eql(layout, PadLayout{})) {
             if (count == max_pad_models) {
-                std.mem.copyForwards(?PadModel, kept[0 .. max_pad_models - 1], kept[1..]);
+                std.mem.copyForwards(?PadModel, kept[0..max_pad_models - 1], kept[1..]);
                 count -= 1;
             }
             kept[count] = .{ .guid = guid, .layout = layout };
@@ -184,18 +193,20 @@ fn encode(settings: Settings, buffer: *[max_record]u8) []const u8 {
     var writer: std.Io.Writer = .fixed(buffer);
     var pads: [max_pad_models]RecordPad = undefined;
     var count: usize = 0;
-    for (&settings.pads) |*entry| if (entry.*) |*model| {
-        const layout = model.layout;
-        pads[count] = .{
-            .model = &model.guid,
-            .act = layout.act,
-            .gun = layout.gun,
-            .use = layout.use,
-            .inventory = layout.inventory,
-            .pause = layout.pause,
-        };
-        count += 1;
-    };
+    for (&settings.pads) |*entry| {
+        if (entry.*) |*model| {
+            const layout = model.layout;
+            pads[count] = .{
+                .model = &model.guid,
+                .act = layout.act,
+                .gun = layout.gun,
+                .use = layout.use,
+                .inventory = layout.inventory,
+                .pause = layout.pause,
+            };
+            count += 1;
+        }
+    }
     const record: Record = .{
         .version = version,
         .volume = settings.volume,
@@ -224,7 +235,9 @@ fn decode(bytes: []const u8) ?Settings {
         .source = source[0..bytes.len :0],
         .diagnostics = &diagnostics,
     }) catch return null;
-    if (record.version != version or record.volume > 100 or record.pads.len > max_pad_models) return null;
+    if (record.version != version or record.volume > 100 or record.pads.len > max_pad_models) {
+        return null;
+    }
     var settings: Settings = .{
         .volume = record.volume,
         .sound_fx = record.sound_fx,
@@ -234,13 +247,16 @@ fn decode(bytes: []const u8) ?Settings {
     };
     for (record.pads, 0..) |pad, i| {
         if (pad.model.len != 32) return null;
-        settings.pads[i] = .{ .guid = pad.model[0..32].*, .layout = .{
-            .act = pad.act,
-            .gun = pad.gun,
-            .use = pad.use,
-            .inventory = pad.inventory,
-            .pause = pad.pause,
-        } };
+        settings.pads[i] = .{
+            .guid = pad.model[0..32].*,
+            .layout = .{
+                .act = pad.act,
+                .gun = pad.gun,
+                .use = pad.use,
+                .inventory = pad.inventory,
+                .pause = pad.pause,
+            },
+        };
     }
     return settings;
 }
@@ -250,7 +266,13 @@ test "settings come back as saved, and a record of another version or that does 
     defer store.deinit();
     try std.testing.expectEqual(Settings{}, load(store.storage()));
     try std.testing.expectEqual(Settings{}, load(null));
-    var chosen: Settings = .{ .volume = 40, .sound_fx = false, .music = false, .joystick = true, .zoom = .auto };
+    var chosen: Settings = .{
+        .volume = 40,
+        .sound_fx = false,
+        .music = false,
+        .joystick = true,
+        .zoom = .auto,
+    };
     var layout: PadLayout = .{};
     layout.bind(.act, .left_shoulder);
     chosen.setPadLayout(@splat('0'), layout);

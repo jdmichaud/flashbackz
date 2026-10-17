@@ -5,7 +5,10 @@ const platform = @import("../platform.zig");
 const sprite = @import("sprite.zig");
 const palette = @import("palette.zig");
 
-pub const Library = struct { name: [12]u8, colors: palette.Bank };
+pub const Library = struct {
+    name: [12]u8,
+    colors: palette.Bank,
+};
 const Archive = struct {
     sprites: platform.OwnedBytes,
     offsets: platform.OwnedBytes,
@@ -20,7 +23,11 @@ pub const Catalog = struct {
     loaded: [4]?Archive = @splat(null),
 
     pub fn deinit(self: *Catalog) void {
-        for (&self.loaded) |*entry| if (entry.*) |*archive| archive.deinit();
+        for (&self.loaded) |*entry| {
+            if (entry.*) |*archive| {
+                archive.deinit();
+            }
+        }
     }
 
     pub fn resolve(self: *Catalog, allocator: std.mem.Allocator, index: u16) !sprite.Frame {
@@ -30,12 +37,12 @@ pub const Catalog = struct {
                 const name = std.mem.sliceTo(&library.name, 0);
                 var path: [64]u8 = undefined;
                 var sprites = try self.source.readAll(
-                    try std.fmt.bufPrint(&path, "DATA/{s}.SPR", .{name}),
+                    try std.fmt.bufPrint(&path, "DATA/{s}.SPR", .{ name }),
                     1024 * 1024,
                 );
                 errdefer sprites.deinit();
                 const offsets = try self.source.readAll(
-                    try std.fmt.bufPrint(&path, "DATA/{s}.OFF", .{name}),
+                    try std.fmt.bufPrint(&path, "DATA/{s}.OFF", .{ name }),
                     32768,
                 );
                 self.loaded[i] = .{ .sprites = sprites, .offsets = offsets };

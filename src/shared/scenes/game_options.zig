@@ -10,7 +10,17 @@ const save = @import("../save.zig");
 const save_slots = @import("save_slots.zig");
 const Settings = settings_mod.Settings;
 /// The rows; SAVE GAME and CONTROLS are ours (PLAN GS-5, GS-3), the others the original's.
-pub const Item = enum { resume_game, save_game, sound_fx, music, volume, joystick, zoom, controls, abort_game };
+pub const Item = enum {
+    resume_game,
+    save_game,
+    sound_fx,
+    music,
+    volume,
+    joystick,
+    zoom,
+    controls,
+    abort_game,
+};
 const item_count = @typeInfo(Item).@"enum".field_names.len;
 pub const Outcome = enum { resume_game, abort_game };
 /// The dialog's page: its rows, the save slots' page, or the CONTROLS page that lists each
@@ -20,7 +30,10 @@ pub const Page = enum { rows, save, controls };
 pub const ControlsRow = enum { act, gun, use, inventory, pause, default, back };
 const controls_row_count = @typeInfo(ControlsRow).@"enum".field_names.len;
 /// The pad the CONTROLS page shows: its layout and model.
-pub const Pad = struct { layout: settings_mod.PadLayout, model: ?platform.ControllerModel };
+pub const Pad = struct {
+    layout: settings_mod.PadLayout,
+    model: ?platform.ControllerModel,
+};
 pub const Menu = struct {
     selection: Item = .resume_game,
     page: Page = .rows,
@@ -42,14 +55,20 @@ pub const Menu = struct {
     pub fn press(self: *Menu, action: input.Action, settings: *Settings) void {
         if (self.page == .save) {
             // Until the game has read the slots, the page only waits.
-            if (self.slots.len == save_slots.row_count) self.save_page.press(action, self.slots);
+            if (self.slots.len == save_slots.row_count) {
+                self.save_page.press(action, self.slots);
+            }
             return;
         }
         if (self.page == .controls) {
             const row: usize = @backingInt(self.controls_row);
             switch (action) {
-                .up => self.controls_row = @fromBackingInt(@as(u3, @intCast((row + controls_row_count - 1) % controls_row_count))),
-                .down => self.controls_row = @fromBackingInt(@as(u3, @intCast((row + 1) % controls_row_count))),
+                .up => self.controls_row = @fromBackingInt(
+                    @as(u3, @intCast((row + controls_row_count - 1) % controls_row_count)),
+                ),
+                .down => self.controls_row = @fromBackingInt(
+                    @as(u3, @intCast((row + 1) % controls_row_count)),
+                ),
                 .left, .right => {},
                 // Escape leaves; the keys give no pad button.
                 .pause => self.page = .rows,
@@ -58,23 +77,32 @@ pub const Menu = struct {
             return;
         }
         switch (action) {
-            .up => self.selection = @fromBackingInt(@as(
-                u4,
-                @intCast((@as(u8, @backingInt(self.selection)) + item_count - 1) % item_count),
-            )),
-            .down => self.selection = @fromBackingInt(@as(
-                u4,
-                @intCast((@as(u8, @backingInt(self.selection)) + 1) % item_count),
-            )),
+            .up => self.selection = @fromBackingInt(
+                @as(
+                    u4,
+                    @intCast((@as(u8, @backingInt(self.selection)) + item_count - 1) % item_count),
+                ),
+            ),
+            .down => self.selection = @fromBackingInt(
+                @as(u4, @intCast((@as(u8, @backingInt(self.selection)) + 1) % item_count)),
+            ),
             .left, .right => switch (self.selection) {
                 .sound_fx => settings.sound_fx = !settings.sound_fx,
                 .music => settings.music = !settings.music,
-                .volume => settings.volume = if (action == .right) @min(100, settings.volume + 10) else settings.volume -| 10,
+                .volume => settings.volume = if (action == .right)
+                    @min(100, settings.volume + 10)
+                else
+                    settings.volume -| 10,
                 .joystick => settings.joystick = !settings.joystick,
-                .zoom => settings.zoom = @fromBackingInt(@as(
-                    u2,
-                    @intCast((@as(u8, @backingInt(settings.zoom)) + @as(u8, if (action == .right) 1 else 2)) % 3),
-                )),
+                .zoom => settings.zoom = @fromBackingInt(
+                    @as(
+                        u2,
+                        @intCast(
+                            (@as(u8, @backingInt(settings.zoom)) +
+                                @as(u8, if (action == .right) 1 else 2)) % 3,
+                        ),
+                    ),
+                ),
                 else => {},
             },
             .pause, .use, .gun, .act => switch (self.selection) {
@@ -170,7 +198,7 @@ pub const Menu = struct {
             const value: ?[]const u8 = switch (@as(Item, @fromBackingInt(@as(u4, @intCast(i))))) {
                 .sound_fx => if (settings.sound_fx) "ON  " else "OFF ",
                 .music => if (settings.music) "ON  " else "OFF ",
-                .volume => try std.fmt.bufPrint(&volume_text, "{d}%", .{settings.volume}),
+                .volume => try std.fmt.bufPrint(&volume_text, "{d}%", .{ settings.volume }),
                 .joystick => if (settings.joystick) "ON  " else "OFF ",
                 .zoom => switch (settings.zoom) {
                     .off => "OFF ",
@@ -179,23 +207,26 @@ pub const Menu = struct {
                 },
                 else => null,
             };
-            if (value) |label_value| try text.draw(
-                pixels,
-                256,
-                224,
-                glyphs,
-                label_value,
-                160,
-                y,
-                .{ .foreground = 0xee, .shadow = 0xe2, .palette_bank = 14 },
-            );
+            if (value) |label_value| {
+                try text.draw(
+                    pixels,
+                    256,
+                    224,
+                    glyphs,
+                    label_value,
+                    160,
+                    y,
+                    .{ .foreground = 0xee, .shadow = 0xe2, .palette_bank = 14 },
+                );
+            }
         }
         var memory_text: [48]u8 = undefined;
-        const memory_label = if (self.saved) "GAME SAVED" else if (self.free_memory_mb) |amount| try std.fmt.bufPrint(
-            &memory_text,
-            "FREE MEM {d} MB",
-            .{amount},
-        ) else "FREE MEM : N/A";
+        const memory_label = if (self.saved)
+            "GAME SAVED"
+        else if (self.free_memory_mb) |amount|
+            try std.fmt.bufPrint(&memory_text, "FREE MEM {d} MB", .{ amount })
+        else
+            "FREE MEM : N/A";
         try text.draw(
             pixels,
             256,
@@ -227,18 +258,45 @@ pub const Menu = struct {
             var name: [8]u8 = undefined;
             try text.draw(pixels, 256, 224, glyphs, row[0], columns[0], y, row_style);
             try text.draw(pixels, 256, 224, glyphs, row[1], columns[1], y, row_style);
-            try text.draw(pixels, 256, 224, glyphs, buttonName(layout.place(action).?.*, pad.model, &name), columns[2], y, row_style);
+            try text.draw(
+                pixels,
+                256,
+                224,
+                glyphs,
+                buttonName(layout.place(action).?.*, pad.model, &name),
+                columns[2],
+                y,
+                row_style,
+            );
         }
-        for ([_][]const u8{ "DEFAULT", "BACK" }, [_]ControlsRow{ .default, .back }, 0..) |label, row, i| {
+        for (
+            [_][]const u8{ "DEFAULT", "BACK" },
+            [_]ControlsRow{ .default, .back },
+            0..,
+        ) |label, row, i| {
             const y = top + 112 + @as(i32, @intCast(i)) * 16;
-            try text.draw(pixels, 256, 224, glyphs, label, columns[0], y, if (row == self.controls_row) selected else style);
+            try text.draw(
+                pixels,
+                256,
+                224,
+                glyphs,
+                label,
+                columns[0],
+                y,
+                if (row == self.controls_row) selected else style,
+            );
         }
     }
 };
 
 /// A panel: its frame's glyphs from `left` to `right` and from `top` to `bottom`, each a glyph's
 /// top-left corner, on a filled background with rounded corners.
-const Panel = struct { left: i32, right: i32, top: i32, bottom: i32 };
+const Panel = struct {
+    left: i32,
+    right: i32,
+    top: i32,
+    bottom: i32,
+};
 
 /// The original's panel, 8 pixels higher and a row longer for CONTROLS.
 const rows_panel: Panel = .{ .left = 48, .right = 200, .top = 16, .bottom = 200 };
@@ -251,10 +309,18 @@ const controls_panel: Panel = .{ .left = 16, .right = 232, .top = 24, .bottom = 
 fn drawPanel(pixels: []u8, glyphs: *const font.Font, panel: Panel) !void {
     const border: text.Style = .{ .foreground = 0xee, .shadow = 0xe2, .palette_bank = 14 };
     for (@intCast(panel.top)..@intCast(panel.bottom + 8)) |y| {
-        @memset(pixels[y * 256 + @as(usize, @intCast(panel.left + 8)) .. y * 256 + @as(usize, @intCast(panel.right))], 0xe2);
+        @memset(
+            pixels[y * 256 + @as(usize, @intCast(panel.left + 8))..y * 256 +
+                @as(usize, @intCast(panel.right))],
+            0xe2,
+        );
     }
     for (@intCast(panel.top + 8)..@intCast(panel.bottom)) |y| {
-        @memset(pixels[y * 256 + @as(usize, @intCast(panel.left)) .. y * 256 + @as(usize, @intCast(panel.right + 8))], 0xe2);
+        @memset(
+            pixels[y * 256 + @as(usize, @intCast(panel.left))..y * 256 +
+                @as(usize, @intCast(panel.right + 8))],
+            0xe2,
+        );
     }
     var x = panel.left;
     while (x <= panel.right) : (x += 8) {
@@ -262,13 +328,13 @@ fn drawPanel(pixels: []u8, glyphs: *const font.Font, panel: Panel) !void {
         const last = x == panel.right;
         const top: u8 = if (first) 129 else if (last) 130 else 133;
         const bottom: u8 = if (first) 131 else if (last) 132 else 136;
-        try text.draw(pixels, 256, 224, glyphs, &.{top}, x, panel.top, border);
-        try text.draw(pixels, 256, 224, glyphs, &.{bottom}, x, panel.bottom, border);
+        try text.draw(pixels, 256, 224, glyphs, &.{ top }, x, panel.top, border);
+        try text.draw(pixels, 256, 224, glyphs, &.{ bottom }, x, panel.bottom, border);
     }
     var y = panel.top + 8;
     while (y < panel.bottom) : (y += 8) {
-        try text.draw(pixels, 256, 224, glyphs, &.{134}, panel.left, y, border);
-        try text.draw(pixels, 256, 224, glyphs, &.{135}, panel.right, y, border);
+        try text.draw(pixels, 256, 224, glyphs, &.{ 134 }, panel.left, y, border);
+        try text.draw(pixels, 256, 224, glyphs, &.{ 135 }, panel.right, y, border);
     }
 }
 
@@ -282,13 +348,38 @@ const controls = [_][2][]const u8{
 };
 
 /// SDL's names of a gamepad's buttons, by `settings.Button`.
-const button_names = [_][]const u8{ "A", "B", "X", "Y", "BACK", "GUIDE", "START", "LS", "RS", "LB", "RB", "UP", "DOWN", "LEFT", "RIGHT" };
+const button_names = [_][]const u8{
+    "A",
+    "B",
+    "X",
+    "Y",
+    "BACK",
+    "GUIDE",
+    "START",
+    "LS",
+    "RS",
+    "LB",
+    "RB",
+    "UP",
+    "DOWN",
+    "LEFT",
+    "RIGHT",
+};
 
 /// The pad's name for `button`: a generic pad's are its numbers.
-fn buttonName(button: settings_mod.Button, model: ?platform.ControllerModel, buffer: *[8]u8) []const u8 {
-    if (model) |m| if (m.generic) {
-        if (m.buttons[@backingInt(button)]) |index| return std.fmt.bufPrint(buffer, "BTN {d}", .{@as(u16, index) + 1}) catch unreachable;
-    };
+fn buttonName(
+    button: settings_mod.Button,
+    model: ?platform.ControllerModel,
+    buffer: *[8]u8,
+) []const u8 {
+    if (model) |m| {
+        if (m.generic) {
+            if (m.buttons[@backingInt(button)]) |index| {
+                return std.fmt.bufPrint(buffer, "BTN {d}", .{ @as(u16, index) + 1 }) catch
+                    unreachable;
+            }
+        }
+    }
     return button_names[@backingInt(button)];
 }
 

@@ -31,7 +31,9 @@ const Reader = struct {
     at: usize = 0,
     fn take(self: *Reader, count: usize) ![]const u8 {
         if (self.at > self.bytes.len or
-            count > self.bytes.len - self.at) return error.TruncatedCinematic;
+            count > self.bytes.len - self.at) {
+            return error.TruncatedCinematic;
+        }
         const result = self.bytes[self.at..][0..count];
         self.at += count;
         return result;
@@ -65,14 +67,25 @@ const Scale = struct {
         const origin = self.origin orelse input;
         self.origin = origin;
         return .{
-            .x = @truncate(@as(i32, self.pivot.x) - self.rounded(@as(i32, self.pivot.x) - origin.x) + self.rounded(@as(i32, input.x) - origin.x)),
-            .y = @truncate(@as(i32, self.pivot.y) - self.rounded(@as(i32, self.pivot.y) - origin.y) + self.rounded(@as(i32, input.y) - origin.y)),
+            .x = @truncate(
+                @as(i32, self.pivot.x) -
+                    self.rounded(@as(i32, self.pivot.x) - origin.x) +
+                    self.rounded(@as(i32, input.x) - origin.x),
+            ),
+            .y = @truncate(
+                @as(i32, self.pivot.y) -
+                    self.rounded(@as(i32, self.pivot.y) - origin.y) +
+                    self.rounded(@as(i32, input.y) - origin.y),
+            ),
         };
     }
 };
 
 fn mapPoint(scale: *?Scale, rotation: ?transforms.Projection, point: shapes.Point) shapes.Point {
-    const projected = if (rotation) |projection| projection.point(point, scale.*.?.pivot) else point;
+    const projected = if (rotation) |projection|
+        projection.point(point, scale.*.?.pivot)
+    else
+        point;
     return if (scale.*) |*transform| transform.point(projected) else projected;
 }
 
@@ -112,7 +125,9 @@ const Builder = struct {
             self.captions = &.{};
             self.caption_band = false;
         }
-        if (self.background_mode == 0) try self.working.appendSlice(self.allocator, self.saved_background);
+        if (self.background_mode == 0) {
+            try self.working.appendSlice(self.allocator, self.saved_background);
+        }
     }
     fn present(self: *Builder, ticks: u32, replay: film.ReplayPresent) !void {
         if (self.frames.items.len >= 10000) return error.CinematicTooLarge;
@@ -126,24 +141,23 @@ const Builder = struct {
         self.wait_ticks = 0;
         self.wait_presents = 0;
         // A hold copies the shown page onto the one it presents.
-        if (replay == .hold) self.page_tail[self.back_page] = self.page_tail[self.back_page ^ 1];
+        if (replay == .hold) {
+            self.page_tail[self.back_page] = self.page_tail[self.back_page ^ 1];
+        }
         const caption_tail = self.page_tail[self.back_page];
         self.back_page ^= 1;
         self.visible = try self.snapshot(self.working.items);
-        try self.frames.append(
-            self.allocator,
-            .{
-                .drawings = self.visible,
-                .colors = self.colors,
-                .hold_ticks = 0,
-                .captions = self.captions,
-                .caption_band = self.caption_band,
-                .present_ticks = @intCast(ticks),
-                .replay_present = replay,
-                .ends_hold = self.new_background,
-                .caption_tail = caption_tail,
-            },
-        );
+        try self.frames.append(self.allocator, .{
+            .drawings = self.visible,
+            .colors = self.colors,
+            .hold_ticks = 0,
+            .captions = self.captions,
+            .caption_band = self.caption_band,
+            .present_ticks = @intCast(ticks),
+            .replay_present = replay,
+            .ends_hold = self.new_background,
+            .caption_tail = caption_tail,
+        });
         self.new_background = false;
     }
     fn textAssets(self: *Builder) !cinematic_text.Text {
@@ -180,10 +194,12 @@ const Builder = struct {
             @intCast(0xd0 + (reference >> 12)),
             false,
         );
-        for (rows) |run| try self.working.append(
-            self.allocator,
-            .{ .geometry = .{ .text = run }, .ink = .{ .color = run.foreground } },
-        );
+        for (rows) |run| {
+            try self.working.append(self.allocator, .{
+                .geometry = .{ .text = run },
+                .ink = .{ .color = run.foreground },
+            });
+        }
     }
     fn setPalette(self: *Builder, bank: u8, destination: u8) !void {
         if (destination > 1) return error.InvalidCinematicPalette;
@@ -204,10 +220,9 @@ const Builder = struct {
     }
     fn drawShape(self: *Builder, command: *Reader, treatment: Treatment) !void {
         const reference = try command.word();
-        if (reference & @as(
-            u16,
-            if (treatment == .rotated) 0x0800 else 0x7800,
-        ) != 0) return error.UnsupportedCinematicShapeFlags;
+        if (reference & @as(u16, if (treatment == .rotated) 0x0800 else 0x7800) != 0) {
+            return error.UnsupportedCinematicShapeFlags;
+        }
         var placement: shapes.Point = .{ .x = 8, .y = 50 };
         if (reference & 0x8000 != 0) {
             placement.x +%= try command.signed();
@@ -217,14 +232,19 @@ const Builder = struct {
         var rotation: ?transforms.Projection = null;
         if (treatment != .placed) {
             const factor: i16 = if (treatment == .scaled or
-                reference & 0x4000 != 0) @bitCast((try command.word()) +% 512) else 512;
+                reference & 0x4000 != 0)
+                @bitCast((try command.word()) +% 512)
+            else
+                512;
             const pivot: shapes.Point = .{ .x = try command.byte(), .y = try command.byte() };
             scale = .{ .factor = factor, .pivot = pivot };
-            if (treatment == .rotated) rotation = try transforms.Projection.fromDegrees(
-                try command.word(),
-                if (reference & 0x2000 != 0) try command.word() else 180,
-                if (reference & 0x1000 != 0) try command.word() else 90,
-            );
+            if (treatment == .rotated) {
+                rotation = try transforms.Projection.fromDegrees(
+                    try command.word(),
+                    if (reference & 0x2000 != 0) try command.word() else 180,
+                    if (reference & 0x1000 != 0) try command.word() else 90,
+                );
+            }
         }
         const shape_table = try wordAt(self.geometry, 2);
         const shape_base = try wordAt(self.geometry, 14);
@@ -232,29 +252,30 @@ const Builder = struct {
         const vertex_base = try wordAt(self.geometry, 18);
         var records: Reader = .{
             .bytes = self.geometry,
-            .at = @as(usize, shape_base) + try wordAt(
-                self.geometry,
-                @as(usize, shape_table) + @as(usize, reference & 0x7ff) * 2,
-            ),
+            .at = @as(usize, shape_base) +
+                try wordAt(
+                    self.geometry,
+                    @as(usize, shape_table) + @as(usize, reference & 0x7ff) * 2,
+                ),
         };
         const count = try records.word();
         if (count > 1024) return error.CinematicTooLarge;
         for (0..count) |_| {
             const vertex_ref = try records.word();
             var offset: shapes.Point = .{ .x = 0, .y = 0 };
-            if (vertex_ref & 0x8000 != 0) offset = .{
-                .x = try records.signed(),
-                .y = try records.signed(),
-            };
+            if (vertex_ref & 0x8000 != 0) {
+                offset = .{ .x = try records.signed(), .y = try records.signed() };
+            }
             const color = try records.byte();
             if (color > 15) return error.InvalidCinematicInk;
             const ink = color + @as(u8, if (self.background_mode == 0) 0xd0 else 0xc0);
             var vertices: Reader = .{
                 .bytes = self.geometry,
-                .at = @as(usize, vertex_base) + try wordAt(
-                    self.geometry,
-                    @as(usize, vertex_table) + @as(usize, vertex_ref & 0x3fff) * 2,
-                ),
+                .at = @as(usize, vertex_base) +
+                    try wordAt(
+                        self.geometry,
+                        @as(usize, vertex_table) + @as(usize, vertex_ref & 0x3fff) * 2,
+                    ),
             };
             const kind = try vertices.byte();
             var point: shapes.Point = .{
@@ -270,7 +291,9 @@ const Builder = struct {
                 // In a rotated shape an ellipse's centre moves only vertically: it takes the rotated
                 // point's row and keeps its own column (the original's shapes, flashback-re
                 // engine-ending-zoom 3.5).
-                if (rotation) |projection| point.y = projection.point(point, scale.?.pivot).y;
+                if (rotation) |projection| {
+                    point.y = projection.point(point, scale.?.pivot).y;
+                }
                 if (scale) |*transform| {
                     const center = transform.point(point);
                     const top = transform.point(.{ .x = point.x, .y = point.y -% ry });
@@ -280,11 +303,13 @@ const Builder = struct {
                     ry = center.y -% top.y;
                 }
                 if (rx < 0 or ry < 0) return error.InvalidCinematicEllipse;
-                drawing.geometry = .{ .ellipse = .{
-                    .center = .{ .x = point.x +% placement.x, .y = point.y +% placement.y },
-                    .radius_x = @intCast(rx),
-                    .radius_y = @intCast(ry),
-                } };
+                drawing.geometry = .{
+                    .ellipse = .{
+                        .center = .{ .x = point.x +% placement.x, .y = point.y +% placement.y },
+                        .radius_x = @intCast(rx),
+                        .radius_y = @intCast(ry),
+                    },
+                };
                 self.vertices += 1;
             } else {
                 if (kind >= 64) return error.UnsupportedCinematicPolygon;
@@ -307,17 +332,24 @@ const Builder = struct {
                     vertex.x +%= placement.x;
                     vertex.y +%= placement.y;
                 }
-                drawing.geometry = .{ .polygon = try self.allocator.dupe(shapes.Point, points[0..used]) };
+                drawing.geometry = .{
+                    .polygon = try self.allocator.dupe(shapes.Point, points[0..used]),
+                };
                 self.vertices += used;
             }
             // A see-through shape brightens what is under it: it sets bit 3 of each pixel.
             const tintable = drawing.geometry == .ellipse or drawing.geometry.polygon.len >= 3;
             drawing.ink = if (vertex_ref & 0x4000 != 0 and
                 ink > 0xc7 and
-                tintable) .{ .mask = 0x08 } else .{ .color = ink };
+                tintable)
+                .{ .mask = 0x08 }
+            else
+                .{ .color = ink };
             try self.working.append(self.allocator, drawing);
         }
-        if (self.background_mode != 0) self.saved_background = try self.snapshot(self.working.items);
+        if (self.background_mode != 0) {
+            self.saved_background = try self.snapshot(self.working.items);
+        }
     }
 };
 
@@ -351,21 +383,30 @@ fn compileFrom(
     if (start > commands.len) return error.TruncatedCinematic;
     var reader: Reader = .{
         .bytes = commands,
-        .at = start + if (entry == 0) @as(usize, 0) else try wordAt(commands, 2 + @as(usize, entry) * 2),
+        .at = start +
+            if (entry == 0) @as(usize, 0) else try wordAt(commands, 2 + @as(usize, entry) * 2),
     };
     var builder: Builder = .{ .allocator = content, .geometry = polygons, .source = source };
-    try builder.frames.append(
-        content,
-        .{ .drawings = &.{}, .colors = builder.colors, .hold_ticks = 0, .presented = false },
-    );
+    try builder.frames.append(content, .{
+        .drawings = &.{},
+        .colors = builder.colors,
+        .hold_ticks = 0,
+        .presented = false,
+    });
     // At each command reached: the frame its next present adds, and the wait due before it.
-    const Reached = struct { frame: usize, wait_ticks: u32 };
+    const Reached = struct {
+        frame: usize,
+        wait_ticks: u32,
+    };
     var reached: std.AutoHashMap(usize, Reached) = .init(allocator);
     defer reached.deinit();
     var finished = false;
     for (0..100000) |_| {
         const command_offset = reader.at;
-        try reached.put(command_offset, .{ .frame = builder.frames.items.len, .wait_ticks = builder.wait_ticks });
+        try reached.put(command_offset, .{
+            .frame = builder.frames.items.len,
+            .wait_ticks = builder.wait_ticks,
+        });
         const encoded = try reader.byte();
         if (encoded & 128 != 0) {
             finished = true;
@@ -395,11 +436,9 @@ fn compileFrom(
             7 => {},
             13 => {
                 const reference = try reader.word();
-                if (reference != 0xffff) try builder.positionedText(
-                    reference,
-                    try reader.byte(),
-                    try reader.byte(),
-                );
+                if (reference != 0xffff) {
+                    try builder.positionedText(reference, try reader.byte(), try reader.byte());
+                }
             },
             8 => _ = try reader.take(3),
             10 => try builder.drawShape(&reader, .scaled),
@@ -424,29 +463,39 @@ fn compileFrom(
                 // then await a new confirmation. Resolve their control flow at import;
                 // playback receives pictures and timed confirmation loops.
                 if (mask != 128 or
-                    try reader.byte() != 0) return error.UnsupportedCinematicInteraction;
+                    try reader.byte() != 0) {
+                    return error.UnsupportedCinematicInteraction;
+                }
                 const fallback = try reader.signed();
                 if (try reader.byte() != 255 or
-                    fallback < 0) return error.UnsupportedCinematicInteraction;
+                    fallback < 0) {
+                    return error.UnsupportedCinematicInteraction;
+                }
                 const idle_target = start + @as(usize, @intCast(fallback));
                 if (destination >= 0 and
                     start + @as(usize, @intCast(destination)) <= command_offset and
-                    idle_target > command_offset)
-                {
+                    idle_target > command_offset) {
                     reader.at = idle_target; // Release loop; the following page awaits confirmation.
                 } else if (destination < 0 and idle_target > command_offset) {
                     // A confirmation ends the film here; without one, it goes on.
                     builder.frames.items[builder.frames.items.len - 1].confirm_ends = true;
                     reader.at = idle_target;
-                } else if (idle_target <= command_offset and (destination < 0 or start + @as(usize, @intCast(destination)) > command_offset)) {
-                    const target = reached.get(idle_target) orelse return error.UnsupportedCinematicInteraction;
+                } else if (idle_target <= command_offset and
+                    (destination < 0 or
+                        start + @as(usize, @intCast(destination)) > command_offset)) {
+                    const target = reached.get(idle_target) orelse
+                        return error.UnsupportedCinematicInteraction;
                     const frames = builder.frames.items;
                     const last = &frames[frames.len - 1];
                     // Looping back costs the waits left after this picture, then those from the
                     // loop's target to the present of its first picture, and that present's own.
                     // A branch-only self-loop waits on the picture already presented.
                     const back = if (target.frame < frames.len)
-                        try std.math.add(u32, builder.wait_ticks, frames[target.frame - 1].hold_ticks)
+                        try std.math.add(
+                            u32,
+                            builder.wait_ticks,
+                            frames[target.frame - 1].hold_ticks,
+                        )
                     else
                         builder.wait_ticks;
                     last.loop_ticks = std.math.sub(u32, back, target.wait_ticks) catch
@@ -482,19 +531,24 @@ pub fn load(
     entry: u16,
 ) !OwnedFilm {
     var path: [64]u8 = undefined;
-    var commands = try source.readAll(try std.fmt.bufPrint(&path, "DATA/{s}.CMD", .{name}), 65536);
+    var commands = try source.readAll(
+        try std.fmt.bufPrint(&path, "DATA/{s}.CMD", .{ name }),
+        65536,
+    );
     defer commands.deinit();
-    var polygons = try source.readAll(try std.fmt.bufPrint(&path, "DATA/{s}.POL", .{name}), 65536);
+    var polygons = try source.readAll(
+        try std.fmt.bufPrint(&path, "DATA/{s}.POL", .{ name }),
+        65536,
+    );
     defer polygons.deinit();
     return compileFrom(allocator, commands.bytes, polygons.bytes, entry, source);
 }
 
 fn testGeometry() [66]u8 {
     var pol: [66]u8 = @splat(0);
-    for (
-        [_]usize{ 2, 6, 10, 14, 18 },
-        [_]u16{ 20, 22, 54, 56, 61 },
-    ) |offset, value| std.mem.writeInt(u16, pol[offset..][0..2], value, .big);
+    for ([_]usize{ 2, 6, 10, 14, 18 }, [_]u16{ 20, 22, 54, 56, 61 }) |offset, value| {
+        std.mem.writeInt(u16, pol[offset..][0..2], value, .big);
+    }
     std.mem.writeInt(u16, pol[24..26], 0x123, .big);
     std.mem.writeInt(u16, pol[56..58], 1, .big);
     pol[60] = 1;
@@ -521,10 +575,10 @@ test "imported pictures retain backgrounds without retaining prior moving drawin
     const rgba = try allocator.alloc(u8, pixels.len * 4);
     defer allocator.free(rgba);
     try content.view().draw(1, pixels, rgba);
-    try std.testing.expectEqualSlices(u8, &.{ 0xc1, 0xd1, 0xc0 }, pixels[50 * 256 + 8 ..][0..3]);
-    try std.testing.expectEqualSlices(u8, &.{ 28, 44, 60, 255 }, rgba[(50 * 256 + 8) * 4 ..][0..4]);
+    try std.testing.expectEqualSlices(u8, &.{ 0xc1, 0xd1, 0xc0 }, pixels[50 * 256 + 8..][0..3]);
+    try std.testing.expectEqualSlices(u8, &.{ 28, 44, 60, 255 }, rgba[(50 * 256 + 8) * 4..][0..4]);
     try content.view().draw(2, pixels, rgba);
-    try std.testing.expectEqualSlices(u8, &.{ 0xc1, 0xc0, 0xd1 }, pixels[50 * 256 + 8 ..][0..3]);
+    try std.testing.expectEqualSlices(u8, &.{ 0xc1, 0xc0, 0xd1 }, pixels[50 * 256 + 8..][0..3]);
     try std.testing.expectEqual(@as(u32, 4), content.frames[0].hold_ticks);
     try std.testing.expectEqual(@as(u32, 4), content.frames[1].hold_ticks);
     try std.testing.expectEqual(@as(u32, 0), content.frames[2].hold_ticks);
@@ -575,7 +629,9 @@ test "page loops: a confirmation may end the film between pictures, a loop back 
     const waiting = page.frames[page.frames.len - 1];
     try std.testing.expectEqual(@as(?usize, page.frames.len - 1), waiting.input_loop_start);
     try std.testing.expectEqual(@as(u32, 0), waiting.loop_ticks);
-    for (page.frames) |frame| try std.testing.expect(!frame.confirm_ends);
+    for (page.frames) |frame| {
+        try std.testing.expect(!frame.confirm_ends);
+    }
 }
 
 fn allocationExercise(allocator: std.mem.Allocator) !void {
@@ -587,7 +643,10 @@ fn allocationExercise(allocator: std.mem.Allocator) !void {
 test "malformed cinematic content and allocation failure release partially compiled frames" {
     const allocator = std.testing.allocator;
     const geometry = testGeometry();
-    try std.testing.expectError(error.TruncatedCinematic, compile(allocator, &.{0}, &geometry, 0));
+    try std.testing.expectError(
+        error.TruncatedCinematic,
+        compile(allocator, &.{ 0 }, &geometry, 0),
+    );
     try std.testing.expectError(
         error.InvalidCinematicEntry,
         compile(allocator, &test_commands, &geometry, 1),

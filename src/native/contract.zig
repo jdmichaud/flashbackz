@@ -23,7 +23,9 @@ pub const fixture = struct {
     pub const nested_len = 3000;
 
     pub fn nested(buf: *[nested_len]u8) []u8 {
-        for (buf, 0..) |*b, i| b.* = @truncate(i * 7 + 3);
+        for (buf, 0..) |*b, i| {
+            b.* = @truncate(i * 7 + 3);
+        }
         return buf;
     }
 
@@ -89,7 +91,9 @@ pub fn assetContract(a: platform.AssetSource) !void {
     var all = try a.list("");
     defer all.deinit();
     try expectEqual(fixture.listing.len, all.names.len);
-    for (fixture.listing, all.names) |want, name| try expectEqualStrings(want, name);
+    for (fixture.listing, all.names) |want, name| {
+        try expectEqualStrings(want, name);
+    }
     var subdir = try a.list("sub/");
     defer subdir.deinit();
     try expectEqual(@as(usize, 1), subdir.names.len);
@@ -178,7 +182,9 @@ pub fn storageContract(s: platform.Storage, faults: ?FaultInjector) !void {
     // A large record round trips.
     const big = try std.testing.allocator.alloc(u8, 100 * 1024);
     defer std.testing.allocator.free(big);
-    for (big, 0..) |*b, i| b.* = @truncate(i *% 31);
+    for (big, 0..) |*b, i| {
+        b.* = @truncate(i *% 31);
+    }
     try s.save("BIG", big);
     {
         var loaded = try s.load("BIG");

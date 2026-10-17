@@ -16,7 +16,11 @@ const confirm_keys = [_]platform.Key{
     .right_ctrl,
 };
 pub const Choice = enum { retry, abort };
-pub const View = struct { choice: Choice = .retry, seconds: i16 = 10, pulse: u8 = 0 };
+pub const View = struct {
+    choice: Choice = .retry,
+    seconds: i16 = 10,
+    pulse: u8 = 0,
+};
 pub const Menu = struct {
     allocator: std.mem.Allocator,
     score: u32,
@@ -47,7 +51,9 @@ pub const Menu = struct {
             else => return,
         }
         // A burst after a stall: the oldest event takes effect early rather than be lost.
-        if (self.events.items.len == queue_capacity) self.apply(self.events.orderedRemove(0));
+        if (self.events.items.len == queue_capacity) {
+            self.apply(self.events.orderedRemove(0));
+        }
         try self.events.append(self.allocator, event_in);
     }
     const queue_capacity = 128;
@@ -57,12 +63,20 @@ pub const Menu = struct {
         switch (queued.payload) {
             .key_down, .key_up => |key| {
                 const pressed = queued.payload == .key_down;
-                if (key.key == .escape) self.cancel_pending = pressed;
-                if (key.key == .up) self.up_pending = pressed;
-                if (key.key == .down) self.down_pending = pressed;
-                for (confirm_keys, 0..) |candidate, i| if (candidate == key.key) {
-                    self.held_confirmation[i] = pressed;
-                };
+                if (key.key == .escape) {
+                    self.cancel_pending = pressed;
+                }
+                if (key.key == .up) {
+                    self.up_pending = pressed;
+                }
+                if (key.key == .down) {
+                    self.down_pending = pressed;
+                }
+                for (confirm_keys, 0..) |candidate, i| {
+                    if (candidate == key.key) {
+                        self.held_confirmation[i] = pressed;
+                    }
+                }
             },
             .focus_lost => {
                 self.cancel_pending = false;
@@ -84,11 +98,16 @@ pub const Menu = struct {
         };
         try self.event(.{
             .time_ns = time_ns,
-            .payload = if (change.down) .{ .key_down = .{ .key = key } } else .{ .key_up = .{ .key = key } },
+            .payload = if (change.down)
+                .{ .key_down = .{ .key = key } }
+            else
+                .{ .key_up = .{ .key = key } },
         });
     }
     pub fn update(self: *Menu, now: u64) !void {
-        if (self.clock == null) self.clock = try timing.Clock.init(timing.inventory, now);
+        if (self.clock == null) {
+            self.clock = try timing.Clock.init(timing.inventory, now);
+        }
         var work: usize = 0;
         while (self.clock.?.due(now) and self.outcome == null and work < 8) : (work += 1) {
             const deadline = self.clock.?.deadline();
@@ -96,10 +115,12 @@ pub const Menu = struct {
                 self.apply(self.events.orderedRemove(0));
             }
             self.activation_key = null;
-            for (confirm_keys, self.held_confirmation) |key, pressed| if (pressed) {
-                self.activation_key = key;
-                break;
-            };
+            for (confirm_keys, self.held_confirmation) |key, pressed| {
+                if (pressed) {
+                    self.activation_key = key;
+                    break;
+                }
+            }
             if (self.seconds < 0 or self.cancel_pending) {
                 self.outcome = .abort;
                 return;
@@ -117,8 +138,12 @@ pub const Menu = struct {
                 self.choice = .abort;
                 self.down_pending = false;
             }
-            if (self.pulse >= 61) self.brightening = false;
-            if (self.pulse < 2) self.brightening = true;
+            if (self.pulse >= 61) {
+                self.brightening = false;
+            }
+            if (self.pulse < 2) {
+                self.brightening = true;
+            }
             self.pulse = if (self.brightening) self.pulse + 2 else self.pulse - 2;
             self.view.pulse = self.pulse;
             const tick = timing.ticksIn(deadline - self.clock.?.origin_ns);
@@ -136,30 +161,39 @@ pub const Menu = struct {
         var hash = std.hash.Wyhash.init(0);
         hash.update(&.{ @backingInt(self.choice), self.pulse, @intFromBool(self.brightening) });
         hash.update(&std.mem.toBytes(std.mem.nativeToLittle(i16, self.seconds)));
-        hash.update(&.{
-            @intFromBool(self.cancel_pending),
-            @intFromBool(self.up_pending),
-            @intFromBool(self.down_pending),
-            @backingInt(self.view.choice),
-            self.view.pulse,
-        });
-        for (self.held_confirmation) |pressed| hash.update(&.{@intFromBool(pressed)});
+        hash.update(
+            &.{
+                @intFromBool(self.cancel_pending),
+                @intFromBool(self.up_pending),
+                @intFromBool(self.down_pending),
+                @backingInt(self.view.choice),
+                self.view.pulse,
+            },
+        );
+        for (self.held_confirmation) |pressed| {
+            hash.update(&.{ @intFromBool(pressed) });
+        }
         for ([_]u64{
             self.score,
             self.last_second_tick,
             if (self.clock) |clock| clock.next_tick else 0,
-        }) |value| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
-        hash.update(&.{
-            @intFromBool(self.outcome != null),
-            if (self.outcome) |choice| @backingInt(choice) else 0,
-        });
+        }) |value| {
+            hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
+        }
+        hash.update(
+            &.{
+                @intFromBool(self.outcome != null),
+                if (self.outcome) |choice| @backingInt(choice) else 0,
+            },
+        );
         const origin = if (self.clock) |clock| clock.origin_ns else 0;
         for (self.events.items) |queued| {
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, queued.time_ns -| origin)));
-            hash.update(&std.mem.toBytes(std.mem.nativeToLittle(
-                u32,
-                @backingInt(std.meta.activeTag(queued.payload)),
-            )));
+            hash.update(
+                &std.mem.toBytes(
+                    std.mem.nativeToLittle(u32, @backingInt(std.meta.activeTag(queued.payload))),
+                ),
+            );
             const key: u16 = switch (queued.payload) {
                 .key_down, .key_up => |press| @backingInt(press.key),
                 else => 0,
@@ -234,20 +268,22 @@ pub fn drawView(
         88,
         style,
     );
-    for ([_][]const u8{ art.retry, art.abort }, 0..) |label, i| try text.draw(
-        indices,
-        256,
-        224,
-        &art.font,
-        label,
-        @divTrunc(256 - @as(i32, @intCast(label.len)) * 8, 2),
-        104 + @as(i32, @intCast(i)) * 8,
-        .{
-            .foreground = if (i == @backingInt(view.choice)) 0xe4 else 0xe5,
-            .shadow = 0xe2,
-            .palette_bank = 14,
-        },
-    );
+    for ([_][]const u8{ art.retry, art.abort }, 0..) |label, i| {
+        try text.draw(
+            indices,
+            256,
+            224,
+            &art.font,
+            label,
+            @divTrunc(256 - @as(i32, @intCast(label.len)) * 8, 2),
+            104 + @as(i32, @intCast(i)) * 8,
+            .{
+                .foreground = if (i == @backingInt(view.choice)) 0xe4 else 0xe5,
+                .shadow = 0xe2,
+                .palette_bank = 14,
+            },
+        );
+    }
     try text.draw(
         indices,
         256,
@@ -292,10 +328,14 @@ test "the Continue clock keeps all eleven countdown values and bounds catch-up w
     while (menu.outcome == null) {
         try menu.update(menu.clock.?.deadline());
         if (menu.view.seconds >= 0 and
-            menu.view.seconds <= 10) seen[@intCast(menu.view.seconds)] = true;
+            menu.view.seconds <= 10) {
+            seen[@intCast(menu.view.seconds)] = true;
+        }
         try std.testing.expect(menu.pulse <= 62 and menu.pulse % 2 == 0);
     }
-    for (seen) |value| try std.testing.expect(value);
+    for (seen) |value| {
+        try std.testing.expect(value);
+    }
     try std.testing.expectEqual(@as(?Choice, .abort), menu.outcome);
 }
 

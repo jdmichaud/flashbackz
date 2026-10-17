@@ -96,10 +96,14 @@ pub const SdlBackend = struct {
     /// acquired, then frees the Zig-owned state. Valid after a failed `start` or without one.
     pub fn deinit(self: *SdlBackend) void {
         self.closeAudio();
-        for (self.controllers.items) |handle| c.SDL_GameControllerClose(handle);
+        for (self.controllers.items) |handle| {
+            c.SDL_GameControllerClose(handle);
+        }
         self.controllers.deinit(self.allocator);
         self.destroyPresentation();
-        if (self.subsystems != 0) c.SDL_QuitSubSystem(self.subsystems);
+        if (self.subsystems != 0) {
+            c.SDL_QuitSubSystem(self.subsystems);
+        }
         self.allocator.free(self.title);
         self.* = undefined;
     }
@@ -129,15 +133,20 @@ pub const SdlBackend = struct {
     /// The pad's GUID, whether it has the generic mapping (`genericMapping` names it so), and the
     /// joystick button behind each gamepad button.
     fn controllerModel(_: *anyopaque, id: platform.ControllerId) ?platform.ControllerModel {
-        const handle = c.SDL_GameControllerFromInstanceID(@bitCast(@backingInt(id))) orelse return null;
+        const handle = c.SDL_GameControllerFromInstanceID(@bitCast(@backingInt(id))) orelse
+            return null;
         const joystick = c.SDL_GameControllerGetJoystick(handle) orelse return null;
         var guid: [33]u8 = undefined;
         c.SDL_JoystickGetGUIDString(c.SDL_JoystickGetGUID(joystick), &guid, guid.len);
         var model: platform.ControllerModel = .{ .guid = guid[0..32].* };
-        if (c.SDL_GameControllerName(handle)) |name| model.generic = std.mem.eql(u8, std.mem.span(name), generic_name);
+        if (c.SDL_GameControllerName(handle)) |name| {
+            model.generic = std.mem.eql(u8, std.mem.span(name), generic_name);
+        }
         for (&model.buttons, 0..) |*button, index| {
             const bind = c.SDL_GameControllerGetBindForButton(handle, @intCast(index));
-            if (bind.bindType == c.SDL_CONTROLLER_BINDTYPE_BUTTON) button.* = @intCast(bind.value.button);
+            if (bind.bindType == c.SDL_CONTROLLER_BINDTYPE_BUTTON) {
+                button.* = @intCast(bind.value.button);
+            }
         }
         return model;
     }
@@ -184,14 +193,15 @@ pub const SdlBackend = struct {
         // display's DPI: on a display scaled to 150%, every pixel of the frame is 1.5 pixels
         // wide. SDL declares it when video starts, and then sizes the window in the display's
         // own pixels, which the window scale divides exactly.
-        if (builtin.os.tag == .windows) _ = c.SDL_SetHint(
-            c.SDL_HINT_WINDOWS_DPI_AWARENESS,
-            "permonitorv2",
-        );
+        if (builtin.os.tag == .windows) {
+            _ = c.SDL_SetHint(c.SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
+        }
         const held = self.subsystems;
         errdefer {
             const acquired = self.subsystems & ~held;
-            if (acquired != 0) c.SDL_QuitSubSystem(acquired);
+            if (acquired != 0) {
+                c.SDL_QuitSubSystem(acquired);
+            }
             self.subsystems = held;
         }
         if (!self.initSubsystem(c.SDL_INIT_TIMER | c.SDL_INIT_EVENTS)) return error.DeviceFailure;
@@ -236,7 +246,9 @@ pub const SdlBackend = struct {
         const age_ms: u32 = @as(u32, @truncate(now_ms)) -% timestamp_ms;
         const event_ms = now_ms -| age_ms;
         var t = (event_ms -| self.ticks_base_ms) * std.time.ns_per_ms;
-        if (t > now) t = now;
+        if (t > now) {
+            t = now;
+        }
         return self.orderedTime(t);
     }
 
@@ -258,7 +270,9 @@ pub const SdlBackend = struct {
     ) platform.Size {
         var s: u32 = std.math.clamp(scale, 1, max_window_scale);
         if (bounds) |b| {
-            while (s > 1 and (width * s > b.width or height * s > b.height)) s -= 1;
+            while (s > 1 and (width * s > b.width or height * s > b.height)) {
+                s -= 1;
+            }
         }
         return .{ .width = width * s, .height = height * s };
     }
@@ -268,7 +282,9 @@ pub const SdlBackend = struct {
         if (out_w <= 0 or
             out_h <= 0 or
             width == 0 or
-            height == 0) return .{ .x = 0, .y = 0, .w = 0, .h = 0 };
+            height == 0) {
+            return .{ .x = 0, .y = 0, .w = 0, .h = 0 };
+        }
         const ow: i64 = out_w;
         const oh: i64 = out_h;
         const w: i64 = width;
@@ -308,21 +324,28 @@ pub const SdlBackend = struct {
         if (width == 0 or
             height == 0 or
             width > max_dimension or
-            height > max_dimension) return error.InvalidResolution;
+            height > max_dimension) {
+            return error.InvalidResolution;
+        }
         // An unchanged resolution is not a mode change. The film player sets its size on every
         // frame. A new texture and a window resize on each frame stall the update loop, and the
         // sound queue then runs empty.
-        if (self.window != null) if (self.resolution) |current| {
-            if (current.width == width and current.height == height) return;
-        };
+        if (self.window != null) {
+            if (self.resolution) |current| {
+                if (current.width == width and current.height == height) return;
+            }
+        }
         if (self.window == null) {
             try self.createPresentation(width, height);
         } else {
             // Make the new texture before the change. The old texture stays until the new one
             // exists.
             const renderer = self.renderer orelse return error.DeviceFailure;
-            const fresh = self.createTexture(renderer, width, height) orelse return error.DeviceFailure;
-            if (self.texture) |old| c.SDL_DestroyTexture(old);
+            const fresh = self.createTexture(renderer, width, height) orelse
+                return error.DeviceFailure;
+            if (self.texture) |old| {
+                c.SDL_DestroyTexture(old);
+            }
             self.texture = fresh;
             self.refitWindow(width, height);
         }
@@ -335,7 +358,9 @@ pub const SdlBackend = struct {
         var rect: c.SDL_Rect = undefined;
         if (c.SDL_GetDisplayUsableBounds(index, &rect) != 0 or
             rect.w <= 0 or
-            rect.h <= 0) return null;
+            rect.h <= 0) {
+            return null;
+        }
         return .{ .width = @intCast(rect.w), .height = @intCast(rect.h) };
     }
 
@@ -349,7 +374,9 @@ pub const SdlBackend = struct {
         c.SDL_GetWindowSize(window, &w, &h);
         if (w < 0 or h < 0) return;
         if (@as(u32, @intCast(w)) != self.window_size.width or
-            @as(u32, @intCast(h)) != self.window_size.height) return;
+            @as(u32, @intCast(h)) != self.window_size.height) {
+            return;
+        }
         const size = fitWindowSize(
             width,
             height,
@@ -376,24 +403,28 @@ pub const SdlBackend = struct {
             @intCast(size.height),
             flags,
         ) orelse {
-            std.log.err("SDL_CreateWindow failed: {s}", .{c.SDL_GetError()});
+            std.log.err("SDL_CreateWindow failed: {s}", .{ c.SDL_GetError() });
             return error.DeviceFailure;
         };
         errdefer c.SDL_DestroyWindow(window);
         const created = self.createRenderer(window) orelse {
-            std.log.err("SDL_CreateRenderer failed: {s}", .{c.SDL_GetError()});
+            std.log.err("SDL_CreateRenderer failed: {s}", .{ c.SDL_GetError() });
             return error.DeviceFailure;
         };
         errdefer c.SDL_DestroyRenderer(created.renderer);
         self.recordRendererInfo(created);
-        const texture = self.createTexture(created.renderer, width, height) orelse return error.DeviceFailure;
+        const texture = self.createTexture(created.renderer, width, height) orelse
+            return error.DeviceFailure;
         self.window = window;
         self.renderer = created.renderer;
         self.texture = texture;
         self.window_size = size;
     }
 
-    const CreatedRenderer = struct { renderer: *c.SDL_Renderer, asked_vsync: bool };
+    const CreatedRenderer = struct {
+        renderer: *c.SDL_Renderer,
+        asked_vsync: bool,
+    };
 
     fn createRenderer(self: *const SdlBackend, window: *c.SDL_Window) ?CreatedRenderer {
         if (self.force_software_renderer) {
@@ -409,7 +440,9 @@ pub const SdlBackend = struct {
                 return .{ .renderer = r, .asked_vsync = true };
             }
         }
-        if (c.SDL_CreateRenderer(window, -1, c.SDL_RENDERER_ACCELERATED)) |r| return .{ .renderer = r, .asked_vsync = false };
+        if (c.SDL_CreateRenderer(window, -1, c.SDL_RENDERER_ACCELERATED)) |r| {
+            return .{ .renderer = r, .asked_vsync = false };
+        }
         const r = c.SDL_CreateRenderer(window, -1, c.SDL_RENDERER_SOFTWARE) orelse return null;
         return .{ .renderer = r, .asked_vsync = false };
     }
@@ -463,18 +496,25 @@ pub const SdlBackend = struct {
             @intCast(width),
             @intCast(height),
         ) orelse {
-            std.log.err(
-                "SDL_CreateTexture({d}x{d}) failed: {s}",
-                .{ width, height, c.SDL_GetError() },
-            );
+            std.log.err("SDL_CreateTexture({d}x{d}) failed: {s}", .{
+                width,
+                height,
+                c.SDL_GetError(),
+            });
             return null;
         };
     }
 
     fn destroyPresentation(self: *SdlBackend) void {
-        if (self.texture) |t| c.SDL_DestroyTexture(t);
-        if (self.renderer) |r| c.SDL_DestroyRenderer(r);
-        if (self.window) |w| c.SDL_DestroyWindow(w);
+        if (self.texture) |t| {
+            c.SDL_DestroyTexture(t);
+        }
+        if (self.renderer) |r| {
+            c.SDL_DestroyRenderer(r);
+        }
+        if (self.window) |w| {
+            c.SDL_DestroyWindow(w);
+        }
         self.texture = null;
         self.renderer = null;
         self.window = null;
@@ -501,11 +541,11 @@ pub const SdlBackend = struct {
         const renderer = self.renderer orelse return error.InvalidResolution;
         const texture = self.texture orelse return error.InvalidResolution;
         // SDL copies the rows into the texture. The backend keeps no reference to the buffer.
-        if (c.SDL_UpdateTexture(texture, null, frame.pixels.ptr, pitch) != 0) return error.DeviceFailure;
-        const out = self.outputSize() orelse platform.Size{
-            .width = res.width,
-            .height = res.height,
-        };
+        if (c.SDL_UpdateTexture(texture, null, frame.pixels.ptr, pitch) != 0) {
+            return error.DeviceFailure;
+        }
+        const out = self.outputSize() orelse
+            platform.Size{ .width = res.width, .height = res.height };
         const dst = fitRect(
             @intCast(@min(out.width, std.math.maxInt(i32))),
             @intCast(@min(out.height, std.math.maxInt(i32))),
@@ -526,7 +566,9 @@ pub const SdlBackend = struct {
         const n = self.poll(dst);
         if (self.event_log) |w| {
             // A full log is only a diagnostic. It never causes the loss of an event for the game.
-            for (dst[0..n]) |ev| eventlog.writeEvent(ev, w) catch {};
+            for (dst[0..n]) |ev| {
+                eventlog.writeEvent(ev, w) catch {};
+            }
         }
         return n;
     }
@@ -561,10 +603,13 @@ pub const SdlBackend = struct {
                     if (!was_focused) return 0;
                     break :blk2 .focus_lost;
                 },
-                c.SDL_WINDOWEVENT_SIZE_CHANGED => .{ .drawable_resized = self.outputSize() orelse .{
-                    .width = @intCast(@max(ev.window.data1, 0)),
-                    .height = @intCast(@max(ev.window.data2, 0)),
-                } },
+                c.SDL_WINDOWEVENT_SIZE_CHANGED => .{
+                    .drawable_resized = self.outputSize() orelse
+                        .{
+                            .width = @intCast(@max(ev.window.data1, 0)),
+                            .height = @intCast(@max(ev.window.data2, 0)),
+                        },
+                },
                 else => return 0,
             },
             c.SDL_KEYDOWN, c.SDL_KEYUP => blk: {
@@ -572,8 +617,7 @@ pub const SdlBackend = struct {
                 // loss first, so these synthetic releases cannot commit a drag or a stroke.
                 // Injected events without a window are kept.
                 if (ev.key.windowID != 0 and self.window != null and
-                    (!self.keyboard_focused or c.SDL_GetKeyboardFocus() != self.window))
-                {
+                    (!self.keyboard_focused or c.SDL_GetKeyboardFocus() != self.window)) {
                     if (!self.keyboard_focused) return 0;
                     self.keyboard_focused = false;
                     break :blk .focus_lost;
@@ -613,13 +657,18 @@ pub const SdlBackend = struct {
                     .controller = controllerId(ev.cbutton.which),
                     .button = @fromBackingInt(ev.cbutton.button),
                 };
-                break :blk if (ev.type == c.SDL_CONTROLLERBUTTONDOWN) .{ .controller_button_down = button } else .{ .controller_button_up = button };
+                break :blk if (ev.type == c.SDL_CONTROLLERBUTTONDOWN)
+                    .{ .controller_button_down = button }
+                else
+                    .{ .controller_button_up = button };
             },
-            c.SDL_CONTROLLERAXISMOTION => .{ .controller_axis = .{
-                .controller = controllerId(ev.caxis.which),
-                .axis = @fromBackingInt(ev.caxis.axis),
-                .value = ev.caxis.value,
-            } },
+            c.SDL_CONTROLLERAXISMOTION => .{
+                .controller_axis = .{
+                    .controller = controllerId(ev.caxis.which),
+                    .axis = @fromBackingInt(ev.caxis.axis),
+                    .value = ev.caxis.value,
+                },
+            },
             else => return 0,
         };
         out[0] = .{ .time_ns = self.eventTimeNs(ev.common.timestamp), .payload = payload };
@@ -642,7 +691,10 @@ pub const SdlBackend = struct {
             c.SDL_JoystickNumHats(joystick) > 0,
         );
         if (c.SDL_GameControllerAddMapping(mapping.ptr) < 0) return false;
-        std.log.info("the joystick {s} has no gamepad mapping: the generic one ({s})", .{ guid[0..32], mapping });
+        std.log.info("the joystick {s} has no gamepad mapping: the generic one ({s})", .{
+            guid[0..32],
+            mapping,
+        });
         return true;
     }
 
@@ -685,7 +737,9 @@ pub const SdlBackend = struct {
         if (!self.capabilities.audio) return error.Unsupported;
         if (format.channels == 0 or
             format.sample_rate == 0 or
-            format.sample_rate > std.math.maxInt(c_int)) return error.Unsupported;
+            format.sample_rate > std.math.maxInt(c_int)) {
+            return error.Unsupported;
+        }
         self.closeAudio();
         const desired: c.SDL_AudioSpec = .{
             .freq = @intCast(format.sample_rate),
@@ -701,14 +755,17 @@ pub const SdlBackend = struct {
         };
         const device = c.SDL_OpenAudioDevice(null, 0, &desired, null, 0);
         if (device == 0) {
-            std.log.err("SDL_OpenAudioDevice failed: {s}", .{c.SDL_GetError()});
+            std.log.err("SDL_OpenAudioDevice failed: {s}", .{ c.SDL_GetError() });
             return error.DeviceFailure;
         }
         self.audio = .{
             .device = device,
             .format = format,
             .bytes_per_frame = @as(u32, format.channels) * @sizeOf(i16),
-            .capacity_frames = if (self.audio_capacity_frames != 0) self.audio_capacity_frames else format.sample_rate,
+            .capacity_frames = if (self.audio_capacity_frames != 0)
+                self.audio_capacity_frames
+            else
+                format.sample_rate,
         };
         c.SDL_PauseAudioDevice(device, 0);
     }
@@ -727,8 +784,9 @@ pub const SdlBackend = struct {
         const accepted: usize = @intCast(@min(offered, room));
         if (accepted == 0) return 0;
         const bytes: u32 = @intCast(accepted * self.audio.bytes_per_frame);
-        if (c.SDL_QueueAudio(self.audio.device, samples.ptr, bytes) != 0)
+        if (c.SDL_QueueAudio(self.audio.device, samples.ptr, bytes) != 0) {
             return error.DeviceFailure;
+        }
         self.audio.accepted_frames += accepted;
         return accepted;
     }
@@ -762,7 +820,9 @@ pub const SdlBackend = struct {
     }
 
     fn closeAudio(self: *SdlBackend) void {
-        if (self.audio.device != 0) c.SDL_CloseAudioDevice(self.audio.device);
+        if (self.audio.device != 0) {
+            c.SDL_CloseAudioDevice(self.audio.device);
+        }
         self.audio = .{};
     }
 };
@@ -874,7 +934,9 @@ const scancode_keys = [_]ScancodeKey{
 
 const key_table: [512]platform.Key = blk: {
     var table: [512]platform.Key = @splat(.unknown);
-    for (scancode_keys) |entry| table[entry[0]] = entry[1];
+    for (scancode_keys) |entry| {
+        table[entry[0]] = entry[1];
+    }
     break :blk table;
 };
 
@@ -938,10 +1000,33 @@ const generic_name = "generic gamepad";
 /// usual, or the last of fewer), then GUIDE; its axes the left stick then the right, then the
 /// triggers; its first hat the D-pad. From sorz (`src/sdl/backend.zig`), reused with the user's
 /// permission (PLAN GS-3).
-fn genericMapping(buffer: *[max_mapping]u8, guid: []const u8, axes: usize, buttons: usize, hat: bool) [:0]const u8 {
-    const in_turn = [_][]const u8{ "a", "b", "x", "y", "leftshoulder", "rightshoulder", "leftstick", "rightstick", "back" };
-    const axis_names = [_][]const u8{ "leftx", "lefty", "rightx", "righty", "lefttrigger", "righttrigger" };
-    var w: std.Io.Writer = .fixed(buffer[0 .. buffer.len - 1]);
+fn genericMapping(
+    buffer: *[max_mapping]u8,
+    guid: []const u8,
+    axes: usize,
+    buttons: usize,
+    hat: bool,
+) [:0]const u8 {
+    const in_turn = [_][]const u8{
+        "a",
+        "b",
+        "x",
+        "y",
+        "leftshoulder",
+        "rightshoulder",
+        "leftstick",
+        "rightstick",
+        "back",
+    };
+    const axis_names = [_][]const u8{
+        "leftx",
+        "lefty",
+        "rightx",
+        "righty",
+        "lefttrigger",
+        "righttrigger",
+    };
+    var w: std.Io.Writer = .fixed(buffer[0..buffer.len - 1]);
     w.print("{s},{s},", .{ guid, generic_name }) catch unreachable;
     const start = if (buttons >= 10) 9 else buttons -| 1;
     var next: usize = 0;
@@ -953,8 +1038,12 @@ fn genericMapping(buffer: *[max_mapping]u8, guid: []const u8, axes: usize, butto
         };
         w.print("{s}:b{d},", .{ name, b }) catch unreachable;
     }
-    for (axis_names[0..@min(axes, axis_names.len)], 0..) |name, a| w.print("{s}:a{d},", .{ name, a }) catch unreachable;
-    if (hat) w.writeAll("dpup:h0.1,dpright:h0.2,dpdown:h0.4,dpleft:h0.8,") catch unreachable;
+    for (axis_names[0..@min(axes, axis_names.len)], 0..) |name, a| {
+        w.print("{s}:a{d},", .{ name, a }) catch unreachable;
+    }
+    if (hat) {
+        w.writeAll("dpup:h0.1,dpright:h0.2,dpdown:h0.4,dpleft:h0.8,") catch unreachable;
+    }
     const n = w.buffered().len;
     buffer[n] = 0;
     return buffer[0..n :0];
@@ -962,12 +1051,27 @@ fn genericMapping(buffer: *[max_mapping]u8, guid: []const u8, axes: usize, butto
 
 test "the generic mapping: a Mega Drive pad's ten buttons and three axes; a small pad's last button START" {
     var buffer: [max_mapping]u8 = undefined;
-    try std.testing.expectEqualStrings("03001a0da30c00002400000011010000,generic gamepad,a:b0,b:b1,x:b2,y:b3,leftshoulder:b4," ++
-        "rightshoulder:b5,leftstick:b6,rightstick:b7,back:b8,start:b9,leftx:a0,lefty:a1,rightx:a2,", genericMapping(&buffer, "03001a0da30c00002400000011010000", 3, 10, false));
-    try std.testing.expectEqualStrings("g,generic gamepad,a:b0,b:b1,x:b2,start:b3,leftx:a0,lefty:a1,dpup:h0.1,dpright:h0.2,dpdown:h0.4,dpleft:h0.8,", genericMapping(&buffer, "g", 2, 4, true));
-    try std.testing.expectEqualStrings("g,generic gamepad,", genericMapping(&buffer, "g", 0, 0, false));
+    try std.testing.expectEqualStrings(
+        "03001a0da30c00002400000011010000,generic gamepad,a:b0,b:b1,x:b2,y:b3,leftshoulder:b4," ++
+            "rightshoulder:b5,leftstick:b6,rightstick:b7,back:b8,start:b9,leftx:a0,lefty:a1,rightx:a2,",
+        genericMapping(&buffer, "03001a0da30c00002400000011010000", 3, 10, false),
+    );
+    try std.testing.expectEqualStrings(
+        "g,generic gamepad,a:b0,b:b1,x:b2,start:b3,leftx:a0,lefty:a1,dpup:h0.1,dpright:h0.2,dpdown:h0.4,dpleft:h0.8,",
+        genericMapping(&buffer, "g", 2, 4, true),
+    );
+    try std.testing.expectEqualStrings(
+        "g,generic gamepad,",
+        genericMapping(&buffer, "g", 0, 0, false),
+    );
     // Many buttons: GUIDE the eleventh, none past it.
-    try std.testing.expect(std.mem.endsWith(u8, genericMapping(&buffer, "g", 8, 16, true), "back:b8,start:b9,guide:b10,leftx:a0,lefty:a1,rightx:a2,righty:a3,lefttrigger:a4,righttrigger:a5,dpup:h0.1,dpright:h0.2,dpdown:h0.4,dpleft:h0.8,"));
+    try std.testing.expect(
+        std.mem.endsWith(
+            u8,
+            genericMapping(&buffer, "g", 8, 16, true),
+            "back:b8,start:b9,guide:b10,leftx:a0,lefty:a1,rightx:a2,righty:a3,lefttrigger:a4,righttrigger:a5,dpup:h0.1,dpright:h0.2,dpdown:h0.4,dpleft:h0.8,",
+        ),
+    );
 }
 
 // A pad SDL has no mapping for, as a virtual joystick of the user's Mega Drive pad's three axes
@@ -987,18 +1091,27 @@ test "a joystick without a gamepad mapping is opened with the generic one" {
     var added: ?platform.ControllerId = null;
     for (0..4) |_| {
         const n = p.pollEvents(&out);
-        for (out[0..n]) |e| if (e.payload == .controller_added) {
-            try std.testing.expect(added == null);
-            added = e.payload.controller_added;
-        };
+        for (out[0..n]) |e| {
+            if (e.payload == .controller_added) {
+                try std.testing.expect(added == null);
+                added = e.payload.controller_added;
+            }
+        }
     }
     const id = added orelse return error.NoControllerAdded;
     // Its model: generic, START its tenth button.
     const model = p.controllerModel(id) orelse return error.NoModel;
     try std.testing.expect(model.generic);
-    try std.testing.expectEqual(@as(?u8, 9), model.buttons[@backingInt(platform.ControllerButton.start)]);
-    try std.testing.expectEqual(@as(?u8, 0), model.buttons[@backingInt(platform.ControllerButton.a)]);
-    const handle = c.SDL_GameControllerFromInstanceID(@bitCast(@backingInt(id))) orelse return error.NotOpened;
+    try std.testing.expectEqual(
+        @as(?u8, 9),
+        model.buttons[@backingInt(platform.ControllerButton.start)],
+    );
+    try std.testing.expectEqual(
+        @as(?u8, 0),
+        model.buttons[@backingInt(platform.ControllerButton.a)],
+    );
+    const handle = c.SDL_GameControllerFromInstanceID(@bitCast(@backingInt(id))) orelse
+        return error.NotOpened;
     const joystick = c.SDL_GameControllerGetJoystick(handle).?;
     _ = c.SDL_JoystickSetVirtualButton(joystick, 9, 1);
     _ = c.SDL_JoystickSetVirtualAxis(joystick, 0, 32767);
@@ -1007,11 +1120,14 @@ test "a joystick without a gamepad mapping is opened with the generic one" {
     var across = false;
     for (0..4) |_| {
         const n = p.pollEvents(&out);
-        for (out[0..n]) |e| switch (e.payload) {
-            .controller_button_down => |b| start = start or (b.button == .start and b.controller == id),
-            .controller_axis => |a| across = across or (a.axis == .left_x and a.value > 16384),
-            else => {},
-        };
+        for (out[0..n]) |e| {
+            switch (e.payload) {
+                .controller_button_down => |b| start = start or
+                    (b.button == .start and b.controller == id),
+                .controller_axis => |a| across = across or (a.axis == .left_x and a.value > 16384),
+                else => {},
+            }
+        }
     }
     try std.testing.expect(start);
     try std.testing.expect(across);
@@ -1019,10 +1135,10 @@ test "a joystick without a gamepad mapping is opened with the generic one" {
 
 fn startedBackend(scale: u32) !SdlBackend {
     useDummyDrivers();
-    var backend = try SdlBackend.init(
-        std.testing.allocator,
-        .{ .title = "flashbackz test", .initial_window_scale = scale },
-    );
+    var backend = try SdlBackend.init(std.testing.allocator, .{
+        .title = "flashbackz test",
+        .initial_window_scale = scale,
+    });
     backend.force_software_renderer = true;
     return backend;
 }
@@ -1036,7 +1152,9 @@ fn readBack(backend: *SdlBackend, dst: []u8, width: u32) !void {
         c.SDL_PIXELFORMAT_RGBA32,
         dst.ptr,
         @intCast(width * 4),
-    ) != 0) return error.ReadBackFailed;
+    ) != 0) {
+        return error.ReadBackFailed;
+    }
 }
 
 fn patternByte(x: u32, y: u32, channel: u32) u8 {
@@ -1054,10 +1172,12 @@ test "every named key has a scancode" {
         if (key == .unknown) continue;
         var found = false;
         for (scancode_keys) |entry| {
-            if (entry[1] == key) found = true;
+            if (entry[1] == key) {
+                found = true;
+            }
         }
         if (!found) {
-            std.debug.print("key {s} has no scancode\n", .{name});
+            std.debug.print("key {s} has no scancode\n", .{ name });
             return error.UnmappedKey;
         }
     }
@@ -1138,7 +1258,9 @@ test "present honours channel order and stride and retains nothing" {
         var x: u32 = 0;
         while (x < 8) : (x += 1) {
             var ch: u32 = 0;
-            while (ch < 4) : (ch += 1) pixels[y * stride + x * 4 + ch] = patternByte(x, y, ch);
+            while (ch < 4) : (ch += 1) {
+                pixels[y * stride + x * 4 + ch] = patternByte(x, y, ch);
+            }
         }
     }
     try p.present(.{ .width = 8, .height = 6, .stride = stride, .pixels = &pixels });
@@ -1318,13 +1440,24 @@ test "translation: keys and timestamps; text and the mouse are not read" {
     // A time stamp of 0 ms is before the backend's origin. It is clamped to the time of the
     // previous event, never earlier, so the delivery order and the time stamps agree.
     const first = out[0].time_ns;
-    ev.key = .{ .type = c.SDL_KEYUP, .timestamp = 0, .state = c.SDL_RELEASED, .keysym = .{ .scancode = c.SDL_SCANCODE_S } };
+    ev.key = .{
+        .type = c.SDL_KEYUP,
+        .timestamp = 0,
+        .state = c.SDL_RELEASED,
+        .keysym = .{ .scancode = c.SDL_SCANCODE_S },
+    };
     try std.testing.expectEqual(@as(usize, 1), backend.translate(&ev, &out));
     try std.testing.expectEqual(platform.Key.s, out[0].payload.key_up.key);
     try std.testing.expect(out[0].time_ns >= first);
 
     // The game reads neither text nor the mouse.
-    for ([_]u32{ c.SDL_TEXTINPUT, c.SDL_TEXTEDITING, c.SDL_MOUSEMOTION, c.SDL_MOUSEBUTTONDOWN, c.SDL_MOUSEWHEEL }) |kind| {
+    for ([_]u32{
+        c.SDL_TEXTINPUT,
+        c.SDL_TEXTEDITING,
+        c.SDL_MOUSEMOTION,
+        c.SDL_MOUSEBUTTONDOWN,
+        c.SDL_MOUSEWHEEL,
+    }) |kind| {
         ev.common = .{ .type = kind };
         try std.testing.expectEqual(@as(usize, 0), backend.translate(&ev, &out));
     }
@@ -1428,6 +1561,8 @@ test "a failed start leaves a backend that deinit cleans up" {
 
 test "the local time is the system's" {
     const now = SdlBackend.localTime(undefined) orelse return error.NoLocalTime;
-    try std.testing.expect(now.year >= 2024 and now.month >= 1 and now.month <= 12 and now.day >= 1 and now.day <= 31);
+    try std.testing.expect(
+        now.year >= 2024 and now.month >= 1 and now.month <= 12 and now.day >= 1 and now.day <= 31,
+    );
     try std.testing.expect(now.hour < 24 and now.minute < 60);
 }

@@ -101,7 +101,9 @@ pub const AgentBackend = struct {
         if (!self.audio.open) return;
         const total: u128 = @as(u128, self.audio.carry_ns) + ns;
         const frames: u64 = @intCast(total * self.audio.format.sample_rate / std.time.ns_per_s);
-        self.audio.carry_ns = @intCast(total - @as(u128, frames) * std.time.ns_per_s / self.audio.format.sample_rate);
+        self.audio.carry_ns = @intCast(
+            total - @as(u128, frames) * std.time.ns_per_s / self.audio.format.sample_rate,
+        );
         const played = @min(frames, self.audio.queued_frames);
         self.audio.queued_frames -= played;
         self.audio.played_frames += played;
@@ -144,7 +146,9 @@ pub const AgentBackend = struct {
         if (width == 0 or
             height == 0 or
             width > 8192 or
-            height > 8192) return error.InvalidResolution;
+            height > 8192) {
+            return error.InvalidResolution;
+        }
         const bytes = @as(usize, width) * height * platform.RgbaFrame.bytes_per_pixel;
         // Prepare the new capture storage before the mode changes.
         self.capture.resize(self.allocator, bytes) catch return error.OutOfMemory;
@@ -163,7 +167,7 @@ pub const AgentBackend = struct {
         const row_bytes = @as(usize, frame.width) * platform.RgbaFrame.bytes_per_pixel;
         var y: u32 = 0;
         while (y < frame.height) : (y += 1) {
-            @memcpy(self.capture.items[@as(usize, y) * row_bytes ..][0..row_bytes], frame.row(y));
+            @memcpy(self.capture.items[@as(usize, y) * row_bytes..][0..row_bytes], frame.row(y));
         }
         self.frames_presented += 1;
         self.last_frame_hash = std.hash.Wyhash.hash(0, self.capture.items);
@@ -196,7 +200,9 @@ pub const AgentBackend = struct {
     fn audioOpen(ctx: *anyopaque, format: platform.AudioFormat) platform.PlatformError!void {
         const self = cast(ctx);
         if (!self.started) return error.NotStarted;
-        if (!self.audio.available or format.channels == 0 or format.sample_rate == 0) return error.Unsupported;
+        if (!self.audio.available or format.channels == 0 or format.sample_rate == 0) {
+            return error.Unsupported;
+        }
         self.audio.open = true;
         self.audio.format = format;
         self.audio.capacity_frames = format.sample_rate;
@@ -214,10 +220,8 @@ pub const AgentBackend = struct {
         const room = self.audio.capacity_frames - self.audio.queued_frames;
         const accepted = @min(offered, room);
         if (self.audio.record) {
-            self.audio.pcm.appendSlice(
-                self.allocator,
-                samples[0 .. accepted * channels],
-            ) catch return error.OutOfMemory;
+            self.audio.pcm.appendSlice(self.allocator, samples[0..accepted * channels]) catch
+                return error.OutOfMemory;
         }
         self.audio.queued_frames += accepted;
         return accepted;

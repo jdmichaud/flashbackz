@@ -58,7 +58,9 @@ test "without a device the game goes on silent" {
     var sound: effects.Player = .init(null);
     sound.submit(bank, .{ .sound = @fromBackingInt(0) }, .{ .effects = true, .tunes = false });
     var output: audio_output.Output = .{};
-    for (0..3) |_| output.pump(&p, .{ .level = .{ .sound = &sound, .bank = bank } });
+    for (0..3) |_| {
+        output.pump(&p, .{ .level = .{ .sound = &sound, .bank = bank } });
+    }
     try std.testing.expect(!backend.audio.open);
     try std.testing.expectEqual(@as(u64, 0), backend.calls.audio_queue);
 }

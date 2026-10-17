@@ -66,7 +66,9 @@ fn word(bytes: []const u8, at: usize) u16 {
 fn expand(allocator: std.mem.Allocator, encoded: []const u8, size: usize) ![]u8 {
     if (encoded.len == 0 or
         encoded.len > size or
-        size > 1024 * 1024) return error.InvalidPackedExecutable;
+        size > 1024 * 1024) {
+        return error.InvalidPackedExecutable;
+    }
     const output = try allocator.alloc(u8, size);
     errdefer allocator.free(output);
     @memset(output, 0);
@@ -75,7 +77,9 @@ fn expand(allocator: std.mem.Allocator, encoded: []const u8, size: usize) ![]u8 
     var padding: usize = 0;
     while (cursor != 0 and
         encoded[cursor - 1] == 255 and
-        padding < 16) : (padding += 1) cursor -= 1;
+        padding < 16) : (padding += 1) {
+        cursor -= 1;
+    }
     var end = size;
     while (true) {
         if (cursor < 3) return error.InvalidPackedExecutable;
@@ -135,47 +139,56 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
     defer allocator.free(image);
     const data = image[data_segment..];
     var interface_colors: palette.Bank = undefined;
-    for (&interface_colors, 0..) |*color, i| color.* = .{
-        .r = palette.expandComponent(data[0xf91 + i * 3]),
-        .g = palette.expandComponent(data[0xf92 + i * 3]),
-        .b = palette.expandComponent(data[0xf93 + i * 3]),
-    };
+    for (&interface_colors, 0..) |*color, i| {
+        color.* = .{
+            .r = palette.expandComponent(data[0xf91 + i * 3]),
+            .g = palette.expandComponent(data[0xf92 + i * 3]),
+            .b = palette.expandComponent(data[0xf93 + i * 3]),
+        };
+    }
     var demos: [3]demo.Descriptor = undefined;
     for (&demos, 0..) |*descriptor, index| {
         const name = word(data, 0xfe0 + index * 4);
         const source_level = word(data, 0xfe2 + index * 4);
         if (source_level >= 7) return error.InvalidDemoLevel;
         var filename: [12]u8 = @splat(0);
-        const length = std.mem.indexOfScalar(u8, data[name..][0..12], 0) orelse return error.InvalidDemoFilename;
+        const length = std.mem.indexOfScalar(u8, data[name..][0..12], 0) orelse
+            return error.InvalidDemoFilename;
         @memcpy(filename[0..length], data[name..][0..length]);
         const room: i16 = @bitCast(word(data, 0xfec + index * 8));
         if (room >= 64) return error.InvalidDemoRoom;
         descriptor.* = .{
             .filename = filename,
             .level = @fromBackingInt(@as(u3, @intCast(source_level))),
-            .start = if (room < 0) null else .{
-                .room = @intCast(room),
-                .x = @bitCast(word(data, 0xfee + index * 8)),
-                .y = @bitCast(word(data, 0xff0 + index * 8)),
-            },
+            .start = if (room < 0)
+                null
+            else
+                .{
+                    .room = @intCast(room),
+                    .x = @bitCast(word(data, 0xfee + index * 8)),
+                    .y = @bitCast(word(data, 0xff0 + index * 8)),
+                },
         };
     }
     var continue_labels: [5][48]u8 = @splat(@splat(0));
     for ([_]usize{ 0x215f, 0x217d, 0x2185, 0x218e, 0x2194 }, &continue_labels) |offset, *label| {
-        const length = std.mem.indexOfScalar(u8, data[offset..][0..48], 0) orelse return error.InvalidContinueLabel;
+        const length = std.mem.indexOfScalar(u8, data[offset..][0..48], 0) orelse
+            return error.InvalidContinueLabel;
         @memcpy(label[0..length], data[offset..][0..length]);
     }
     var score_awards: [16]u16 = undefined;
-    for (&score_awards, 0..) |*score, i| score.* = word(data, 0xd3b + i * 2);
+    for (&score_awards, 0..) |*score, i| {
+        score.* = word(data, 0xd3b + i * 2);
+    }
     var actor_libraries: [4]actor_art.Library = undefined;
     for (&actor_libraries, 0..) |*library, i| {
         const name = word(data, 0xe42 + i * 2);
-        const length = std.mem.indexOfScalar(u8, data[name..][0..12], 0) orelse return error.InvalidActorLibrary;
+        const length = std.mem.indexOfScalar(u8, data[name..][0..12], 0) orelse
+            return error.InvalidActorLibrary;
         library.name = @splat(0);
-        for (
-            data[name..][0..length],
-            library.name[0..length],
-        ) |character, *out| out.* = std.ascii.toUpper(character);
+        for (data[name..][0..length], library.name[0..length]) |character, *out| {
+            out.* = std.ascii.toUpper(character);
+        }
         const colors = word(data, 0xea9 + i * 2);
         library.colors = try palette.decodeActorBank(data[colors..][0..32]);
     }
@@ -207,7 +220,7 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
         const cue = if (number < 75) data[0x114a + number] else 0xff;
         if (cue == 0xff) continue;
         if (cue >= 26) return error.InvalidSceneTable;
-        const music = data[0x760 + @as(usize, cue) * 9 ..][0..9];
+        const music = data[0x760 + @as(usize, cue) * 9..][0..9];
         const music_length = std.mem.indexOfScalar(u8, music, 0) orelse
             return error.InvalidSceneTable;
         if (music_length > scene.music.len) return error.InvalidSceneTable;
@@ -242,23 +255,31 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
             0x01 => 3,
             else => 1,
         };
-        @memcpy(credits[credits_length..][0..size], data[0x2326 + @as(usize, credits_length) ..][0..size]);
+        @memcpy(
+            credits[credits_length..][0..size],
+            data[0x2326 + @as(usize, credits_length)..][0..size],
+        );
         credits_length += size;
         if (byte == 0xff) break;
     }
     var ending_code: [7]u8 = undefined;
-    for (&ending_code, 0..) |*character, c| character.* = data[0x12ad + 21 * 7 + c] ^ 0x55;
+    for (&ending_code, 0..) |*character, c| {
+        character.* = data[0x12ad + 21 * 7 + c] ^ 0x55;
+    }
     var passwords: [7][3][7]u8 = undefined;
-    for (&passwords, 0..) |*level, l| for (level, 0..) |*code, d| {
-        for (code, 0..) |*character, c| character.* = data[0x12ad + l * 21 + d * 7 + c] ^ 0x55;
-        if (std.mem.indexOfScalar(u8, code, 0) == null) return error.InvalidLevelCode;
-    };
+    for (&passwords, 0..) |*level, l| {
+        for (level, 0..) |*code, d| {
+            for (code, 0..) |*character, c| {
+                character.* = data[0x12ad + l * 21 + d * 7 + c] ^ 0x55;
+            }
+            if (std.mem.indexOfScalar(u8, code, 0) == null) return error.InvalidLevelCode;
+        }
+    }
     // The immutable prefix is constructed from these immediate operands in this edition.
     var password_prefix: [6]u8 = undefined;
-    for (
-        [_]usize{ 0x2424, 0x242b, 0x2433, 0x243b, 0x2443 },
-        0..,
-    ) |offset, i| password_prefix[i] = image[offset] ^ 0x55;
+    for ([_]usize{ 0x2424, 0x242b, 0x2433, 0x243b, 0x2443 }, 0..) |offset, i| {
+        password_prefix[i] = image[offset] ^ 0x55;
+    }
     password_prefix[5] = image[0x244b];
     return .{
         .passwords = passwords,

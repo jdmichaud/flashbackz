@@ -1,6 +1,9 @@
 //! Bounded legacy rule records for semantic content import, never runtime dispatch.
 const std = @import("std");
-pub const Operation = struct { code: u8, argument: i16 };
+pub const Operation = struct {
+    code: u8,
+    argument: i16,
+};
 pub const Rule = struct {
     source: u16,
     target: u16,
@@ -17,7 +20,7 @@ pub const Group = struct {
         return self.records.len / 18;
     }
     pub fn at(self: Group, index: usize) Rule {
-        const r = self.records[index * 18 ..][0..18];
+        const r = self.records[index * 18..][0..18];
         return .{
             .source = word(r, 0),
             .target = word(r, 4),
@@ -39,14 +42,18 @@ pub fn group(data: []const u8, index: u16) !Group {
     const body = data[2..];
     if (count > 256 or
         index >= count or
-        @as(usize, count) * 4 > body.len) return error.InvalidRuleDirectory;
-    const offset = std.mem.readInt(u32, body[@as(usize, index) * 4 ..][0..4], .little);
+        @as(usize, count) * 4 > body.len) {
+        return error.InvalidRuleDirectory;
+    }
+    const offset = std.mem.readInt(u32, body[@as(usize, index) * 4..][0..4], .little);
     if (offset < @as(usize, count) * 4 or
         offset > body.len or
-        body.len - offset < 2) return error.InvalidRuleOffset;
+        body.len - offset < 2) {
+        return error.InvalidRuleOffset;
+    }
     const bytes = @as(usize, word(body, offset)) * 18;
     if (bytes > body.len - offset - 2) return error.TruncatedRules;
-    return .{ .records = body[offset + 2 ..][0..bytes] };
+    return .{ .records = body[offset + 2..][0..bytes] };
 }
 fn word(data: []const u8, offset: usize) u16 {
     return std.mem.readInt(u16, data[offset..][0..2], .little);

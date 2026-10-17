@@ -7,9 +7,10 @@ pub fn copy(allocator: std.mem.Allocator, file: []const u8, index: u16) ![]u8 {
     const end = std.mem.readInt(u16, file[0..2], .little);
     if (end < 2 or end % 2 != 0 or end > file.len) return error.InvalidStringDirectory;
     if (index >= end / 2) return error.MissingString;
-    const offset = std.mem.readInt(u16, file[@as(usize, index) * 2 ..][0..2], .little);
+    const offset = std.mem.readInt(u16, file[@as(usize, index) * 2..][0..2], .little);
     if (offset < end or offset >= file.len) return error.InvalidStringOffset;
-    const length = std.mem.indexOfScalar(u8, file[offset..], 0) orelse return error.UnterminatedString;
+    const length = std.mem.indexOfScalar(u8, file[offset..], 0) orelse
+        return error.UnterminatedString;
     if (length > 256) return error.StringTooLong;
     return allocator.dupe(u8, file[offset..][0..length]);
 }

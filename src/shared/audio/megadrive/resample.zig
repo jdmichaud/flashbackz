@@ -120,7 +120,9 @@ test "a rate stretched by 0.5 % gives 0.5 % more frames for the same input" {
     var frames: u64 = 0;
     for (0..inputs) |i| {
         // Half a second at 48 kHz, then half at 48,240 Hz.
-        if (i == inputs / 2) r.setRate(48240);
+        if (i == inputs / 2) {
+            r.setRate(48240);
+        }
         frames += r.push(.{ .left = 0, .right = 0 }, &out);
     }
     try testing.expect(frames >= 48000 + 119 and frames <= 48000 + 121);

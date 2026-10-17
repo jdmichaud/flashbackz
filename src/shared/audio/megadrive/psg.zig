@@ -24,7 +24,24 @@ const chip = @import("chip.zig");
 const Frame = chip.Frame;
 
 /// The level of each attenuation, 2 dB apart: round(2340 * 10^(-a / 10)), 0 for 15.
-pub const levels: [16]u16 = .{ 2340, 1859, 1476, 1173, 932, 740, 588, 467, 371, 295, 234, 186, 148, 117, 93, 0 };
+pub const levels: [16]u16 = .{
+    2340,
+    1859,
+    1476,
+    1173,
+    932,
+    740,
+    588,
+    467,
+    371,
+    295,
+    234,
+    186,
+    148,
+    117,
+    93,
+    0,
+};
 
 pub const Psg = struct {
     /// One step every 16 cycles of the chip, the chip at master / 15.
@@ -79,7 +96,9 @@ pub const Psg = struct {
             } else {
                 p.period[channel] = (p.period[channel] & 0x3f0) | data;
             }
-            if (channel == 2 and p.noise & 3 == 3) p.period[3] = p.period[2];
+            if (channel == 2 and p.noise & 3 == 3) {
+                p.period[3] = p.period[2];
+            }
         }
     }
 
@@ -95,19 +114,29 @@ pub const Psg = struct {
     /// One step: the counters, then the output level (0 to 4 x 2340).
     pub fn step(p: *Psg) i32 {
         for (0..4) |i| {
-            if (p.counter[i] != 0) p.counter[i] -= 1;
+            if (p.counter[i] != 0) {
+                p.counter[i] -= 1;
+            }
             if (p.counter[i] == 0) {
                 p.counter[i] = p.period[i];
                 p.output[i] ^= 1;
-                if (i < 3 and p.period[i] <= 1) p.output[i] = 1;
-                if (i == 3 and p.output[3] == 1) p.shiftNoise();
+                if (i < 3 and p.period[i] <= 1) {
+                    p.output[i] = 1;
+                }
+                if (i == 3 and p.output[3] == 1) {
+                    p.shiftNoise();
+                }
             }
         }
         var sum: i32 = 0;
         for (0..3) |i| {
-            if (p.output[i] != 0) sum += levels[p.attenuation[i]];
+            if (p.output[i] != 0) {
+                sum += levels[p.attenuation[i]];
+            }
         }
-        if (p.noise_out != 0) sum += levels[p.attenuation[3]];
+        if (p.noise_out != 0) {
+            sum += levels[p.attenuation[3]];
+        }
         return sum;
     }
 
@@ -132,7 +161,9 @@ pub const Psg = struct {
             if (p.counter[i] == 0) return 0;
             n = @min(n, p.counter[i] - 1);
         }
-        if (p.attenuation[3] != 15) n = @min(n, p.noiseSteady());
+        if (p.attenuation[3] != 15) {
+            n = @min(n, p.noiseSteady());
+        }
         return n;
     }
 
@@ -144,7 +175,9 @@ pub const Psg = struct {
         const interval: u32 = @max(p.period[3], 1);
         // The step of the next rise: the counter's next 0, or the one after when it falls there.
         var rise: u32 = if (p.counter[3] == 0) 1 else p.counter[3];
-        if (p.output[3] == 1) rise += interval;
+        if (p.output[3] == 1) {
+            rise += interval;
+        }
         // The rises that give the output it has: the register's low bits equal to it.
         const same: u32 = @ctz(p.lfsr ^ (if (p.noise_out == 1) @as(u16, 0xffff) else 0));
         return rise + same * 2 * interval - 1;
@@ -163,7 +196,9 @@ pub const Psg = struct {
                 // The register shifts when the output rises: every other flip, from the first if
                 // the output is low.
                 const rises = if (p.output[3] == 0) (flips + 1) / 2 else flips / 2;
-                for (0..rises) |_| p.shiftNoise();
+                for (0..rises) |_| {
+                    p.shiftNoise();
+                }
                 p.output[3] ^= @truncate(flips);
             }
         }
@@ -233,9 +268,13 @@ test "a tone of period 0 or 1 is a constant +1" {
     var p = Psg.init();
     p.write(0, 0x90);
     p.write(0, 0x81); // period 1
-    for (0..10) |_| try testing.expectEqual(@as(i32, 2340), p.step());
+    for (0..10) |_| {
+        try testing.expectEqual(@as(i32, 2340), p.step());
+    }
     p.write(0, 0x80); // period 0
-    for (0..10) |_| try testing.expectEqual(@as(i32, 2340), p.step());
+    for (0..10) |_| {
+        try testing.expectEqual(@as(i32, 2340), p.step());
+    }
 }
 
 test "the levels: 2 dB steps, 15 off, the sum of the channels" {
@@ -256,7 +295,9 @@ test "the levels: 2 dB steps, 15 off, the sum of the channels" {
     for (0..40) |_| {
         const v = p.step();
         try testing.expect(v == 0 or v == 2340 or v == 1476 or v == 2340 + 1476);
-        if (v == 2340 + 1476) seen_both = true;
+        if (v == 2340 + 1476) {
+            seen_both = true;
+        }
     }
     try testing.expect(seen_both);
 }
@@ -300,7 +341,9 @@ test "noise rate 3 follows tone 2's period, and a noise write resets the registe
     try testing.expectEqual(@as(u16, 7), p.period[3]);
     p.write(0, 0xc0 | 0x09); // tone 2's period changes: so does the noise's
     try testing.expectEqual(@as(u16, 9), p.period[3]);
-    for (0..1000) |_| _ = p.step();
+    for (0..1000) |_| {
+        _ = p.step();
+    }
     try testing.expect(p.lfsr != 0x8000);
     p.write(0, 0xe7);
     try testing.expectEqual(@as(u16, 0x8000), p.lfsr);
@@ -319,7 +362,10 @@ fn randomWrite(p: *Psg, r: std.Random) void {
         3 => p.write(0, 0xe0 | r.uintLessThan(u8, 8)),
         4 => p.write(0, r.uintLessThan(u8, 0x80)),
         else => {
-            const period: u16 = if (r.boolean()) r.uintLessThan(u16, 4) else r.uintLessThan(u16, 1024);
+            const period: u16 = if (r.boolean())
+                r.uintLessThan(u16, 4)
+            else
+                r.uintLessThan(u16, 1024);
             p.write(0, 0x80 | ((ch % 3) << 5) | @as(u8, @intCast(period & 15)));
             p.write(0, @intCast(period >> 4));
         },
@@ -332,16 +378,22 @@ test "a steady run: its steps keep the level, and skip leaves the state of the s
     var p = Psg.init();
     var runs: usize = 0;
     for (0..20000) |_| {
-        for (0..r.uintLessThan(u8, 3)) |_| randomWrite(&p, r);
+        for (0..r.uintLessThan(u8, 3)) |_| {
+            randomWrite(&p, r);
+        }
         // `steady` is asked after a step.
         const level = p.step();
         const n = p.steady();
         const k: u32 = @min(n, r.uintLessThan(u32, 5000));
         var stepped = p;
-        for (0..k) |_| try testing.expectEqual(level, stepped.step());
+        for (0..k) |_| {
+            try testing.expectEqual(level, stepped.step());
+        }
         p.skip(k);
         try testing.expectEqual(stepped, p);
-        if (k > 1) runs += 1;
+        if (k > 1) {
+            runs += 1;
+        }
     }
     // The runs were not all empty.
     try testing.expect(runs > 5000);
@@ -353,7 +405,9 @@ test "a silent channel's steps are skipped: the tones' periods 0 and 1, the nois
     _ = p.step();
     try testing.expectEqual(@as(u32, std.math.maxInt(u32)), p.steady());
     var stepped = p;
-    for (0..1001) |_| _ = stepped.step();
+    for (0..1001) |_| {
+        _ = stepped.step();
+    }
     p.skip(1001);
     try testing.expectEqual(stepped, p);
     // A tone heard at period 1 is a constant: it does not end the run; the noise heard does.
@@ -369,7 +423,9 @@ test "a silent channel's steps are skipped: the tones' periods 0 and 1, the nois
     try testing.expectEqual(@as(u1, 0), p.noise_out);
     try testing.expectEqual(@as(u1, 0), p.output[3]);
     try testing.expectEqual(@as(u32, 0x10 + 15 * 0x20 - 1), p.steady());
-    for (0..0x10 + 15 * 0x20 - 1) |_| try testing.expectEqual(level, p.step());
+    for (0..0x10 + 15 * 0x20 - 1) |_| {
+        try testing.expectEqual(level, p.step());
+    }
     try testing.expectEqual(level + levels[0], p.step());
 }
 
@@ -389,7 +445,9 @@ test "white noise at its fastest, heard: its steady runs give the steps' levels"
         made += 1;
         steps += 1;
         const n = p.steady();
-        for (0..n) |_| try testing.expectEqual(level, stepped.step());
+        for (0..n) |_| {
+            try testing.expectEqual(level, stepped.step());
+        }
         p.skip(n);
         steps += n;
         try testing.expectEqual(stepped, p);

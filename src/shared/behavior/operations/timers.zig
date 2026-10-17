@@ -22,7 +22,9 @@ pub fn setTimerFrom(world: *World, actor: u16, number: vocabulary.Number) !bool 
 /// Health at or below zero. An enemy found defeated adds 100 points each time.
 pub fn defeated(world: *World, actor: u16, _: void) !bool {
     if (world.characters[actor].health > 0) return false;
-    if (world.level.characters[actor].kind == .enemy) world.score +%= 100;
+    if (world.level.characters[actor].kind == .enemy) {
+        world.score +%= 100;
+    }
     return true;
 }
 

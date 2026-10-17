@@ -45,7 +45,8 @@ pub fn extractInMemory(
     // The known edition has none; another one shows what was not understood.
     if (report.unexpected != 0) {
         std.log.warn("the data set made from these files has {d} unexpected items:\n{s}", .{
-            report.unexpected, report.notes.items,
+            report.unexpected,
+            report.notes.items,
         });
     }
     return collector.files;
@@ -80,7 +81,9 @@ const DirectoryWriter = struct {
 
     fn put(context: *anyopaque, path: []const u8, bytes: []const u8) anyerror!void {
         const self: *DirectoryWriter = @ptrCast(@alignCast(context));
-        if (std.fs.path.dirname(path)) |parent| try self.dir.createDirPath(self.io, parent);
+        if (std.fs.path.dirname(path)) |parent| {
+            try self.dir.createDirPath(self.io, parent);
+        }
         try self.dir.writeFile(self.io, .{ .sub_path = path, .data = bytes });
     }
 };

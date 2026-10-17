@@ -5,7 +5,9 @@ pub const Stream = struct {
     pub fn next(self: *Stream) u16 {
         const high_bit = self.state & 0x80000000 != 0;
         self.state <<= 1;
-        if (!high_bit) self.state ^= 0x1d872b41;
+        if (!high_bit) {
+            self.state ^= 0x1d872b41;
+        }
         return @truncate(self.state);
     }
 };

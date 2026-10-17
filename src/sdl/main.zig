@@ -32,14 +32,18 @@ pub fn main(init: std.process.Init) !void {
                 "or a directory extracted from them";
             try w.interface.print("{s}: {s}\n", .{ program, needs });
             try Args.writeUsage(&w.interface);
-        } else try Args.writeError(&w.interface, @errorCast(err), diagnostic);
+        } else {
+            try Args.writeError(&w.interface, @errorCast(err), diagnostic);
+        }
         try w.interface.flush();
         std.process.exit(2);
     };
     // Extracting writes the data set without opening a window.
     if (options.providers.extract != null) {
         const status = native.cli.extractCommand(init.gpa, init.io, program, options.providers);
-        if (status != 0) std.process.exit(status);
+        if (status != 0) {
+            std.process.exit(status);
+        }
         return;
     }
     if (options.help) {
@@ -49,5 +53,7 @@ pub fn main(init: std.process.Init) !void {
         return w.interface.flush();
     }
     const status = try sdl.host.run(init.gpa, init.io, init.environ_map, options);
-    if (status != 0) std.process.exit(status);
+    if (status != 0) {
+        std.process.exit(status);
+    }
 }

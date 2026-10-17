@@ -4,18 +4,25 @@ const level = @import("level.zig");
 const floppy_interface = @import("floppy_interface.zig");
 const platform = @import("../platform.zig");
 const settings = @import("../settings.zig");
-pub const Destination = struct { level: level.Id, difficulty: settings.Difficulty };
+pub const Destination = struct {
+    level: level.Id,
+    difficulty: settings.Difficulty,
+};
 pub const Table = [7][3][7]u8;
 
 pub fn match(codes: Table, input: []const u8) ?Destination {
     if (input.len == 0 or input.len > 6) return null;
-    for (codes, 0..) |difficulties, level_index| for (difficulties, 0..) |code, difficulty| {
-        const expected = std.mem.sliceTo(&code, 0);
-        if (expected.len != 0 and std.ascii.eqlIgnoreCase(input, expected)) return .{
-            .level = @fromBackingInt(@as(u3, @intCast(level_index))),
-            .difficulty = @fromBackingInt(@as(u2, @intCast(difficulty))),
-        };
-    };
+    for (codes, 0..) |difficulties, level_index| {
+        for (difficulties, 0..) |code, difficulty| {
+            const expected = std.mem.sliceTo(&code, 0);
+            if (expected.len != 0 and std.ascii.eqlIgnoreCase(input, expected)) {
+                return .{
+                    .level = @fromBackingInt(@as(u3, @intCast(level_index))),
+                    .difficulty = @fromBackingInt(@as(u2, @intCast(difficulty))),
+                };
+            }
+        }
+    }
     return null;
 }
 
@@ -58,5 +65,7 @@ test "level codes select their difficulty, retain spaces and reject partial inpu
         "END",
         "ENDGO",
         "END GOX",
-    }) |input| try std.testing.expect(match(codes, input) == null);
+    }) |input| {
+        try std.testing.expect(match(codes, input) == null);
+    }
 }

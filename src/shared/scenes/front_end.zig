@@ -97,15 +97,23 @@ pub const Scene = struct {
 
     fn play(self: *Scene, name: []const u8) !void {
         const next = try vector_player.Player.open(self.allocator, self.source, name, 0);
-        if (self.player) |*previous| previous.deinit();
+        if (self.player) |*previous| {
+            previous.deinit();
+        }
         self.player = next;
         self.skip_requested = false;
     }
 
     pub fn deinit(self: *Scene) void {
-        if (self.player) |*player| player.deinit();
-        if (self.page_assets) |*assets| assets.deinit();
-        if (self.music) |*music| music.deinit();
+        if (self.player) |*player| {
+            player.deinit();
+        }
+        if (self.page_assets) |*assets| {
+            assets.deinit();
+        }
+        if (self.music) |*music| {
+            music.deinit();
+        }
         self.assets.deinit();
         self.* = undefined;
     }
@@ -122,11 +130,15 @@ pub const Scene = struct {
                 .menu => "OPTION3",
             };
             const replacement = try soundtrack.Soundtrack.open(self.allocator, self.source, name);
-            if (self.music) |*previous| previous.deinit();
+            if (self.music) |*previous| {
+                previous.deinit();
+            }
             self.music = replacement;
             self.music_cue = wanted;
         }
-        if (self.music) |*music| music.player.master_volume = self.music_volume;
+        if (self.music) |*music| {
+            music.player.master_volume = self.music_volume;
+        }
     }
 
     fn cue(self: *const Scene) ?MusicCue {
@@ -147,17 +159,21 @@ pub const Scene = struct {
 
     pub fn stateHash(self: *const Scene) u64 {
         var hash = std.hash.Wyhash.init(0);
-        hash.update(&.{
-            @backingInt(self.stage),
-            @backingInt(self.view),
-            @backingInt(self.menu.selected),
-            @backingInt(self.difficulty),
-            @backingInt(self.pending_difficulty),
-            @backingInt(self.selected_level),
-        });
+        hash.update(
+            &.{
+                @backingInt(self.stage),
+                @backingInt(self.view),
+                @backingInt(self.menu.selected),
+                @backingInt(self.difficulty),
+                @backingInt(self.pending_difficulty),
+                @backingInt(self.selected_level),
+            },
+        );
         hash.update(self.password[0..self.password_length]);
-        hash.update(&.{@backingInt(self.introduction_part)});
-        if (self.player) |player| hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, player.playback.frame)));
+        hash.update(&.{ @backingInt(self.introduction_part) });
+        if (self.player) |player| {
+            hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, player.playback.frame)));
+        }
         return hash.final();
     }
 
@@ -166,7 +182,9 @@ pub const Scene = struct {
     }
 
     pub fn update(self: *Scene, p: *platform.Platform) !void {
-        if (self.view == .password) self.blinkCursor(p.nowNs());
+        if (self.view == .password) {
+            self.blinkCursor(p.nowNs());
+        }
         if (self.stage == .menu and self.view == .main and self.player == null) {
             const now = p.nowNs();
             const since = self.idle_since_ns orelse now;
@@ -175,11 +193,15 @@ pub const Scene = struct {
                 self.idle_since_ns = null;
                 self.stage = .demo_ready;
             }
-        } else self.idle_since_ns = null;
+        } else {
+            self.idle_since_ns = null;
+        }
         if (self.player) |*player| {
             player.setPaused(self.films_paused, p.nowNs());
             // A held film does not look at its keys.
-            if (player.paused_at != null) self.skip_requested = false;
+            if (player.paused_at != null) {
+                self.skip_requested = false;
+            }
             const skipped = self.skip_requested;
             if (skipped or try player.update(p.nowNs())) {
                 if (self.stage == .game_over) {
@@ -215,18 +237,24 @@ pub const Scene = struct {
         if (now_ns >= due) {
             self.cursor_shown = !self.cursor_shown;
             self.cursor_due_ns = due + period;
-        } else self.cursor_due_ns = due;
+        } else {
+            self.cursor_due_ns = due;
+        }
     }
 
     fn show(self: *Scene, view: View, picture: []const u8) !void {
         const replacement = try menu_art.loadNamed(self.allocator, self.source, picture);
-        if (self.page_assets) |*assets| assets.deinit();
+        if (self.page_assets) |*assets| {
+            assets.deinit();
+        }
         self.page_assets = replacement;
         self.view = view;
     }
 
     fn mainMenu(self: *Scene) void {
-        if (self.page_assets) |*assets| assets.deinit();
+        if (self.page_assets) |*assets| {
+            assets.deinit();
+        }
         self.page_assets = null;
         self.view = .main;
         self.menu.selected = .start;
@@ -254,7 +282,9 @@ pub const Scene = struct {
             return;
         }
         // Films read only their skip keys and P.
-        if (self.player != null and vector_player.skips(input.payload, self.joystick)) self.skip_requested = true;
+        if (self.player != null and vector_player.skips(input.payload, self.joystick)) {
+            self.skip_requested = true;
+        }
         if (input.payload != .key_down) return;
         const press = input.payload.key_down;
         const key = press.key;
@@ -263,41 +293,70 @@ pub const Scene = struct {
         if (self.stage != .menu) return;
         const direction = if (input_mod.keyAction(key)) |action| action.isDirection() else false;
         if (self.view != .password and direction and
-            !self.direction_repeat.accept(press.repeat, input.time_ns)) return;
+            !self.direction_repeat.accept(press.repeat, input.time_ns)) {
+            return;
+        }
         switch (self.view) {
             .main => {
-                if (key == .up or key == .down) self.idle_since_ns = input.time_ns;
+                if (key == .up or key == .down) {
+                    self.idle_since_ns = input.time_ns;
+                }
                 const index: usize = @backingInt(self.menu.selected);
-                if (key == .up) self.menu.selected = @fromBackingInt(@as(
-                    u3,
-                    @intCast((index + menu_mod.action_count - 1) % menu_mod.action_count),
-                ));
-                if (key == .down) self.menu.selected = @fromBackingInt(@as(
-                    u3,
-                    @intCast((index + 1) % menu_mod.action_count),
-                ));
+                if (key == .up) {
+                    self.menu.selected = @fromBackingInt(
+                        @as(
+                            u3,
+                            @intCast((index + menu_mod.action_count - 1) % menu_mod.action_count),
+                        ),
+                    );
+                }
+                if (key == .down) {
+                    self.menu.selected = @fromBackingInt(
+                        @as(u3, @intCast((index + 1) % menu_mod.action_count)),
+                    );
+                }
                 // A held Escape that skipped the introduction does not quit as it repeats.
-                if (key == .escape and !press.repeat) self.stage = .quit;
-                if (confirm and !press.repeat) try self.choose();
+                if (key == .escape and !press.repeat) {
+                    self.stage = .quit;
+                }
+                if (confirm and !press.repeat) {
+                    try self.choose();
+                }
             },
             .skill => {
                 // Up and Down wrap around the three difficulties.
                 const selected: u2 = @backingInt(self.pending_difficulty);
-                if (key == .up) self.pending_difficulty = @fromBackingInt(if (selected == 0) 2 else selected - 1);
-                if (key == .down) self.pending_difficulty = @fromBackingInt(if (selected == 2) 0 else selected + 1);
+                if (key == .up) {
+                    self.pending_difficulty = @fromBackingInt(
+                        if (selected == 0) 2 else selected - 1,
+                    );
+                }
+                if (key == .down) {
+                    self.pending_difficulty = @fromBackingInt(
+                        if (selected == 2) 0 else selected + 1,
+                    );
+                }
                 if (confirm and !press.repeat) {
                     self.difficulty = self.pending_difficulty;
                     self.mainMenu();
                 }
-                if (key == .escape) self.mainMenu();
+                if (key == .escape) {
+                    self.mainMenu();
+                }
             },
             .info => if (confirm or key == .escape or key == .tab) self.mainMenu(),
             .load => if (input_mod.keyAction(key)) |action| {
-                if (!press.repeat or action.isDirection()) self.pressLoad(action);
+                if (!press.repeat or action.isDirection()) {
+                    self.pressLoad(action);
+                }
             },
             .password => {
                 if (key == .backspace) {
-                    if (self.pad_character != null) self.pad_character = null else self.password_length -|= 1;
+                    if (self.pad_character != null) {
+                        self.pad_character = null;
+                    } else {
+                        self.password_length -|= 1;
+                    }
                     return;
                 }
                 if (key == .enter) {
@@ -309,7 +368,8 @@ pub const Scene = struct {
                 const character: ?u8 = if (code >= @backingInt(platform.Key.a) and
                     code <= @backingInt(platform.Key.z))
                     @intCast('A' + code - @backingInt(platform.Key.a))
-                else if (code >= @backingInt(platform.Key.digit_0) and code <= @backingInt(platform.Key.digit_9))
+                else if (code >= @backingInt(platform.Key.digit_0) and
+                    code <= @backingInt(platform.Key.digit_9))
                     @intCast('0' + code - @backingInt(platform.Key.digit_0))
                 else switch (key) {
                     .space => ' ',
@@ -372,16 +432,30 @@ pub const Scene = struct {
                     self.idle_since_ns = time_ns;
                     const index: usize = @backingInt(self.menu.selected);
                     const step: usize = if (change.action == .up) menu_mod.action_count - 1 else 1;
-                    self.menu.selected = @fromBackingInt(@as(u3, @intCast((index + step) % menu_mod.action_count)));
+                    self.menu.selected = @fromBackingInt(
+                        @as(u3, @intCast((index + step) % menu_mod.action_count)),
+                    );
                 },
                 else => if (choose_it or back) try self.choose(),
             },
             .skill => {
                 const selected: u2 = @backingInt(self.pending_difficulty);
-                if (change.action == .up) self.pending_difficulty = @fromBackingInt(if (selected == 0) 2 else selected - 1);
-                if (change.action == .down) self.pending_difficulty = @fromBackingInt(if (selected == 2) 0 else selected + 1);
-                if (choose_it) self.difficulty = self.pending_difficulty;
-                if (choose_it or back) self.mainMenu();
+                if (change.action == .up) {
+                    self.pending_difficulty = @fromBackingInt(
+                        if (selected == 0) 2 else selected - 1,
+                    );
+                }
+                if (change.action == .down) {
+                    self.pending_difficulty = @fromBackingInt(
+                        if (selected == 2) 0 else selected + 1,
+                    );
+                }
+                if (choose_it) {
+                    self.difficulty = self.pending_difficulty;
+                }
+                if (choose_it or back) {
+                    self.mainMenu();
+                }
             },
             .info => if (choose_it or back) self.mainMenu(),
             .load => self.pressLoad(change.action),
@@ -392,15 +466,19 @@ pub const Scene = struct {
     /// A press on LOAD's page, once the game has read the slots; going back returns to the main
     /// page.
     fn pressLoad(self: *Scene, action: input_mod.Action) void {
-        if (self.slots.len == save_slots.row_count) self.load_page.press(action, self.slots);
+        if (self.slots.len == save_slots.row_count) {
+            self.load_page.press(action, self.slots);
+        }
         self.leaveLoad();
     }
 
     fn leaveLoad(self: *Scene) void {
-        if (self.load_page.outcome) |outcome| if (outcome == .back) {
-            self.load_page.outcome = null;
-            self.mainMenu();
-        };
+        if (self.load_page.outcome) |outcome| {
+            if (outcome == .back) {
+                self.load_page.outcome = null;
+                self.mainMenu();
+            }
+        }
     }
 
     /// The characters a pad goes through, in order.
@@ -412,7 +490,12 @@ pub const Scene = struct {
     fn padCode(self: *Scene, action: input_mod.Action, enter: bool, back: bool) !void {
         switch (action) {
             .up, .down => {
-                const at = if (self.pad_character) |c| std.mem.indexOfScalar(u8, pad_characters, c).? else if (action == .up) pad_characters.len - 1 else 0;
+                const at = if (self.pad_character) |c|
+                    std.mem.indexOfScalar(u8, pad_characters, c).?
+                else if (action == .up)
+                    pad_characters.len - 1
+                else
+                    0;
                 const step: usize = if (action == .up) 1 else pad_characters.len - 1;
                 self.pad_character = pad_characters[(at + step) % pad_characters.len];
             },
@@ -426,7 +509,9 @@ pub const Scene = struct {
                 self.password_length -|= 1;
             },
             else => if (enter) {
-                if (self.pad_character) |c| self.addCharacter(c);
+                if (self.pad_character) |c| {
+                    self.addCharacter(c);
+                }
                 self.pad_character = null;
                 try self.submitPassword();
             } else if (back) {
@@ -467,13 +552,15 @@ pub const Scene = struct {
         if (self.view == .load) {
             // On black, in the page's colors.
             @memset(indices, 0);
-            if (self.slots.len == save_slots.row_count) try self.load_page.draw(
-                indices,
-                &assets.font,
-                self.slots,
-                .{ .foreground = 2, .shadow = 0 },
-                .{ .foreground = 1, .shadow = 0 },
-            );
+            if (self.slots.len == save_slots.row_count) {
+                try self.load_page.draw(
+                    indices,
+                    &assets.font,
+                    self.slots,
+                    .{ .foreground = 2, .shadow = 0 },
+                    .{ .foreground = 1, .shadow = 0 },
+                );
+            }
             return palette.writeRgba(indices, &assets.colors, rgba);
         }
         @memcpy(indices, assets.background.pixels);
@@ -489,19 +576,21 @@ pub const Scene = struct {
                     96,
                     .{ .foreground = 2, .shadow = 0 },
                 );
-                for ([_][]const u8{ "EASY", "NORMAL", "EXPERT" }, 0..) |label, i| try text.draw(
-                    indices,
-                    256,
-                    224,
-                    &assets.font,
-                    label,
-                    112,
-                    120 + @as(i32, @intCast(i)) * 16,
-                    .{
-                        .foreground = if (i == @backingInt(self.pending_difficulty)) 1 else 2,
-                        .shadow = 0,
-                    },
-                );
+                for ([_][]const u8{ "EASY", "NORMAL", "EXPERT" }, 0..) |label, i| {
+                    try text.draw(
+                        indices,
+                        256,
+                        224,
+                        &assets.font,
+                        label,
+                        112,
+                        120 + @as(i32, @intCast(i)) * 16,
+                        .{
+                            .foreground = if (i == @backingInt(self.pending_difficulty)) 1 else 2,
+                            .shadow = 0,
+                        },
+                    );
+                }
             },
             .password => {
                 try text.draw(
@@ -535,26 +624,30 @@ pub const Scene = struct {
                     .{ .foreground = 2, .shadow = 0 },
                 );
                 // The character a pad is choosing, in the selected color, the cursor under it.
-                if (self.pad_character) |c| try text.draw(
-                    indices,
-                    256,
-                    224,
-                    &assets.font,
-                    &.{c},
-                    120 + 8 * @as(i32, @intCast(self.password_length)),
-                    168,
-                    .{ .foreground = 1, .shadow = 0 },
-                );
-                if (self.cursor_shown) try text.draw(
-                    indices,
-                    256,
-                    224,
-                    &assets.font,
-                    "_",
-                    120 + 8 * @as(i32, @intCast(self.password_length)),
-                    168,
-                    .{ .foreground = 2, .shadow = 0 },
-                );
+                if (self.pad_character) |c| {
+                    try text.draw(
+                        indices,
+                        256,
+                        224,
+                        &assets.font,
+                        &.{ c },
+                        120 + 8 * @as(i32, @intCast(self.password_length)),
+                        168,
+                        .{ .foreground = 1, .shadow = 0 },
+                    );
+                }
+                if (self.cursor_shown) {
+                    try text.draw(
+                        indices,
+                        256,
+                        224,
+                        &assets.font,
+                        "_",
+                        120 + 8 * @as(i32, @intCast(self.password_length)),
+                        168,
+                        .{ .foreground = 2, .shadow = 0 },
+                    );
+                }
             },
             .info => {},
             .main, .load => unreachable,

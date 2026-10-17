@@ -25,7 +25,10 @@ pub const DirectoryAssetSource = struct {
     /// short-read loop of `readAll`.
     max_read: usize = 0,
 
-    const Handle = struct { file: std.Io.File, length: u64 };
+    const Handle = struct {
+        file: std.Io.File,
+        length: u64,
+    };
 
     pub const OpenError = error{ NotFound, NotADirectory, AccessDenied, Io, Canceled };
 
@@ -35,13 +38,14 @@ pub const DirectoryAssetSource = struct {
         io: std.Io,
         path: []const u8,
     ) OpenError!DirectoryAssetSource {
-        const dir = std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true }) catch |err| return switch (err) {
-            error.FileNotFound => error.NotFound,
-            error.NotDir => error.NotADirectory,
-            error.AccessDenied, error.PermissionDenied => error.AccessDenied,
-            error.Canceled => error.Canceled,
-            else => error.Io,
-        };
+        const dir = std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true }) catch |err|
+            return switch (err) {
+                error.FileNotFound => error.NotFound,
+                error.NotDir => error.NotADirectory,
+                error.AccessDenied, error.PermissionDenied => error.AccessDenied,
+                error.Canceled => error.Canceled,
+                else => error.Io,
+            };
         return .{ .allocator = allocator, .io = io, .dir = dir, .owns_dir = true };
     }
 
@@ -54,17 +58,23 @@ pub const DirectoryAssetSource = struct {
     /// closes its own handles; this is a safety net.
     pub fn deinit(self: *DirectoryAssetSource) void {
         for (self.handles.items) |slot| {
-            if (slot) |h| h.file.close(self.io);
+            if (slot) |h| {
+                h.file.close(self.io);
+            }
         }
         self.handles.deinit(self.allocator);
-        if (self.owns_dir) self.dir.close(self.io);
+        if (self.owns_dir) {
+            self.dir.close(self.io);
+        }
         self.* = undefined;
     }
 
     pub fn openHandles(self: *const DirectoryAssetSource) usize {
         var n: usize = 0;
         for (self.handles.items) |slot| {
-            if (slot != null) n += 1;
+            if (slot != null) {
+                n += 1;
+            }
         }
         return n;
     }
@@ -126,8 +136,11 @@ pub const DirectoryAssetSource = struct {
             if (last) {
                 return dir.openFile(io, host_name, .{}) catch |err| return mapError(err);
             }
-            const next = dir.openDir(io, host_name, .{ .iterate = true }) catch |err| return mapError(err);
-            if (owned_dir) dir.close(io);
+            const next = dir.openDir(io, host_name, .{ .iterate = true }) catch |err|
+                return mapError(err);
+            if (owned_dir) {
+                dir.close(io);
+            }
             dir = next;
             owned_dir = true;
         }
@@ -152,9 +165,11 @@ pub const DirectoryAssetSource = struct {
                 .directory => st.kind == .directory,
             };
             if (ok) return component;
-        } else |err| switch (err) {
-            error.FileNotFound, error.NotDir => {},
-            else => return mapError(err),
+        } else |err| {
+            switch (err) {
+                error.FileNotFound, error.NotDir => {},
+                else => return mapError(err),
+            }
         }
         var found: ?[]const u8 = null;
         var scan = try iterable(io, dir);
@@ -213,10 +228,15 @@ pub const DirectoryAssetSource = struct {
         if (dst.len == 0) return 0;
         if (offset >= h.length) return 0;
         var n = dst.len;
-        if (self.max_read != 0) n = @min(n, self.max_read);
+        if (self.max_read != 0) {
+            n = @min(n, self.max_read);
+        }
         const remaining = h.length - offset;
-        if (remaining < n) n = @intCast(remaining);
-        return h.file.readPositional(self.io, &.{dst[0..n]}, offset) catch |err| return mapError(err);
+        if (remaining < n) {
+            n = @intCast(remaining);
+        }
+        return h.file.readPositional(self.io, &.{ dst[0..n] }, offset) catch |err|
+            return mapError(err);
     }
 
     fn lookup(self: *DirectoryAssetSource, file: platform.AssetHandle) ?Handle {
@@ -229,7 +249,9 @@ pub const DirectoryAssetSource = struct {
         const self = cast(ctx);
         const raw = @backingInt(file);
         if (raw == 0 or raw > self.handles.items.len) return;
-        if (self.handles.items[raw - 1]) |h| h.file.close(self.io);
+        if (self.handles.items[raw - 1]) |h| {
+            h.file.close(self.io);
+        }
         self.handles.items[raw - 1] = null;
     }
 
@@ -237,7 +259,9 @@ pub const DirectoryAssetSource = struct {
         const self = cast(ctx);
         var names: std.ArrayList([]const u8) = .empty;
         errdefer {
-            for (names.items) |n| self.allocator.free(n);
+            for (names.items) |n| {
+                self.allocator.free(n);
+            }
             names.deinit(self.allocator);
         }
         var logical: [platform.max_asset_name_len]u8 = undefined;
@@ -266,12 +290,14 @@ pub const DirectoryAssetSource = struct {
             platform.validateName(entry.name) catch continue;
             if (used + entry.name.len > logical.len) continue;
             const kind = self.entryKind(dir, entry) orelse continue;
-            const full = logical[0 .. used + entry.name.len];
+            const full = logical[0..used + entry.name.len];
             _ = platform.canonicalAssetName(entry.name, logical[used..][0..entry.name.len]);
             switch (kind) {
                 .directory => {
                     if (depth >= platform.max_asset_depth or full.len + 1 >= logical.len) continue;
-                    var sub = dir.openDir(io, entry.name, .{ .iterate = true }) catch |err| switch (err) {
+                    var sub = dir.openDir(io, entry.name, .{
+                        .iterate = true,
+                    }) catch |err| switch (err) {
                         error.Canceled => return error.Canceled,
                         else => continue,
                     };
@@ -308,18 +334,18 @@ const contract = @import("contract.zig");
 
 /// Writes the contract fixture into `dir`, with mixed host case and an invisible entry.
 pub fn writeFixture(io: std.Io, dir: std.Io.Dir) !void {
-    try dir.writeFile(
-        io,
-        .{ .sub_path = contract.fixture.blob_name, .data = contract.fixture.blob },
-    );
+    try dir.writeFile(io, .{
+        .sub_path = contract.fixture.blob_name,
+        .data = contract.fixture.blob,
+    });
     try dir.writeFile(io, .{ .sub_path = contract.fixture.empty_name, .data = "" });
     try dir.writeFile(io, .{ .sub_path = "game.cfg", .data = contract.fixture.config });
     try dir.createDirPath(io, "sub");
     var pattern: [contract.fixture.nested_len]u8 = undefined;
-    try dir.writeFile(
-        io,
-        .{ .sub_path = "sub/nested.dat", .data = contract.fixture.nested(&pattern) },
-    );
+    try dir.writeFile(io, .{
+        .sub_path = "sub/nested.dat",
+        .data = contract.fixture.nested(&pattern),
+    });
     // Not a logical name: it is never listed and never opened.
     try dir.writeFile(io, .{ .sub_path = ".hidden", .data = "x" });
 }
@@ -372,6 +398,6 @@ test "directory asset source survives every allocation failure without leaking" 
     try std.testing.checkAllAllocationFailures(
         std.testing.allocator,
         directoryAssetsUnderAllocator,
-        .{tmp.dir},
+        .{ tmp.dir },
     );
 }

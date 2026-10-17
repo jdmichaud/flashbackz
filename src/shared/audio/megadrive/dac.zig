@@ -21,7 +21,11 @@ pub const enable_delay: u32 = 143;
 pub const first_value_delay: u32 = 908;
 
 /// A write the player makes: `port` and `value` as for `Ym2612.write`, at `cycle` (master clock).
-pub const Write = struct { cycle: u64, port: u2, value: u8 };
+pub const Write = struct {
+    cycle: u64,
+    port: u2,
+    value: u8,
+};
 
 pub const Dac = struct {
     values: []const u8 = &.{},
@@ -64,7 +68,9 @@ pub const Dac = struct {
     /// its bus: the play's next events come that much later. Call it in time order, before
     /// taking the writes due after `from`.
     pub fn hold(d: *Dac, from: u64, cycles: u64) void {
-        if (d.stage != .idle and d.next >= from) d.next += cycles;
+        if (d.stage != .idle and d.next >= from) {
+            d.next += cycles;
+        }
     }
 
     /// Whether a sample is playing (the Z80's flag $1FF6 for the long samples).
@@ -131,7 +137,9 @@ pub const Dac = struct {
                     d.stage = .idle;
                 }
                 d.index += 1;
-                if (d.index >= d.values.len) d.stage = .idle;
+                if (d.index >= d.values.len) {
+                    d.stage = .idle;
+                }
                 return .{ .cycle = at, .port = 0, .value = 0x2a };
             },
         }
@@ -155,10 +163,13 @@ test "a sample's writes: DAC on, then each value at its step" {
     try testing.expectEqual(Write{ .cycle = t1, .port = 0, .value = 0x2a }, d.nextWrite(t1).?);
     try testing.expectEqual(Write{ .cycle = t1, .port = 1, .value = 0x80 }, d.nextWrite(t1).?);
     const t2 = t1 + 200 * 15;
-    try testing.expectEqual(Write{ .cycle = t2, .port = 1, .value = 0x90 }, blk: {
-        _ = d.nextWrite(t2).?;
-        break :blk d.nextWrite(t2).?;
-    });
+    try testing.expectEqual(
+        Write{ .cycle = t2, .port = 1, .value = 0x90 },
+        blk: {
+            _ = d.nextWrite(t2).?;
+            break :blk d.nextWrite(t2).?;
+        },
+    );
     const t3 = t2 + 250 * 15;
     _ = d.nextWrite(t3).?;
     try testing.expectEqual(Write{ .cycle = t3, .port = 1, .value = 0x70 }, d.nextWrite(t3).?);
@@ -168,7 +179,7 @@ test "a sample's writes: DAC on, then each value at its step" {
 
 test "a hold delays the next value, not one due before it" {
     var d: Dac = .{};
-    d.start(0, &.{ 1, 2 }, &.{100}, false);
+    d.start(0, &.{ 1, 2 }, &.{ 100 }, false);
     const t1 = (enable_delay + first_value_delay) * 15;
     d.hold(10, 500);
     // The DAC-on writes, then nothing until the first value, 500 cycles late.

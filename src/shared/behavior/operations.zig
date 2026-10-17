@@ -20,7 +20,7 @@ const groups = .{
     @import("operations/carriers.zig"),
 };
 
-pub const Error = error{InvalidAnimation};
+pub const Error = error{ InvalidAnimation };
 
 pub fn perform(world: *World, actor: u16, operation: vocabulary.Operation) Error!bool {
     switch (operation) {
@@ -43,7 +43,7 @@ fn camelCase(comptime name: []const u8) []const u8 {
             if (c == '_') {
                 upper = true;
             } else {
-                result = result ++ .{if (upper) std.ascii.toUpper(c) else c};
+                result = result ++ .{ if (upper) std.ascii.toUpper(c) else c };
                 upper = false;
             }
         }
@@ -66,7 +66,7 @@ const testing = struct {
     const states = [_]vocabulary.State{.{ .name = "idle", .animation = 0, .rules = &.{} }};
     const behaviors = [_]vocabulary.Behavior{.{
         .name = "test",
-        .links = &.{"friend"},
+        .links = &.{ "friend" },
         .numbers = &.{ "delay", "room_to_appear" },
         .states = &states,
     }};
@@ -140,11 +140,9 @@ test "operations read input, terrain, timers, chance and messages" {
     try std.testing.expect(try perform(&w, 1, .{ .chance = 3 }));
     try std.testing.expect(!try perform(&w, 1, .{ .chance = 0 }));
     const call: vocabulary.Message = @fromBackingInt(300);
-    try std.testing.expect(try perform(
-        &w,
-        1,
-        .{ .send = .{ .to = @fromBackingInt(0), .message = call } },
-    ));
+    try std.testing.expect(
+        try perform(&w, 1, .{ .send = .{ .to = @fromBackingInt(0), .message = call } }),
+    );
     try std.testing.expect(try perform(&w, 0, .{ .received = call }));
     try std.testing.expect(!try perform(&w, 1, .{ .received = call }));
     try std.testing.expect(try perform(&w, 1, .{ .reveal = @fromBackingInt(1) }));

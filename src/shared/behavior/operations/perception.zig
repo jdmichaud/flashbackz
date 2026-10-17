@@ -19,11 +19,13 @@ const Height = vocabulary.Height;
 /// from the front one by someone facing it. The height of the hit does not matter.
 pub fn hit(world: *World, actor: u16, side: vocabulary.HitSide) !bool {
     var letters = world.mailbox(actor);
-    while (letters.nextLetter()) |letter| switch (letter.message) {
-        .hit_behind_high, .hit_behind_low => if (side == .from_behind) return true,
-        .hit_front_high, .hit_front_low => if (side != .from_behind) return true,
-        else => {},
-    };
+    while (letters.nextLetter()) |letter| {
+        switch (letter.message) {
+            .hit_behind_high, .hit_behind_low => if (side == .from_behind) return true,
+            .hit_front_high, .hit_front_low => if (side != .from_behind) return true,
+            else => {},
+        }
+    }
     return false;
 }
 
@@ -31,11 +33,15 @@ pub fn hit(world: *World, actor: u16, side: vocabulary.HitSide) !bool {
 /// or a hit on its side; an `acknowledge` does not count, unlike for a message that ends an
 /// animation early (`World.awaits`). Only waiting characters can be shot or struck.
 fn waitsFor(world: *const World, character: u16, message: Message) bool {
-    for (world.stateOf(character).rules) |rule| for (rule.when) |check| switch (check) {
-        .received => |expected| if (expected == message) return true,
-        .hit => |side| if (side.awaits(message)) return true,
-        else => {},
-    };
+    for (world.stateOf(character).rules) |rule| {
+        for (rule.when) |check| {
+            switch (check) {
+                .received => |expected| if (expected == message) return true,
+                .hit => |side| if (side.awaits(message)) return true,
+                else => {},
+            }
+        }
+    }
     return false;
 }
 
@@ -51,11 +57,7 @@ fn hitMessage(world: *const World, actor: u16, target: u16, height: Height) Mess
 /// Fires along the tier up to the `range` number's cells (positive: ahead) from the next
 /// cell. The first active player, enemy or kind-12 character waiting for the hit gets it;
 /// others are passed through. True once a hit is sent, even if the send is dropped.
-pub fn shoot(
-    world: *World,
-    actor: u16,
-    argument: @FieldType(vocabulary.Operation, "shoot"),
-) !bool {
+pub fn shoot(world: *World, actor: u16, argument: @FieldType(vocabulary.Operation, "shoot")) !bool {
     const range = world.number(actor, argument.range);
     return traceHit(world, actor, argument.height, range, .shot);
 }
@@ -208,7 +210,9 @@ fn unhittableTargets(
                 if (!world.level.characters[target].kind.matches(kind)) continue;
                 const same = world.characters[target].facing_right == observer.facing_right;
                 if (same != (facing == .same)) continue;
-                if (!waitsFor(world, target, message)) count +%= 1;
+                if (!waitsFor(world, target, message)) {
+                    count +%= 1;
+                }
             }
         }
         if (sampled(world, actor, if (ahead) distance else -distance) != 0) return count;
@@ -336,7 +340,9 @@ pub fn sees(world: *World, actor: u16, argument: @FieldType(vocabulary.Operation
             room = world.grid.neighbor(room, .left) orelse return false;
             column = 15;
             cursor = read.back(32);
-        } else cursor = cursor.back(1);
+        } else {
+            cursor = cursor.back(1);
+        }
         read = cursor;
         if (occupants(world, cursorSlot(world, cursor))) |found| {
             var in_cell = found;
@@ -555,7 +561,10 @@ fn playerToward(world: *World, actor: u16, cells: i16, right: bool, same_x_count
 fn sampled(world: *World, actor: u16, ahead: i16) i8 {
     const offset: i32 = if (world.updating_facing_right) ahead else -@as(i32, ahead);
     const room = world.characters[actor].room;
-    return original_memory.read(world, world.grid.probe(room, world.band + 1, world.column + offset));
+    return original_memory.read(
+        world,
+        world.grid.probe(room, world.band + 1, world.column + offset),
+    );
 }
 
 /// A grid byte read directly; rows and columns outside the room run on into the next bytes.
@@ -593,7 +602,7 @@ const testing = struct {
     const behaviors = [_]vocabulary.Behavior{.{
         .name = "test",
         .links = &.{},
-        .numbers = &.{"range"},
+        .numbers = &.{ "range" },
         .states = &states,
     }};
     const idle: u16 = 0;
@@ -671,7 +680,9 @@ const testing = struct {
                 w.level.characters[index].width,
                 &shared,
             );
-            if (first) |slot| w.characters[index].contact = slot;
+            if (first) |slot| {
+                w.characters[index].contact = slot;
+            }
         }
         w.contacts.buildWindow(&w.grid, w.view_room);
     }

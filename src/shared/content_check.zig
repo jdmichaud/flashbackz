@@ -8,13 +8,17 @@ const platform = @import("platform.zig");
 const data_set = @import("behavior/data_set.zig");
 const vector_cinematic = @import("content/vector_cinematic.zig");
 
-pub fn check(allocator: std.mem.Allocator, assets: platform.AssetSource, files: *const data_set.Files) !void {
+pub fn check(
+    allocator: std.mem.Allocator,
+    assets: platform.AssetSource,
+    files: *const data_set.Files,
+) !void {
     var arena_state: std.heap.ArenaAllocator = .init(allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
     var diagnostic: data_set.Diagnostic = .{};
     const scenes = data_set.loadScenes(allocator, arena, files, &diagnostic) catch |err| {
-        std.log.err("data set: {s}", .{diagnostic.message()});
+        std.log.err("data set: {s}", .{ diagnostic.message() });
         return err;
     };
     for (scenes.films, 0..) |maybe, scene| {
@@ -27,7 +31,10 @@ pub fn check(allocator: std.mem.Allocator, assets: platform.AssetSource, files: 
         if (seen) continue;
         var movie = vector_cinematic.load(allocator, assets, film.film, film.entry) catch |err| {
             std.log.err("scene {d}: film {s} entry {d} cannot play: {s}", .{
-                scene, film.film, film.entry, @errorName(err),
+                scene,
+                film.film,
+                film.entry,
+                @errorName(err),
             });
             return err;
         };

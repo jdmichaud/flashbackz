@@ -30,13 +30,17 @@ pub const Story = struct {
 
     pub fn deinit(self: *Story) void {
         self.player.deinit();
-        if (self.music) |*music| music.deinit();
+        if (self.music) |*music| {
+            music.deinit();
+        }
         self.* = undefined;
     }
     /// True when the film is over or skipped.
     pub fn update(self: *Story, now_ns: u64) !bool {
         // A held film does not look at its keys.
-        if (self.player.paused_at != null) self.skip = false;
+        if (self.player.paused_at != null) {
+            self.skip = false;
+        }
         return self.skip or try self.player.update(now_ns);
     }
     /// The film's music, with the MUSIC option.
@@ -54,7 +58,8 @@ pub const Story = struct {
         }
         switch (input.payload) {
             .key_down => |press| switch (press.key) {
-                .enter, .space, .left_shift, .right_shift => if (!press.repeat) self.player.confirm(),
+                .enter, .space, .left_shift, .right_shift => if (!press.repeat)
+                    self.player.confirm(),
                 .tab, .backspace, .escape => {},
                 else => return false,
             },

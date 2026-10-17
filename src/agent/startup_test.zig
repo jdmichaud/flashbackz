@@ -112,7 +112,11 @@ test "normal startup completes three vector chapters and skipping introduction r
     for (0..20) |_| {
         _ = try app.update(&platform);
         if (app.scene.menu.stage == .introduction) {
-            if (app.scene.menu.introduction_part == .first) first = true else second = true;
+            if (app.scene.menu.introduction_part == .first) {
+                first = true;
+            } else {
+                second = true;
+            }
         }
         backend.advance(100_000_000);
     }

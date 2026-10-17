@@ -35,15 +35,20 @@ pub fn extractAll(
         defer rules.deinit();
         var labels = try read(source, basename, "TBN", 16 * 1024);
         defer labels.deinit();
-        try level.extract(arena, .{
-            .name = @tagName(id),
-            .placements = placements.bytes,
-            .rules = rules.bytes,
-            .labels = labels.bytes,
-            .score_awards = interface.score_awards,
-            .library_groups = interface.library_groups[@backingInt(id)],
-            .overlay = overlay,
-        }, output, &report);
+        try level.extract(
+            arena,
+            .{
+                .name = @tagName(id),
+                .placements = placements.bytes,
+                .rules = rules.bytes,
+                .labels = labels.bytes,
+                .score_awards = interface.score_awards,
+                .library_groups = interface.library_groups[@backingInt(id)],
+                .overlay = overlay,
+            },
+            output,
+            &report,
+        );
     }
     try writeMessages(arena, source, output);
     try writeScenes(arena, &interface, output);
@@ -98,21 +103,27 @@ fn writeScenes(
     for (std.enums.values(flashbackz.content.level.Id), interface.level_scenes) |id, scene| {
         if (scene) |number| {
             try w.line(".{s} = {d},", .{ @tagName(id), number });
-        } else try w.line(".{s} = null,", .{@tagName(id)});
+        } else {
+            try w.line(".{s} = null,", .{ @tagName(id) });
+        }
     }
     try w.close();
     try w.open("films");
     for (interface.scenes, 0..) |scene, number| {
         const film = std.mem.sliceTo(&scene.film, 0);
         if (film.len == 0) {
-            try w.line("null, // scene {d}", .{number});
+            try w.line("null, // scene {d}", .{ number });
             continue;
         }
         var fields: std.Io.Writer.Allocating = .init(arena);
         try fields.writer.print(".film = {f}, .entry = {d}", .{ zon.string(film), scene.entry });
         const music = std.mem.sliceTo(&scene.music, 0);
-        if (music.len != 0) try fields.writer.print(", .music = {f}", .{zon.string(music)});
-        if (scene.flagged) try fields.writer.writeAll(", .flagged = true");
+        if (music.len != 0) {
+            try fields.writer.print(", .music = {f}", .{ zon.string(music) });
+        }
+        if (scene.flagged) {
+            try fields.writer.writeAll(", .flagged = true");
+        }
         try w.line(".{{ {s} }}, // scene {d}", .{ fields.written(), number });
     }
     try w.close();
@@ -123,14 +134,11 @@ fn writeScenes(
 
 /// The scenes the ending plays after its first, and the credits typed over them: text (`|` starts
 /// a new line), holds in timer ticks, positions in 8-pixel cells, and block ends.
-fn writeEnding(
-    w: *zon.Writer,
-    interface: *const flashbackz.content.floppy_interface.Values,
-) !void {
+fn writeEnding(w: *zon.Writer, interface: *const flashbackz.content.floppy_interface.Values) !void {
     try w.open("ending");
     try w.open("scenes");
     for (interface.ending_scenes[0..interface.ending_scene_count]) |scene| {
-        try w.line("{d},", .{scene});
+        try w.line("{d},", .{ scene });
     }
     try w.close();
     try w.open("credits");
@@ -141,15 +149,15 @@ fn writeEnding(
             0xff => break,
             0xfe => {
                 if (at + 2 > stream.len) return error.TruncatedCredits;
-                try w.line(".{{ .hold = {d} }},", .{stream[at + 1]});
+                try w.line(".{{ .hold = {d} }},", .{ stream[at + 1] });
                 at += 2;
             },
             0x01 => {
                 if (at + 3 > stream.len) return error.TruncatedCredits;
-                try w.line(
-                    ".{{ .at = .{{ .column = {d}, .row = {d} }} }},",
-                    .{ stream[at + 1], stream[at + 2] },
-                );
+                try w.line(".{{ .at = .{{ .column = {d}, .row = {d} }} }},", .{
+                    stream[at + 1],
+                    stream[at + 2],
+                });
                 at += 3;
             },
             0x00 => {
@@ -157,9 +165,13 @@ fn writeEnding(
                 at += 1;
             },
             else => {
-                const end = std.mem.indexOfAny(u8, stream[at..], &.{ 0x00, 0x01, 0xfe, 0xff }) orelse
+                const end = std.mem.indexOfAny(
+                    u8,
+                    stream[at..],
+                    &.{ 0x00, 0x01, 0xfe, 0xff },
+                ) orelse
                     stream.len - at;
-                try w.line(".{{ .text = {f} }},", .{zon.string(stream[at..][0..end])});
+                try w.line(".{{ .text = {f} }},", .{ zon.string(stream[at..][0..end]) });
                 at += end;
             },
         }
@@ -185,14 +197,13 @@ fn writeMessages(
     );
     try w.open(null);
     for (messages.messages, 0..) |message, number| {
-        try w.line("// message {d}", .{number});
+        try w.line("// message {d}", .{ number });
         try w.open(null);
         for (message.pages) |page| {
             try w.open(null);
-            for (page.lines) |line| try w.line(
-                ".{{ .text = {f}, .ink = {d} }},",
-                .{ zon.string(line.text), line.ink },
-            );
+            for (page.lines) |line| {
+                try w.line(".{{ .text = {f}, .ink = {d} }},", .{ zon.string(line.text), line.ink });
+            }
             try w.close();
         }
         try w.close();

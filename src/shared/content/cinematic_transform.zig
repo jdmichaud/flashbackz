@@ -8,15 +8,19 @@ const indexed_shapes = @import("../render/indexed_shapes.zig");
 const sine_table: [360]i16 = table: {
     @setEvalBranchQuota(200000);
     var values: [360]i16 = undefined;
-    for (&values, 0..) |*value, degrees| value.* = switch (degrees) {
-        0, 180 => 0,
-        30, 150 => 127,
-        90 => 256,
-        210 => -128,
-        270 => -256,
-        330 => -127,
-        else => @intFromFloat(@sin(@as(f64, @floatFromInt(degrees)) * std.math.pi / 180.0) * 256.0),
-    };
+    for (&values, 0..) |*value, degrees| {
+        value.* = switch (degrees) {
+            0, 180 => 0,
+            30, 150 => 127,
+            90 => 256,
+            210 => -128,
+            270 => -256,
+            330 => -127,
+            else => @intFromFloat(
+                @sin(@as(f64, @floatFromInt(degrees)) * std.math.pi / 180.0) * 256.0,
+            ),
+        };
+    }
     break :table values;
 };
 

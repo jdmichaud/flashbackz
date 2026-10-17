@@ -49,7 +49,9 @@ test "the filter's constant is BlastEm's 3390 Hz pole at the YM2612's rate" {
 test "the filter: a step settles, a Nyquist tone is cut, off passes through" {
     var m: Model1 = .{};
     var y: Frame = .{};
-    for (0..200) |_| y = m.process(.{ .left = 10000, .right = -10000 }, 0);
+    for (0..200) |_| {
+        y = m.process(.{ .left = 10000, .right = -10000 }, 0);
+    }
     try testing.expect(y.left >= 9990 and y.left <= 10000);
     try testing.expect(y.right <= -9990 and y.right >= -10001);
     // Alternating +-10000 (26.6 kHz): the gain of one pole there is about 0.17.
@@ -58,9 +60,14 @@ test "the filter: a step settles, a Nyquist tone is cut, off passes through" {
     for (0..400) |i| {
         const v: i32 = if (i % 2 == 0) 10000 else -10000;
         y = m.process(.{ .left = v, .right = v }, 0);
-        if (i > 200) peak = @max(peak, @as(i32, @intCast(@abs(y.left))));
+        if (i > 200) {
+            peak = @max(peak, @as(i32, @intCast(@abs(y.left))));
+        }
     }
     try testing.expect(peak > 1000 and peak < 2500);
     m = .{ .enabled = false };
-    try testing.expectEqual(Frame{ .left = 1234 + 50, .right = -99 + 50 }, m.process(.{ .left = 1234, .right = -99 }, 50));
+    try testing.expectEqual(
+        Frame{ .left = 1234 + 50, .right = -99 + 50 },
+        m.process(.{ .left = 1234, .right = -99 }, 50),
+    );
 }

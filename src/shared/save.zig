@@ -21,7 +21,7 @@ pub const quick_slot = "QUICK";
 pub const slot_count = 8;
 
 pub fn slotName(slot: usize, buffer: *[8]u8) []const u8 {
-    return std.fmt.bufPrint(buffer, "SAVE{d}", .{slot + 1}) catch unreachable;
+    return std.fmt.bufPrint(buffer, "SAVE{d}", .{ slot + 1 }) catch unreachable;
 }
 
 pub const Record = struct {
@@ -83,7 +83,11 @@ pub const Record = struct {
     };
 
     /// A message in the pool; its message by number, as the data set's are not all named.
-    pub const Letter = struct { sender: u16, message: u16, next: ?u16 };
+    pub const Letter = struct {
+        sender: u16,
+        message: u16,
+        next: ?u16,
+    };
 
     pub const Terrain = struct {
         changes: []const world_mod.TerrainHistory.Change,
@@ -121,22 +125,33 @@ pub const Picture = [picture_width * picture_height * 3]u8;
 
 /// The info record of save `slot`.
 pub fn infoName(slot: []const u8, buffer: *[16]u8) []const u8 {
-    return std.fmt.bufPrint(buffer, "{s}.INFO", .{slot}) catch unreachable;
+    return std.fmt.bufPrint(buffer, "{s}.INFO", .{ slot }) catch unreachable;
 }
 
 /// The game's picture (`width` by `height` palette indices), a quarter of its size each way: each
 /// pixel the mean of the 4 by 4 it stands for.
-pub fn picture(indices: []const u8, width: usize, colors: *const palette.Palette, out: *Picture) void {
-    for (0..picture_height) |y| for (0..picture_width) |x| {
-        var sum: [3]u32 = @splat(0);
-        for (0..4) |dy| for (0..4) |dx| {
-            const color = colors[indices[(y * 4 + dy) * width + x * 4 + dx]];
-            sum[0] += color.r;
-            sum[1] += color.g;
-            sum[2] += color.b;
-        };
-        for (0..3) |c| out[(y * picture_width + x) * 3 + c] = @intCast(sum[c] / 16);
-    };
+pub fn picture(
+    indices: []const u8,
+    width: usize,
+    colors: *const palette.Palette,
+    out: *Picture,
+) void {
+    for (0..picture_height) |y| {
+        for (0..picture_width) |x| {
+            var sum: [3]u32 = @splat(0);
+            for (0..4) |dy| {
+                for (0..4) |dx| {
+                    const color = colors[indices[(y * 4 + dy) * width + x * 4 + dx]];
+                    sum[0] += color.r;
+                    sum[1] += color.g;
+                    sum[2] += color.b;
+                }
+            }
+            for (0..3) |c| {
+                out[(y * picture_width + x) * 3 + c] = @intCast(sum[c] / 16);
+            }
+        }
+    }
 }
 
 pub fn encodeInfo(allocator: std.mem.Allocator, info: Info) ![]u8 {
@@ -155,15 +170,28 @@ pub const Slot = union(enum) {
     /// A save that does not read.
     broken,
     /// A save, `loadable` unless it was made with another data set.
-    save: struct { level: content_level.Id, play_walks: u64, date: []const u8, picture: ?Picture, loadable: bool },
+    save: struct {
+        level: content_level.Id,
+        play_walks: u64,
+        date: []const u8,
+        picture: ?Picture,
+        loadable: bool,
+    },
 };
 
 /// The slot of info record `bytes` (none: `empty`), its strings in `arena`.
-pub fn readSlot(gpa: std.mem.Allocator, arena: std.mem.Allocator, bytes: ?[]const u8, data_set_print: u64) !Slot {
+pub fn readSlot(
+    gpa: std.mem.Allocator,
+    arena: std.mem.Allocator,
+    bytes: ?[]const u8,
+    data_set_print: u64,
+) !Slot {
     const text = bytes orelse return .empty;
     const source = try arena.dupeSentinel(u8, text, 0);
     var diagnostics: std.zon.parse.Diagnostics = undefined;
-    const Versioned = struct { version: u32 };
+    const Versioned = struct {
+        version: u32,
+    };
     const versioned = std.zon.parse.fromSlice(Versioned, .{
         .gpa = gpa,
         .arena = arena,
@@ -179,19 +207,23 @@ pub fn readSlot(gpa: std.mem.Allocator, arena: std.mem.Allocator, bytes: ?[]cons
         .diagnostics = &diagnostics,
     }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else .broken;
     var print_text: [16]u8 = undefined;
-    _ = std.fmt.bufPrint(&print_text, "{x:0>16}", .{data_set_print}) catch unreachable;
+    _ = std.fmt.bufPrint(&print_text, "{x:0>16}", .{ data_set_print }) catch unreachable;
     var shown: ?Picture = null;
     if (info.picture.len == @sizeOf(Picture) * 2) {
         var pixels: Picture = undefined;
-        if (std.fmt.hexToBytes(&pixels, info.picture)) |_| shown = pixels else |_| {}
+        if (std.fmt.hexToBytes(&pixels, info.picture)) |_| {
+            shown = pixels;
+        } else |_| {}
     }
-    return .{ .save = .{
-        .level = info.level,
-        .play_walks = info.play_walks,
-        .date = info.date,
-        .picture = shown,
-        .loadable = std.mem.eql(u8, info.data_set, &print_text),
-    } };
+    return .{
+        .save = .{
+            .level = info.level,
+            .play_walks = info.play_walks,
+            .date = info.date,
+            .picture = shown,
+            .loadable = std.mem.eql(u8, info.data_set, &print_text),
+        },
+    };
 }
 
 /// The data set's fingerprint: its files, in name order, hashed.
@@ -200,17 +232,22 @@ pub fn fingerprint(files: *const data_set.Files) u64 {
     const count = @min(files.count(), names_buffer.len);
     const names = names_buffer[0..count];
     @memcpy(names, files.keys()[0..count]);
-    std.sort.pdq([]const u8, names, {}, struct {
-        fn less(_: void, a: []const u8, b: []const u8) bool {
-            return std.mem.lessThan(u8, a, b);
-        }
-    }.less);
+    std.sort.pdq(
+        []const u8,
+        names,
+        {},
+        struct {
+            fn less(_: void, a: []const u8, b: []const u8) bool {
+                return std.mem.lessThan(u8, a, b);
+            }
+        }.less,
+    );
     var hash = std.hash.Wyhash.init(0);
     for (names) |name| {
         hash.update(name);
-        hash.update(&.{0});
+        hash.update(&.{ 0 });
         hash.update(files.get(name).?);
-        hash.update(&.{0});
+        hash.update(&.{ 0 });
     }
     return hash.final();
 }
@@ -218,11 +255,13 @@ pub fn fingerprint(files: *const data_set.Files) u64 {
 /// The world as a record; its strings are allocated in `arena`, its lists are the world's own.
 pub fn captureWorld(arena: std.mem.Allocator, world: *const world_mod.World) !Record.World {
     const letters = try arena.alloc(Record.Letter, world.letters.len);
-    for (letters, world.letters) |*record, letter| record.* = .{
-        .sender = letter.sender,
-        .message = @backingInt(letter.message),
-        .next = letter.next,
-    };
+    for (letters, world.letters) |*record, letter| {
+        record.* = .{
+            .sender = letter.sender,
+            .message = @backingInt(letter.message),
+            .next = letter.next,
+        };
+    }
     return .{
         .characters = world.characters,
         .room_lists = &world.room_lists,
@@ -261,7 +300,10 @@ pub fn captureWorld(arena: std.mem.Allocator, world: *const world_mod.World) !Re
     };
 }
 
-fn captureTerrain(arena: std.mem.Allocator, history: *const world_mod.TerrainHistory) !Record.Terrain {
+fn captureTerrain(
+    arena: std.mem.Allocator,
+    history: *const world_mod.TerrainHistory,
+) !Record.Terrain {
     return .{
         .changes = history.changes[0..history.change_count],
         .used_words = history.used_words,
@@ -275,7 +317,9 @@ pub fn restoreWorld(world: *world_mod.World, record: Record.World) Error!void {
     if (record.characters.len != world.characters.len or record.inbox.len != world.inbox.len or
         record.room_lists.len != world.room_lists.len or record.letters.len != world.letters.len or
         record.contacts.entries.len != world.contacts.entries.len or
-        record.contacts.slots.len != world.contacts.slots.len) return error.InvalidSave;
+        record.contacts.slots.len != world.contacts.slots.len) {
+        return error.InvalidSave;
+    }
     @memcpy(world.characters, record.characters);
     @memcpy(&world.room_lists, record.room_lists);
     @memcpy(&world.contacts.entries, record.contacts.entries);
@@ -283,11 +327,13 @@ pub fn restoreWorld(world: *world_mod.World, record: Record.World) Error!void {
     @memcpy(&world.contacts.slots, record.contacts.slots);
     world.contacts.slot_count = record.contacts.slot_count;
     try unhex(&world.contacts.window, record.contacts.window);
-    for (&world.letters, record.letters) |*letter, saved| letter.* = .{
-        .sender = saved.sender,
-        .message = @fromBackingInt(saved.message),
-        .next = saved.next,
-    };
+    for (&world.letters, record.letters) |*letter, saved| {
+        letter.* = .{
+            .sender = saved.sender,
+            .message = @fromBackingInt(saved.message),
+            .next = saved.next,
+        };
+    }
     world.free_letter = record.free_letter;
     @memcpy(world.inbox, record.inbox);
     world.random.state = record.random;
@@ -315,12 +361,16 @@ pub fn restoreWorld(world: *world_mod.World, record: Record.World) Error!void {
         checkpoint.terrain_history = .{};
         try restoreTerrain(&checkpoint.terrain_history, saved.terrain);
         world.checkpoint = checkpoint;
-    } else world.checkpoint = null;
+    } else {
+        world.checkpoint = null;
+    }
 }
 
 fn restoreTerrain(history: *world_mod.TerrainHistory, record: Record.Terrain) Error!void {
     if (record.changes.len > history.changes.len or record.saved.len % 2 != 0 or
-        record.saved.len / 2 > history.saved.len) return error.InvalidSave;
+        record.saved.len / 2 > history.saved.len) {
+        return error.InvalidSave;
+    }
     history.* = .{};
     @memcpy(history.changes[0..record.changes.len], record.changes);
     history.change_count = @intCast(record.changes.len);
@@ -355,11 +405,18 @@ pub fn encode(allocator: std.mem.Allocator, record: Record) ![]u8 {
 
 /// The record in `bytes`, its lists and strings allocated in `arena`, if it is of this version
 /// and made with the data set of fingerprint `data_set_print`.
-pub fn decode(gpa: std.mem.Allocator, arena: std.mem.Allocator, bytes: []const u8, data_set_print: u64) Error!Record {
+pub fn decode(
+    gpa: std.mem.Allocator,
+    arena: std.mem.Allocator,
+    bytes: []const u8,
+    data_set_print: u64,
+) Error!Record {
     const source = try arena.dupeSentinel(u8, bytes, 0);
     var diagnostics: std.zon.parse.Diagnostics = undefined;
     // The version first, so that another version's record is told apart from a broken one.
-    const Versioned = struct { version: u32 };
+    const Versioned = struct {
+        version: u32,
+    };
     const versioned = std.zon.parse.fromSlice(Versioned, .{
         .gpa = gpa,
         .arena = arena,
@@ -375,7 +432,7 @@ pub fn decode(gpa: std.mem.Allocator, arena: std.mem.Allocator, bytes: []const u
         .diagnostics = &diagnostics,
     }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.InvalidSave;
     var print_text: [16]u8 = undefined;
-    _ = std.fmt.bufPrint(&print_text, "{x:0>16}", .{data_set_print}) catch unreachable;
+    _ = std.fmt.bufPrint(&print_text, "{x:0>16}", .{ data_set_print }) catch unreachable;
     if (!std.mem.eql(u8, record.data_set, &print_text)) return error.OtherDataSet;
     return record;
 }
@@ -387,8 +444,8 @@ const synthetic = struct {
     const states = [_]vocabulary.State{.{ .name = "idle", .animation = 0, .rules = &.{} }};
     const behaviors = [_]vocabulary.Behavior{.{
         .name = "test",
-        .links = &.{"friend"},
-        .numbers = &.{"delay"},
+        .links = &.{ "friend" },
+        .numbers = &.{ "delay" },
         .states = &states,
     }};
     fn character(placement: u16, kind: vocabulary.Kind, room: u8) data_set.Character {
@@ -444,7 +501,12 @@ const synthetic = struct {
             .difficulty = .normal,
             .play_walks = 0,
             .inherited = &.{},
-            .scene = .{ .last_direction = 0, .inventory_delay = 0, .catch_up_due = false, .requested_scene = null },
+            .scene = .{
+                .last_direction = 0,
+                .inventory_delay = 0,
+                .catch_up_due = false,
+                .requested_scene = null,
+            },
             .world = try captureWorld(arena, w),
         });
     }
@@ -481,7 +543,10 @@ test "a world saved and read back is the same world, and goes on the same" {
     defer copy.deinit();
     try restoreWorld(&copy, record.world);
     for (0..20) |i| {
-        try std.testing.expectEqualStrings(try synthetic.text(arena, &original), try synthetic.text(arena, &copy));
+        try std.testing.expectEqualStrings(
+            try synthetic.text(arena, &original),
+            try synthetic.text(arena, &copy),
+        );
         const controls: world_mod.Controls = @bitCast(@as(u8, @truncate(i * 37)));
         _ = try original.update(controls, if (i % 5 == 4) .catch_up else .only);
         _ = try copy.update(controls, if (i % 5 == 4) .catch_up else .only);
@@ -496,9 +561,21 @@ test "a save of another version or data set, or that does not read, is refused" 
     defer w.deinit();
     const saved = try synthetic.text(arena, &w);
     try std.testing.expectError(error.OtherDataSet, decode(std.testing.allocator, arena, saved, 1));
-    const other_version = try std.mem.replaceOwned(u8, arena, saved, ".version = 2,", ".version = 1,");
-    try std.testing.expectError(error.OtherVersion, decode(std.testing.allocator, arena, other_version, 0));
-    try std.testing.expectError(error.InvalidSave, decode(std.testing.allocator, arena, saved[0 .. saved.len / 2], 0));
+    const other_version = try std.mem.replaceOwned(
+        u8,
+        arena,
+        saved,
+        ".version = 2,",
+        ".version = 1,",
+    );
+    try std.testing.expectError(
+        error.OtherVersion,
+        decode(std.testing.allocator, arena, other_version, 0),
+    );
+    try std.testing.expectError(
+        error.InvalidSave,
+        decode(std.testing.allocator, arena, saved[0..saved.len / 2], 0),
+    );
     // A world of another size.
     const record = try decode(std.testing.allocator, arena, saved, 0);
     var shorter = record.world;
@@ -527,8 +604,14 @@ test "a slot's info reads back; another version is shown, another data set not l
     try std.testing.expect(!(try readSlot(std.testing.allocator, arena, info, 1)).save.loadable);
     try std.testing.expectEqual(Slot.empty, try readSlot(std.testing.allocator, arena, null, 0));
     const old = try std.mem.replaceOwned(u8, arena, info, ".version = 2,", ".version = 1,");
-    try std.testing.expectEqual(Slot.other_version, try readSlot(std.testing.allocator, arena, old, 0xff));
-    try std.testing.expectEqual(Slot.broken, try readSlot(std.testing.allocator, arena, "nonsense", 0xff));
+    try std.testing.expectEqual(
+        Slot.other_version,
+        try readSlot(std.testing.allocator, arena, old, 0xff),
+    );
+    try std.testing.expectEqual(
+        Slot.broken,
+        try readSlot(std.testing.allocator, arena, "nonsense", 0xff),
+    );
 }
 
 test "the picture is the game's, a quarter of its size, each pixel a 4 by 4 mean" {
@@ -536,9 +619,11 @@ test "the picture is the game's, a quarter of its size, each pixel a 4 by 4 mean
     colors[1] = .{ .r = 160, .g = 80, .b = 40 };
     var indices: [256 * 224]u8 = @splat(0);
     // The top-left 4 by 4: half in color 1.
-    for (0..4) |y| for (0..2) |x| {
-        indices[y * 256 + x] = 1;
-    };
+    for (0..4) |y| {
+        for (0..2) |x| {
+            indices[y * 256 + x] = 1;
+        }
+    }
     var out: Picture = undefined;
     picture(&indices, 256, &colors, &out);
     try std.testing.expectEqualSlices(u8, &.{ 80, 40, 20 }, out[0..3]);

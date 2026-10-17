@@ -79,8 +79,13 @@ pub const Ending = struct {
             allocator.destroy(arena);
         }
         var diagnostic: data_set.Diagnostic = .{};
-        const scenes = data_set.loadScenes(allocator, arena.allocator(), files, &diagnostic) catch |err| {
-            std.log.err("data set: {s}", .{diagnostic.message()});
+        const scenes = data_set.loadScenes(
+            allocator,
+            arena.allocator(),
+            files,
+            &diagnostic,
+        ) catch |err| {
+            std.log.err("data set: {s}", .{ diagnostic.message() });
             return err;
         };
         const interface = try floppy_interface.load(allocator, assets);
@@ -99,18 +104,33 @@ pub const Ending = struct {
             .font = try font_mod.decode(allocator, font_file.bytes),
         };
         errdefer ending.font.deinit();
-        if (scenes.film(ending_scene)) |film| ending.add(film);
-        for (scenes.ending.scenes) |scene| if (scenes.film(scene)) |film| ending.add(film);
+        if (scenes.film(ending_scene)) |film| {
+            ending.add(film);
+        }
+        for (scenes.ending.scenes) |scene| {
+            if (scenes.film(scene)) |film| {
+                ending.add(film);
+            }
+        }
         if (ending.film_count == 0) {
-            std.log.err("data set: scenes.zon: no film for the ending (scene {d})", .{ending_scene});
+            std.log.err("data set: scenes.zon: no film for the ending (scene {d})", .{
+                ending_scene,
+            });
             return error.NoEndingFilm;
         }
-        for (scenes.ending.credits) |credit| if (credit == .text) for (credit.text) |byte| {
-            if (byte != '|' and ending.font.glyph(byte) == null) {
-                std.log.err("data set: scenes.zon: the font has no character {d} of the credits", .{byte});
-                return error.MissingGlyph;
+        for (scenes.ending.credits) |credit| {
+            if (credit == .text) {
+                for (credit.text) |byte| {
+                    if (byte != '|' and ending.font.glyph(byte) == null) {
+                        std.log.err(
+                            "data set: scenes.zon: the font has no character {d} of the credits",
+                            .{ byte },
+                        );
+                        return error.MissingGlyph;
+                    }
+                }
             }
-        };
+        }
         // One music plays from the first film to the end of the list.
         if (ending.films[0].music) |name| {
             ending.music = try soundtrack.Soundtrack.open(allocator, assets, name);
@@ -127,7 +147,9 @@ pub const Ending = struct {
     }
 
     pub fn openFilm(self: *Ending, index: usize) !void {
-        if (self.player) |*player| player.deinit();
+        if (self.player) |*player| {
+            player.deinit();
+        }
         self.player = null;
         self.film_index = index;
         const film = self.films[index];
@@ -137,8 +159,12 @@ pub const Ending = struct {
     }
 
     pub fn deinit(self: *Ending) void {
-        if (self.player) |*player| player.deinit();
-        if (self.music) |*music| music.deinit();
+        if (self.player) |*player| {
+            player.deinit();
+        }
+        if (self.music) |*music| {
+            music.deinit();
+        }
         self.font.deinit();
         self.arena.deinit();
         self.allocator.destroy(self.arena);
@@ -149,10 +175,14 @@ pub const Ending = struct {
         const now = p.nowNs();
         switch (self.stage) {
             .films => {
-                if (self.paused_at == null and self.origin_ns == null) self.origin_ns = now;
+                if (self.paused_at == null and self.origin_ns == null) {
+                    self.origin_ns = now;
+                }
                 var work: usize = 0;
                 while (self.stage == .films and self.due(now) and work < 16) : (work += 1) {
-                    if (!try self.present()) try self.nextFilm();
+                    if (!try self.present()) {
+                        try self.nextFilm();
+                    }
                     if (self.pause_requested) {
                         self.paused_at = now;
                         break;
@@ -161,7 +191,9 @@ pub const Ending = struct {
             },
             .score_film => {
                 const player = &self.player.?;
-                if (try player.update(now)) try self.nextFilm();
+                if (try player.update(now)) {
+                    try self.nextFilm();
+                }
             },
             .score => {},
         }
@@ -171,15 +203,21 @@ pub const Ending = struct {
     /// stop after the present in progress, and the next present comes at once when P is
     /// pressed again. The music plays on.
     pub fn setPaused(self: *Ending, paused: bool, now_ns: u64) void {
-        if (self.player) |*player| player.setPaused(paused, now_ns);
+        if (self.player) |*player| {
+            player.setPaused(paused, now_ns);
+        }
         self.pause_requested = paused;
         if (paused) {
-            if (self.origin_ns == null and self.paused_at == null) self.paused_at = now_ns;
+            if (self.origin_ns == null and self.paused_at == null) {
+                self.paused_at = now_ns;
+            }
             return;
         }
         if (self.paused_at == null) return;
         self.paused_at = null;
-        if (self.origin_ns) |*origin| origin.* = now_ns -| self.cadence.deadline_ns;
+        if (self.origin_ns) |*origin| {
+            origin.* = now_ns -| self.cadence.deadline_ns;
+        }
     }
 
     fn due(self: *const Ending, now_ns: u64) bool {
@@ -208,7 +246,9 @@ pub const Ending = struct {
         self.image_colors = frame.colors;
         @memcpy(self.image_colors[0xe0..0xf0], &self.text_colors);
         // In replay mode every palette change also turns film colour 0xd0 white.
-        if (!self.replay.normal) self.image_colors[0xd0] = .{ .r = 255, .g = 255, .b = 255 };
+        if (!self.replay.normal) {
+            self.image_colors[0xd0] = .{ .r = 255, .g = 255, .b = 255 };
+        }
         if (!self.replay.normal and self.credits.present(elapsed, step.kind, step.new_background)) {
             try self.credits.draw(&self.image, &self.font);
         }
@@ -235,7 +275,9 @@ pub const Ending = struct {
             };
             self.stage = .score_film;
             self.film_index = 0;
-            if (self.player) |*player| player.deinit();
+            if (self.player) |*player| {
+                player.deinit();
+            }
             self.player = try vector.Player.open(
                 self.allocator,
                 self.assets,
@@ -267,7 +309,8 @@ pub const Ending = struct {
                 self.held.insert(key.key);
                 switch (self.stage) {
                     // Escape too, unlike the original (user decision, 2026-10-09).
-                    .films => if (key.key == .tab or key.key == .backspace or key.key == .escape) self.skipFilm(),
+                    .films => if (key.key == .tab or key.key == .backspace or key.key == .escape)
+                        self.skipFilm(),
                     .score_film => {},
                     .score => switch (key.key) {
                         .enter, .space, .left_shift, .right_shift, .backspace, .tab => {
@@ -297,7 +340,9 @@ pub const Ending = struct {
     /// film does not look at its keys.
     fn skipFilm(self: *Ending) void {
         if (self.paused_at != null) return;
-        if (self.film_index != 0) self.film_index = self.film_count - 1;
+        if (self.film_index != 0) {
+            self.film_index = self.film_count - 1;
+        }
         self.replay.finished = true;
     }
 
@@ -312,18 +357,15 @@ pub const Ending = struct {
                 @memcpy(indices, &self.picture);
                 var line: [64]u8 = undefined;
                 const score = self.score orelse 0;
-                const text = try std.fmt.bufPrint(
-                    &line,
-                    "{s}{d:0>8}",
-                    .{ std.mem.sliceTo(&self.score_label, 0), score % 100_000_000 },
-                );
+                const text = try std.fmt.bufPrint(&line, "{s}{d:0>8}", .{
+                    std.mem.sliceTo(&self.score_label, 0),
+                    score % 100_000_000,
+                });
                 try self.write(indices, text, 40, 0xe5);
                 var code_line: [16]u8 = undefined;
-                const code = try std.fmt.bufPrint(
-                    &code_line,
-                    "CODE: {s}",
-                    .{std.mem.sliceTo(&self.code, 0)},
-                );
+                const code = try std.fmt.bufPrint(&code_line, "CODE: {s}", .{
+                    std.mem.sliceTo(&self.code, 0),
+                });
                 try self.write(indices, code, 16, 0xe7);
                 var colors = self.colors;
                 @memcpy(colors[0xe0..0xf0], &self.text_colors);
@@ -345,7 +387,10 @@ pub const Ending = struct {
     pub fn stateHash(self: *const Ending) u64 {
         var hash = std.hash.Wyhash.init(0);
         hash.update(&.{ @backingInt(self.stage), @intFromBool(self.finished) });
-        const film_frame: u64 = if (self.player) |player| player.playback.frame else std.math.maxInt(u64);
+        const film_frame: u64 = if (self.player) |player|
+            player.playback.frame
+        else
+            std.math.maxInt(u64);
         for ([_]u64{ self.film_index, film_frame, self.credits.step, self.credits.typed }) |value| {
             hash.update(&std.mem.toBytes(std.mem.nativeToLittle(u64, value)));
         }
@@ -396,7 +441,9 @@ pub const Credits = struct {
             self.waiting = false;
             self.picture_held = false;
         }
-        if (new_background) self.picture_held = false;
+        if (new_background) {
+            self.picture_held = false;
+        }
         switch (kind) {
             .picture => {
                 defer self.picture_held = false;
@@ -409,13 +456,17 @@ pub const Credits = struct {
             // While no text is shown, holding the picture holds the credits too.
             .hold => {
                 self.picture_held = true;
-                if (self.line_length == 0) self.hold_ticks += 1;
+                if (self.line_length == 0) {
+                    self.hold_ticks += 1;
+                }
                 return self.typeStep();
             },
             .held => {
                 self.picture_held = true;
                 self.waiting = true;
-                if (self.line_length == 0) self.hold_ticks = 20;
+                if (self.line_length == 0) {
+                    self.hold_ticks = 20;
+                }
                 return self.typeStep();
             },
         }
@@ -426,7 +477,9 @@ pub const Credits = struct {
             if (self.picture_held) return false;
             self.paused = false;
         }
-        if (self.hold_ticks == 0) self.next();
+        if (self.hold_ticks == 0) {
+            self.next();
+        }
         return true;
     }
 
@@ -452,7 +505,9 @@ pub const Credits = struct {
             },
             .block_end => {
                 self.line_length = 0;
-                if (self.picture_held) self.paused = true;
+                if (self.picture_held) {
+                    self.paused = true;
+                }
             },
         }
         self.step += 1;
@@ -494,16 +549,18 @@ pub const Replay = struct {
             const frame = frames[self.frame];
             if (self.made == 0) {
                 self.made = 1;
-                if (frame.presented) return .{
-                    .frame = self.frame,
-                    .kind = switch (frame.replay_present) {
-                        .picture => .picture,
-                        .page => .page,
-                        .hold => .hold,
-                    },
-                    .period = if (self.normal) frame.hold_ticks else frame.present_ticks,
-                    .new_background = frame.ends_hold,
-                };
+                if (frame.presented) {
+                    return .{
+                        .frame = self.frame,
+                        .kind = switch (frame.replay_present) {
+                            .picture => .picture,
+                            .page => .page,
+                            .hold => .hold,
+                        },
+                        .period = if (self.normal) frame.hold_ticks else frame.present_ticks,
+                        .new_background = frame.ends_hold,
+                    };
+                }
             }
             if (!self.normal and self.made <= frame.held_presents) {
                 self.made += 1;

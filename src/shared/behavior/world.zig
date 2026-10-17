@@ -84,12 +84,20 @@ pub const Inherited = struct {
     composed: bool = false,
 };
 
-pub const Letter = struct { sender: u16, message: vocabulary.Message, next: ?u16 };
+pub const Letter = struct {
+    sender: u16,
+    message: vocabulary.Message,
+    next: ?u16,
+};
 /// The original's message pool; sends beyond it are dropped silently.
 pub const letter_capacity = 256;
 
 /// A sound a character starts; `distant` when it plays from a room beside the view.
-pub const Sound = struct { id: u8, character: u16, distant: bool };
+pub const Sound = struct {
+    id: u8,
+    character: u16,
+    distant: bool,
+};
 
 /// What the rest of the game acts on after an update.
 pub const Requests = struct {
@@ -269,7 +277,11 @@ pub const World = struct {
     checkpoint: ?Checkpoint = null,
 
     /// Where Conrad starts instead of his placement, as a demo does.
-    pub const Start = struct { room: u8, x: i16, y: i16 };
+    pub const Start = struct {
+        room: u8,
+        x: i16,
+        y: i16,
+    };
 
     /// A level as it starts: characters wake from their placements and Conrad's placement
     /// room, then Conrad moves to `start` if given, then rooms are listed and the view
@@ -316,8 +328,9 @@ pub const World = struct {
                 .health = if (doubled) definition.health *% 2 else definition.health,
                 .facing_right = definition.facing == .right,
                 .present = present,
-                .active = present and (definition.active or
-                    (definition.wakes_when_near and room == world.view_room)),
+                .active = present and
+                    (definition.active or
+                        (definition.wakes_when_near and room == world.view_room)),
             };
             if (present) continue;
             // Characters left out at this difficulty keep their flags from the previous level.
@@ -385,7 +398,9 @@ pub const World = struct {
         self.terrain_history = saved.terrain_history;
         self.room_lists = @splat(null);
         for (self.characters, 0..) |character, index| {
-            if (character.present) self.pushToRoom(@intCast(index), character.room);
+            if (character.present) {
+                self.pushToRoom(@intCast(index), character.room);
+            }
         }
         self.restart();
         return true;
@@ -420,12 +435,17 @@ pub const World = struct {
         // The frame draws once, after its last walk: a catch-up walk leaves the world message
         // and the hits the first walk asked for, as the original clears its message only once
         // shown (flashback-re engine-update 1, steps 11 and 13).
-        self.requests = if (catch_up) .{
-            .world_message = self.requests.world_message,
-            .hits = self.requests.hits,
-            .hit_count = self.requests.hit_count,
-        } else .{};
-        if (!catch_up and self.protection != 0) self.protection -= 1;
+        self.requests = if (catch_up)
+            .{
+                .world_message = self.requests.world_message,
+                .hits = self.requests.hits,
+                .hit_count = self.requests.hit_count,
+            }
+        else
+            .{};
+        if (!catch_up and self.protection != 0) {
+            self.protection -= 1;
+        }
         if (!catch_up and self.defeat_countdown & 0xff != 0) {
             self.defeat_countdown -%= 1;
             if (self.defeat_countdown == 0) {
@@ -465,7 +485,9 @@ pub const World = struct {
                 self.register(index);
                 const definition = self.level.characters[index];
                 const asleep = !self.characters[index].active;
-                if (asleep and definition.wakes_when_near) self.activate(index);
+                if (asleep and definition.wakes_when_near) {
+                    self.activate(index);
+                }
             }
         }
         for (self.characters, 0..) |character, i| {
@@ -486,9 +508,13 @@ pub const World = struct {
             self.level.characters[index].width,
             &met,
         );
-        if (first) |slot| character.contact = slot;
+        if (first) |slot| {
+            character.contact = slot;
+        }
         for (met.slice()) |shared| {
-            if (self.level.characters[shared].wakes_on_contact) self.activate(shared);
+            if (self.level.characters[shared].wakes_on_contact) {
+                self.activate(shared);
+            }
         }
     }
 
@@ -532,13 +558,19 @@ pub const World = struct {
         self.column = grid.columnOf(character.x);
         self.band = grid.bandOf(character.y);
         const start_room = character.room;
-        if (self.inbox[index] != null) try self.skipToAwaitedRule(index);
+        if (self.inbox[index] != null) {
+            try self.skipToAwaitedRule(index);
+        }
         const animation = try self.animationOf(index);
         if (signedByte(animation.count()) > signedByte(character.cursor)) {
             self.playFrame(index, animation);
         } else if (try self.fireFirstRule(index)) {
             const entered = try self.animationOf(index);
-            if (entered.sound) |sound| if (self.entry_sound) self.requestSound(index, sound);
+            if (entered.sound) |sound| {
+                if (self.entry_sound) {
+                    self.requestSound(index, sound);
+                }
+            }
             self.afterRule(index, start_room);
             self.playFrame(index, entered);
         }
@@ -574,18 +606,22 @@ pub const World = struct {
     /// or an `acknowledge` of it, or a hit on its side. Being shot or struck asks the same
     /// without `acknowledge` (`perception.waitsFor`).
     fn awaits(rule: vocabulary.Rule, message: vocabulary.Message) bool {
-        for (rule.when) |check| switch (check) {
-            .received, .acknowledge => |expected| if (expected == message) return true,
-            .hit => |side| if (side.awaits(message)) return true,
-            else => {},
-        };
+        for (rule.when) |check| {
+            switch (check) {
+                .received, .acknowledge => |expected| if (expected == message) return true,
+                .hit => |side| if (side.awaits(message)) return true,
+                else => {},
+            }
+        }
         return false;
     }
 
     /// Advance one frame: the frame's movement points toward the character's back.
     fn playFrame(self: *World, index: u16, animation: animations.Animation) void {
         const character = &self.characters[index];
-        if (signedByte(animation.count()) < signedByte(character.cursor)) character.cursor = 0;
+        if (signedByte(animation.count()) < signedByte(character.cursor)) {
+            character.cursor = 0;
+        }
         const frame = animation.frame(character.cursor);
         character.cursor +%= 1;
         const sprite = frame.sprite orelse return;
@@ -605,7 +641,9 @@ pub const World = struct {
     pub fn showFrame(self: *World, index: u16) !void {
         const character = &self.characters[index];
         const animation = try self.animationOf(index);
-        if (character.cursor < @as(u8, @truncate(animation.count()))) character.cursor = 0;
+        if (character.cursor < @as(u8, @truncate(animation.count()))) {
+            character.cursor = 0;
+        }
         const sprite = animation.frame(character.cursor).sprite orelse return;
         character.look = .{
             .sprite = @intCast(sprite),
@@ -625,7 +663,9 @@ pub const World = struct {
         const state = self.stateOf(index);
         for (state.rules) |rule| {
             if (!try self.checksHold(index, rule.when)) continue;
-            if (rule.then) |effect| _ = try operations.perform(self, index, effect);
+            if (rule.then) |effect| {
+                _ = try operations.perform(self, index, effect);
+            }
             self.enter(index, rule);
             return true;
         }
@@ -633,7 +673,9 @@ pub const World = struct {
     }
 
     fn checksHold(self: *World, index: u16, checks: []const vocabulary.Operation) !bool {
-        for (checks) |check| if (!try operations.perform(self, index, check)) return false;
+        for (checks) |check| {
+            if (!try operations.perform(self, index, check)) return false;
+        }
         return true;
     }
 
@@ -645,14 +687,24 @@ pub const World = struct {
         character.state = rule.next;
         character.cursor = 0;
         self.score +%= rule.score;
-        if (rule.turn) character.facing_right = !character.facing_right;
+        if (rule.turn) {
+            character.facing_right = !character.facing_right;
+        }
         if (rule.damage) {
             character.health -%= 1;
-            if (kind == .player) self.hurt = true;
-            if (kind == .enemy) self.score +%= 100;
+            if (kind == .player) {
+                self.hurt = true;
+            }
+            if (kind == .enemy) {
+                self.score +%= 100;
+            }
         }
-        if (rule.heal) character.health +%= 1;
-        if (rule.kill) character.health = -1;
+        if (rule.heal) {
+            character.health +%= 1;
+        }
+        if (rule.kill) {
+            character.health = -1;
+        }
         character.x +%= if (character.facing_right) rule.forward else -%rule.forward;
         character.y +%= rule.down;
         // Protection starts once Conrad is in a state that listens for hits again.
@@ -664,11 +716,15 @@ pub const World = struct {
 
     /// Whether `state` has a rule for any hit: a `hit` check, or a `received` of a hit message.
     fn listensForHits(state: vocabulary.State) bool {
-        for (state.rules) |rule| for (rule.when) |check| switch (check) {
-            .hit => return true,
-            .received => |message| if (message.isHit()) return true,
-            else => {},
-        };
+        for (state.rules) |rule| {
+            for (rule.when) |check| {
+                switch (check) {
+                    .hit => return true,
+                    .received => |message| if (message.isHit()) return true,
+                    else => {},
+                }
+            }
+        }
         return false;
     }
 
@@ -691,10 +747,16 @@ pub const World = struct {
         } else null;
         if (side) |s| {
             // A missing neighbor stores `Room.nowhere`, as in the original.
-            if (character.room < 0x80) character.room = self.grid.rawLink(character.room, s);
-            if (self.level.characters[index].kind == .player) self.followConrad(character.room);
+            if (character.room < 0x80) {
+                character.room = self.grid.rawLink(character.room, s);
+            }
+            if (self.level.characters[index].kind == .player) {
+                self.followConrad(character.room);
+            }
         }
-        if (character.room != start_room) self.moveBetweenRooms(index, start_room, character.room);
+        if (character.room != start_room) {
+            self.moveBetweenRooms(index, start_room, character.room);
+        }
     }
 
     /// Conrad's new room becomes the view at once; characters there wake, and so do some in
@@ -706,9 +768,13 @@ pub const World = struct {
         if (room >= 64) return;
         self.wakeRoom(room, null);
         const up = self.grid.rawLink(room, .up);
-        if (up < 64) self.wakeRoom(up, 48);
+        if (up < 64) {
+            self.wakeRoom(up, 48);
+        }
         const down = self.grid.rawLink(room, .down);
-        if (down < 64) self.wakeRoom(down, 176);
+        if (down < 64) {
+            self.wakeRoom(down, 176);
+        }
     }
 
     fn wakeRoom(self: *World, room: u8, minimum_y: ?i16) void {
@@ -818,11 +884,13 @@ pub const World = struct {
 
     /// Every letter free, in order, and blank, so that a save writes defined values.
     fn resetLetters(self: *World) void {
-        for (&self.letters, 0..) |*letter, i| letter.* = .{
-            .sender = 0,
-            .message = @fromBackingInt(0),
-            .next = if (i + 1 < letter_capacity) @intCast(i + 1) else null,
-        };
+        for (&self.letters, 0..) |*letter, i| {
+            letter.* = .{
+                .sender = 0,
+                .message = @fromBackingInt(0),
+                .next = if (i + 1 < letter_capacity) @intCast(i + 1) else null,
+            };
+        }
         self.free_letter = 0;
     }
 
@@ -884,7 +952,12 @@ test "a catch-up walk keeps the world message the first walk asked for, until th
         .{ .name = "say", .animation = 0, .rules = &rules },
         .{ .name = "done", .animation = 0, .rules = &.{} },
     };
-    const behaviors = [_]vocabulary.Behavior{.{ .name = "t", .links = &.{}, .numbers = &.{}, .states = &states }};
+    const behaviors = [_]vocabulary.Behavior{.{
+        .name = "t",
+        .links = &.{},
+        .numbers = &.{},
+        .states = &states,
+    }};
     const characters = [_]data_set.Character{.{
         .name = "c",
         .placement = 0,
@@ -900,7 +973,11 @@ test "a catch-up walk keeps the world message the first walk asked for, until th
         .active = true,
         .minimum_difficulty = .easy,
     }};
-    const level: data_set.Level = .{ .behaviors = &behaviors, .characters = &characters, .message_names = &.{} };
+    const level: data_set.Level = .{
+        .behaviors = &behaviors,
+        .characters = &characters,
+        .message_names = &.{},
+    };
     var layout: [grid.Grid.layout_size]u8 = @splat(0);
     @memset(layout[0..256], 0xff);
     const animation_bytes = [_]u8{ 1, 0, 2, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -935,7 +1012,11 @@ test "a message reaches a later recipient in the same update, an earlier one in 
         .{ .send = .{ .to = @fromBackingInt(1), .message = call } },
     };
     const call_rules = [_]vocabulary.Rule{.{ .when = &call_checks, .next = 0 }};
-    const call_states = [_]vocabulary.State{.{ .name = "call", .animation = 0, .rules = &call_rules }};
+    const call_states = [_]vocabulary.State{.{
+        .name = "call",
+        .animation = 0,
+        .rules = &call_rules,
+    }};
     const behaviors = [_]vocabulary.Behavior{
         .{ .name = "idle", .links = &.{}, .numbers = &.{}, .states = &idle_states },
         .{ .name = "listen", .links = &.{}, .numbers = &.{}, .states = &listen_states },
@@ -972,7 +1053,11 @@ test "a message reaches a later recipient in the same update, an earlier one in 
         Make.character(.enemy, 1),
     };
     characters[2].links = .{ @fromBackingInt(1), @fromBackingInt(3), null, null };
-    const level: data_set.Level = .{ .behaviors = &behaviors, .characters = &characters, .message_names = &.{} };
+    const level: data_set.Level = .{
+        .behaviors = &behaviors,
+        .characters = &characters,
+        .message_names = &.{},
+    };
     var layout: [grid.Grid.layout_size]u8 = @splat(0);
     @memset(layout[0..256], 0xff);
     var world = try World.init(

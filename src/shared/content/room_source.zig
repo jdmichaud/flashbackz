@@ -20,17 +20,26 @@ pub const RoomSource = union(enum) {
             files.rooms,
             "MAP",
             8 * 1024 * 1024,
-        )) |file| return .{ .installed = file } else |err| if (err != error.NotFound) return err;
+        )) |file| {
+            return .{ .installed = file };
+        } else |err| if (err != error.NotFound) {
+            return err;
+        }
         var rooms = try readLevel(source, files.rooms, "LEV", 1024 * 1024);
         errdefer rooms.deinit();
         var tiles = try readLevel(source, files.rooms, "BNQ", 1024 * 1024);
         errdefer tiles.deinit();
-        return .{ .compact = .{
-            .rooms = rooms,
-            .tiles = tiles,
-            .background = if (files.tile_bias != 0) try readLevel(source, files.rooms, "SGD", 1024 * 1024) else null,
-            .tile_bias = files.tile_bias,
-        } };
+        return .{
+            .compact = .{
+                .rooms = rooms,
+                .tiles = tiles,
+                .background = if (files.tile_bias != 0)
+                    try readLevel(source, files.rooms, "SGD", 1024 * 1024)
+                else
+                    null,
+                .tile_bias = files.tile_bias,
+            },
+        };
     }
     pub fn deinit(self: *RoomSource) void {
         switch (self.*) {
@@ -38,7 +47,9 @@ pub const RoomSource = union(enum) {
             .compact => |*files| {
                 files.rooms.deinit();
                 files.tiles.deinit();
-                if (files.background) |*background| background.deinit();
+                if (files.background) |*background| {
+                    background.deinit();
+                }
             },
         }
     }

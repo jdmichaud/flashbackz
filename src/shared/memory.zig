@@ -5,7 +5,10 @@ const std = @import("std");
 const platform = @import("platform.zig");
 
 /// Immutable asset bytes, borrowed for the lifetime of their source.
-pub const AssetEntry = struct { name: []const u8, bytes: []const u8 };
+pub const AssetEntry = struct {
+    name: []const u8,
+    bytes: []const u8,
+};
 
 pub const MemoryAssetSource = struct {
     allocator: std.mem.Allocator,
@@ -94,7 +97,9 @@ pub const MemoryAssetSource = struct {
         if (offset >= bytes.len) return 0;
         const start: usize = @intCast(offset);
         var n = @min(dst.len, bytes.len - start);
-        if (self.max_read != 0) n = @min(n, self.max_read);
+        if (self.max_read != 0) {
+            n = @min(n, self.max_read);
+        }
         @memcpy(dst[0..n], bytes[start..][0..n]);
         return n;
     }
@@ -103,7 +108,9 @@ pub const MemoryAssetSource = struct {
         const self: *MemoryAssetSource = @ptrCast(@alignCast(ctx));
         var names: std.ArrayList([]const u8) = .empty;
         errdefer {
-            for (names.items) |n| self.allocator.free(n);
+            for (names.items) |n| {
+                self.allocator.free(n);
+            }
             names.deinit(self.allocator);
         }
         for (self.entries.keys()) |key| {
@@ -190,10 +197,13 @@ pub const MemoryStorage = struct {
 
     fn listSaves(ctx: *anyopaque) platform.StorageError!platform.OwnedSaveNames {
         const self: *MemoryStorage = @ptrCast(@alignCast(ctx));
-        const names = self.allocator.alloc([]const u8, self.records.count()) catch return error.OutOfMemory;
+        const names = self.allocator.alloc([]const u8, self.records.count()) catch
+            return error.OutOfMemory;
         var filled: usize = 0;
         errdefer {
-            for (names[0..filled]) |n| self.allocator.free(n);
+            for (names[0..filled]) |n| {
+                self.allocator.free(n);
+            }
             self.allocator.free(names);
         }
         for (self.records.keys()) |key| {

@@ -27,7 +27,7 @@ pub fn compute(group: rule_table.Group) Key {
             const raw: u16 = @bitCast(operation.argument);
             const argument = if (carriesMessage(operation.code)) messages.of(raw) else raw;
             encoded[9 + slot * 3] = operation.code;
-            std.mem.writeInt(u16, encoded[10 + slot * 3 ..][0..2], argument, .little);
+            std.mem.writeInt(u16, encoded[10 + slot * 3..][0..2], argument, .little);
         }
         hash.update(&encoded);
     }

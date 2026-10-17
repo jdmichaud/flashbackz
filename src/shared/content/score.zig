@@ -18,10 +18,24 @@ pub const Instrument = struct {
     feedback_connection: u8,
     scale_modulator: bool,
 };
-pub const Note = struct { instrument: u4, pitch: u8, velocity: u7 };
-pub const Action = union(enum) { play: Note, release: u8, bend: u14 };
-pub const Event = struct { tick: u32, action: Action };
-pub const Part = struct { events: []const Event, repeat_ticks: ?u32 };
+pub const Note = struct {
+    instrument: u4,
+    pitch: u8,
+    velocity: u7,
+};
+pub const Action = union(enum) {
+    play: Note,
+    release: u8,
+    bend: u14,
+};
+pub const Event = struct {
+    tick: u32,
+    action: Action,
+};
+pub const Part = struct {
+    events: []const Event,
+    repeat_ticks: ?u32,
+};
 pub const Score = struct {
     instruments: [16]?Instrument,
     parts: []const Part,

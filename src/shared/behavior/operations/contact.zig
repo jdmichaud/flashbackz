@@ -57,7 +57,9 @@ pub fn touchingInPose(world: *World, actor: u16, pose: i16) !bool {
 /// Someone else shares a cell, whatever its kind.
 pub fn touchingAnyone(world: *World, actor: u16, _: void) !bool {
     var mates = cellMates(world, actor);
-    while (mates.next()) |other| if (other != actor) return true;
+    while (mates.next()) |other| {
+        if (other != actor) return true;
+    }
     return false;
 }
 
@@ -74,11 +76,7 @@ pub fn touching(world: *World, actor: u16, kind: vocabulary.Kind) !bool {
 }
 
 /// Sends to everyone else touching that faces the other way. See `sendToTouchingFacing`.
-pub fn sendToTouchingFacingOpposite(
-    world: *World,
-    actor: u16,
-    message: vocabulary.Message,
-) !bool {
+pub fn sendToTouchingFacingOpposite(world: *World, actor: u16, message: vocabulary.Message) !bool {
     return sendToTouchingFacing(world, actor, message, false);
 }
 
@@ -209,7 +207,9 @@ pub fn appearAtSender(world: *World, actor: u16, message: vocabulary.Message) !b
     character.y = from.y;
     character.room = from.room;
     character.facing_right = from.facing_right;
-    if (character.owner) |owner| world.unlinkItem(owner, actor);
+    if (character.owner) |owner| {
+        world.unlinkItem(owner, actor);
+    }
     return true;
 }
 
@@ -363,14 +363,18 @@ const testing = struct {
                 placement.width,
                 &shared,
             );
-            if (first) |slot| c.contact = slot;
+            if (first) |slot| {
+                c.contact = slot;
+            }
         }
     }
 
     fn waiting(w: *const World, index: u16) usize {
         var count: usize = 0;
         var letters = w.mailbox(index);
-        while (letters.nextLetter()) |_| count += 1;
+        while (letters.nextLetter()) |_| {
+            count += 1;
+        }
         return count;
     }
 
@@ -393,7 +397,9 @@ test "the footprint walk meets everyone cell by cell, the character itself inclu
     var met: [8]u16 = undefined;
     var count: usize = 0;
     var mates = cellMates(&w, 0);
-    while (mates.next()) |other| : (count += 1) met[count] = other;
+    while (mates.next()) |other| : (count += 1) {
+        met[count] = other;
+    }
     try std.testing.expectEqualSlices(u16, &.{ 2, 1, 0, 2, 0 }, met[0..count]);
 
     try std.testing.expect(try touchingAnyone(&w, 0, {}));

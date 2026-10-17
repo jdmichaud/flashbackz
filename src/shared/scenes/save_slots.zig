@@ -13,7 +13,10 @@ const step_clock = @import("../step_clock.zig");
 pub const Mode = enum { save, load };
 /// The quick slot, then the eight others.
 pub const row_count = 1 + save.slot_count;
-pub const Outcome = union(enum) { back, chosen: usize };
+pub const Outcome = union(enum) {
+    back,
+    chosen: usize,
+};
 
 /// Where the selected save's picture goes on the page.
 pub const picture_x = 16;
@@ -59,7 +62,11 @@ pub const Page = struct {
     /// A pad's B: no to the question, or back.
     pub fn back(self: *Page) void {
         self.refused = false;
-        if (self.confirming) self.confirming = false else self.outcome = .back;
+        if (self.confirming) {
+            self.confirming = false;
+        } else {
+            self.outcome = .back;
+        }
     }
 
     fn choose(self: *Page, slot: save.Slot) void {
@@ -92,7 +99,10 @@ pub const Page = struct {
             const y: i32 = 30 + @as(i32, @intCast(row)) * 14;
             const row_style = if (row == self.selection) selected else style;
             var name: [8]u8 = undefined;
-            const label = if (row == 0) "QUICK" else std.fmt.bufPrint(&name, "{d}", .{row}) catch unreachable;
+            const label = if (row == 0)
+                "QUICK"
+            else
+                std.fmt.bufPrint(&name, "{d}", .{ row }) catch unreachable;
             try text.draw(pixels, 256, 224, glyphs, label, 16, y, row_style);
             var time: [16]u8 = undefined;
             const what: []const u8, const when: []const u8 = switch (slot) {
@@ -105,7 +115,9 @@ pub const Page = struct {
             try text.draw(pixels, 256, 224, glyphs, when, 184, y, row_style);
         }
         const chosen = slots[self.selection];
-        if (chosen == .save) try text.draw(pixels, 256, 224, glyphs, chosen.save.date, 96, 166, style);
+        if (chosen == .save) {
+            try text.draw(pixels, 256, 224, glyphs, chosen.save.date, 96, 166, style);
+        }
         const status: []const u8 = if (self.confirming)
             "SAVE OVER IT?"
         else if (self.refused) switch (chosen) {
@@ -136,13 +148,27 @@ pub fn levelName(level: content_level.Id) []const u8 {
 /// Play time as hours, minutes and seconds: a walk takes two ticks of the original's timer.
 pub fn playTime(walks: u64, buffer: *[16]u8) []const u8 {
     const seconds = walks * 2 * step_clock.counts_per_tick / step_clock.timer_hz;
-    return std.fmt.bufPrint(buffer, "{d}:{d:0>2}:{d:0>2}", .{ seconds / 3600, seconds / 60 % 60, seconds % 60 }) catch unreachable;
+    return std.fmt.bufPrint(buffer, "{d}:{d:0>2}:{d:0>2}", .{
+        seconds / 3600,
+        seconds / 60 % 60,
+        seconds % 60,
+    }) catch unreachable;
 }
 
 test "the page chooses slots: empty ones at once, over a save after asking, never a save it cannot load" {
     var slots: [row_count]save.Slot = @splat(.empty);
-    slots[1] = .{ .save = .{ .level = .city, .play_walks = 0, .date = "", .picture = null, .loadable = true } };
-    slots[2] = .{ .save = .{ .level = .city, .play_walks = 0, .date = "", .picture = null, .loadable = false } };
+    slots[1] = .{
+        .save = .{ .level = .city, .play_walks = 0, .date = "", .picture = null, .loadable = true },
+    };
+    slots[2] = .{
+        .save = .{
+            .level = .city,
+            .play_walks = 0,
+            .date = "",
+            .picture = null,
+            .loadable = false,
+        },
+    };
     slots[3] = .other_version;
 
     var saving: Page = .{ .mode = .save };

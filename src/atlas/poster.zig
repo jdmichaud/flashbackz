@@ -47,7 +47,12 @@ const Block = struct {
     tags: []Tag,
 };
 /// A tag on the block; when it would cover another, it moves along x, or else along y.
-const Tag = struct { letter: u8, x: i32, y: i32, along_x: bool };
+const Tag = struct {
+    letter: u8,
+    x: i32,
+    y: i32,
+    along_x: bool,
+};
 
 pub fn render(allocator: std.mem.Allocator, font: *const Font, levels: []const Level) !draw.Canvas {
     const blocks = try allocator.alloc(Block, levels.len);
@@ -68,7 +73,11 @@ pub fn render(allocator: std.mem.Allocator, font: *const Font, levels: []const L
         height += block.image.height;
     }
 
-    var canvas = try draw.Canvas.init(allocator, margin + label_width + label_gap + map_width + margin, height);
+    var canvas = try draw.Canvas.init(
+        allocator,
+        margin + label_width + label_gap + map_width + margin,
+        height,
+    );
     errdefer canvas.deinit(allocator);
     var y: i32 = margin;
     for (levels, blocks, 1..) |*level, *block, number| {
@@ -76,7 +85,9 @@ pub fn render(allocator: std.mem.Allocator, font: *const Font, levels: []const L
         const x: i32 = margin + label_width + label_gap;
         try canvas.glow(allocator, &block.image, x, y, glow_edge);
         canvas.draw(&block.image, x, y);
-        for (block.tags) |t| canvas.tag(font, t.letter, x + t.x, y + t.y, accent);
+        for (block.tags) |t| {
+            canvas.tag(font, t.letter, x + t.x, y + t.y, accent);
+        }
         drawLabel(&canvas, font, level, number, @intCast(block.image.height), y, accent);
         y += @as(i32, @intCast(block.image.height)) + row_gap;
     }
@@ -85,14 +96,24 @@ pub fn render(allocator: std.mem.Allocator, font: *const Font, levels: []const L
 
 /// The label, centered on the row and right-aligned against the gutter: the level's number,
 /// its name (a line a word when it is too long), a rule in the accent, the count of rooms.
-fn drawLabel(canvas: *draw.Canvas, font: *const Font, level: *const Level, number: usize, row_height: i32, top: i32, accent: draw.Rgb) void {
+fn drawLabel(
+    canvas: *draw.Canvas,
+    font: *const Font,
+    level: *const Level,
+    number: usize,
+    row_height: i32,
+    top: i32,
+    accent: draw.Rgb,
+) void {
     var lines_buffer: [4][]const u8 = undefined;
     var lines: []const []const u8 = lines_buffer[0..1];
     lines_buffer[0] = level.name;
     if (draw.textWidth(level.name, name_scale) > label_width) {
         var words = std.mem.tokenizeScalar(u8, level.name, ' ');
         var count: usize = 0;
-        while (words.next()) |word| : (count += 1) lines_buffer[count] = word;
+        while (words.next()) |word| : (count += 1) {
+            lines_buffer[count] = word;
+        }
         lines = lines_buffer[0..count];
     }
     const line_count: i32 = @intCast(lines.len);
@@ -103,11 +124,27 @@ fn drawLabel(canvas: *draw.Canvas, font: *const Font, level: *const Level, numbe
     var y = top + @divTrunc(row_height - height, 2);
 
     var text_buffer: [32]u8 = undefined;
-    const heading = std.fmt.bufPrint(&text_buffer, "LEVEL {d}", .{number}) catch unreachable;
-    canvas.text(font, heading, right - draw.textWidth(heading, number_scale), y, number_scale, accent, draw.darker(accent, 0.3));
+    const heading = std.fmt.bufPrint(&text_buffer, "LEVEL {d}", .{ number }) catch unreachable;
+    canvas.text(
+        font,
+        heading,
+        right - draw.textWidth(heading, number_scale),
+        y,
+        number_scale,
+        accent,
+        draw.darker(accent, 0.3),
+    );
     y += 8 * number_scale + 48;
     for (lines) |line| {
-        canvas.text(font, line, right - draw.textWidth(line, name_scale), y, name_scale, name_color, draw.darker(accent, 0.32));
+        canvas.text(
+            font,
+            line,
+            right - draw.textWidth(line, name_scale),
+            y,
+            name_scale,
+            name_color,
+            draw.darker(accent, 0.32),
+        );
         y += 12 * name_scale;
     }
     y += 64 - 4 * name_scale;
@@ -115,9 +152,19 @@ fn drawLabel(canvas: *draw.Canvas, font: *const Font, level: *const Level, numbe
     canvas.fill(right - rule_width, y, rule_width, rule_height, accent);
     y += rule_height + 56;
     var rooms: usize = 0;
-    for (level.map.cells) |cell| rooms += @intFromBool(cell != null);
-    const note = std.fmt.bufPrint(&text_buffer, "{d} ROOMS", .{rooms}) catch unreachable;
-    canvas.text(font, note, right - draw.textWidth(note, note_scale), y, note_scale, note_color, note_shadow);
+    for (level.map.cells) |cell| {
+        rooms += @intFromBool(cell != null);
+    }
+    const note = std.fmt.bufPrint(&text_buffer, "{d} ROOMS", .{ rooms }) catch unreachable;
+    canvas.text(
+        font,
+        note,
+        right - draw.textWidth(note, note_scale),
+        y,
+        note_scale,
+        note_color,
+        note_shadow,
+    );
 }
 
 fn buildBlock(allocator: std.mem.Allocator, level: *const Level) !Block {
@@ -137,16 +184,26 @@ fn buildBlock(allocator: std.mem.Allocator, level: *const Level) !Block {
             order[count] = @intCast(room);
             count += 1;
         }
-        std.sort.insertion(u8, order[starts[p]..count], map, struct {
-            fn above(m: *const map_mod.Map, a: u8, b: u8) bool {
-                const ca = m.cells[a].?;
-                const cb = m.cells[b].?;
-                return ca.y < cb.y or (ca.y == cb.y and ca.x < cb.x);
-            }
-        }.above);
+        std.sort.insertion(
+            u8,
+            order[starts[p]..count],
+            map,
+            struct {
+                fn above(m: *const map_mod.Map, a: u8, b: u8) bool {
+                    const ca = m.cells[a].?;
+                    const cb = m.cells[b].?;
+                    return ca.y < cb.y or (ca.y == cb.y and ca.x < cb.x);
+                }
+            }.above,
+        );
         for (order[starts[p]..count], rects[starts[p]..count]) |room, *rect| {
             const c = map.cells[room].?;
-            rect.* = .{ .x = c.x * room_width, .y = c.y * room_pitch, .w = room_width, .h = room_height };
+            rect.* = .{
+                .x = c.x * room_width,
+                .y = c.y * room_pitch,
+                .w = room_width,
+                .h = room_height,
+            };
         }
         const size = map.sizes[p];
         pieces[p] = .{
@@ -162,29 +219,50 @@ fn buildBlock(allocator: std.mem.Allocator, level: *const Level) !Block {
     const size = if (level.line) |*line|
         alongLine(map, line, pieces[0..piece_count], ties[0..tie_count], origins[0..piece_count])
     else
-        pack_mod.pack(pieces[0..piece_count], ties[0..tie_count], map_limit, piece_gap, origins[0..piece_count]);
+        pack_mod.pack(
+            pieces[0..piece_count],
+            ties[0..tie_count],
+            map_limit,
+            piece_gap,
+            origins[0..piece_count],
+        );
     var image = try draw.Image.init(allocator, @intCast(size.w), @intCast(size.h));
     errdefer image.deinit(allocator);
     for (0..piece_count) |p| {
         for (order[starts[p]..starts[p + 1]], rects[starts[p]..starts[p + 1]]) |room, rect| {
             const pixels = level.rooms[room] orelse continue;
-            image.paste(pixels, room_width, room_height, origins[p].x + rect.x, origins[p].y + rect.y);
+            image.paste(
+                pixels,
+                room_width,
+                room_height,
+                origins[p].x + rect.x,
+                origins[p].y + rect.y,
+            );
         }
     }
 
     // Tags mark the joins between pieces, unless the level is drawn along its transit line.
     var tags: std.ArrayList(Tag) = .empty;
     errdefer tags.deinit(allocator);
-    if (level.line == null) for (level.joins) |join| {
-        const join_ends = ends(join);
-        if (map.cells[join_ends[0].room].?.piece == map.cells[join_ends[1].room].?.piece) continue;
-        const letter: u8 = @intCast('A' + tags.items.len / 2);
-        for (join_ends) |end| {
-            const origin = origins[map.cells[end.room].?.piece];
-            const at = inPiece(map, end);
-            try tags.append(allocator, .{ .letter = letter, .x = origin.x + at.x, .y = origin.y + at.y, .along_x = end.along_x });
+    if (level.line == null) {
+        for (level.joins) |join| {
+            const join_ends = ends(join);
+            if (map.cells[join_ends[0].room].?.piece == map.cells[join_ends[1].room].?.piece) {
+                continue;
+            }
+            const letter: u8 = @intCast('A' + tags.items.len / 2);
+            for (join_ends) |end| {
+                const origin = origins[map.cells[end.room].?.piece];
+                const at = inPiece(map, end);
+                try tags.append(allocator, .{
+                    .letter = letter,
+                    .x = origin.x + at.x,
+                    .y = origin.y + at.y,
+                    .along_x = end.along_x,
+                });
+            }
         }
-    };
+    }
     separate(tags.items);
     return .{ .image = image, .tags = try tags.toOwnedSlice(allocator) };
 }
@@ -199,7 +277,12 @@ fn joinTies(level: *const Level, ties: *[2 * map_mod.room_count]pack_mod.Tie) us
         const piece_a = map.cells[a.room].?.piece;
         const piece_b = map.cells[b.room].?.piece;
         if (piece_a == piece_b or count == ties.len) continue;
-        ties[count] = .{ .a = piece_a, .a_at = inPiece(map, a), .b = piece_b, .b_at = inPiece(map, b) };
+        ties[count] = .{
+            .a = piece_a,
+            .a_at = inPiece(map, a),
+            .b = piece_b,
+            .b_at = inPiece(map, b),
+        };
         count += 1;
     }
     return count;
@@ -230,7 +313,12 @@ fn alongLine(
         const cell = map.cells[room].?;
         stop.district = .{
             .piece = cell.piece,
-            .room = .{ .x = cell.x * room_width, .y = cell.y * room_pitch, .w = room_width, .h = room_height },
+            .room = .{
+                .x = cell.x * room_width,
+                .y = cell.y * room_pitch,
+                .w = room_width,
+                .h = room_height,
+            },
             .below = .{ .x = cell.x * room_width, .y = (cell.y + 1) * room_pitch },
         };
     }
@@ -239,7 +327,11 @@ fn alongLine(
 
 /// One end of a join: its room, where in the room its tag goes, and which way the tag moves
 /// if another is there.
-const End = struct { room: u8, at: pack_mod.Point, along_x: bool };
+const End = struct {
+    room: u8,
+    at: pack_mod.Point,
+    along_x: bool,
+};
 
 fn ends(join: map_mod.Join) [2]End {
     return switch (join) {
@@ -273,7 +365,11 @@ fn separate(tags: []Tag) void {
             moved = false;
             for (tags[0..i]) |other| {
                 if (@abs(t.x - other.x) >= spacing or @abs(t.y - other.y) >= spacing) continue;
-                if (t.along_x) t.x = other.x + spacing else t.y = other.y + spacing;
+                if (t.along_x) {
+                    t.x = other.x + spacing;
+                } else {
+                    t.y = other.y + spacing;
+                }
                 moved = true;
             }
         }

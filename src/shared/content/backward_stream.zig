@@ -38,14 +38,14 @@ const Command = union(enum) {
         if (prefix == 1) return .{ .reference = .{ .length = 2, .distance = try bits.take(8) } };
         const kind = ((prefix & 1) << 1) | try bits.take(1);
         if (kind == 3) return .{ .literal = try bits.take(8) + 9 };
-        if (kind == 2) return .{ .reference = .{
-            .length = try bits.take(8) + 1,
-            .distance = try bits.take(12),
-        } };
-        return .{ .reference = .{
-            .length = kind + 3,
-            .distance = try bits.take(@intCast(kind + 9)),
-        } };
+        if (kind == 2) {
+            return .{
+                .reference = .{ .length = try bits.take(8) + 1, .distance = try bits.take(12) },
+            };
+        }
+        return .{
+            .reference = .{ .length = kind + 3, .distance = try bits.take(@intCast(kind + 9)) },
+        };
     }
 };
 
@@ -53,8 +53,8 @@ pub fn decode(allocator: std.mem.Allocator, bytes: []const u8, maximum: usize) !
     if (bytes.len < 12 or bytes.len % 4 != 0) return error.InvalidBitstreamLength;
     const cursor = bytes.len - 12;
     const initial_word = std.mem.readInt(u32, bytes[cursor..][0..4], .big);
-    const checksum = std.mem.readInt(u32, bytes[cursor + 4 ..][0..4], .big);
-    const size = std.mem.readInt(u32, bytes[cursor + 8 ..][0..4], .big);
+    const checksum = std.mem.readInt(u32, bytes[cursor + 4..][0..4], .big);
+    const size = std.mem.readInt(u32, bytes[cursor + 8..][0..4], .big);
     if (size > maximum) return error.ExpandedContentTooLarge;
     var bits: Bits = .{
         .bytes = bytes,
@@ -79,7 +79,9 @@ pub fn decode(allocator: std.mem.Allocator, bytes: []const u8, maximum: usize) !
                 if (reference.distance == 0) return error.InvalidBackReference;
                 for (0..reference.length) |_| {
                     remaining -= 1;
-                    if (reference.distance >= output.len - remaining) return error.InvalidBackReference;
+                    if (reference.distance >= output.len - remaining) {
+                        return error.InvalidBackReference;
+                    }
                     output[remaining] = output[remaining + reference.distance];
                 }
             },

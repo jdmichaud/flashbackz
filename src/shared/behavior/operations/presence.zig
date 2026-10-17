@@ -25,7 +25,9 @@ pub fn sleepUnlessNearPlayer(world: *World, actor: u16, _: void) !bool {
     const near = room == world.view_room or for (std.enums.values(grid.Side)) |side| {
         if (world.grid.rawLink(world.view_room, side) == room) break true;
     } else false;
-    if (!(wakes and near and (room < 0x40 or room >= 0x80))) world.deactivate(actor);
+    if (!(wakes and near and (room < 0x40 or room >= 0x80))) {
+        world.deactivate(actor);
+    }
     return true;
 }
 
@@ -33,7 +35,9 @@ pub fn sleepUnlessNearPlayer(world: *World, actor: u16, _: void) !bool {
 pub fn remove(world: *World, actor: u16, _: void) !bool {
     world.characters[actor].room = Room.removed;
     world.deactivate(actor);
-    if (world.level.characters[actor].kind == .enemy) world.score +%= 200;
+    if (world.level.characters[actor].kind == .enemy) {
+        world.score +%= 200;
+    }
     return true;
 }
 
@@ -49,7 +53,9 @@ pub fn useUp(world: *World, actor: u16, owner: vocabulary.Character) !bool {
 /// moves the view after the update.
 pub fn reveal(world: *World, actor: u16, number: vocabulary.Number) !bool {
     world.characters[actor].room = @truncate(@as(u16, @bitCast(world.number(actor, number))));
-    if (world.level.characters[actor].kind == .player) world.view_dirty = true;
+    if (world.level.characters[actor].kind == .player) {
+        world.view_dirty = true;
+    }
     world.showFrame(actor) catch return error.InvalidAnimation;
     return true;
 }

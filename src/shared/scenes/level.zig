@@ -111,7 +111,10 @@ pub const Scene = struct {
         const max_items = 32;
     };
 
-    pub const Demo = struct { bytes: []u8, cursor: usize = 0 };
+    pub const Demo = struct {
+        bytes: []u8,
+        cursor: usize = 0,
+    };
 
     /// Loads `level` from the data set `files` and the original art and sound in `assets`.
     pub const Setup = struct {
@@ -143,11 +146,10 @@ pub const Scene = struct {
     ) !Scene {
         const recording = try demo_mod.load(allocator, assets, index);
         errdefer allocator.free(recording.controls);
-        const start: ?World.Start = if (recording.descriptor.start) |start| .{
-            .room = start.room,
-            .x = start.x,
-            .y = start.y,
-        } else null;
+        const start: ?World.Start = if (recording.descriptor.start) |start|
+            .{ .room = start.room, .x = start.x, .y = start.y }
+        else
+            null;
         var scene = try loadWithStart(
             allocator,
             assets,
@@ -188,7 +190,7 @@ pub const Scene = struct {
             @tagName(level),
             &diagnostic,
         ) catch |err| {
-            std.log.err("data set: {s}", .{diagnostic.message()});
+            std.log.err("data set: {s}", .{ diagnostic.message() });
             return err;
         };
         const messages = data_set.loadMessages(
@@ -197,7 +199,7 @@ pub const Scene = struct {
             files,
             &diagnostic,
         ) catch |err| {
-            std.log.err("data set: {s}", .{diagnostic.message()});
+            std.log.err("data set: {s}", .{ diagnostic.message() });
             return err;
         };
         const scenes = data_set.loadScenes(
@@ -206,7 +208,7 @@ pub const Scene = struct {
             files,
             &diagnostic,
         ) catch |err| {
-            std.log.err("data set: {s}", .{diagnostic.message()});
+            std.log.err("data set: {s}", .{ diagnostic.message() });
             return err;
         };
         const interface = try floppy_interface.load(allocator, assets);
@@ -252,7 +254,9 @@ pub const Scene = struct {
     }
 
     pub fn deinit(self: *Scene) void {
-        if (self.demo) |demo| self.allocator.free(demo.bytes);
+        if (self.demo) |demo| {
+            self.allocator.free(demo.bytes);
+        }
         self.pending.deinit(self.allocator);
         self.allocator.destroy(self.screen);
         self.world.deinit();
@@ -288,8 +292,7 @@ pub const Scene = struct {
         }
         var work: usize = 0;
         while (self.outcome == .playing and self.film == null and self.needsCatchup(now_ns) and
-            work < 8) : (work += 1)
-        {
+            work < 8) : (work += 1) {
             if (self.options) |*options| {
                 const deadline = options.clock.deadline();
                 options.clock.consume();
@@ -320,7 +323,9 @@ pub const Scene = struct {
     /// The original's frame wait: two ticks after the last frame, three after a catch-up walk.
     fn frameWait(self: *Scene) void {
         self.clock.?.consume();
-        if (self.caught_up) self.clock.?.advance(1);
+        if (self.caught_up) {
+            self.clock.?.advance(1);
+        }
         self.caught_up = false;
     }
 
@@ -383,11 +388,15 @@ pub const Scene = struct {
                     options.menu.back();
                     continue;
                 }
-                if (options.direction_repeat.registers(change, event.time_ns)) options.menu.press(change.action, settings);
+                if (options.direction_repeat.registers(change, event.time_ns)) {
+                    options.menu.press(change.action, settings);
+                }
             }
         }
         if (self.keys.pads.repeat()) |held| {
-            if (options.direction_repeat.registers(held, deadline)) options.menu.press(held.action, settings);
+            if (options.direction_repeat.registers(held, deadline)) {
+                options.menu.press(held.action, settings);
+            }
         }
         const outcome = options.menu.outcome orelse return;
         self.screen.zoom.setRow(@backingInt(settings.zoom));
@@ -539,32 +548,49 @@ pub const Scene = struct {
         self.keys.unlatch();
         self.clock.?.origin_ns +|= paused_for;
         // Films do not leave the zoom, but its pages are rebuilt.
-        if (self.screen.zoom.on) self.screen.zoom.enter = true;
+        if (self.screen.zoom.on) {
+            self.screen.zoom.enter = true;
+        }
         const controls = try self.walks(self.after_film, now_ns, settings.*);
         try self.finishFrame(controls, now_ns, settings);
         // The film restarted the tick counter: this frame is not late.
         self.frameWait();
     }
 
-    fn walk(self: *Scene, controls: u8, kind: behavior.world.Walk, enabled: audio_effects.Enabled) !void {
+    fn walk(
+        self: *Scene,
+        controls: u8,
+        kind: behavior.world.Walk,
+        enabled: audio_effects.Enabled,
+    ) !void {
         const outcome = try self.world.update(@bitCast(controls), kind);
         self.walk_count += 1;
         for (self.world.requests.sounds[0..self.world.requests.sound_count]) |request| {
-            self.effects.submit(self.pack.sounds, .{
-                .sound = @fromBackingInt(request.id),
-                .attenuation = @intFromBool(request.distant),
-            }, enabled);
+            self.effects.submit(
+                self.pack.sounds,
+                .{
+                    .sound = @fromBackingInt(request.id),
+                    .attenuation = @intFromBool(request.distant),
+                },
+                enabled,
+            );
         }
         switch (outcome) {
             .played => {
-                if (self.world.requests.scene) |scene| self.requested_scene = scene;
+                if (self.world.requests.scene) |scene| {
+                    self.requested_scene = scene;
+                }
                 // The first of two walks is not drawn.
-                if (kind != .first_of_two) try self.screen.draw(&self.pack, self.messages, &self.world);
+                if (kind != .first_of_two) {
+                    try self.screen.draw(&self.pack, self.messages, &self.world);
+                }
             },
             // The defeat scene plays before the continue screen.
             .defeated => {
                 self.outcome = .defeated;
-                if (self.world.requests.scene) |scene| self.film = self.scenes.film(scene);
+                if (self.world.requests.scene) |scene| {
+                    self.film = self.scenes.film(scene);
+                }
             },
             .level_changed => self.outcome = .{
                 .level = std.enums.fromInt(level_mod.Id, self.world.requests.level.?) orelse
@@ -597,7 +623,8 @@ pub const Scene = struct {
         while (next) |item| : (next = self.world.characters[item].next_item) {
             if (count == Inventory.max_items) break;
             const definition = self.data.characters[item];
-            const icon = level_screen.iconFrame(&self.pack, definition.inventory_icon) orelse continue;
+            const icon = level_screen.iconFrame(&self.pack, definition.inventory_icon) orelse
+                continue;
             inventory.items[count] = item;
             inventory.entries[count] = .{
                 .icon = icon,
@@ -627,18 +654,26 @@ pub const Scene = struct {
         while (self.pending.items.len != 0 and self.pending.items[0].time_ns <= deadline) {
             const event = self.pending.orderedRemove(0);
             const changes = self.keys.apply(event.payload);
-            if (event.payload == .focus_lost) inventory.keys = .{};
+            if (event.payload == .focus_lost) {
+                inventory.keys = .{};
+            }
             // The original polls the joystick here too when the Joystick option is on.
             for (changes.slice()) |change| {
                 if (change.pad and !joystick) continue;
                 if (change.down and change.action.isDirection() and
-                    !inventory.direction_repeat.accept(change.repeat, event.time_ns)) continue;
+                    !inventory.direction_repeat.accept(change.repeat, event.time_ns)) {
+                    continue;
+                }
                 inventory.keys.action(change.action, change.down);
             }
         }
-        if (joystick) if (self.keys.pads.repeat()) |held| {
-            if (inventory.direction_repeat.accept(true, deadline)) inventory.keys.action(held.action, true);
-        };
+        if (joystick) {
+            if (self.keys.pads.repeat()) |held| {
+                if (inventory.direction_repeat.accept(true, deadline)) {
+                    inventory.keys.action(held.action, true);
+                }
+            }
+        }
         if (self.demo) |*demo| {
             if (demo.cursor == demo.bytes.len) {
                 self.outcome = .aborted;
@@ -678,7 +713,9 @@ pub const Scene = struct {
             const event = self.pending.orderedRemove(0);
             const changes = self.keys.apply(event.payload);
             for (changes.slice()) |change| {
-                if (change.action == .pause) self.keys.escape = change.down;
+                if (change.action == .pause) {
+                    self.keys.escape = change.down;
+                }
             }
         }
         return self.keys.read(joystick);
@@ -750,15 +787,19 @@ pub const Scene = struct {
             return palette.writeRgba(indices, &self.screen.colors, rgba);
         }
         var picture = self.screen.displayed;
-        if (self.inventory) |inventory| try inventory.menu.draw(
-            .of(&self.pack.inventory),
-            inventory.entries[0..inventory.menu.count],
-            self.world.score,
-            &picture,
-            width,
-            height,
-        );
-        if (self.options) |options| try options.menu.draw(&picture, &self.pack.font, settings);
+        if (self.inventory) |inventory| {
+            try inventory.menu.draw(
+                .of(&self.pack.inventory),
+                inventory.entries[0..inventory.menu.count],
+                self.world.score,
+                &picture,
+                width,
+                height,
+            );
+        }
+        if (self.options) |options| {
+            try options.menu.draw(&picture, &self.pack.font, settings);
+        }
         self.screen.display(&picture, indices[0..pixel_count]);
         try palette.writeRgba(indices, &self.screen.colors, rgba);
     }
@@ -787,31 +828,52 @@ pub const Scene = struct {
 /// What play animates and draws must be in the level's files: each state's animation, and the
 /// characters of the world messages and the labels. Checked at load, so that a data set fails
 /// there, with its reason, not in play.
-fn checkContent(data: *const data_set.Level, messages: data_set.Messages, pack: *const level_pack.Pack) !void {
-    for (data.behaviors) |table| for (table.states) |state| {
-        _ = pack.animations.get(state.animation) catch |err| {
-            std.log.err("data set: behavior {s}, state {s}: animation {d} is not in the level's files ({s})", .{
-                table.name, state.name, state.animation, @errorName(err),
-            });
-            return err;
-        };
-    };
-    for (messages, 0..) |pages, number| for (pages) |lines| for (lines) |line| {
-        if (missingGlyph(&pack.font, line.text)) |byte| {
-            std.log.err("data set: message {d}: the font has no character {d}", .{ number, byte });
-            return error.MissingGlyph;
+fn checkContent(
+    data: *const data_set.Level,
+    messages: data_set.Messages,
+    pack: *const level_pack.Pack,
+) !void {
+    for (data.behaviors) |table| {
+        for (table.states) |state| {
+            _ = pack.animations.get(state.animation) catch |err| {
+                std.log.err(
+                    "data set: behavior {s}, state {s}: animation {d} is not in the level's files ({s})",
+                    .{ table.name, state.name, state.animation, @errorName(err) },
+                );
+                return err;
+            };
         }
-    };
-    for (data.characters) |character| for ([_]*const font_mod.Font{ &pack.font, &pack.inventory.font }) |font| {
-        if (missingGlyph(font, character.label)) |byte| {
-            std.log.err("data set: {s}'s label: the font has no character {d}", .{ character.name, byte });
-            return error.MissingGlyph;
+    }
+    for (messages, 0..) |pages, number| {
+        for (pages) |lines| {
+            for (lines) |line| {
+                if (missingGlyph(&pack.font, line.text)) |byte| {
+                    std.log.err("data set: message {d}: the font has no character {d}", .{
+                        number,
+                        byte,
+                    });
+                    return error.MissingGlyph;
+                }
+            }
         }
-    };
+    }
+    for (data.characters) |character| {
+        for ([_]*const font_mod.Font{ &pack.font, &pack.inventory.font }) |font| {
+            if (missingGlyph(font, character.label)) |byte| {
+                std.log.err("data set: {s}'s label: the font has no character {d}", .{
+                    character.name,
+                    byte,
+                });
+                return error.MissingGlyph;
+            }
+        }
+    }
 }
 
 fn missingGlyph(font: *const font_mod.Font, text: []const u8) ?u8 {
-    for (text) |byte| if (font.glyph(byte) == null) return byte;
+    for (text) |byte| {
+        if (font.glyph(byte) == null) return byte;
+    }
     return null;
 }
 

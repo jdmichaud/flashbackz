@@ -74,7 +74,9 @@ pub fn Synth(comptime Fm: type, comptime P: type) type {
         psg_steady: u32 = 0,
 
         pub fn init(fm: Fm, psg: P, options: Options) Self {
-            std.debug.assert(options.rate > 0 and options.rate <= chip.master_clock / Fm.cycles_per_sample);
+            std.debug.assert(
+                options.rate > 0 and options.rate <= chip.master_clock / Fm.cycles_per_sample,
+            );
             return .{
                 .fm = fm,
                 .psg = psg,
@@ -154,24 +156,35 @@ pub fn Synth(comptime Fm: type, comptime P: type) type {
                 // PSG's are made sample by sample with the mix.
                 const next_dac = if (dac_values) s.dac.nextSetup() else s.dac.nextCycle();
                 const end = if (next_dac) |w| @min(t, w) else t;
-                const most: usize = @intCast(@min((end + Fm.cycles_per_sample - 1) / Fm.cycles_per_sample - s.fm_count, block_samples));
+                const most: usize = @intCast(
+                    @min(
+                        (end + Fm.cycles_per_sample - 1) / Fm.cycles_per_sample - s.fm_count,
+                        block_samples,
+                    ),
+                );
                 var block: [block_samples]Frame = undefined;
                 const count = if (dac_values) s.fm.renderChannels(block[0..most]) else most;
-                if (!dac_values) s.fm.generate(block[0..count]);
+                if (!dac_values) {
+                    s.fm.generate(block[0..count]);
+                }
                 var dac_due = if (dac_values) s.dac.nextCycle() orelse std.math.maxInt(u64) else 0;
                 for (block[0..count]) |f| {
                     const at = s.fm_count * Fm.cycles_per_sample;
                     var sample = f;
                     if (dac_values) {
                         if (at >= dac_due) {
-                            while (s.dac.nextWrite(at)) |w| s.fm.write(w.port, w.value);
+                            while (s.dac.nextWrite(at)) |w| {
+                                s.fm.write(w.port, w.value);
+                            }
                             dac_due = s.dac.nextCycle() orelse std.math.maxInt(u64);
                         }
                         sample = s.fm.withDac(f);
                     }
                     if (s.fm_count > 0) {
-                        n += s.mix(s.psgMean(at), out[2 * n ..]);
-                    } else s.psgTo(at);
+                        n += s.mix(s.psgMean(at), out[2 * n..]);
+                    } else {
+                        s.psgTo(at);
+                    }
                     s.fm_sample = sample;
                     s.fm_count += 1;
                 }
@@ -203,7 +216,9 @@ pub fn Synth(comptime Fm: type, comptime P: type) type {
                 }
                 s.psg_sum += @as(i64, s.psg_level) * @as(i64, @intCast(at - s.psg_mark));
                 s.psg_mark = at;
-            } else s.psgTo(at);
+            } else {
+                s.psgTo(at);
+            }
             const sum = s.psg_sum;
             s.psg_sum = 0;
             return @intCast(@divFloor(sum, Fm.cycles_per_sample));
@@ -273,7 +288,7 @@ pub fn Synth(comptime Fm: type, comptime P: type) type {
                 // each call to one frame at most, as the output rate is below the input's.
                 const inputs = s.resampler.inputsBeforeNextFrame();
                 const t = (s.fm_count + inputs - 1) * Fm.cycles_per_sample + 1;
-                n += s.advanceTo(t, out[2 * n ..]);
+                n += s.advanceTo(t, out[2 * n..]);
             }
         }
 
@@ -323,8 +338,10 @@ test "render gives exactly the frames asked, and the same PCM as advance" {
     a.render(&pa);
     var pb: [2 * frames + 2 * 900]i16 = undefined;
     var n: usize = 0;
-    while (n < frames) n += b.advance(1000, pb[2 * n ..]);
-    try testing.expectEqualSlices(i16, &pa, pb[0 .. 2 * frames]);
+    while (n < frames) {
+        n += b.advance(1000, pb[2 * n..]);
+    }
+    try testing.expectEqualSlices(i16, &pa, pb[0..2 * frames]);
     // The output moves: the PSG's square wave is there.
     var lo: i16 = std.math.maxInt(i16);
     var hi: i16 = std.math.minInt(i16);
@@ -338,7 +355,7 @@ test "render gives exactly the frames asked, and the same PCM as advance" {
 test "a DAC sample is heard at its step times" {
     var s = init(.{ .model1 = false });
     // Two values, 1000 Z80 cycles apart: +64, then -64 on the 8-bit scale.
-    s.startSample(&.{ 0xc0, 0x40 }, &.{1000}, false);
+    s.startSample(&.{ 0xc0, 0x40 }, &.{ 1000 }, false);
     var buf: [2 * 4000]i16 = undefined;
     var n = s.advance(40000 * 15, &buf);
     // Before the first value: the DAC at 0 (a silent start).
@@ -347,7 +364,9 @@ test "a DAC sample is heard at its step times" {
     try testing.expectEqual(@as(i16, @divTrunc(-128 * 128, 6)), buf[2 * (n - 1)]);
     // Somewhere in between: +128 scaled.
     var seen = false;
-    for (0..n) |i| seen = seen or buf[2 * i] == @divTrunc(128 * 128, 6);
+    for (0..n) |i| {
+        seen = seen or buf[2 * i] == @divTrunc(128 * 128, 6);
+    }
     try testing.expect(seen);
     try testing.expect(!s.samplePlaying());
     n = s.advance(1000, &buf);
@@ -358,7 +377,9 @@ test "a hold of the Z80 delays the sample's next values" {
     var a = init(.{ .model1 = false });
     var b = init(.{ .model1 = false });
     var buf: [2 * 4000]i16 = undefined;
-    for ([_]*Default{ &a, &b }) |s| s.startSample(&.{ 0xc0, 0x40 }, &.{1000}, false);
+    for ([_]*Default{ &a, &b }) |s| {
+        s.startSample(&.{ 0xc0, 0x40 }, &.{ 1000 }, false);
+    }
     _ = a.advance(1500 * 15, &buf);
     _ = b.advance(1500 * 15, &buf);
     // The first value is due 1051 Z80 cycles after the request, the second 1000 after it.

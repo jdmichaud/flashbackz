@@ -57,7 +57,7 @@ pub const Screen = struct {
     /// drawn gets the texts and icons it showed earlier wiped with the background, which then
     /// holds the frozen frame's message area (16, 26, 128x32).
     pages: [2][pixel_count]u8 = undefined,
-    page_rects: [2]Rects = .{ .{}, .{} },
+    page_rects: [2]Rects = .{.{}, .{}},
     page_buffer: u1 = 0,
     message_background: [pixel_count]u8 = undefined,
     /// The rectangles of the texts and icons drawn this frame and the previous one.
@@ -75,9 +75,17 @@ pub const Screen = struct {
     zoom: Zoom = .{},
     message_left_zoom: bool = false,
 
-    pub const ShownMessage = struct { number: u16, page: usize = 0 };
+    pub const ShownMessage = struct {
+        number: u16,
+        page: usize = 0,
+    };
 
-    const Rect = struct { x: i32, y: i32, w: i32, h: i32 };
+    const Rect = struct {
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+    };
     const Rects = struct {
         items: [16]Rect = undefined,
         count: u8 = 0,
@@ -102,7 +110,9 @@ pub const Screen = struct {
         world: *const World,
     ) !void {
         if (world.requests.world_message) |number| {
-            if (number >= 0) self.pending_message = @intCast(number);
+            if (number >= 0) {
+                self.pending_message = @intCast(number);
+            }
         }
         if (world.room_loads != self.room_loads) {
             self.room_loads = world.room_loads;
@@ -224,10 +234,12 @@ pub const Screen = struct {
         self.message_left_zoom = self.leaveZoomFor();
         @memcpy(&self.under_message, &self.picture);
         @memcpy(&self.message_background, &self.background);
-        for (26..58) |row| @memcpy(
-            self.message_background[row * width + 16 ..][0..128],
-            self.picture[row * width + 16 ..][0..128],
-        );
+        for (26..58) |row| {
+            @memcpy(
+                self.message_background[row * width + 16..][0..128],
+                self.picture[row * width + 16..][0..128],
+            );
+        }
         self.pages = .{ self.picture, self.picture };
         self.page_rects = .{ self.frame_rects, self.previous_rects };
         self.page_buffer = 0;
@@ -245,7 +257,9 @@ pub const Screen = struct {
         const shown = self.message.?;
         const target = &self.pages[self.page_buffer];
         const rects = &self.page_rects[self.page_buffer];
-        if (iconFrame(pack, self.message_icon)) |frame| drawIcon(target, rects, frame, 80, 8);
+        if (iconFrame(pack, self.message_icon)) |frame| {
+            drawIcon(target, rects, frame, 80, 8);
+        }
         for (messages[shown.number][shown.page], 0..) |line, row| {
             const x = 88 - 4 * @as(i32, @intCast(line.text.len));
             const y = 26 + 8 * @as(i32, @intCast(row));
@@ -255,7 +269,9 @@ pub const Screen = struct {
         self.page_buffer = ~self.page_buffer;
         const other = &self.pages[self.page_buffer];
         const old = &self.page_rects[self.page_buffer];
-        for (old.items[0..old.count]) |rect| restore(other, &self.message_background, rect);
+        for (old.items[0..old.count]) |rect| {
+            restore(other, &self.message_background, rect);
+        }
         old.* = .{};
     }
 
@@ -268,12 +284,14 @@ pub const Screen = struct {
     ) void {
         const offset = @as(usize, self.shake_rows) * width;
         @memset(shown[0..offset], 0);
-        @memcpy(shown[offset..], picture[0 .. pixel_count - offset]);
+        @memcpy(shown[offset..], picture[0..pixel_count - offset]);
     }
 
     fn loadRoom(self: *Screen, pack: *const level_pack.Pack, world: *const World) void {
         const room = world.view_room;
-        if (self.zoom.on) self.zoom.snap(world);
+        if (self.zoom.on) {
+            self.zoom.snap(world);
+        }
         if (pack.room(room)) |art| {
             @memcpy(&self.background, art.image.pixels);
             @memcpy(&self.foreground, art.foreground);
@@ -291,7 +309,7 @@ pub const Screen = struct {
     fn setRoomColors(self: *Screen, pack: *const level_pack.Pack, room: u8) void {
         const art = pack.room(room) orelse return;
         for ([_]usize{ 0, 1, 2, 3, 4, 8, 9, 10, 11, 14, 15 }) |block| {
-            @memcpy(self.colors[block * 16 ..][0..16], art.colors[block * 16 ..][0..16]);
+            @memcpy(self.colors[block * 16..][0..16], art.colors[block * 16..][0..16]);
         }
     }
 
@@ -303,13 +321,15 @@ pub const Screen = struct {
         if (self.hud_icon == icon) return;
         self.hud_icon = icon;
         const frame = iconFrame(pack, icon) orelse return;
-        for (0..16) |row| for (0..16) |column| {
-            const pixel = frame.image.pixels[row * 16 + column];
-            if (pixel == 0) continue;
-            const at = (8 + row) * width + 232 + column;
-            self.background[at] = 0xa0 | pixel;
-            self.foreground[at] = true;
-        };
+        for (0..16) |row| {
+            for (0..16) |column| {
+                const pixel = frame.image.pixels[row * 16 + column];
+                if (pixel == 0) continue;
+                const at = (8 + row) * width + 232 + column;
+                self.background[at] = 0xa0 | pixel;
+                self.foreground[at] = true;
+            }
+        }
         self.hud_unshown = true;
     }
 
@@ -508,7 +528,9 @@ pub const Screen = struct {
             return;
         }
         const rects = &self.frame_rects;
-        if (iconFrame(pack, found.icon - 1)) |frame| drawIcon(&self.picture, rects, frame, 80, 8);
+        if (iconFrame(pack, found.icon - 1)) |frame| {
+            drawIcon(&self.picture, rects, frame, 80, 8);
+        }
         const name = world.level.characters[found.character].label;
         const x = 88 - 4 * @as(i32, @intCast(name.len));
         try drawText(&self.picture, rects, pack, name, x, 26, 0xe6);
@@ -534,7 +556,15 @@ pub const Screen = struct {
         if (self.notice_frames == 0) return;
         self.notice_frames -= 1;
         const x = 128 - 4 * @as(i32, @intCast(self.notice.len));
-        try drawText(&self.picture, &self.frame_rects, pack, self.notice, x, if (self.password_frames == 0) 16 else 28, 0xe7);
+        try drawText(
+            &self.picture,
+            &self.frame_rects,
+            pack,
+            self.notice,
+            x,
+            if (self.password_frames == 0) 16 else 28,
+            0xe7,
+        );
     }
 
     fn drawPassword(self: *Screen, pack: *const level_pack.Pack) !void {
@@ -574,11 +604,14 @@ fn restore(target: *[pixel_count]u8, source: *const [pixel_count]u8, rect: Scree
     if (x1 <= x0) return;
     for (y0..y1) |row| {
         const line = row * width;
-        @memcpy(target[line + x0 .. line + x1], source[line + x0 .. line + x1]);
+        @memcpy(target[line + x0..line + x1], source[line + x0..line + x1]);
     }
 }
 
-const Label = struct { icon: u8, character: u16 };
+const Label = struct {
+    icon: u8,
+    character: u16,
+};
 
 /// The first search looks for an item (kind 3) among the characters in Conrad's first cell,
 /// newest first, Conrad included. If none has an icon, a second search for kinds 5 and 9 starts
@@ -586,9 +619,13 @@ const Label = struct { icon: u8, character: u16 };
 fn labelTarget(world: *const World) ?Label {
     var last: u16 = 0;
     const item = search(world, 0, &.{ .interactive, .any }, &last);
-    if (item) |found| if (positive(found.icon)) return found;
+    if (item) |found| {
+        if (positive(found.icon)) return found;
+    }
     const other = search(world, last, &.{ .any, @fromBackingInt(5), @fromBackingInt(9) }, &last);
-    if (other) |found| if (positive(found.icon)) return found;
+    if (other) |found| {
+        if (positive(found.icon)) return found;
+    }
     return null;
 }
 
@@ -606,7 +643,9 @@ fn search(world: *const World, who: u16, kinds: []const Kind, last: *u16) ?Label
         const definition = world.level.characters[entry.character];
         for (kinds) |kind| {
             if (definition.kind.matches(kind)) break;
-        } else continue;
+        } else {
+            continue;
+        }
         return .{ .icon = definition.contact_icon, .character = entry.character };
     }
     return null;
@@ -629,10 +668,14 @@ fn drawIcon(
     x: usize,
     y: usize,
 ) void {
-    for (0..16) |row| for (0..16) |column| {
-        const pixel = frame.image.pixels[row * 16 + column];
-        if (pixel != 0) picture[(y + row) * width + x + column] = 0xa0 | pixel;
-    };
+    for (0..16) |row| {
+        for (0..16) |column| {
+            const pixel = frame.image.pixels[row * 16 + column];
+            if (pixel != 0) {
+                picture[(y + row) * width + x + column] = 0xa0 | pixel;
+            }
+        }
+    }
     rects.add(.{ .x = @intCast(x), .y = @intCast(y), .w = 16, .h = 16 });
 }
 
@@ -699,7 +742,9 @@ pub const Zoom = struct {
             if (self.automatic) {
                 const kind = world.level.characters[recipient].kind;
                 if (!kind.matches(.player) and !kind.matches(.enemy)) continue;
-                if (!self.on) self.enter = true;
+                if (!self.on) {
+                    self.enter = true;
+                }
                 self.leave_timer = 40;
             }
             self.target = recipient;
@@ -710,11 +755,15 @@ pub const Zoom = struct {
     fn countDown(self: *Zoom) void {
         if (self.leave_timer != 0) {
             self.leave_timer -= 1;
-            if (self.leave_timer == 0 and self.on) self.leave = true;
+            if (self.leave_timer == 0 and self.on) {
+                self.leave = true;
+            }
         }
         if (self.follow_timer != 0) {
             self.follow_timer -= 1;
-            if (self.follow_timer == 0) self.target = 0;
+            if (self.follow_timer == 0) {
+                self.target = 0;
+            }
         }
     }
 
@@ -734,7 +783,9 @@ pub const Zoom = struct {
     /// Where the window wants to be: Conrad looking into the open side, or a followed
     /// character placed by Conrad's facing. A target outside the view room gives way to Conrad.
     fn goal(self: *Zoom, world: *const World) struct { x: i16, y: i16, carried: bool } {
-        if (world.characters[self.target].room != world.view_room) self.target = 0;
+        if (world.characters[self.target].room != world.view_room) {
+            self.target = 0;
+        }
         const target = world.characters[self.target];
         const following = self.target != 0;
         const near = target.x - 12;
@@ -751,7 +802,13 @@ pub const Zoom = struct {
     fn follow(self: *Zoom, world: *const World) void {
         const aim = self.goal(world);
         const dx = @abs(aim.x - self.camera_x);
-        const step_x: i16 = if (dx < 4) 0 else if (dx < 8) 1 else if (dx < 16) 2 else if (self.follow_timer != 0)
+        const step_x: i16 = if (dx < 4)
+            0
+        else if (dx < 8)
+            1
+        else if (dx < 16)
+            2
+        else if (self.follow_timer != 0)
             8
         else
             4;
@@ -780,8 +837,10 @@ pub const Zoom = struct {
             height - window_height - 1
         else
             @intCast(@max(self.blit_y, 0));
-        for (0..2 * window_height) |y| for (0..width) |x| {
-            self.page[(top + y) * width + x] = picture[(sy + y / 2) * width + sx + x / 2];
-        };
+        for (0..2 * window_height) |y| {
+            for (0..width) |x| {
+                self.page[(top + y) * width + x] = picture[(sy + y / 2) * width + sx + x / 2];
+            }
+        }
     }
 };

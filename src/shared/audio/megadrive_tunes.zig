@@ -21,7 +21,10 @@ const registers = [33]u8{
 };
 
 /// A write to one of the YM2612's first three channels' registers (its port 0 and 1).
-pub const Write = struct { register: u8, value: u8 };
+pub const Write = struct {
+    register: u8,
+    value: u8,
+};
 
 /// A frame's writes, in order: at most a note on each channel.
 pub const FrameWrites = struct {
@@ -72,7 +75,9 @@ pub const Player = struct {
             } else {
                 const cells = tune.rows[self.row];
                 for (0..channels) |channel| {
-                    if (cells[2 * channel] != 0) self.instrument[channel] = cells[2 * channel];
+                    if (cells[2 * channel] != 0) {
+                        self.instrument[channel] = cells[2 * channel];
+                    }
                     const note = cells[2 * channel + 1];
                     const index = @as(usize, self.instrument[channel]) -% 1;
                     if (note == 0 or index >= tune.instruments.len) continue;
@@ -85,7 +90,9 @@ pub const Player = struct {
                 self.row += 1;
                 self.wait = tune.frames_per_row + tempo;
                 // The tune ends with its last row, not after it.
-                if (self.row == tune.rows.len) self.tune = null;
+                if (self.row == tune.rows.len) {
+                    self.tune = null;
+                }
             }
         }
         var writes: FrameWrites = .{};
@@ -158,7 +165,9 @@ pub const Output = struct {
     pub fn mixInto(self: *Output, out: []i16) void {
         var i: usize = 0;
         while (i < out.len) {
-            if (self.begin == self.end) self.renderVBlank();
+            if (self.begin == self.end) {
+                self.renderVBlank();
+            }
             const n = @min(out.len - i, self.end - self.begin);
             for (out[i..][0..n], self.frames[self.begin..][0..n], self.begin..) |*sample, tune, k| {
                 const heard = self.coupling[k % 2].pass(tune);
@@ -176,12 +185,12 @@ pub const Output = struct {
         var count: usize = 0;
         for (writes.slice(), 0..) |write, k| {
             const at = self.vblank + first_write + k * write_spacing;
-            count += self.synth.advanceTo(at, self.frames[2 * count ..]);
+            count += self.synth.advanceTo(at, self.frames[2 * count..]);
             self.synth.writeFm(0, write.register);
             self.synth.writeFm(1, write.value);
         }
         self.vblank += chips.synth.cycles_per_vblank;
-        count += self.synth.advanceTo(self.vblank, self.frames[2 * count ..]);
+        count += self.synth.advanceTo(self.vblank, self.frames[2 * count..]);
         self.begin = 0;
         self.end = 2 * count;
     }
@@ -215,14 +224,16 @@ const Coupling = struct {
 /// indices, its release after `length` frames.
 pub fn testTunes(rows: []const megadrive.Row, frames_per_row: u16, length: u8) megadrive.Tunes {
     var instrument: megadrive.Instrument = undefined;
-    for (&instrument, 0..) |*byte, i| byte.* = @intCast(i);
+    for (&instrument, 0..) |*byte, i| {
+        byte.* = @intCast(i);
+    }
     instrument[33] = length;
     instrument[34] = 0xF0;
     const tune: megadrive.Tune = .{
         .rows = rows,
         .frames_per_row = frames_per_row,
         .instruments = @splat(instrument),
-        .detune = .{-2} ++ @as([14]i16, @splat(0)),
+        .detune = .{ -2 } ++ @as([14]i16, @splat(0)),
     };
     var pitches: [255]u16 = @splat(0);
     pitches[0] = 0x1234;
@@ -249,11 +260,13 @@ test "a note: key off, the instrument's registers, its frequency, key on" {
 }
 
 test "rows last their frames plus the tempo plus one; the channel number is added" {
-    const tunes = testTunes(&.{ .{ 1, 1, 0, 0, 0, 0 }, .{ 0, 0, 1, 2, 0, 0 } }, 3, 0);
+    const tunes = testTunes(&.{.{ 1, 1, 0, 0, 0, 0 }, .{ 0, 0, 1, 2, 0, 0 }}, 3, 0);
     var player: Player = .{ .tunes = &tunes };
     player.start(0);
     try std.testing.expectEqual(@as(usize, 35), player.frame().len);
-    for (0..4) |_| try std.testing.expectEqual(@as(usize, 0), player.frame().len);
+    for (0..4) |_| {
+        try std.testing.expectEqual(@as(usize, 0), player.frame().len);
+    }
     const writes = player.frame().slice();
     try std.testing.expectEqual(Write{ .register = 0xB1, .value = 0 }, writes[1]);
     try std.testing.expectEqual(Write{ .register = 0x22, .value = 30 }, writes[31]);
@@ -290,18 +303,24 @@ test "the output adds a VBlank's tune to the effects, silent before a tune" {
     var output = Output.init(&tunes, 48000);
     var effects: [2 * 400]i16 = @splat(100);
     output.mixInto(&effects);
-    for (effects) |sample| try std.testing.expectEqual(@as(i16, 100), sample);
+    for (effects) |sample| {
+        try std.testing.expectEqual(@as(i16, 100), sample);
+    }
     output.player.start(0);
     var heard: [2 * 2000]i16 = @splat(0);
     output.mixInto(&heard);
     var loudest: u16 = 0;
-    for (heard) |sample| loudest = @max(loudest, @abs(sample));
+    for (heard) |sample| {
+        loudest = @max(loudest, @abs(sample));
+    }
     try std.testing.expect(loudest > 0);
 }
 
 test "the coupling passes a tone and removes a constant level" {
     var coupling = Coupling.init(48000);
-    for (0..48000) |_| try std.testing.expectEqual(@as(i32, 0), coupling.pass(143));
+    for (0..48000) |_| {
+        try std.testing.expectEqual(@as(i32, 0), coupling.pass(143));
+    }
     var loudest: i32 = 0;
     for (0..4800) |n| {
         const tone: i16 = if (n / 24 % 2 == 0) 1000 else -1000;

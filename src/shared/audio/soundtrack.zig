@@ -12,9 +12,16 @@ pub const Soundtrack = struct {
     /// Set once the output plays it: a new music replaces what was queued before it.
     heard: bool = false,
 
-    pub fn open(allocator: std.mem.Allocator, source: platform.AssetSource, name: []const u8) !Soundtrack {
+    pub fn open(
+        allocator: std.mem.Allocator,
+        source: platform.AssetSource,
+        name: []const u8,
+    ) !Soundtrack {
         const owned = try content.load(allocator, source, name);
-        return .{ .owned = owned, .player = music_player.Player.init(owned.score, output.format.sample_rate, null) };
+        return .{
+            .owned = owned,
+            .player = music_player.Player.init(owned.score, output.format.sample_rate, null),
+        };
     }
     pub fn deinit(self: *Soundtrack) void {
         self.owned.deinit();

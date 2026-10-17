@@ -44,7 +44,13 @@ pub fn check(comptime T: type) void {
     const Reset = fn (*T) void;
     const Write = fn (*T, u2, u8) void;
     const Generate = fn (*T, []Frame) void;
-    if (@TypeOf(T.reset) != Reset) @compileError(@typeName(T) ++ ".reset must be " ++ @typeName(Reset));
-    if (@TypeOf(T.write) != Write) @compileError(@typeName(T) ++ ".write must be " ++ @typeName(Write));
-    if (@TypeOf(T.generate) != Generate) @compileError(@typeName(T) ++ ".generate must be " ++ @typeName(Generate));
+    if (@TypeOf(T.reset) != Reset) {
+        @compileError(@typeName(T) ++ ".reset must be " ++ @typeName(Reset));
+    }
+    if (@TypeOf(T.write) != Write) {
+        @compileError(@typeName(T) ++ ".write must be " ++ @typeName(Write));
+    }
+    if (@TypeOf(T.generate) != Generate) {
+        @compileError(@typeName(T) ++ ".generate must be " ++ @typeName(Generate));
+    }
 }

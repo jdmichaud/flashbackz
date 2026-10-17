@@ -23,7 +23,10 @@ pub const Sources = struct {
     music: ?*soundtrack.Soundtrack = null,
     level: ?Level = null,
 
-    pub const Level = struct { sound: *effects.Player, bank: sounds.Bank };
+    pub const Level = struct {
+        sound: *effects.Player,
+        bank: sounds.Bank,
+    };
 };
 
 pub const Output = struct {
@@ -43,17 +46,25 @@ pub const Output = struct {
         const fresh_music = if (sources.music) |music| !music.heard else false;
         if (fresh_music or
             (self.played.music and sources.music == null) or
-            (self.played.level and sources.level == null)) self.cut(p);
+            (self.played.level and sources.level == null)) {
+            self.cut(p);
+        }
         self.played = .{ .music = sources.music != null, .level = sources.level != null };
         if (sources.music == null and sources.level == null) return;
-        if (sources.music) |music| music.heard = true;
-        if (self.state == .closed) self.open(p);
+        if (sources.music) |music| {
+            music.heard = true;
+        }
+        if (self.state == .closed) {
+            self.open(p);
+        }
         if (self.state != .open) return;
         for (0..8) |_| {
             const status = p.audioStatus();
             if (!status.running or status.suspended or status.queued_frames >= lead_frames) return;
             if (self.begin == self.end) {
-                const frames: usize = @intCast(@min(self.pending.len / 2, lead_frames - status.queued_frames));
+                const frames: usize = @intCast(
+                    @min(self.pending.len / 2, lead_frames - status.queued_frames),
+                );
                 self.begin = 0;
                 self.end = frames * 2;
                 mix(sources, self.pending[0..self.end], self.volume);
@@ -81,14 +92,20 @@ pub const Output = struct {
     }
 
     fn fail(self: *Output, p: *platform.Platform, err: platform.PlatformError) void {
-        if (err != error.Unsupported) std.log.err("no sound: the audio device failed ({s})", .{@errorName(err)});
-        if (self.state == .open) p.audioClose();
+        if (err != error.Unsupported) {
+            std.log.err("no sound: the audio device failed ({s})", .{ @errorName(err) });
+        }
+        if (self.state == .open) {
+            p.audioClose();
+        }
         self.state = .failed;
     }
 
     /// Drops what is mixed and queued.
     fn cut(self: *Output, p: *platform.Platform) void {
-        if (self.state == .open) p.audioClear();
+        if (self.state == .open) {
+            p.audioClear();
+        }
         self.begin = 0;
         self.end = 0;
     }
@@ -121,15 +138,17 @@ pub fn gain(volume: u8) u32 {
 fn scale(samples: []i16, volume: u8) void {
     if (volume >= 100) return;
     const factor: i64 = gain(volume);
-    for (samples) |*sample| sample.* = @intCast((@as(i64, sample.*) * factor) >> 16);
+    for (samples) |*sample| {
+        sample.* = @intCast((@as(i64, sample.*) * factor) >> 16);
+    }
 }
 
 fn add(sum: []i16, part: []const i16) void {
-    for (sum, part) |*total, sample| total.* = @intCast(std.math.clamp(
-        @as(i32, total.*) + sample,
-        std.math.minInt(i16),
-        std.math.maxInt(i16),
-    ));
+    for (sum, part) |*total, sample| {
+        total.* = @intCast(
+            std.math.clamp(@as(i32, total.*) + sample, std.math.minInt(i16), std.math.maxInt(i16)),
+        );
+    }
 }
 
 test "the master volume keeps the full range, takes 4 dB a step and mutes" {
@@ -146,8 +165,11 @@ test "the master volume keeps the full range, takes 4 dB a step and mutes" {
     try std.testing.expectEqualSlices(i16, &.{ 0, 0, 0, 0, 0 }, &samples);
     var step: u8 = 10;
     while (step <= 100) : (step += 10) {
-        const ratio = @as(f64, @floatFromInt(gain(step))) / @as(f64, @floatFromInt(gain(step - 10)));
-        if (step > 10) try std.testing.expectApproxEqAbs(4.0, 20 * std.math.log10(ratio), 0.01);
+        const ratio = @as(f64, @floatFromInt(gain(step))) /
+            @as(f64, @floatFromInt(gain(step - 10)));
+        if (step > 10) {
+            try std.testing.expectApproxEqAbs(4.0, 20 * std.math.log10(ratio), 0.01);
+        }
     }
 }
 

@@ -44,7 +44,10 @@ const picture_pixels = picture_width * picture_height;
 pub const Phase = enum { startup, playing, finished };
 pub const UpdateResult = enum { running, finished };
 
-const ConnectedPad = struct { id: platform.ControllerId, model: platform.ControllerModel };
+const ConnectedPad = struct {
+    id: platform.ControllerId,
+    model: platform.ControllerModel,
+};
 
 /// The save slots as a slot page shows them, read from storage.
 const SlotList = struct {
@@ -120,12 +123,13 @@ pub const Game = struct {
     ) !Game {
         const page = try allocator.alloc(u8, picture_pixels);
         errdefer allocator.free(page);
-        const rgba = try allocator.alloc(
-            u8,
-            picture_pixels * platform.RgbaFrame.bytes_per_pixel,
-        );
+        const rgba = try allocator.alloc(u8, picture_pixels * platform.RgbaFrame.bytes_per_pixel);
         errdefer allocator.free(rgba);
-        if (assets) |source| if (data) |files| try content_check.check(allocator, source, files);
+        if (assets) |source| {
+            if (data) |files| {
+                try content_check.check(allocator, source, files);
+            }
+        }
         const settings = settings_mod.load(storage);
         const tunes = try loadTunes(allocator, assets);
         errdefer if (tunes) |t| freeTunes(allocator, t);
@@ -156,7 +160,9 @@ pub const Game = struct {
         const menu = (try menu_art.load(allocator, source)) orelse return error.MissingMenu;
         var front = front_end.Scene.init(allocator, source, menu);
         errdefer front.deinit();
-        if (entry == .automatic) try front.intro();
+        if (entry == .automatic) {
+            try front.intro();
+        }
         return .{
             .allocator = allocator,
             .assets = assets,
@@ -181,7 +187,7 @@ pub const Game = struct {
         defer cartridge.deinit();
         // Only the accepted cartridge, however the files gave it.
         if (!megadrive.isCartridge(cartridge.bytes)) {
-            std.log.err("{s} is not the accepted Mega Drive cartridge", .{megadrive.asset});
+            std.log.err("{s} is not the accepted Mega Drive cartridge", .{ megadrive.asset });
             return error.UnsupportedCartridge;
         }
         const tunes = try allocator.create(megadrive.Tunes);
@@ -197,8 +203,12 @@ pub const Game = struct {
 
     pub fn deinit(self: *Game) void {
         self.dropSlots();
-        if (self.story) |*story| story.deinit();
-        if (self.suspended_level) |*scene| scene.deinit();
+        if (self.story) |*story| {
+            story.deinit();
+        }
+        if (self.suspended_level) |*scene| {
+            scene.deinit();
+        }
         switch (self.scene) {
             .menu => |*scene| scene.deinit(),
             .level => |*scene| scene.deinit(),
@@ -207,7 +217,9 @@ pub const Game = struct {
         }
         self.allocator.free(self.page);
         self.allocator.free(self.rgba);
-        if (self.tunes) |tunes| freeTunes(self.allocator, tunes);
+        if (self.tunes) |tunes| {
+            freeTunes(self.allocator, tunes);
+        }
         self.* = undefined;
     }
 
@@ -268,7 +280,9 @@ pub const Game = struct {
                 _ = try p.start();
                 try p.setResolution(picture_width, picture_height);
                 self.phase = .playing;
-                if (self.scene == .level) try self.consumeEvents(p);
+                if (self.scene == .level) {
+                    try self.consumeEvents(p);
+                }
             },
             .playing => try self.consumeEvents(p),
             .finished => {},
@@ -280,7 +294,9 @@ pub const Game = struct {
         if (self.scene == .ending) {
             const ending = &self.scene.ending;
             ending.music_enabled = self.settings.music;
-            if (ending.music) |*music| music.player.master_volume = self.music_volume;
+            if (ending.music) |*music| {
+                music.player.master_volume = self.music_volume;
+            }
             ending.setPaused(self.films_paused, p.nowNs());
             try ending.update(p);
             if (ending.finished) {
@@ -298,7 +314,9 @@ pub const Game = struct {
             front.joystick = self.settings.joystick;
             front.films_paused = self.films_paused;
             front.music_volume = self.music_volume;
-            if (self.pads.repeat()) |held| try front.pad(held, p.nowNs());
+            if (self.pads.repeat()) |held| {
+                try front.pad(held, p.nowNs());
+            }
             if (front.view == .load) {
                 front.slots = try self.slotList();
                 if (front.load_page.outcome) |outcome| if (outcome == .chosen) {
@@ -306,7 +324,7 @@ pub const Game = struct {
                     var name: [8]u8 = undefined;
                     // Loading replaces the title: nothing of it is used after.
                     self.loadGame(save_slots.slotName(outcome.chosen, &name)) catch |err| {
-                        std.log.err("the game could not be loaded: {s}", .{@errorName(err)});
+                        std.log.err("the game could not be loaded: {s}", .{ @errorName(err) });
                     };
                     if (self.scene != .menu) {
                         try self.present(p);
@@ -397,7 +415,8 @@ pub const Game = struct {
                     self.retire(level);
                     self.suspended_level = null;
                 }
-                const art = (try menu_art.load(self.allocator, self.assets.?)) orelse return error.MissingMenu;
+                const art = (try menu_art.load(self.allocator, self.assets.?)) orelse
+                    return error.MissingMenu;
                 var next = front_end.Scene.init(self.allocator, self.assets.?, art);
                 errdefer next.deinit();
                 next.difficulty = self.difficulty;
@@ -430,7 +449,9 @@ pub const Game = struct {
             }
             const story = &self.story.?;
             story.music_enabled = self.settings.music;
-            if (story.music) |*music| music.player.master_volume = self.music_volume;
+            if (story.music) |*music| {
+                music.player.master_volume = self.music_volume;
+            }
             story.player.setPaused(self.films_paused, now);
             if (!try story.update(now)) {
                 try self.present(p);
@@ -449,12 +470,16 @@ pub const Game = struct {
         try scene.update(now, &self.settings);
         if (scene.options) |*options| {
             if (options.menu.free_memory_mb == null) {
-                if (p.availableMemory()) |bytes| options.menu.free_memory_mb = bytes / (1024 * 1024);
+                if (p.availableMemory()) |bytes| {
+                    options.menu.free_memory_mb = bytes / (1024 * 1024);
+                }
             }
             const shown = self.shownPad();
             if (options.menu.reset_pad) {
                 options.menu.reset_pad = false;
-                if (shown) |model| self.settings.setPadLayout(model.guid, .{});
+                if (shown) |model| {
+                    self.settings.setPadLayout(model.guid, .{});
+                }
             }
             options.menu.pad = .{
                 .layout = if (shown) |model| self.settings.padLayout(model.guid) else .{},
@@ -471,7 +496,11 @@ pub const Game = struct {
                             var name: [8]u8 = undefined;
                             if (self.saveGame(p, save_slots.slotName(row, &name))) {
                                 options.menu.saved = true;
-                            } else |err| std.log.err("the game could not be saved: {s}", .{@errorName(err)});
+                            } else |err| {
+                                std.log.err("the game could not be saved: {s}", .{
+                                    @errorName(err),
+                                });
+                            }
                         },
                     }
                 }
@@ -558,7 +587,9 @@ pub const Game = struct {
                 // GS-3).
                 const pad = self.pads.apply(event.payload);
                 for (pad.slice()) |change| {
-                    if (change.down) self.settings.joystick = true;
+                    if (change.down) {
+                        self.settings.joystick = true;
+                    }
                 }
                 if (self.story) |*story| {
                     if (event.payload == .quit) {
@@ -566,25 +597,45 @@ pub const Game = struct {
                         continue;
                     }
                     if (story.event(event, self.settings.joystick)) continue;
-                    if (self.scene == .level) try self.scene.level.enqueue(event);
+                    if (self.scene == .level) {
+                        try self.scene.level.enqueue(event);
+                    }
                     continue;
                 }
                 if (self.scene == .level) {
-                    if (event.payload == .quit) self.phase = .finished else try self.scene.level.enqueue(event);
+                    if (event.payload == .quit) {
+                        self.phase = .finished;
+                    } else {
+                        try self.scene.level.enqueue(event);
+                    }
                     continue;
                 }
                 if (self.scene == .ending) {
-                    if (event.payload == .quit) self.phase = .finished else self.scene.ending.event(event);
-                    for (pad.slice()) |change| self.scene.ending.pad(change);
+                    if (event.payload == .quit) {
+                        self.phase = .finished;
+                    } else {
+                        self.scene.ending.event(event);
+                    }
+                    for (pad.slice()) |change| {
+                        self.scene.ending.pad(change);
+                    }
                     continue;
                 }
                 if (self.scene == .continue_game) {
-                    if (event.payload == .quit) self.phase = .finished else try self.scene.continue_game.event(event);
-                    for (pad.slice()) |change| try self.scene.continue_game.pad(change, event.time_ns);
+                    if (event.payload == .quit) {
+                        self.phase = .finished;
+                    } else {
+                        try self.scene.continue_game.event(event);
+                    }
+                    for (pad.slice()) |change| {
+                        try self.scene.continue_game.pad(change, event.time_ns);
+                    }
                     continue;
                 }
                 try self.scene.menu.event(event);
-                for (pad.slice()) |change| try self.scene.menu.pad(change, event.time_ns);
+                for (pad.slice()) |change| {
+                    try self.scene.menu.pad(change, event.time_ns);
+                }
             }
         }
     }
@@ -630,17 +681,25 @@ pub const Game = struct {
         switch (event.payload) {
             .controller_added => |id| {
                 const model = p.controllerModel(id) orelse return event;
-                for (&self.pad_models) |*slot| if (slot.* == null) {
-                    slot.* = .{ .id = id, .model = model };
-                    break;
-                };
+                for (&self.pad_models) |*slot| {
+                    if (slot.* == null) {
+                        slot.* = .{ .id = id, .model = model };
+                        break;
+                    }
+                }
                 return event;
             },
             .controller_removed => |id| {
-                for (&self.pad_models) |*slot| if (slot.*) |pad| {
-                    if (pad.id == id) slot.* = null;
-                };
-                if (self.last_pad == id) self.last_pad = null;
+                for (&self.pad_models) |*slot| {
+                    if (slot.*) |pad| {
+                        if (pad.id == id) {
+                            slot.* = null;
+                        }
+                    }
+                }
+                if (self.last_pad == id) {
+                    self.last_pad = null;
+                }
                 return event;
             },
             .controller_button_down, .controller_button_up => |change| {
@@ -655,10 +714,17 @@ pub const Game = struct {
                         return null;
                     }
                 }
-                const standard = self.settings.padLayout(model.guid).standard(button) orelse return null;
+                const standard = self.settings.padLayout(model.guid).standard(button) orelse
+                    return null;
                 var translated = event;
-                const payload: platform.Event.ControllerButtonEvent = .{ .controller = change.controller, .button = standard.controller() };
-                translated.payload = if (event.payload == .controller_button_down) .{ .controller_button_down = payload } else .{ .controller_button_up = payload };
+                const payload: platform.Event.ControllerButtonEvent = .{
+                    .controller = change.controller,
+                    .button = standard.controller(),
+                };
+                translated.payload = if (event.payload == .controller_button_down)
+                    .{ .controller_button_down = payload }
+                else
+                    .{ .controller_button_up = payload };
                 return translated;
             },
             else => return event,
@@ -666,16 +732,22 @@ pub const Game = struct {
     }
 
     fn padModel(self: *const Game, id: platform.ControllerId) ?platform.ControllerModel {
-        for (self.pad_models) |slot| if (slot) |pad| {
-            if (pad.id == id) return pad.model;
-        };
+        for (self.pad_models) |slot| {
+            if (slot) |pad| {
+                if (pad.id == id) return pad.model;
+            }
+        }
         return null;
     }
 
     /// The model of the pad the CONTROLS page shows: the last to press, or the first connected.
     fn shownPad(self: *const Game) ?platform.ControllerModel {
-        if (self.last_pad) |id| if (self.padModel(id)) |model| return model;
-        for (self.pad_models) |slot| if (slot) |pad| return pad.model;
+        if (self.last_pad) |id| {
+            if (self.padModel(id)) |model| return model;
+        }
+        for (self.pad_models) |slot| {
+            if (slot) |pad| return pad.model;
+        }
         return null;
     }
 
@@ -699,18 +771,22 @@ pub const Game = struct {
             else => return false,
         };
         if (press.key != .f5 and press.key != .f9) return false;
-        if (self.scene != .level or self.story != null or self.scene.level.demo != null) return false;
+        if (self.scene != .level or self.story != null or self.scene.level.demo != null) {
+            return false;
+        }
         if (press.repeat) return true;
         if (press.key == .f5) {
             if (!self.canSave()) return true;
             self.saveGame(p, save.quick_slot) catch |err| {
-                std.log.err("the game could not be saved: {s}", .{@errorName(err)});
+                std.log.err("the game could not be saved: {s}", .{ @errorName(err) });
                 return true;
             };
             self.scene.level.screen.showNotice("GAME SAVED");
         } else {
             self.loadGame(save.quick_slot) catch |err| {
-                if (err != error.NotFound) std.log.err("the game could not be loaded: {s}", .{@errorName(err)});
+                if (err != error.NotFound) {
+                    std.log.err("the game could not be loaded: {s}", .{ @errorName(err) });
+                }
                 return true;
             };
             self.scene.level.screen.showNotice("GAME LOADED");
@@ -737,7 +813,12 @@ pub const Game = struct {
                     continue;
                 };
                 defer bytes.deinit();
-                slot.* = try save.readSlot(self.allocator, list.arena.allocator(), bytes.bytes, print);
+                slot.* = try save.readSlot(
+                    self.allocator,
+                    list.arena.allocator(),
+                    bytes.bytes,
+                    print,
+                );
             }
             self.slot_list = list;
         }
@@ -745,7 +826,9 @@ pub const Game = struct {
     }
 
     fn dropSlots(self: *Game) void {
-        if (self.slot_list) |*list| list.arena.deinit();
+        if (self.slot_list) |*list| {
+            list.arena.deinit();
+        }
         self.slot_list = null;
     }
 
@@ -753,7 +836,10 @@ pub const Game = struct {
     fn slotPicture(self: *const Game) ?*const save.Picture {
         const list = &(self.slot_list orelse return null);
         const row = switch (self.scene) {
-            .level => |*level| if (level.options) |*options| if (options.menu.page == .save) options.menu.save_page.selection else return null else return null,
+            .level => |*level| if (level.options) |*options|
+                if (options.menu.page == .save) options.menu.save_page.selection else return null
+            else
+                return null,
             .menu => |*front| if (front.view == .load) front.load_page.selection else return null,
             else => return null,
         };
@@ -766,11 +852,13 @@ pub const Game = struct {
     /// Draws the selected save's picture into the presented `frame`, in its own colors.
     fn drawSlotPicture(self: *const Game, frame: []u8) void {
         const pixels = self.slotPicture() orelse return;
-        for (0..save.picture_height) |y| for (0..save.picture_width) |x| {
-            const at = ((save_slots.picture_y + y) * 256 + save_slots.picture_x + x) * 4;
-            const from = (y * save.picture_width + x) * 3;
-            frame[at..][0..4].* = .{ pixels[from], pixels[from + 1], pixels[from + 2], 255 };
-        };
+        for (0..save.picture_height) |y| {
+            for (0..save.picture_width) |x| {
+                const at = ((save_slots.picture_y + y) * 256 + save_slots.picture_x + x) * 4;
+                const from = (y * save.picture_width + x) * 3;
+                frame[at..][0..4].* = .{ pixels[from], pixels[from + 1], pixels[from + 2], 255 };
+            }
+        }
     }
 
     /// The walks played in this game, the level in play's included: its play time.
@@ -789,7 +877,8 @@ pub const Game = struct {
         const arena = arena_state.allocator();
         const level = &self.scene.level;
         var print: [16]u8 = undefined;
-        const fingerprint = std.fmt.bufPrint(&print, "{x:0>16}", .{save.fingerprint(files)}) catch unreachable;
+        const fingerprint = std.fmt.bufPrint(&print, "{x:0>16}", .{ save.fingerprint(files) }) catch
+            unreachable;
         const text = try save.encode(arena, .{
             .version = save.version,
             .data_set = fingerprint,
@@ -807,9 +896,16 @@ pub const Game = struct {
         var pixels: save.Picture = undefined;
         save.picture(indices, level_scene.width, colors, &pixels);
         var date: [16]u8 = undefined;
-        const when: []const u8 = if (p.localTime()) |t| std.fmt.bufPrint(&date, "{d:0>4}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}", .{
-            t.year, t.month, t.day, t.hour, t.minute,
-        }) catch "" else "";
+        const when: []const u8 = if (p.localTime()) |t|
+            std.fmt.bufPrint(&date, "{d:0>4}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}", .{
+                t.year,
+                t.month,
+                t.day,
+                t.hour,
+                t.minute,
+            }) catch ""
+        else
+            "";
         const info = try save.encodeInfo(arena, .{
             .version = save.version,
             .data_set = fingerprint,
@@ -833,7 +929,12 @@ pub const Game = struct {
         defer bytes.deinit();
         var arena_state: std.heap.ArenaAllocator = .init(self.allocator);
         defer arena_state.deinit();
-        const record = try save.decode(self.allocator, arena_state.allocator(), bytes.bytes, save.fingerprint(files));
+        const record = try save.decode(
+            self.allocator,
+            arena_state.allocator(),
+            bytes.bytes,
+            save.fingerprint(files),
+        );
         if (record.inherited.len != self.inherited.len) return error.InvalidSave;
         var inherited: [data_set.max_characters]behavior_world.Inherited = undefined;
         @memcpy(&inherited, record.inherited);
@@ -881,18 +982,27 @@ pub const Game = struct {
     fn present(self: *Game, p: *platform.Platform) !void {
         try p.setResolution(picture_width, picture_height);
         const indices = self.page[0..picture_pixels];
-        const frame = self.rgba[0 .. picture_pixels * 4];
+        const frame = self.rgba[0..picture_pixels * 4];
         if (self.story) |*story| {
             try story.player.draw(indices, frame);
-        } else switch (self.scene) {
-            .level => |*level| try level.draw(indices, frame, self.settings),
-            .ending => |*ending| try ending.draw(indices, frame),
-            .continue_game => |*dialog| try dialog.draw(indices, frame),
-            .menu => |*front| try front.draw(indices, frame),
+        } else {
+            switch (self.scene) {
+                .level => |*level| try level.draw(indices, frame, self.settings),
+                .ending => |*ending| try ending.draw(indices, frame),
+                .continue_game => |*dialog| try dialog.draw(indices, frame),
+                .menu => |*front| try front.draw(indices, frame),
+            }
         }
-        if (self.story == null) self.drawSlotPicture(frame);
+        if (self.story == null) {
+            self.drawSlotPicture(frame);
+        }
         self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
-        try p.present(.{ .width = picture_width, .height = picture_height, .stride = picture_width * 4, .pixels = frame });
+        try p.present(.{
+            .width = picture_width,
+            .height = picture_height,
+            .stride = picture_width * 4,
+            .pixels = frame,
+        });
         self.frames_presented += 1;
     }
 };

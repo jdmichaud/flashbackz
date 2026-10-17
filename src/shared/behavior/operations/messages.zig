@@ -6,7 +6,9 @@ const World = @import("../world.zig").World;
 /// A message with that value is waiting, from any sender.
 pub fn received(world: *World, actor: u16, message: vocabulary.Message) !bool {
     var letters = world.mailbox(actor);
-    while (letters.nextLetter()) |letter| if (letter.message == message) return true;
+    while (letters.nextLetter()) |letter| {
+        if (letter.message == message) return true;
+    }
     return false;
 }
 
@@ -26,9 +28,11 @@ pub fn sendToSelectedItem(world: *World, actor: u16, message: vocabulary.Message
 /// Reply `acknowledged` to the sender of the first waiting message with that value.
 pub fn acknowledge(world: *World, actor: u16, message: vocabulary.Message) !bool {
     var letters = world.mailbox(actor);
-    while (letters.nextLetter()) |letter| if (letter.message == message) {
-        world.send(actor, letter.sender, .acknowledged);
-        return true;
-    };
+    while (letters.nextLetter()) |letter| {
+        if (letter.message == message) {
+            world.send(actor, letter.sender, .acknowledged);
+            return true;
+        }
+    }
     return false;
 }

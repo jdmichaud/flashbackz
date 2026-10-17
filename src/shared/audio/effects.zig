@@ -8,8 +8,15 @@ const audio_output = @import("output.zig");
 
 /// A sample of the effects bank.
 pub const SoundId = enum(u16) { _ };
-pub const Event = struct { sound: SoundId, attenuation: u2 = 0 };
-const Voice = struct { sound: SoundId, cursor: usize = 0, attenuation: u2 };
+pub const Event = struct {
+    sound: SoundId,
+    attenuation: u2 = 0,
+};
+const Voice = struct {
+    sound: SoundId,
+    cursor: usize = 0,
+    attenuation: u2,
+};
 pub const Mixer = struct {
     voices: [4]?Voice = @splat(null),
     block: [70]i8 = @splat(0),
@@ -25,12 +32,13 @@ pub const Mixer = struct {
                     self.voices[i] = .{ .sound = event.sound, .attenuation = event.attenuation };
                     return;
                 }
-            } else if (free == null) free = i;
+            } else if (free == null) {
+                free = i;
+            }
         }
-        if (free) |index| self.voices[index] = .{
-            .sound = event.sound,
-            .attenuation = event.attenuation,
-        };
+        if (free) |index| {
+            self.voices[index] = .{ .sound = event.sound, .attenuation = event.attenuation };
+        }
     }
     /// Produce the next hardware-sized source block, before host resampling.
     pub fn mixBlock(self: *Mixer, bank: sounds.Bank) *const [70]i8 {
@@ -46,12 +54,20 @@ pub const Mixer = struct {
             const shift: u3 = @as(u3, voice.attenuation) * 2;
             for (pcm[voice.cursor..][0..count], self.block[0..count]) |sample, *target| {
                 const value = sample >> shift;
-                if (first) target.* = value else target.* +%= value;
+                if (first) {
+                    target.* = value;
+                } else {
+                    target.* +%= value;
+                }
             }
-            if (first and count != 0) @memset(self.block[count..], self.block[count - 1]);
+            if (first and count != 0) {
+                @memset(self.block[count..], self.block[count - 1]);
+            }
             first = false;
             voice.cursor += count;
-            if (pcm.len - voice.cursor <= 4) slot.* = null;
+            if (pcm.len - voice.cursor <= 4) {
+                slot.* = null;
+            }
         };
         self.cursor = 0;
         return &self.block;
@@ -60,7 +76,9 @@ pub const Mixer = struct {
         std.debug.assert(output.len % 2 == 0 and rate >= 8000);
         var i: usize = 0;
         while (i < output.len) : (i += 2) {
-            if (self.cursor == self.block.len) _ = self.mixBlock(bank);
+            if (self.cursor == self.block.len) {
+                _ = self.mixBlock(bank);
+            }
             const value: i16 = @as(i16, self.block[self.cursor]) * 256;
             output[i] = value;
             output[i + 1] = value;
@@ -70,14 +88,19 @@ pub const Mixer = struct {
             while (self.fraction >= period) {
                 self.fraction -= period;
                 self.cursor += 1;
-                if (self.cursor == self.block.len) _ = self.mixBlock(bank);
+                if (self.cursor == self.block.len) {
+                    _ = self.mixBlock(bank);
+                }
             }
         }
     }
 };
 /// What a level's sound plays, from the options: the effects with SOUND FX, and the Mega Drive
 /// tunes with MUSIC, since they are its music.
-pub const Enabled = struct { effects: bool, tunes: bool };
+pub const Enabled = struct {
+    effects: bool,
+    tunes: bool,
+};
 
 /// A level's sound: four effect voices and, when the user gave the Mega Drive cartridge (PLAN
 /// MD-D), its tunes, which its effects 68-75 play where the DOS bank has no sample.
@@ -97,13 +120,14 @@ pub const Player = struct {
     /// Plays `event`, an effect or a tune, if what it is is enabled.
     pub fn submit(self: *Player, bank: sounds.Bank, event: Event, enabled: Enabled) void {
         const id = @backingInt(event.sound);
-        if (self.tunes) |*tunes| if (id >= megadrive.first_tune and id < megadrive.first_tune + megadrive.tune_count) {
-            // As in the cartridge, a tune asked for restarts the tunes' player with it.
-            if (!enabled.tunes) return;
-            tunes.player.start(id - megadrive.first_tune);
-            self.started = true;
-            return;
-        };
+        if (self.tunes) |*tunes|
+            if (id >= megadrive.first_tune and id < megadrive.first_tune + megadrive.tune_count) {
+                // As in the cartridge, a tune asked for restarts the tunes' player with it.
+                if (!enabled.tunes) return;
+                tunes.player.start(id - megadrive.first_tune);
+                self.started = true;
+                return;
+            };
         if (!enabled.effects) return;
         self.mixer.start(bank, event);
         self.started = true;
@@ -112,7 +136,9 @@ pub const Player = struct {
     /// The next `out.len / 2` stereo frames at the output's rate.
     pub fn render(self: *Player, bank: sounds.Bank, out: []i16) void {
         self.mixer.render(bank, out, audio_output.format.sample_rate);
-        if (self.tunes) |*tunes| tunes.mixInto(out);
+        if (self.tunes) |*tunes| {
+            tunes.mixInto(out);
+        }
     }
 
     /// Stops what the options turned off; everything when both are off.
@@ -120,8 +146,12 @@ pub const Player = struct {
         if (!enabled.effects and !enabled.tunes) {
             self.stop();
         } else {
-            if (self.enabled.effects and !enabled.effects) self.mixer = .{};
-            if (self.enabled.tunes and !enabled.tunes) self.stopTunes();
+            if (self.enabled.effects and !enabled.effects) {
+                self.mixer = .{};
+            }
+            if (self.enabled.tunes and !enabled.tunes) {
+                self.stopTunes();
+            }
         }
         self.enabled = enabled;
     }
@@ -134,13 +164,15 @@ pub const Player = struct {
     }
 
     fn stopTunes(self: *Player) void {
-        if (self.tunes) |*tunes| tunes.* = .init(tunes.player.tunes, audio_output.format.sample_rate);
+        if (self.tunes) |*tunes| {
+            tunes.* = .init(tunes.player.tunes, audio_output.format.sample_rate);
+        }
     }
 };
 
 test "effects mixer restarts identical cues and preserves wrapping byte mixing" {
     var positive: [72]i8 = @splat(100);
-    var samples = [_]sounds.Sample{ .{ .pcm = &positive }, .{ .pcm = &positive } };
+    var samples = [_]sounds.Sample{.{ .pcm = &positive }, .{ .pcm = &positive }};
     const bank: sounds.Bank = .{ .allocator = std.testing.allocator, .samples = &samples };
     var mixer: Mixer = .{};
     mixer.start(bank, .{ .sound = @fromBackingInt(0) });
@@ -161,7 +193,9 @@ test "a short initial effect holds the original decoder's final available amplit
     mixer.start(bank, .{ .sound = @fromBackingInt(0) });
     const block = mixer.mixBlock(bank);
     try std.testing.expectEqualSlices(i8, &.{ 117, 117, 118, 120 }, block[0..4]);
-    for (block[4..]) |value| try std.testing.expectEqual(@as(i8, 120), value);
+    for (block[4..]) |value| {
+        try std.testing.expectEqual(@as(i8, 120), value);
+    }
     try std.testing.expect(mixer.voices[0] == null);
 }
 

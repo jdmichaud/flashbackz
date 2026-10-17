@@ -49,7 +49,8 @@ pub const Grid = struct {
     /// columns outside the room continue into the bytes that follow or precede it.
     pub fn cell(self: *const Grid, room: u8, row: i32, column: i32) Read {
         const offset = 256 + @as(i32, room) * cells_per_room + row * columns + column;
-        const b = self.byte(offset) orelse return .{ .outside = original_memory.gridAddress(offset) };
+        const b = self.byte(offset) orelse
+            return .{ .outside = original_memory.gridAddress(offset) };
         return .{ .value = @bitCast(b) };
     }
 
@@ -64,7 +65,8 @@ pub const Grid = struct {
         if (column >= columns) {
             // The original tests the right link after zero-extending it, so a missing right
             // neighbor (0xff) is never noticed and the read lands past the grid.
-            const link = self.signedLink(room, .right) orelse return .{ .outside = original_memory.gridAddress(0) };
+            const link = self.signedLink(room, .right) orelse
+                return .{ .outside = original_memory.gridAddress(0) };
             const right: u8 = @bitCast(link);
             return self.cell(right, row, column - columns);
         }

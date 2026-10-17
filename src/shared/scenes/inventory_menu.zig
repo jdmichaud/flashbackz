@@ -50,22 +50,45 @@ pub const Keys = struct {
 
     pub fn sample(self: *Keys) Input {
         const d = self.directions;
-        if (!((d.left or d.right) and (d.up or d.down))) self.previous = d;
+        if (!((d.left or d.right) and (d.up or d.down))) {
+            self.previous = d;
+        }
         const selected = self.previous;
-        if (selected.right) self.directions.right = false else if (selected.left) self.directions.left = false else if (selected.up) self.directions.up = false else if (selected.down) self.directions.down = false;
+        if (selected.right) {
+            self.directions.right = false;
+        } else if (selected.left) {
+            self.directions.left = false;
+        } else if (selected.up) {
+            self.directions.up = false;
+        } else if (selected.down) {
+            self.directions.down = false;
+        }
         return .{
             .right = selected.right,
             .left = selected.left,
             .up = selected.up,
             .down = selected.down,
-            .score = self.buttons & (input_mod.Action.use.bit() | input_mod.Action.gun.bit() | input_mod.Action.act.bit()) != 0,
+            .score = self.buttons &
+                (input_mod.Action.use.bit() |
+                    input_mod.Action.gun.bit() |
+                    input_mod.Action.act.bit()) != 0,
             .close = self.buttons & input_mod.Action.inventory.bit() != 0,
         };
     }
 };
-pub const View = union(enum) { items: usize, score };
-pub const Result = union(enum) { stay, choose: usize };
-pub const Entry = struct { icon: *const sprite.Frame, label: []const u8, quantity: ?u16 };
+pub const View = union(enum) {
+    items: usize,
+    score,
+};
+pub const Result = union(enum) {
+    stay,
+    choose: usize,
+};
+pub const Entry = struct {
+    icon: *const sprite.Frame,
+    label: []const u8,
+    quantity: ?u16,
+};
 pub const Artwork = struct {
     background: *const sprite.Frame,
     marker: *const sprite.Frame,
@@ -101,15 +124,25 @@ pub const Menu = struct {
     pub fn poll(self: *Menu, input: Input) Result {
         if (input.close) return .{ .choose = self.last_displayed };
         self.view = if (self.score_next) .score else .{ .items = self.cursor };
-        if (!self.score_next) self.last_displayed = self.cursor;
+        if (!self.score_next) {
+            self.last_displayed = self.cursor;
+        }
         if (input.right) {
-            if (self.cursor % 4 < 3 and self.cursor + 1 < self.count) self.cursor += 1;
+            if (self.cursor % 4 < 3 and self.cursor + 1 < self.count) {
+                self.cursor += 1;
+            }
         } else if (input.left) {
-            if (self.cursor % 4 != 0) self.cursor -= 1;
+            if (self.cursor % 4 != 0) {
+                self.cursor -= 1;
+            }
         } else if (input.up) {
-            if (self.cursor >= 4) self.cursor -= 4;
+            if (self.cursor >= 4) {
+                self.cursor -= 4;
+            }
         } else if (input.down) {
-            if (self.cursor / 4 < (self.count - 1) / 4) self.cursor = @min(self.cursor + 4, self.count - 1);
+            if (self.cursor / 4 < (self.count - 1) / 4) {
+                self.cursor = @min(self.cursor + 4, self.count - 1);
+            }
         }
         self.score_next = input.score;
         return .stay;
@@ -171,33 +204,39 @@ pub const Menu = struct {
                         );
                         if (entry.quantity) |quantity| {
                             var buffer: [5]u8 = undefined;
-                            const label = try std.fmt.bufPrint(&buffer, "{d}", .{quantity});
+                            const label = try std.fmt.bufPrint(&buffer, "{d}", .{ quantity });
                             try centered(pixels, width, height, art.font, label, 0, 256, 197, 0xed);
                         }
                     }
                 }
-                if (start != 0) try sprites.draw(
-                    pixels,
-                    width,
-                    height,
-                    art.previous_page,
-                    120,
-                    143,
-                    .{ .palette_bank = 10, .foreground = .overwrite },
-                );
-                if (start / 4 < (entries.len - 1) / 4) try sprites.draw(
-                    pixels,
-                    width,
-                    height,
-                    art.next_page,
-                    120,
-                    176,
-                    .{ .palette_bank = 10, .foreground = .overwrite },
-                );
+                if (start != 0) {
+                    try sprites.draw(
+                        pixels,
+                        width,
+                        height,
+                        art.previous_page,
+                        120,
+                        143,
+                        .{ .palette_bank = 10, .foreground = .overwrite },
+                    );
+                }
+                if (start / 4 < (entries.len - 1) / 4) {
+                    try sprites.draw(
+                        pixels,
+                        width,
+                        height,
+                        art.next_page,
+                        120,
+                        176,
+                        .{ .palette_bank = 10, .foreground = .overwrite },
+                    );
+                }
             },
             .score => {
                 var buffer: [14]u8 = undefined;
-                const label = try std.fmt.bufPrint(&buffer, "SCORE {d:0>8}", .{score % 100000000});
+                const label = try std.fmt.bufPrint(&buffer, "SCORE {d:0>8}", .{
+                    score % 100000000,
+                });
                 try centered(pixels, width, height, art.font, label, 72, 114, 158, 0xe5);
                 try centered(pixels, width, height, art.font, art.level_label, 72, 114, 166, 0xe5);
             },
@@ -235,7 +274,9 @@ fn centered(
 
 test "vertical navigation preserves the column and clamps a partial last page" {
     var menu = try Menu.init(10);
-    for (0..3) |_| _ = menu.poll(.{ .right = true });
+    for (0..3) |_| {
+        _ = menu.poll(.{ .right = true });
+    }
     try std.testing.expectEqual(@as(usize, 3), menu.cursor);
     _ = menu.poll(.{ .down = true });
     try std.testing.expectEqual(@as(usize, 7), menu.cursor);

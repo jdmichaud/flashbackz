@@ -34,7 +34,7 @@ pub const Animation = struct {
         if (index * 4 + 4 > self.frames.len) {
             return .{ .sprite = null, .mirrored = false, .dx = 0, .dy = 0 };
         }
-        const record = self.frames[index * 4 ..][0..4];
+        const record = self.frames[index * 4..][0..4];
         const visual = std.mem.readInt(u16, record[0..2], .little);
         return .{
             .sprite = if (visual == 0xffff) null else visual & 0x7fff,
@@ -62,7 +62,7 @@ pub const Animations = struct {
 
     pub fn get(self: Animations, id: u16) !Animation {
         if (id >= self.count()) return error.MissingAnimation;
-        const entry = self.bytes[2 + @as(usize, id) * 2 ..][0..2];
+        const entry = self.bytes[2 + @as(usize, id) * 2..][0..2];
         const offset = 2 + @as(usize, std.mem.readInt(u16, entry, .little));
         const fits = offset <= self.bytes.len and self.bytes.len - offset >= 6;
         if (!fits) return error.InvalidAnimationOffset;
@@ -71,7 +71,7 @@ pub const Animations = struct {
         const available = self.bytes.len - offset - 6;
         if (frames == 0 or frames * 4 > available) return error.InvalidAnimationLength;
         return .{
-            .frames = self.bytes[offset + 6 ..],
+            .frames = self.bytes[offset + 6..],
             .frame_count = @intCast(frames),
             .sound = if (header[2] == 0) null else header[2] - 1,
             .pose = header[3],

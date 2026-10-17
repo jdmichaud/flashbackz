@@ -99,7 +99,9 @@ pub const Contacts = struct {
             const entry_index = self.entry_count;
             self.entry_count += 1;
             const key = cellKey(collision, room, x +% @as(i16, @intCast(k * 16)), y) orelse {
-                if (previous) |p| self.entries[p].next_slot = null;
+                if (previous) |p| {
+                    self.entries[p].next_slot = null;
+                }
                 return first orelse no_slot;
             };
             const slot = self.find(key);
@@ -113,9 +115,15 @@ pub const Contacts = struct {
             self.slots[used] = entry_index;
             if (slot != null) {
                 shared.add(character);
-                if (head) |h| shared.add(self.entries[h].character);
+                if (head) |h| {
+                    shared.add(self.entries[h].character);
+                }
             }
-            if (previous) |p| self.entries[p].next_slot = used else first = used;
+            if (previous) |p| {
+                self.entries[p].next_slot = used;
+            } else {
+                first = used;
+            }
             previous = entry_index;
         }
         return first;

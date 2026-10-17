@@ -27,7 +27,9 @@ pub const Pack = struct {
             }
         }
         if (bytes.len > limit - self.total or
-            self.source.entries.count() >= 4096) return error.TooLarge;
+            self.source.entries.count() >= 4096) {
+            return error.TooLarge;
+        }
         const allocator = self.source.allocator;
         const key = try allocator.dupe(u8, name);
         errdefer allocator.free(key);
@@ -38,10 +40,9 @@ pub const Pack = struct {
     }
     /// Import another pack without borrowing its storage. Conflicting editions are errors.
     pub fn merge(self: *Pack, other: *const Pack) !void {
-        for (
-            other.source.entries.keys(),
-            other.source.entries.values(),
-        ) |name, bytes| try self.add(name, bytes);
+        for (other.source.entries.keys(), other.source.entries.values()) |name, bytes| {
+            try self.add(name, bytes);
+        }
     }
     pub fn assetSource(self: *Pack) platform.AssetSource {
         return self.source.assetSource();

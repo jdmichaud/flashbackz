@@ -12,8 +12,9 @@ pub fn expand(pack: *Pack, bytes: []const u8, prefix: []const u8) !void {
     var previous_end: usize = 4 + @as(usize, count) * 30;
     if (previous_end > bytes.len) return error.TruncatedArchive;
     for (0..count) |i| {
-        const record = bytes[4 + i * 30 ..][0..30];
-        const name_end = std.mem.indexOfScalar(u8, record[0..14], 0) orelse return error.InvalidArchiveName;
+        const record = bytes[4 + i * 30..][0..30];
+        const name_end = std.mem.indexOfScalar(u8, record[0..14], 0) orelse
+            return error.InvalidArchiveName;
         const name = record[0..name_end];
         if (std.mem.indexOfAny(u8, name, "/\\") != null) return error.InvalidArchiveName;
         const at: usize = std.mem.readInt(u32, record[14..18], .big);
@@ -23,7 +24,9 @@ pub fn expand(pack: *Pack, bytes: []const u8, prefix: []const u8) !void {
         if (at < previous_end or
             at > bytes.len or
             stored_size > bytes.len - at or
-            stored_size > size) return error.InvalidArchiveExtent;
+            stored_size > size) {
+            return error.InvalidArchiveExtent;
+        }
         if (size > Pack.limit - pack.total) return error.TooLarge;
         previous_end = at + stored_size;
         const allocator = pack.source.allocator;
@@ -48,7 +51,7 @@ pub fn expandAll(pack: *Pack) !void {
         // Table growth can move the slices, but each name and payload is separately owned.
         const name = pack.source.entries.keys()[i];
         if (!std.ascii.endsWithIgnoreCase(name, ".ABA")) continue;
-        const prefix = if (std.mem.lastIndexOfScalar(u8, name, '/')) |at| name[0 .. at + 1] else "";
+        const prefix = if (std.mem.lastIndexOfScalar(u8, name, '/')) |at| name[0..at + 1] else "";
         try expand(pack, pack.source.entries.values()[i], prefix);
     }
 }

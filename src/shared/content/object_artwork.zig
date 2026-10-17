@@ -7,12 +7,14 @@ const art_bank = @import("art_bank.zig");
 pub fn recordAt(archive: []const u8, index: u16) ![]const u8 {
     if (archive.len < 2) return error.InvalidObjectArtDirectory;
     const directory_end = std.mem.readInt(u16, archive[0..2], .big);
-    if (directory_end < 2 or directory_end % 2 != 0 or directory_end > archive.len)
+    if (directory_end < 2 or directory_end % 2 != 0 or directory_end > archive.len) {
         return error.InvalidObjectArtDirectory;
+    }
     if (index >= directory_end / 2) return error.MissingObjectArt;
-    const offset = std.mem.readInt(u16, archive[@as(usize, index) * 2 ..][0..2], .big);
-    if (offset < directory_end or offset > archive.len or archive.len - offset < 6)
+    const offset = std.mem.readInt(u16, archive[@as(usize, index) * 2..][0..2], .big);
+    if (offset < directory_end or offset > archive.len or archive.len - offset < 6) {
         return error.InvalidObjectArtOffset;
+    }
     const length = 6 + @as(usize, archive[offset + 5]) * 4;
     if (length > archive.len - offset) return error.TruncatedObjectArt;
     return archive[offset..][0..length];
@@ -34,7 +36,9 @@ pub fn fromArchive(
 
 pub fn decode(allocator: std.mem.Allocator, record: []const u8, bank: []const u8) !sprite.Frame {
     if (record.len < 6 or
-        record.len != 6 + @as(usize, record[5]) * 4) return error.TruncatedObjectArt;
+        record.len != 6 + @as(usize, record[5]) * 4) {
+        return error.TruncatedObjectArt;
+    }
     if (record[5] == 0) return error.EmptyObjectArt;
     var width: u16 = 0;
     var height: u16 = 0;
@@ -42,8 +46,9 @@ pub fn decode(allocator: std.mem.Allocator, record: []const u8, bank: []const u8
     while (parts.next()) |part| {
         const shape = dimensions(part[3]);
         const offset = @as(usize, part[0]) * 32;
-        if (offset > bank.len or shape.width * shape.height / 2 > bank.len - offset)
+        if (offset > bank.len or shape.width * shape.height / 2 > bank.len - offset) {
             return error.TruncatedObjectArtTile;
+        }
         width = @max(width, @as(u16, part[1]) + shape.width);
         height = @max(height, @as(u16, part[2]) + shape.height);
     }
@@ -53,15 +58,20 @@ pub fn decode(allocator: std.mem.Allocator, record: []const u8, bank: []const u8
     parts.reset();
     while (parts.next()) |part| {
         const shape = dimensions(part[3]);
-        const encoded = bank[@as(usize, part[0]) * 32 ..][0 .. shape.width * shape.height / 2];
+        const encoded = bank[@as(usize, part[0]) * 32..][0..shape.width * shape.height / 2];
         for (0..shape.height) |y| {
             for (0..shape.width) |x| {
                 const source_x = if (part[3] & 0x10 != 0) shape.width - 1 - x else x;
                 const source = y * shape.width + source_x;
-                const color = if (source % 2 == 0) encoded[source / 2] >> 4 else encoded[source / 2] & 15;
+                const color = if (source % 2 == 0)
+                    encoded[source / 2] >> 4
+                else
+                    encoded[source / 2] & 15;
                 // A transparent part leaves earlier parts visible. Higher part flags are
                 // ignored by the original DOS compositor, including the observed bit 5.
-                if (color != 0) pixels[(part[2] + y) * width + part[1] + x] = color;
+                if (color != 0) {
+                    pixels[(part[2] + y) * width + part[1] + x] = color;
+                }
             }
         }
     }

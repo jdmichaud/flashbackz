@@ -28,7 +28,10 @@ pub const DirectionRepeat = struct {
     /// Whether a press registers: a direction as `accept` says, another key only when pressed,
     /// not when repeated.
     pub fn registers(self: *DirectionRepeat, press: input.Change, time_ns: u64) bool {
-        return if (press.action.isDirection()) self.accept(press.repeat, time_ns) else !press.repeat;
+        return if (press.action.isDirection())
+            self.accept(press.repeat, time_ns)
+        else
+            !press.repeat;
     }
 };
 
@@ -46,5 +49,7 @@ test "a held direction repeats after 20 ticks, then every 12" {
     try std.testing.expect(fresh.accept(true, 5 * tick_ns));
     // Other keys register once per press.
     try std.testing.expect(fresh.registers(.{ .action = .use, .down = true }, 6 * tick_ns));
-    try std.testing.expect(!fresh.registers(.{ .action = .use, .down = true, .repeat = true }, 600 * tick_ns));
+    try std.testing.expect(
+        !fresh.registers(.{ .action = .use, .down = true, .repeat = true }, 600 * tick_ns),
+    );
 }

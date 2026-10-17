@@ -89,11 +89,14 @@ pub const Archive = struct {
             const count: i16 = @bitCast(try big16(self.banks, bank * 6 + 4));
             const size = @as(usize, @abs(count)) * 32;
             if (count == 0 or size > 32768 or offset < directory) return error.InvalidArtBank;
-            const bytes = if (count < 0) try allocator.dupe(u8, try slice(self.banks, offset, size)) else try backward.decode(
-                allocator,
-                try slice(self.banks, directory, offset - directory),
-                size,
-            );
+            const bytes = if (count < 0)
+                try allocator.dupe(u8, try slice(self.banks, offset, size))
+            else
+                try backward.decode(
+                    allocator,
+                    try slice(self.banks, directory, offset - directory),
+                    size,
+                );
             defer allocator.free(bytes);
             if (bytes.len != size) return error.ArtBankSizeMismatch;
             const selected = (try slice(description, at, 1))[0];
@@ -103,10 +106,9 @@ pub const Archive = struct {
             } else {
                 const indices = try slice(description, at, @as(usize, selected) + 1);
                 at += indices.len;
-                for (indices) |index| try result.appendSlice(
-                    allocator,
-                    try slice(bytes, @as(usize, index) * 32, 32),
-                );
+                for (indices) |index| {
+                    try result.appendSlice(allocator, try slice(bytes, @as(usize, index) * 32, 32));
+                }
             }
             if (result.items.len > 32768) return error.RoomTilesTooLarge;
             if (selection & 0x8000 != 0) return result.toOwnedSlice(allocator);
@@ -124,18 +126,25 @@ pub const Archive = struct {
         const count = try big16(description, at);
         const placements = try slice(description, at + 2, @as(usize, count) * 6);
         for (0..count) |i| {
-            const placement = placements[i * 6 ..][0..6];
+            const placement = placements[i * 6..][0..6];
             const code = try big16(placement, 0);
             if (code == 0xffff) continue;
             const index = code & 0x7fff;
             if (self.background.len < 4 or
-                index >= self.background[0]) return error.InvalidBackgroundIndex;
+                index >= self.background[0]) {
+                return error.InvalidBackgroundIndex;
+            }
             var offset: i32 = @bitCast(try big32(self.background, @as(usize, index) * 4));
-            if (index == 0) offset &= 0x00ffffff;
+            if (index == 0) {
+                offset &= 0x00ffffff;
+            }
             const start: usize = @abs(offset);
             const size = try big16(self.background, start);
             const encoded = try slice(self.background, start + 2, size);
-            const decoded = if (offset < 0) try allocator.dupe(u8, encoded) else try expandRuns(allocator, encoded);
+            const decoded = if (offset < 0)
+                try allocator.dupe(u8, encoded)
+            else
+                try expandRuns(allocator, encoded);
             defer allocator.free(decoded);
             try drawBackgroundPiece(
                 pixels,
@@ -183,18 +192,22 @@ fn drawBackgroundPiece(pixels: []u8, bytes: []const u8, x: i32, y: i32) !void {
             const dx = x + @as(i32, @intCast(column));
             if (dx < 0 or
                 dx >= 256 or
-                mask[row * (width / 8) + column / 8] & (@as(u8, 128) >> @as(u3, @intCast(column % 8))) == 0) continue;
+                mask[row * (width / 8) + column / 8] &
+                    (@as(u8, 128) >> @as(u3, @intCast(column % 8))) == 0) {
+                continue;
+            }
             const value = colors[row * (width / 2) + column / 2];
-            pixels[
-                @as(usize, @intCast(dy)) * 256 + @as(usize, @intCast(dx))
-            ] = if (column % 2 == 0) value >> 4 else value & 15;
+            pixels[@as(usize, @intCast(dy)) * 256 + @as(usize, @intCast(dx))] = if (column % 2 == 0)
+                value >> 4
+            else
+                value & 15;
         }
     }
 }
 
 fn drawTiles(pixels: []u8, cells: []const u8, tiles: []const u8, bias: u16) !void {
     for (0..896) |cell| {
-        const flags = std.mem.readInt(u16, cells[cell * 2 ..][0..2], .little);
+        const flags = std.mem.readInt(u16, cells[cell * 2..][0..2], .little);
         const number = flags & 0x7ff;
         if (number == 0) continue;
         if (number < bias) return error.InvalidRoomTile;
@@ -202,14 +215,18 @@ fn drawTiles(pixels: []u8, cells: []const u8, tiles: []const u8, bias: u16) !voi
         const bank: u8 = @intCast(((flags >> 9) & 0x30) | ((flags >> 8) & 0x80));
         const x = cell % 32 * 8;
         const y = cell / 32 * 8;
-        for (0..8) |row| for (0..8) |column| {
-            const sx = if (flags & 0x800 != 0) 7 - column else column;
-            const sy = if (flags & 0x1000 != 0) 7 - row else row;
-            const pair = tile[sy * 4 + sx / 2];
-            const value = if (sx % 2 == 0) pair >> 4 else pair & 15;
-            const index = (y + row) * 256 + x + column;
-            if (value != 0) pixels[index] = value | bank | (pixels[index] & 0x80);
-        };
+        for (0..8) |row| {
+            for (0..8) |column| {
+                const sx = if (flags & 0x800 != 0) 7 - column else column;
+                const sy = if (flags & 0x1000 != 0) 7 - row else row;
+                const pair = tile[sy * 4 + sx / 2];
+                const value = if (sx % 2 == 0) pair >> 4 else pair & 15;
+                const index = (y + row) * 256 + x + column;
+                if (value != 0) {
+                    pixels[index] = value | bank | (pixels[index] & 0x80);
+                }
+            }
+        }
     }
 }
 

@@ -76,11 +76,13 @@ test "events are logged in the agent host's own vocabulary" {
     try writeEvent(
         .{
             .time_ns = 20,
-            .payload = .{ .controller_axis = .{
-                .controller = @fromBackingInt(3),
-                .axis = .left_x,
-                .value = -300,
-            } },
+            .payload = .{
+                .controller_axis = .{
+                    .controller = @fromBackingInt(3),
+                    .axis = .left_x,
+                    .value = -300,
+                },
+            },
         },
         &w,
     );

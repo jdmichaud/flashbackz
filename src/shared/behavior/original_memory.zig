@@ -113,11 +113,13 @@ pub fn mailboxSlot(world: *World, index: i32) ?u8 {
 /// of 16 cells never reaches.
 pub fn placementByte(world: *const World, record: u16, before: i32) ?u8 {
     const position = @as(i32, record) * placement_record_size - before;
-    if (position >= 0) return recordByte(
-        world,
-        @intCast(@divTrunc(position, placement_record_size)),
-        @intCast(@mod(position, placement_record_size)),
-    );
+    if (position >= 0) {
+        return recordByte(
+            world,
+            @intCast(@divTrunc(position, placement_record_size)),
+            @intCast(@mod(position, placement_record_size)),
+        );
+    }
     const wake_list = 2 * 256 + position;
     if (wake_list < 0) return null;
     const sleeper: u16 = @intCast(@divTrunc(wake_list, 2));

@@ -67,19 +67,33 @@ pub const assets: clap.Positional = .{
 /// The providers' options from a parse whose description includes `shared_options` and `assets`.
 pub fn fromArgs(args: anytype, diagnostic: *clap.Diagnostic) clap.Error!Options {
     var result: Options = .{};
-    if (args.value("scene")) |name| result.entry = sceneEntry(name) orelse {
-        diagnostic.* = .{ .argument = "--scene", .value = name };
-        return error.InvalidValue;
-    };
-    if (args.value("saves")) |dir| result.saves = try nonEmpty("--saves", dir, diagnostic);
-    if (args.value("data")) |dir| result.data = try nonEmpty("--data", dir, diagnostic);
-    if (args.value("extract")) |dir| result.extract = try nonEmpty("--extract", dir, diagnostic);
-    if (args.value("names")) |file| result.names = try nonEmpty("--names", file, diagnostic);
-    if (args.value("megadrive")) |file| result.megadrive = try nonEmpty("--megadrive", file, diagnostic);
-    for (args.positional("ASSET_PATH")) |path| result.addAsset(path) catch {
-        diagnostic.* = .{ .argument = "ASSET_PATH", .value = path };
-        return error.InvalidValue;
-    };
+    if (args.value("scene")) |name| {
+        result.entry = sceneEntry(name) orelse {
+            diagnostic.* = .{ .argument = "--scene", .value = name };
+            return error.InvalidValue;
+        };
+    }
+    if (args.value("saves")) |dir| {
+        result.saves = try nonEmpty("--saves", dir, diagnostic);
+    }
+    if (args.value("data")) |dir| {
+        result.data = try nonEmpty("--data", dir, diagnostic);
+    }
+    if (args.value("extract")) |dir| {
+        result.extract = try nonEmpty("--extract", dir, diagnostic);
+    }
+    if (args.value("names")) |file| {
+        result.names = try nonEmpty("--names", file, diagnostic);
+    }
+    if (args.value("megadrive")) |file| {
+        result.megadrive = try nonEmpty("--megadrive", file, diagnostic);
+    }
+    for (args.positional("ASSET_PATH")) |path| {
+        result.addAsset(path) catch {
+            diagnostic.* = .{ .argument = "ASSET_PATH", .value = path };
+            return error.InvalidValue;
+        };
+    }
     if (result.names != null and result.extract == null) {
         diagnostic.* = .{ .argument = "--names", .value = "--extract" };
         return error.NeedsOption;
@@ -88,7 +102,9 @@ pub fn fromArgs(args: anytype, diagnostic: *clap.Diagnostic) clap.Error!Options 
         // Extracting only writes the data set: the options of a game run do not apply.
         const Args = @TypeOf(args);
         for (args.given) |given| {
-            if (given.option == Args.index("extract") or given.option == Args.index("names")) continue;
+            if (given.option == Args.index("extract") or given.option == Args.index("names")) {
+                continue;
+            }
             diagnostic.* = .{ .argument = Args.flagName(given.option), .value = "--extract" };
             return error.ExcludedOption;
         }
@@ -99,12 +115,20 @@ pub fn fromArgs(args: anytype, diagnostic: *clap.Diagnostic) clap.Error!Options 
 /// `--extract`: writes the data set made from the options' disks, or the built-in ones, into the
 /// chosen directory and prints the extraction report. Returns the exit status, after saying what
 /// failed if anything.
-pub fn extractCommand(gpa: std.mem.Allocator, io: std.Io, program: []const u8, options: Options) u8 {
+pub fn extractCommand(
+    gpa: std.mem.Allocator,
+    io: std.Io,
+    program: []const u8,
+    options: Options,
+) u8 {
     if (options.assets == null and options.built_in.disks.len == 0) {
         var buffer: [256]u8 = undefined;
         var stderr = std.Io.File.stderr().writerStreaming(io, &buffer);
-        stderr.interface.print("{s}: --extract needs the game's files: give both floppy images " ++
-            "(disk1.img disk2.img) or a directory extracted from them\n", .{program}) catch {};
+        stderr.interface.print(
+            "{s}: --extract needs the game's files: give both floppy images " ++
+                "(disk1.img disk2.img) or a directory extracted from them\n",
+            .{ program },
+        ) catch {};
         stderr.interface.flush() catch {};
         return 2;
     }
@@ -123,7 +147,7 @@ pub fn extractCommand(gpa: std.mem.Allocator, io: std.Io, program: []const u8, o
                 options.extract.?,
             })
         else if (openError(err)) |failure| written: {
-            out.print("{s}: ", .{program}) catch {};
+            out.print("{s}: ", .{ program }) catch {};
             break :written providers.writeFailure(failure, out);
         } else out.print("{s}: extraction failed: {s}\n", .{ program, @errorName(err) });
         written catch {};
@@ -157,10 +181,21 @@ fn writeDataSet(
     else
         extract.built_in_names;
     providers.failed = .{ .what = "data set directory", .path = options.extract.? };
-    return data_set.writeDirectory(gpa, arena, io, providers.assetSource().?, names, options.extract.?);
+    return data_set.writeDirectory(
+        gpa,
+        arena,
+        io,
+        providers.assetSource().?,
+        names,
+        options.extract.?,
+    );
 }
 
-fn nonEmpty(comptime name: []const u8, value: []const u8, diagnostic: *clap.Diagnostic) clap.Error![]const u8 {
+fn nonEmpty(
+    comptime name: []const u8,
+    value: []const u8,
+    diagnostic: *clap.Diagnostic,
+) clap.Error![]const u8 {
     if (value.len != 0) return value;
     diagnostic.* = .{ .argument = name, .value = value };
     return error.InvalidValue;
@@ -197,7 +232,9 @@ pub const Options = struct {
             self.assets = path;
         } else if (self.second_assets == null) {
             self.second_assets = path;
-        } else return error.TooManyAssets;
+        } else {
+            return error.TooManyAssets;
+        }
     }
 };
 
@@ -317,7 +354,12 @@ pub const Providers = struct {
     /// Adds the Mega Drive cartridge to the asset source, once it is known to be the accepted one.
     fn importCartridge(self: *Providers, io: std.Io, path: []const u8) OpenError!void {
         const megadrive = flashbackz.content.megadrive;
-        const bytes = std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, .limited(megadrive.size + 1)) catch |err| return switch (err) {
+        const bytes = std.Io.Dir.cwd().readFileAlloc(
+            io,
+            path,
+            self.allocator,
+            .limited(megadrive.size + 1),
+        ) catch |err| return switch (err) {
             error.FileNotFound => error.NotFound,
             error.AccessDenied => error.AccessDenied,
             error.OutOfMemory => error.OutOfMemory,
@@ -358,7 +400,7 @@ pub const Providers = struct {
                 arena.allocator(),
                 self.assetSource().?,
             ) catch |err| missing: {
-                std.log.info("data set not extracted: {s}", .{@errorName(err)});
+                std.log.info("data set not extracted: {s}", .{ @errorName(err) });
                 break :missing null;
             };
         }
@@ -366,7 +408,12 @@ pub const Providers = struct {
 
     /// Opens only asset paths, for tools that read the game and never save.
     /// Opens the game's files only: the asset paths, else the built-in disks.
-    pub fn openAssets(self: *Providers, allocator: std.mem.Allocator, io: std.Io, options: Options) OpenError!void {
+    pub fn openAssets(
+        self: *Providers,
+        allocator: std.mem.Allocator,
+        io: std.Io,
+        options: Options,
+    ) OpenError!void {
         self.allocator = allocator;
         errdefer self.deinit();
         try self.importAssets(io, options);
@@ -376,21 +423,30 @@ pub const Providers = struct {
         self.content = Pack.init(self.allocator);
         if (options.assets) |path| {
             try self.importPath(io, path);
-            if (options.second_assets) |second| try self.importPath(io, second);
+            if (options.second_assets) |second| {
+                try self.importPath(io, second);
+            }
         } else {
             self.failed = .{ .what = "built-in disks" };
-            for (options.built_in.disks) |image| try self.importImage(image);
+            for (options.built_in.disks) |image| {
+                try self.importImage(image);
+            }
             self.kind = .built_in;
         }
         self.failed = .{ .what = "disks' archives" };
-        flashbackz.content.archive.expandAll(&self.content.?) catch |err| return mapImportError(err);
+        flashbackz.content.archive.expandAll(&self.content.?) catch |err|
+            return mapImportError(err);
         self.failed = .{};
     }
 
     fn importPath(self: *Providers, io: std.Io, path: []const u8) OpenError!void {
         self.failed = .{ .what = "disk", .path = path };
         const allocator = self.allocator;
-        const kind: AssetKind = if (DirectoryAssetSource.open(allocator, io, path)) |opened| directory: {
+        const kind: AssetKind = if (DirectoryAssetSource.open(
+            allocator,
+            io,
+            path,
+        )) |opened| directory: {
             var directory = opened;
             defer directory.deinit();
             const source = directory.assetSource();
@@ -399,7 +455,8 @@ pub const Providers = struct {
             for (listing.names) |name| {
                 // Refuse the superseded edition before reading large movies.
                 if (platform.assetNameEql(name, "GAME_E.OVL")) return error.InvalidImage;
-                var data = source.readAll(name, Pack.limit - self.content.?.total) catch return error.InvalidImage;
+                var data = source.readAll(name, Pack.limit - self.content.?.total) catch
+                    return error.InvalidImage;
                 defer data.deinit();
                 self.content.?.add(name, data.bytes) catch |err| return mapImportError(err);
             }
@@ -443,8 +500,12 @@ pub const Providers = struct {
             arena.deinit();
             self.allocator.destroy(arena);
         }
-        if (self.content) |*content| content.deinit();
-        if (self.saves) |*s| s.deinit();
+        if (self.content) |*content| {
+            content.deinit();
+        }
+        if (self.saves) |*s| {
+            s.deinit();
+        }
         self.allocator.free(self.saves_path);
         self.* = .{ .failed = self.failed };
     }
@@ -474,28 +535,19 @@ pub fn defaultSaveDirectory(
     if (builtin.os.tag == .windows) {
         const appdata = environ.get("APPDATA") orelse return error.NoApplicationDirectory;
         if (appdata.len == 0) return error.NoApplicationDirectory;
-        return std.fmt.allocPrint(
-            allocator,
-            "{s}\\flashbackz\\saves",
-            .{appdata},
-        ) catch return error.OutOfMemory;
+        return std.fmt.allocPrint(allocator, "{s}\\flashbackz\\saves", .{ appdata }) catch
+            return error.OutOfMemory;
     }
     if (environ.get("XDG_DATA_HOME")) |data_home| {
         if (data_home.len != 0) {
-            return std.fmt.allocPrint(
-                allocator,
-                "{s}/flashbackz/saves",
-                .{data_home},
-            ) catch return error.OutOfMemory;
+            return std.fmt.allocPrint(allocator, "{s}/flashbackz/saves", .{ data_home }) catch
+                return error.OutOfMemory;
         }
     }
     const home = environ.get("HOME") orelse return error.NoApplicationDirectory;
     if (home.len == 0) return error.NoApplicationDirectory;
-    return std.fmt.allocPrint(
-        allocator,
-        "{s}/.local/share/flashbackz/saves",
-        .{home},
-    ) catch return error.OutOfMemory;
+    return std.fmt.allocPrint(allocator, "{s}/.local/share/flashbackz/saves", .{ home }) catch
+        return error.OutOfMemory;
 }
 
 const contract = @import("contract.zig");
@@ -505,7 +557,9 @@ fn testEnviron(
     pairs: []const [2][]const u8,
 ) !std.process.Environ.Map {
     var map = std.process.Environ.Map.init(allocator);
-    for (pairs) |pair| try map.put(pair[0], pair[1]);
+    for (pairs) |pair| {
+        try map.put(pair[0], pair[1]);
+    }
     return map;
 }
 
@@ -529,10 +583,7 @@ test "the save directory follows the platform's application data convention" {
     {
         var env = try testEnviron(
             allocator,
-            &.{
-                .{ "HOME", "/home/player" },
-                .{ "APPDATA", "C:\\Users\\player\\AppData\\Roaming" },
-            },
+            &.{.{ "HOME", "/home/player" }, .{ "APPDATA", "C:\\Users\\player\\AppData\\Roaming" }},
         );
         defer env.deinit();
         const path = try defaultSaveDirectory(allocator, &env);
@@ -604,7 +655,7 @@ test "the options open a game directory, or none" {
     // A path that is missing, or not a directory.
     {
         var providers: Providers = .empty;
-        const missing = try std.fmt.allocPrint(allocator, "{s}/absent", .{base});
+        const missing = try std.fmt.allocPrint(allocator, "{s}/absent", .{ base });
         defer allocator.free(missing);
         const options: Options = .{ .assets = missing, .saves = paths[1] };
         const failed = providers.open(allocator, io, &env, options);
@@ -615,11 +666,11 @@ test "the options open a game directory, or none" {
         const expected = try std.fmt.allocPrint(
             allocator,
             "cannot open the disk {s}: not found\n",
-            .{missing},
+            .{ missing },
         );
         defer allocator.free(expected);
         try std.testing.expectEqualStrings(expected, message.written());
-        const not_a_directory = try std.fmt.allocPrint(allocator, "{s}/game/game.cfg", .{base});
+        const not_a_directory = try std.fmt.allocPrint(allocator, "{s}/game/game.cfg", .{ base });
         defer allocator.free(not_a_directory);
         try std.testing.expectError(
             error.InvalidImage,
@@ -640,9 +691,9 @@ test "the positional source reads a floppy through owned provider storage" {
     const base = path_buffer[0..try tmp.dir.realPath(io, &path_buffer)];
     var env = try testEnviron(allocator, &.{});
     defer env.deinit();
-    const saves = try std.fmt.allocPrint(allocator, "{s}/saves", .{base});
+    const saves = try std.fmt.allocPrint(allocator, "{s}/saves", .{ base });
     defer allocator.free(saves);
-    const path = try std.fmt.allocPrint(allocator, "{s}/game.ima", .{base});
+    const path = try std.fmt.allocPrint(allocator, "{s}/game.ima", .{ base });
     defer allocator.free(path);
     var providers: Providers = .empty;
     try providers.open(allocator, io, &env, .{ .assets = path, .saves = saves });
@@ -662,13 +713,13 @@ test "the standalone build's files stand in for paths, which still take preceden
     defer allocator.free(image);
     var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
     const base = path_buffer[0..try tmp.dir.realPath(io, &path_buffer)];
-    const saves = try std.fmt.allocPrint(allocator, "{s}/saves", .{base});
+    const saves = try std.fmt.allocPrint(allocator, "{s}/saves", .{ base });
     defer allocator.free(saves);
-    const missing = try std.fmt.allocPrint(allocator, "{s}/absent.img", .{base});
+    const missing = try std.fmt.allocPrint(allocator, "{s}/absent.img", .{ base });
     defer allocator.free(missing);
     var env = try testEnviron(allocator, &.{});
     defer env.deinit();
-    const disks: []const []const u8 = &.{image};
+    const disks: []const []const u8 = &.{ image };
     {
         var providers: Providers = .empty;
         defer providers.deinit();
@@ -691,8 +742,11 @@ test "the standalone build's files stand in for paths, which still take preceden
         var message: std.Io.Writer.Allocating = .init(allocator);
         defer message.deinit();
         try providers.writeFailure(error.UnsupportedCartridge, &message.writer);
-        try std.testing.expectEqualStrings("cannot open the built-in Mega Drive cartridge: " ++
-            "not the cartridge Flashback (Europe) (En,Fr)\n", message.written());
+        try std.testing.expectEqualStrings(
+            "cannot open the built-in Mega Drive cartridge: " ++
+                "not the cartridge Flashback (Europe) (En,Fr)\n",
+            message.written(),
+        );
     }
     // A path on the command line wins over the built-in disks, even a missing one.
     {
@@ -714,9 +768,9 @@ test "multiple disks merge files and conflicting editions fail without partial p
     const image = try flashbackz.floppy.testImage(allocator);
     defer allocator.free(image);
     try tmp.dir.writeFile(io, .{ .sub_path = "first.img", .data = image });
-    @memcpy(image[33 * 512 ..][0..11], "SECOND  DAT");
+    @memcpy(image[33 * 512..][0..11], "SECOND  DAT");
     try tmp.dir.writeFile(io, .{ .sub_path = "second.img", .data = image });
-    @memcpy(image[33 * 512 ..][0..11], "FILE    DAT");
+    @memcpy(image[33 * 512..][0..11], "FILE    DAT");
     image[35 * 512] = 'X';
     try tmp.dir.writeFile(io, .{ .sub_path = "conflict.img", .data = image });
     var path_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
@@ -750,13 +804,19 @@ test "multiple disks merge files and conflicting editions fail without partial p
     try conflicting.addAsset(paths[0]);
     try conflicting.addAsset(paths[2]);
     var failed: Providers = .empty;
-    try std.testing.expectError(error.ConflictingAsset, failed.open(allocator, io, &env, conflicting));
+    try std.testing.expectError(
+        error.ConflictingAsset,
+        failed.open(allocator, io, &env, conflicting),
+    );
     try std.testing.expect(failed.content == null and failed.saves == null);
     // The game's files are the two disks: a third path is refused.
     try std.testing.expectError(error.TooManyAssets, options.addAsset("third.img"));
     // A --megadrive file that is not the accepted cartridge is refused, leaving no provider.
     var cartridge: Options = .{ .saves = paths[3], .megadrive = paths[1] };
     try cartridge.addAsset(paths[0]);
-    try std.testing.expectError(error.UnsupportedCartridge, failed.open(allocator, io, &env, cartridge));
+    try std.testing.expectError(
+        error.UnsupportedCartridge,
+        failed.open(allocator, io, &env, cartridge),
+    );
     try std.testing.expect(failed.content == null and failed.saves == null);
 }

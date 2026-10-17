@@ -36,10 +36,9 @@ pub fn load(
         defer tile.deinit();
         const x = index % 9 * 16;
         const y = index / 9 * 16;
-        for (0..16) |row| @memcpy(
-            pixels[(y + row) * 144 + x ..][0..16],
-            tile.image.pixels[row * 16 ..][0..16],
-        );
+        for (0..16) |row| {
+            @memcpy(pixels[(y + row) * 144 + x..][0..16], tile.image.pixels[row * 16..][0..16]);
+        }
     }
     var marker = try sprite.fromIcons(allocator, icons, 76);
     errdefer marker.deinit();

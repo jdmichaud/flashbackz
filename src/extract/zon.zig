@@ -14,8 +14,10 @@ pub const Writer = struct {
     pub fn open(self: *Writer, name: ?[]const u8) !void {
         try self.out.splatByteAll(' ', self.depth * 4);
         if (name) |n| {
-            try self.out.print("{f} = .{{\n", .{identifier(n)});
-        } else try self.out.writeAll(".{\n");
+            try self.out.print("{f} = .{{\n", .{ identifier(n) });
+        } else {
+            try self.out.writeAll(".{\n");
+        }
         self.depth += 1;
     }
 
@@ -34,7 +36,7 @@ pub fn identifier(name: []const u8) Identifier {
 pub const Identifier = struct {
     name: []const u8,
     pub fn format(self: Identifier, out: *std.Io.Writer) std.Io.Writer.Error!void {
-        if (isPlainIdentifier(self.name)) return out.print(".{s}", .{self.name});
+        if (isPlainIdentifier(self.name)) return out.print(".{s}", .{ self.name });
         try out.writeAll(".@");
         try writeString(out, self.name);
     }
@@ -54,19 +56,23 @@ pub const Quoted = struct {
 
 fn writeString(out: *std.Io.Writer, text: []const u8) std.Io.Writer.Error!void {
     try out.writeByte('"');
-    for (text) |c| switch (c) {
-        '"' => try out.writeAll("\\\""),
-        '\\' => try out.writeAll("\\\\"),
-        '\n' => try out.writeAll("\\n"),
-        0x20...0x21, 0x23...0x5b, 0x5d...0x7e => try out.writeByte(c),
-        else => try out.print("\\x{x:0>2}", .{c}),
-    };
+    for (text) |c| {
+        switch (c) {
+            '"' => try out.writeAll("\\\""),
+            '\\' => try out.writeAll("\\\\"),
+            '\n' => try out.writeAll("\\n"),
+            0x20...0x21, 0x23...0x5b, 0x5d...0x7e => try out.writeByte(c),
+            else => try out.print("\\x{x:0>2}", .{ c }),
+        }
+    }
     try out.writeByte('"');
 }
 
 pub fn isPlainIdentifier(name: []const u8) bool {
     if (name.len == 0 or std.ascii.isDigit(name[0])) return false;
-    for (name) |c| if (!std.ascii.isAlphanumeric(c) and c != '_') return false;
+    for (name) |c| {
+        if (!std.ascii.isAlphanumeric(c) and c != '_') return false;
+    }
     return std.zig.Token.getKeyword(name) == null and !std.zig.isPrimitive(name);
 }
 
@@ -85,7 +91,9 @@ pub fn sanitize(buffer: []u8, text: []const u8) []const u8 {
             buffer[length] = std.ascii.toLower(c);
             length += 1;
             gap = false;
-        } else gap = true;
+        } else {
+            gap = true;
+        }
     }
     return buffer[0..length];
 }
@@ -93,17 +101,18 @@ pub fn sanitize(buffer: []u8, text: []const u8) []const u8 {
 test "identifiers that are not plain names are quoted" {
     var buffer: [64]u8 = undefined;
     var out: std.Io.Writer = .fixed(&buffer);
-    try out.print(
-        "{f} {f} {f}",
-        .{ identifier("watching"), identifier("type"), identifier("2nd") },
-    );
+    try out.print("{f} {f} {f}", .{
+        identifier("watching"),
+        identifier("type"),
+        identifier("2nd"),
+    });
     try std.testing.expectEqualStrings(".watching .@\"type\" .@\"2nd\"", out.buffered());
 }
 
 test "strings escape quotes, backslashes and control bytes" {
     var buffer: [64]u8 = undefined;
     var out: std.Io.Writer = .fixed(&buffer);
-    try out.print("{f}", .{string("a\"b\\c\x01")});
+    try out.print("{f}", .{ string("a\"b\\c\x01") });
     try std.testing.expectEqualStrings("\"a\\\"b\\\\c\\x01\"", out.buffered());
 }
 

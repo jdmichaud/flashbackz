@@ -65,7 +65,12 @@ pub fn buttonAction(button: platform.ControllerButton) ?Action {
 
 /// A press or release of an action, from the keyboard (`repeat` when the keyboard repeats a
 /// held key) or from a pad.
-pub const Change = struct { action: Action, down: bool, repeat: bool = false, pad: bool = false };
+pub const Change = struct {
+    action: Action,
+    down: bool,
+    repeat: bool = false,
+    pad: bool = false,
+};
 
 /// The changes one event makes: a stick moved from one side to the other releases a direction
 /// and presses its opposite.
@@ -96,7 +101,9 @@ pub const Pads = struct {
 
     pub fn held(self: *const Pads) u8 {
         var bits: u8 = 0;
-        for (self.stick, self.buttons) |stick, buttons| bits |= stick | buttons;
+        for (self.stick, self.buttons) |stick, buttons| {
+            bits |= stick | buttons;
+        }
         return bits;
     }
 
@@ -105,7 +112,9 @@ pub const Pads = struct {
     pub fn repeat(self: *const Pads) ?Change {
         const bits = self.held();
         for ([_]Action{ .up, .down, .left, .right }) |action| {
-            if (bits & action.bit() != 0) return .{ .action = action, .down = true, .repeat = true, .pad = true };
+            if (bits & action.bit() != 0) {
+                return .{ .action = action, .down = true, .repeat = true, .pad = true };
+            }
         }
         return null;
     }
@@ -124,23 +133,37 @@ pub const Pads = struct {
                 const before = self.stick[at];
                 const axis = negative.bit() | positive.bit();
                 var now = before & ~axis;
-                if (motion.value < -quarter) now |= negative.bit();
-                if (motion.value > quarter) now |= positive.bit();
+                if (motion.value < -quarter) {
+                    now |= negative.bit();
+                }
+                if (motion.value > quarter) {
+                    now |= positive.bit();
+                }
                 self.stick[at] = now;
                 for ([_]Action{ negative, positive }) |action| {
                     const was = before & action.bit() != 0;
                     const is = now & action.bit() != 0;
-                    if (was != is) changes.add(.{ .action = action, .down = is, .pad = true });
+                    if (was != is) {
+                        changes.add(.{ .action = action, .down = is, .pad = true });
+                    }
                 }
             },
             .controller_button_down, .controller_button_up => |change| {
                 const action = buttonAction(change.button) orelse return changes;
                 const at = self.slot(change.controller) orelse return changes;
                 const down = payload == .controller_button_down;
-                if (down) self.buttons[at] |= action.bit() else self.buttons[at] &= ~action.bit();
+                if (down) {
+                    self.buttons[at] |= action.bit();
+                } else {
+                    self.buttons[at] &= ~action.bit();
+                }
                 changes.add(.{ .action = action, .down = down, .pad = true });
             },
-            .controller_removed => |id| for (&self.ids, &self.stick, &self.buttons) |*slot_id, *stick, *buttons| {
+            .controller_removed => |id| for (
+                &self.ids,
+                &self.stick,
+                &self.buttons,
+            ) |*slot_id, *stick, *buttons| {
                 if (slot_id.* != id) continue;
                 slot_id.* = null;
                 stick.* = 0;
@@ -153,11 +176,15 @@ pub const Pads = struct {
 
     /// The slot of pad `id`, taking a free one for a pad not seen yet; null when all are taken.
     fn slot(self: *Pads, id: platform.ControllerId) ?usize {
-        for (self.ids, 0..) |slot_id, i| if (slot_id == id) return i;
-        for (&self.ids, 0..) |*slot_id, i| if (slot_id.* == null) {
-            slot_id.* = id;
-            return i;
-        };
+        for (self.ids, 0..) |slot_id, i| {
+            if (slot_id == id) return i;
+        }
+        for (&self.ids, 0..) |*slot_id, i| {
+            if (slot_id.* == null) {
+                slot_id.* = id;
+                return i;
+            }
+        }
         return null;
     }
 };
@@ -204,7 +231,9 @@ pub const Tracker = struct {
             else => {
                 const pad_changes = self.pads.apply(payload);
                 for (pad_changes.slice()) |change| {
-                    if (!change.down) self.pad_latched &= ~change.action.bit();
+                    if (!change.down) {
+                        self.pad_latched &= ~change.action.bit();
+                    }
                 }
                 return pad_changes;
             },
@@ -239,8 +268,12 @@ pub const Tracker = struct {
         if (bit == 0) return;
         if (down) {
             self.down |= bit;
-            if (repeat) self.ignored &= ~bit;
-            if (self.ignored & bit == 0) self.held |= bit;
+            if (repeat) {
+                self.ignored &= ~bit;
+            }
+            if (self.ignored & bit == 0) {
+                self.held |= bit;
+            }
         } else {
             self.down &= ~bit;
             self.ignored &= ~bit;
@@ -271,12 +304,16 @@ test "the layouts give the input byte's bits" {
 
 test "the joystick holds directions and buttons beside the keyboard when enabled" {
     var keys: Tracker = .{};
-    _ = keys.apply(.{ .controller_axis = .{ .controller = pad(0), .axis = .left_x, .value = 20000 } });
+    _ = keys.apply(.{
+        .controller_axis = .{ .controller = pad(0), .axis = .left_x, .value = 20000 },
+    });
     _ = keys.apply(.{ .controller_button_down = .{ .controller = pad(0), .button = .a } });
     try std.testing.expectEqual(@as(u8, 0), keys.read(false));
     try std.testing.expectEqual(@as(u8, 0x48), keys.read(true));
     // A small deflection is the centre; the keyboard adds its own bits.
-    _ = keys.apply(.{ .controller_axis = .{ .controller = pad(0), .axis = .left_x, .value = 4000 } });
+    _ = keys.apply(.{
+        .controller_axis = .{ .controller = pad(0), .axis = .left_x, .value = 4000 },
+    });
     _ = keys.apply(.{ .key_down = .{ .key = .space } });
     try std.testing.expectEqual(@as(u8, 0x60), keys.read(true));
     // A modal screen that ends holds back what is held, the joystick's as the keys'.
@@ -303,12 +340,20 @@ test "each pad holds its own buttons" {
 
 test "a stick across releases one direction and presses the other" {
     var keys: Tracker = .{};
-    _ = keys.apply(.{ .controller_axis = .{ .controller = pad(0), .axis = .left_x, .value = -30000 } });
-    const changes = keys.apply(.{ .controller_axis = .{ .controller = pad(0), .axis = .left_x, .value = 30000 } });
-    try std.testing.expectEqualSlices(Change, &.{
-        .{ .action = .left, .down = false, .pad = true },
-        .{ .action = .right, .down = true, .pad = true },
-    }, changes.slice());
+    _ = keys.apply(.{
+        .controller_axis = .{ .controller = pad(0), .axis = .left_x, .value = -30000 },
+    });
+    const changes = keys.apply(.{
+        .controller_axis = .{ .controller = pad(0), .axis = .left_x, .value = 30000 },
+    });
+    try std.testing.expectEqualSlices(
+        Change,
+        &.{
+            .{ .action = .left, .down = false, .pad = true },
+            .{ .action = .right, .down = true, .pad = true },
+        },
+        changes.slice(),
+    );
 }
 
 test "a key held through a modal screen counts again only once pressed anew" {

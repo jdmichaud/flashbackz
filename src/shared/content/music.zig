@@ -8,7 +8,7 @@ fn word(bytes: []const u8, at: usize) u16 {
     return std.mem.readInt(u16, bytes[at..][0..2], .little);
 }
 fn terminated(bytes: []const u8) ![]const u8 {
-    return bytes[0 .. std.mem.indexOfScalar(u8, bytes, 0) orelse return error.UnterminatedMusicName];
+    return bytes[0..std.mem.indexOfScalar(u8, bytes, 0) orelse return error.UnterminatedMusicName];
 }
 fn read(
     source: platform.AssetSource,
@@ -17,13 +17,19 @@ fn read(
     maximum: usize,
 ) !platform.OwnedBytes {
     if (name.len == 0) return error.EmptyMusicName;
-    for (name) |c| if (!std.ascii.isAlphanumeric(c) and
-        c != '_' and
-        c != '.' and
-        c != '-') return error.InvalidMusicName;
+    for (name) |c| {
+        if (!std.ascii.isAlphanumeric(c) and
+            c != '_' and
+            c != '.' and
+            c != '-') {
+            return error.InvalidMusicName;
+        }
+    }
     var path: [64]u8 = undefined;
     const filename = try std.fmt.bufPrint(&path, "DATA/{s}{s}", .{ name, extension });
-    for (filename) |*c| c.* = std.ascii.toUpper(c.*);
+    for (filename) |*c| {
+        c.* = std.ascii.toUpper(c.*);
+    }
     return source.readAll(filename, maximum) catch |err| switch (err) {
         error.NotFound => source.readAll(filename[5..], maximum),
         else => err,
@@ -60,7 +66,9 @@ fn operator(bytes: []const u8, waveform: u16) score.Operator {
         .key_scale = @truncate(field(bytes, .key_scale_level) << 6),
         .attenuation = @intCast(field(bytes, .total_level) & 63),
         .attack_decay = @truncate((field(bytes, .attack) << 4) | (field(bytes, .decay) & 15)),
-        .sustain_release = @truncate((field(bytes, .sustain_level) << 4) | (field(bytes, .release) & 15)),
+        .sustain_release = @truncate(
+            (field(bytes, .sustain_level) << 4) | (field(bytes, .release) & 15),
+        ),
         .waveform = @truncate(waveform),
     };
 }
@@ -69,14 +77,20 @@ fn operator(bytes: []const u8, waveform: u16) score.Operator {
 /// waveforms at bytes 74 and 76.
 pub fn instrument(bytes: []const u8) !score.Instrument {
     if (bytes.len != 80) return error.InvalidInstrumentSize;
-    const percussion: ?score.Percussion = if (bytes[0] == 0) null else std.enums.fromInt(score.Percussion, bytes[1]) orelse return error.InvalidPercussionInstrument;
+    const percussion: ?score.Percussion = if (bytes[0] == 0)
+        null
+    else
+        std.enums.fromInt(score.Percussion, bytes[1]) orelse
+            return error.InvalidPercussionInstrument;
     const modulator = bytes[2..28];
     return .{
         .percussion = percussion,
         .modulator = operator(modulator, word(bytes, 74)),
         .carrier = operator(bytes[28..54], word(bytes, 76)),
-        .feedback_connection = @truncate((field(modulator, .feedback) << 1) |
-            @as(u16, if (field(modulator, .connection) == 0) 1 else 0)),
+        .feedback_connection = @truncate(
+            (field(modulator, .feedback) << 1) |
+                @as(u16, if (field(modulator, .connection) == 0) 1 else 0),
+        ),
         .scale_modulator = modulator[@backingInt(OperatorField.connection)] == 0,
     };
 }
@@ -126,7 +140,9 @@ pub const Profile = struct {
         if (interval == 0 or
             interval > 1000 or
             bar_ticks == 0 or
-            limit == std.math.minInt(i32)) return error.InvalidMusicTiming;
+            limit == std.math.minInt(i32)) {
+            return error.InvalidMusicTiming;
+        }
         return .{ .bytes = bytes, .interval = interval, .bar_ticks = bar_ticks, .limit = limit };
     }
 };
@@ -151,7 +167,9 @@ fn importPart(
             if (running == 0) return error.InvalidMidiStatus;
             reader.at -= 1;
             status = running;
-        } else if (status < 0xf0) running = status;
+        } else if (status < 0xf0) {
+            running = status;
+        }
         if (status == 0xff) {
             const kind = try reader.byte();
             const payload = try reader.take(try reader.vlq());
@@ -179,28 +197,40 @@ fn importPart(
         );
         const action: ?score.Action = switch (kind) {
             0x8 => .{ .release = pitch },
-            0x9 => if (second == 0) .{ .release = pitch } else .{ .play = .{
-                .instrument = @intCast(binding),
-                .pitch = pitch,
-                .velocity = @intCast(velocity),
-            } },
+            0x9 => if (second == 0)
+                .{ .release = pitch }
+            else
+                .{
+                    .play = .{
+                        .instrument = @intCast(binding),
+                        .pitch = pitch,
+                        .velocity = @intCast(velocity),
+                    },
+                },
             0xe => .{ .bend = @as(u14, second) << 7 | first },
             0xc => change: {
-                if (word(profile.bytes, 570) != 0) for (0..16) |i| {
-                    if (word(profile.bytes, 572 + i * 2) == first) {
-                        binding = i;
-                        break;
+                if (word(profile.bytes, 570) != 0) {
+                    for (0..16) |i| {
+                        if (word(profile.bytes, 572 + i * 2) == first) {
+                            binding = i;
+                            break;
+                        }
                     }
-                };
+                }
                 break :change null;
             },
             else => null, // Original AdLib playback ignores pressure and controller changes.
         };
-        if (action) |value| try events.append(allocator, .{ .tick = tick, .action = value });
+        if (action) |value| {
+            try events.append(allocator, .{ .tick = tick, .action = value });
+        }
     }
     if (!ended or reader.at != bytes.len) return error.InvalidMidiEnd;
     const duration = tick - 1;
-    const repeat_ticks = if (profile.bytes[732 + part] != 0) null else duration + profile.bar_ticks - duration % profile.bar_ticks;
+    const repeat_ticks = if (profile.bytes[732 + part] != 0)
+        null
+    else
+        duration + profile.bar_ticks - duration % profile.bar_ticks;
     return .{ .events = try events.toOwnedSlice(allocator), .repeat_ticks = repeat_ticks };
 }
 
@@ -213,13 +243,17 @@ pub fn decode(
     var reader: Reader = .{ .bytes = midi };
     const header = try reader.chunk("MThd");
     if (header.len != 6 or
-        std.mem.readInt(u16, header[0..2], .big) > 1) return error.InvalidMidiHeader;
+        std.mem.readInt(u16, header[0..2], .big) > 1) {
+        return error.InvalidMidiHeader;
+    }
     const count = std.mem.readInt(u16, header[2..4], .big);
     if (count == 0 or count > 16) return error.TooManyMusicParts;
     const parts = try allocator.alloc(score.Part, count);
     var done: usize = 0;
     errdefer {
-        for (parts[0..done]) |part| allocator.free(part.events);
+        for (parts[0..done]) |part| {
+            allocator.free(part.events);
+        }
         allocator.free(parts);
     }
     for (parts, 0..) |*part, i| {
@@ -233,7 +267,10 @@ pub fn decode(
         .tick_pit_cycles = 532 * @as(u32, profile.interval),
         // Widened: a limit at either end of its range still gives a count of ticks.
         .stop_after_ticks = if (profile.limit > 0) @intCast(@as(i64, profile.limit) + 1) else null,
-        .restart_after_ticks = if (profile.limit < 0) @intCast(-@as(i64, profile.limit) + 2) else null,
+        .restart_after_ticks = if (profile.limit < 0)
+            @intCast(-@as(i64, profile.limit) + 2)
+        else
+            null,
     };
 }
 
@@ -255,7 +292,7 @@ pub fn load(
     defer midi.deinit();
     var instruments: [16]?score.Instrument = @splat(null);
     for (&instruments, 0..) |*destination, i| {
-        const full_name = try terminated(file.bytes[i * 30 ..][0..30]);
+        const full_name = try terminated(file.bytes[i * 30..][0..30]);
         if (full_name.len == 0) continue;
         var ins = try read(source, full_name[0..@min(8, full_name.len)], ".INS", 80);
         defer ins.deinit();

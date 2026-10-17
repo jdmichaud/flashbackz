@@ -118,16 +118,12 @@ pub fn lookup(code: u8) ?Operation {
         51 => op("send_to_selected_item", .message),
         70 => op("send_to_touching_facing_opposite", .message),
         71 => op("send_to_touching_facing_same", .message),
-        72 => withNumber(
-            "send_to_matching_device",
-            .message,
-            .{
-                .parameter = 0,
-                .main_field = "message",
-                .field = "kind",
-                .default_name = "device_kind",
-            },
-        ),
+        72 => withNumber("send_to_matching_device", .message, .{
+            .parameter = 0,
+            .main_field = "message",
+            .field = "kind",
+            .default_name = "device_kind",
+        }),
         111 => op("acknowledge", .message),
         124 => op("send_to_touching_device", .message),
         126 => op("broadcast", .message),
@@ -138,16 +134,12 @@ pub fn lookup(code: u8) ?Operation {
         39 => op("defeated", .none),
         85 => op("set_charge", .number),
         86 => op("add_charge", .number),
-        88 => withNumber(
-            "copy_health_to",
-            .character,
-            .{
-                .parameter = 0,
-                .main_field = "character",
-                .field = "health",
-                .default_name = "health_to_copy",
-            },
-        ),
+        88 => withNumber("copy_health_to", .character, .{
+            .parameter = 0,
+            .main_field = "character",
+            .field = "health",
+            .default_name = "health_to_copy",
+        }),
         89 => op("mirror_health", .character),
         101 => op("credit", .parameter_link_and_amount),
         102 => op("debit", .parameter_link_and_amount),
@@ -169,16 +161,16 @@ pub fn lookup(code: u8) ?Operation {
         69 => op("touching_anyone", .none),
         80 => op("touching", .kind),
         84 => op("player_touching", .kind),
-        98 => withNumber(
-            "facing_target_unhittable",
-            .{ .kind_and = "hit" },
-            .{ .parameter = 0, .field = "range", .default_name = "shot_range" },
-        ),
-        99 => withNumber(
-            "backturned_target_unhittable",
-            .{ .kind_and = "hit" },
-            .{ .parameter = 0, .field = "range", .default_name = "shot_range" },
-        ),
+        98 => withNumber("facing_target_unhittable", .{ .kind_and = "hit" }, .{
+            .parameter = 0,
+            .field = "range",
+            .default_name = "shot_range",
+        }),
+        99 => withNumber("backturned_target_unhittable", .{ .kind_and = "hit" }, .{
+            .parameter = 0,
+            .field = "range",
+            .default_name = "shot_range",
+        }),
         106 => op("enemy_in_line", .number),
         118 => op("player_above", .none),
         119 => op("player_below", .none),
@@ -187,62 +179,42 @@ pub fn lookup(code: u8) ?Operation {
         // Chance: one random draw, true when the value is divisible by the argument.
         97 => op("chance", .number),
         // Combat.
-        100 => withNumber(
-            "shoot",
-            .height,
-            .{
-                .parameter = 0,
-                .main_field = "height",
-                .field = "range",
-                .default_name = "shot_range",
-            },
-        ),
+        100 => withNumber("shoot", .height, .{
+            .parameter = 0,
+            .main_field = "height",
+            .field = "range",
+            .default_name = "shot_range",
+        }),
         107 => op("hit", .hit_side),
-        134 => withNumber(
-            "strike",
-            .height,
-            .{
-                .parameter = 3,
-                .main_field = "height",
-                .field = "range",
-                .default_name = "strike_range",
-            },
-        ),
-        95 => withNumber(
-            "snap_to_wall_ahead",
-            .flag,
-            .{
-                .parameter = 0,
-                .main_field = "through_low_gaps",
-                .field = "range",
-                .default_name = "range",
-            },
-        ),
+        134 => withNumber("strike", .height, .{
+            .parameter = 3,
+            .main_field = "height",
+            .field = "range",
+            .default_name = "strike_range",
+        }),
+        95 => withNumber("snap_to_wall_ahead", .flag, .{
+            .parameter = 0,
+            .main_field = "through_low_gaps",
+            .field = "range",
+            .default_name = "range",
+        }),
         79 => op("start_defeat", .number),
-        92 => withNumber(
-            "start_defeat_with_scene",
-            .number,
-            .{
-                .parameter = 3,
-                .main_field = "scene",
-                .field = "delay",
-                .default_name = "defeat_delay",
-            },
-        ),
+        92 => withNumber("start_defeat_with_scene", .number, .{
+            .parameter = 3,
+            .main_field = "scene",
+            .field = "delay",
+            .default_name = "defeat_delay",
+        }),
         // Inventory and items.
         48 => op("carried_by", .character),
         49 => op("drop_at", .character),
         50 => op("selected_item_is", .number),
-        108 => withNumber(
-            "offer_payment",
-            .message,
-            .{
-                .parameter = 0,
-                .main_field = "message",
-                .field = "seller",
-                .default_name = "seller_kind",
-            },
-        ),
+        108 => withNumber("offer_payment", .message, .{
+            .parameter = 0,
+            .main_field = "message",
+            .field = "seller",
+            .default_name = "seller_kind",
+        }),
         109 => op("touching_pickup", .number),
         131 => op("player_has_item", .number),
         // Lifts and carriers.
@@ -294,7 +266,7 @@ pub fn kindName(buffer: []u8, kind: i16) []const u8 {
         3 => "interactive",
         10 => "enemy",
         11 => "overlay",
-        else => std.fmt.bufPrint(buffer, "kind_{d}", .{kind}) catch unreachable,
+        else => std.fmt.bufPrint(buffer, "kind_{d}", .{ kind }) catch unreachable,
     };
 }
 
@@ -423,7 +395,9 @@ test "every operation the floppy levels use has a name" {
         138,
         139,
     };
-    for (used) |code| try std.testing.expect(lookup(code) != null);
+    for (used) |code| {
+        try std.testing.expect(lookup(code) != null);
+    }
 }
 
 test "every code in the vocabulary has a distinct name except the four link sends" {
@@ -434,7 +408,9 @@ test "every code in the vocabulary has a distinct name except the four link send
         const entry = try seen.getOrPut(std.testing.allocator, operation.name);
         if (entry.found_existing) {
             try std.testing.expectEqualStrings("send", operation.name);
-        } else entry.value_ptr.* = @intCast(code);
+        } else {
+            entry.value_ptr.* = @intCast(code);
+        }
     }
     try std.testing.expectEqual(@as(?Operation, null), lookup(0));
     try std.testing.expectEqual(@as(?Operation, null), lookup(137));

@@ -15,9 +15,12 @@ const data_set = flashbackz.behavior.data_set;
 const Args = clap.Parser(.{
     .name = "flashbackz-atlas",
     .description = "Draws every level's rooms into one PNG poster, from the game's floppy disks.",
-    .options = &.{
-        .{ .long = "output", .short = 'o', .value = "FILE", .help = "write the poster to FILE (default flashback-levels.png)" },
-    },
+    .options = &.{.{
+        .long = "output",
+        .short = 'o',
+        .value = "FILE",
+        .help = "write the poster to FILE (default flashback-levels.png)",
+    }},
     .positionals = &.{.{
         .name = "ASSET_PATH",
         .help = "a floppy image (IMG/IMA) or extracted directory; give both disks",
@@ -50,7 +53,11 @@ pub fn main(init: std.process.Init) !u8 {
     const err_out = &stderr.interface;
 
     var diagnostic: clap.Diagnostic = .{};
-    const args = Args.parse(arena, try clap.processArguments(arena, init.minimal.args), &diagnostic) catch |err| {
+    const args = Args.parse(
+        arena,
+        try clap.processArguments(arena, init.minimal.args),
+        &diagnostic,
+    ) catch |err| {
         try Args.writeError(err_out, err, diagnostic);
         try err_out.flush();
         return 2;
@@ -65,11 +72,13 @@ pub fn main(init: std.process.Init) !u8 {
     const output = args.value("output") orelse "flashback-levels.png";
 
     var options: native.cli.Options = .{};
-    for (args.positional("ASSET_PATH")) |path| options.addAsset(path) catch {
-        try err_out.print("flashbackz-atlas: an empty ASSET_PATH\n", .{});
-        try err_out.flush();
-        return 2;
-    };
+    for (args.positional("ASSET_PATH")) |path| {
+        options.addAsset(path) catch {
+            try err_out.print("flashbackz-atlas: an empty ASSET_PATH\n", .{});
+            try err_out.flush();
+            return 2;
+        };
+    }
     var providers: native.Providers = .empty;
     defer providers.deinit();
     providers.openAssets(gpa, io, options) catch |err| {
@@ -83,7 +92,9 @@ pub fn main(init: std.process.Init) !u8 {
     var data_arena: std.heap.ArenaAllocator = .init(gpa);
     defer data_arena.deinit();
     const files = native.data_set.extractInMemory(gpa, data_arena.allocator(), source) catch |err| {
-        try err_out.print("flashbackz-atlas: cannot read the levels from the disks: {s}\n", .{@errorName(err)});
+        try err_out.print("flashbackz-atlas: cannot read the levels from the disks: {s}\n", .{
+            @errorName(err),
+        });
         try err_out.flush();
         return 1;
     };
@@ -98,14 +109,27 @@ pub fn main(init: std.process.Init) !u8 {
     var starts: [ids.len]map.RoomSet = undefined;
     for (ids, &data, &starts) |id, *level, *rooms| {
         var level_diagnostic: data_set.Diagnostic = .{};
-        level.* = data_set.loadLevel(gpa, data_arena.allocator(), &files, @tagName(id), &level_diagnostic) catch |err| {
-            try err_out.print("flashbackz-atlas: {s}: {s}\n", .{ @tagName(id), level_diagnostic.message() });
+        level.* = data_set.loadLevel(
+            gpa,
+            data_arena.allocator(),
+            &files,
+            @tagName(id),
+            &level_diagnostic,
+        ) catch |err| {
+            try err_out.print("flashbackz-atlas: {s}: {s}\n", .{
+                @tagName(id),
+                level_diagnostic.message(),
+            });
             try err_out.flush();
             return err;
         };
         rooms.* = .empty;
         for (level.characters) |character| {
-            if (character.room) |room| if (room < map.room_count) rooms.set(room);
+            if (character.room) |room| {
+                if (room < map.room_count) {
+                    rooms.set(room);
+                }
+            }
         }
     }
 
@@ -113,16 +137,31 @@ pub fn main(init: std.process.Init) !u8 {
     var joins: [ids.len]std.ArrayList(map.Join) = @splat(.empty);
     var pixels: std.ArrayList([]u8) = .empty;
     defer {
-        for (&joins) |*list| list.deinit(gpa);
-        for (pixels.items) |p| gpa.free(p);
+        for (&joins) |*list| {
+            list.deinit(gpa);
+        }
+        for (pixels.items) |p| {
+            gpa.free(p);
+        }
         pixels.deinit(gpa);
     }
     for (ids, 0..) |id, i| {
         const start = data[i].characters[0].room orelse 0;
-        var pack = try flashbackz.content.level_pack.load(gpa, source, &interface, id, .normal, start);
+        var pack = try flashbackz.content.level_pack.load(
+            gpa,
+            source,
+            &interface,
+            id,
+            .normal,
+            start,
+        );
         defer pack.deinit();
         var present: map.RoomSet = .empty;
-        for (pack.rooms, 0..) |room, index| if (room != null) present.set(index);
+        for (pack.rooms, 0..) |room, index| {
+            if (room != null) {
+                present.set(index);
+            }
+        }
         const terrain: flashbackz.behavior.grid.Grid = try .init(&pack.collision);
         const links: map.Links = .fromGrid(&terrain, present);
         const owned = map.owned(&links, starts[i], sharer(ids, i, &starts));
@@ -131,13 +170,14 @@ pub fn main(init: std.process.Init) !u8 {
         while (drawn.next()) |room| {
             const art = pack.room(@intCast(room)).?;
             // The poster lays rooms out at the size the game draws them.
-            if (art.image.width != map.room_width or art.image.height != map.room_height)
+            if (art.image.width != map.room_width or art.image.height != map.room_height) {
                 return error.UnexpectedRoomSize;
+            }
             const rgb = try gpa.alloc(u8, art.image.pixels.len * 3);
             try pixels.append(gpa, rgb);
             for (art.image.pixels, 0..) |index, p| {
                 const color = art.colors[index];
-                rgb[p * 3 ..][0..3].* = .{ color.r, color.g, color.b };
+                rgb[p * 3..][0..3].* = .{ color.r, color.g, color.b };
             }
             rooms[room] = rgb;
         }
@@ -147,10 +187,14 @@ pub fn main(init: std.process.Init) !u8 {
         try map.cutLinks(gpa, &links, &level_map, &joins[i]);
         try map.transports(gpa, &data[i], &level_map, &joins[i]);
         // Off a transit line, a ride's two areas stand side by side.
-        if (line == null) for (joins[i].items) |join| switch (join) {
-            .transport => |t| _ = level_map.rideBeside(t.from.room, t.to.room),
-            .link => {},
-        };
+        if (line == null) {
+            for (joins[i].items) |join| {
+                switch (join) {
+                    .transport => |t| _ = level_map.rideBeside(t.from.room, t.to.room),
+                    .link => {},
+                }
+            }
+        }
         const look = design(id);
         levels[i] = .{
             .name = look.name,
@@ -165,7 +209,10 @@ pub fn main(init: std.process.Init) !u8 {
     var canvas = try poster.render(gpa, &font, &levels);
     defer canvas.deinit(gpa);
     var file = std.Io.Dir.cwd().createFile(io, output, .{}) catch |err| {
-        try err_out.print("flashbackz-atlas: cannot write {s}: {s}\n", .{ output, @errorName(err) });
+        try err_out.print("flashbackz-atlas: cannot write {s}: {s}\n", .{
+            output,
+            @errorName(err),
+        });
         try err_out.flush();
         return 1;
     };

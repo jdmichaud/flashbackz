@@ -6,7 +6,12 @@ const font_mod = @import("content/font.zig");
 const text_renderer = @import("render/text.zig");
 const palette = @import("content/palette.zig");
 
-pub const TextRun = struct { text: []const u8, x: i16, y: i16, foreground: u8 };
+pub const TextRun = struct {
+    text: []const u8,
+    x: i16,
+    y: i16,
+    foreground: u8,
+};
 
 pub const Drawing = struct {
     geometry: union(enum) {
@@ -72,13 +77,19 @@ pub const View = struct {
         if (self.frames.len == 0) return error.EmptyFilm;
         if (self.frames.len > 10000 or
             self.width == 0 or
-            self.height == 0) return error.InvalidFilm;
-        for (self.frames, 0..) |frame, end| if (frame.input_loop_start) |start| {
-            if (start > end) return error.InvalidFilmInputLoop;
-            var timed = frame.loop_ticks != 0;
-            for (self.frames[start..end]) |loop_frame| timed = timed or loop_frame.hold_ticks != 0;
-            if (!timed and start != end) return error.UnboundedFilmInputLoop;
-        };
+            self.height == 0) {
+            return error.InvalidFilm;
+        }
+        for (self.frames, 0..) |frame, end| {
+            if (frame.input_loop_start) |start| {
+                if (start > end) return error.InvalidFilmInputLoop;
+                var timed = frame.loop_ticks != 0;
+                for (self.frames[start..end]) |loop_frame| {
+                    timed = timed or loop_frame.hold_ticks != 0;
+                }
+                if (!timed and start != end) return error.UnboundedFilmInputLoop;
+            }
+        }
     }
 
     /// Frame `frame_index` as palette indices in `pixels`, and as RGBA in `rgba`.
@@ -90,7 +101,9 @@ pub const View = struct {
     /// Frame `frame_index` as palette indices.
     pub fn drawPicture(self: View, frame_index: usize, pixels: []u8) !void {
         if (frame_index >= self.frames.len or
-            pixels.len != @as(usize, self.width) * self.height) return error.InvalidFilmFrame;
+            pixels.len != @as(usize, self.width) * self.height) {
+            return error.InvalidFilmFrame;
+        }
         @memset(pixels, self.background);
         const frame = self.frames[frame_index];
         const canvas: shapes.Canvas = .{
@@ -104,21 +117,26 @@ pub const View = struct {
         var y = @max(@as(i32, self.viewport.y), 0);
         const bottom = @min(@as(i32, self.viewport.y) + self.viewport.height, self.height);
         while (y < bottom) : (y += 1) {
-            if (left < right) @memset(
-                pixels[@as(usize, @intCast(y)) * self.width + @as(usize, @intCast(left)) ..][0..@intCast(right - left)],
-                frame.background,
-            );
+            if (left < right) {
+                @memset(
+                    pixels[@as(usize, @intCast(y)) * self.width +
+                        @as(usize, @intCast(left))..][0..@intCast(right - left)],
+                    frame.background,
+                );
+            }
         }
-        for (frame.drawings) |drawing| switch (drawing.geometry) {
-            .polygon => |points| try canvas.draw(points, drawing.ink),
-            .ellipse => |ellipse| try canvas.ellipse(
-                ellipse.center,
-                ellipse.radius_x,
-                ellipse.radius_y,
-                drawing.ink,
-            ),
-            .text => |run| if (self.texts) try self.drawText(pixels, self.height, run),
-        };
+        for (frame.drawings) |drawing| {
+            switch (drawing.geometry) {
+                .polygon => |points| try canvas.draw(points, drawing.ink),
+                .ellipse => |ellipse| try canvas.ellipse(
+                    ellipse.center,
+                    ellipse.radius_x,
+                    ellipse.radius_y,
+                    drawing.ink,
+                ),
+                .text => |run| if (self.texts) try self.drawText(pixels, self.height, run),
+            }
+        }
         if (!self.texts) return;
         if (frame.caption_band) {
             const start = @min(pixels.len, @as(usize, self.width) * 178);
@@ -130,7 +148,7 @@ pub const View = struct {
         else
             @min(self.height, 178 + 8 * frame.captions.len);
         for (frame.captions) |run| {
-            try self.drawText(pixels[0 .. caption_rows * self.width], @intCast(caption_rows), run);
+            try self.drawText(pixels[0..caption_rows * self.width], @intCast(caption_rows), run);
         }
     }
     fn drawText(self: View, pixels: []u8, rows: u16, run: TextRun) !void {

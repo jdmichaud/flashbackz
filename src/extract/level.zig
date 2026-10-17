@@ -66,7 +66,12 @@ pub const Report = struct {
     }
 };
 
-const State = struct { animation: u16, name: []const u8, first: usize, count: usize };
+const State = struct {
+    animation: u16,
+    name: []const u8,
+    first: usize,
+    count: usize,
+};
 
 const Behavior = struct {
     group: u16,
@@ -80,12 +85,16 @@ const Behavior = struct {
     numbers: [4]?[]const u8 = @splat(null),
 
     fn hasState(self: Behavior, animation: u16) bool {
-        for (self.states) |state| if (state.animation == animation) return true;
+        for (self.states) |state| {
+            if (state.animation == animation) return true;
+        }
         return false;
     }
 
     fn stateName(self: Behavior, animation: u16) []const u8 {
-        for (self.states) |state| if (state.animation == animation) return state.name;
+        for (self.states) |state| {
+            if (state.animation == animation) return state.name;
+        }
         unreachable; // every rule's states and every placement's start state are collected
     }
 };
@@ -120,31 +129,41 @@ pub fn extract(arena: std.mem.Allocator, input: Input, output: Output, report: *
         const behavior = level.behaviors.getPtr(record.rule_group).?;
         if (behavior.hasState(record.initial_state)) continue;
         // It only waits there.
-        try report.unexpectedData(arena, "{s}: placement {d} starts in state {d}, which no rule names", .{
-            input.name, index, record.initial_state,
-        });
-        const waiting: State = .{ .animation = record.initial_state, .name = "", .first = behavior.rules.count(), .count = 0 };
-        behavior.states = try std.mem.concat(arena, State, &.{ behavior.states, &.{waiting} });
+        try report.unexpectedData(
+            arena,
+            "{s}: placement {d} starts in state {d}, which no rule names",
+            .{ input.name, index, record.initial_state },
+        );
+        const waiting: State = .{
+            .animation = record.initial_state,
+            .name = "",
+            .first = behavior.rules.count(),
+            .count = 0,
+        };
+        behavior.states = try std.mem.concat(arena, State, &.{ behavior.states, &.{ waiting } });
     }
     try nameBehaviors(&level);
     level.character_ids = try arena.alloc([]const u8, level.table.count);
-    for (level.character_ids, 0..) |*id, index| id.* = try characterId(&level, @intCast(index));
-    for (level.behaviors.values()) |*behavior| try classifyParameters(&level, behavior);
+    for (level.character_ids, 0..) |*id, index| {
+        id.* = try characterId(&level, @intCast(index));
+    }
+    for (level.behaviors.values()) |*behavior| {
+        try classifyParameters(&level, behavior);
+    }
     for (level.behaviors.values()) |behavior| {
         var text: std.Io.Writer.Allocating = .init(arena);
         try writeBehavior(&level, behavior, &text.writer);
-        const path = try std.fmt.allocPrint(
-            arena,
-            "{s}/behaviors/{s}.zon",
-            .{ input.name, behavior.file },
-        );
+        const path = try std.fmt.allocPrint(arena, "{s}/behaviors/{s}.zon", .{
+            input.name,
+            behavior.file,
+        });
         try output.put(output.context, path, text.written());
     }
     var characters: std.Io.Writer.Allocating = .init(arena);
     try writeCharacters(&level, &characters.writer);
     try output.put(
         output.context,
-        try std.fmt.allocPrint(arena, "{s}/characters.zon", .{input.name}),
+        try std.fmt.allocPrint(arena, "{s}/characters.zon", .{ input.name }),
         characters.written(),
     );
     report.behaviors += level.behaviors.count();
@@ -165,14 +184,18 @@ fn collectBehavior(level: *Level, group_index: u16) !Behavior {
     var reachable: usize = 0;
     for (states, animations.items) |*state, animation| {
         var first: ?usize = null;
-        for (0..rules.count()) |index| if (rules.at(index).source == animation) {
-            first = index;
-            break;
-        };
+        for (0..rules.count()) |index| {
+            if (rules.at(index).source == animation) {
+                first = index;
+                break;
+            }
+        }
         // Every target has rules in the floppy data; a state without rules only waits.
         const start = first orelse rules.count();
         var end = start;
-        while (end < rules.count() and rules.at(end).source == animation) end += 1;
+        while (end < rules.count() and rules.at(end).source == animation) {
+            end += 1;
+        }
         reachable += end - start;
         state.* = .{ .animation = animation, .name = "", .first = start, .count = end - start };
     }
@@ -182,7 +205,9 @@ fn collectBehavior(level: *Level, group_index: u16) !Behavior {
         level.report.dead_rules += rules.count() - reachable;
         const format = "{s}: rule group {d} has {d} unreachable rules (dropped)";
         try level.report.note(level.arena, format, .{
-            level.input.name, group_index, rules.count() - reachable,
+            level.input.name,
+            group_index,
+            rules.count() - reachable,
         });
     }
     return .{
@@ -202,23 +227,27 @@ fn nameBehaviors(level: *Level) !void {
         if (behavior.named) |named| {
             behavior.name = named.name;
             level.report.named_behaviors += 1;
-        } else behavior.name = try std.fmt.allocPrint(
-            level.arena,
-            "behavior_{d}",
-            .{behavior.group},
-        );
+        } else {
+            behavior.name = try std.fmt.allocPrint(level.arena, "behavior_{d}", .{
+                behavior.group,
+            });
+        }
         for (behavior.states, 0..) |*state, ordinal| {
             level.report.states += 1;
-            state.name = try std.fmt.allocPrint(level.arena, "state_{d}", .{state.animation});
+            state.name = try std.fmt.allocPrint(level.arena, "state_{d}", .{ state.animation });
             const named = behavior.named orelse continue;
-            for (named.states) |entry| if (entry.ordinal == ordinal) {
-                state.name = entry.name;
-                level.report.named_states += 1;
-            };
+            for (named.states) |entry| {
+                if (entry.ordinal == ordinal) {
+                    state.name = entry.name;
+                    level.report.named_states += 1;
+                }
+            }
         }
-        for (behavior.states, 0..) |state, i| for (behavior.states[0..i]) |earlier| {
-            if (std.mem.eql(u8, state.name, earlier.name)) return error.DuplicateStateName;
-        };
+        for (behavior.states, 0..) |state, i| {
+            for (behavior.states[0..i]) |earlier| {
+                if (std.mem.eql(u8, state.name, earlier.name)) return error.DuplicateStateName;
+            }
+        }
     }
     // A behavior used by several rule groups of one level keeps its name with the group added.
     for (level.behaviors.values()) |*behavior| {
@@ -226,11 +255,10 @@ fn nameBehaviors(level: *Level) !void {
         for (level.behaviors.values()) |other| {
             uses += @intFromBool(std.mem.eql(u8, other.name, behavior.name));
         }
-        behavior.file = if (uses == 1) behavior.name else try std.fmt.allocPrint(
-            level.arena,
-            "{s}_{d}",
-            .{ behavior.name, behavior.group },
-        );
+        behavior.file = if (uses == 1)
+            behavior.name
+        else
+            try std.fmt.allocPrint(level.arena, "{s}_{d}", .{ behavior.name, behavior.group });
     }
 }
 
@@ -246,11 +274,10 @@ fn characterId(level: *Level, index: u16) ![]const u8 {
         zon.sanitize(&buffer, label)
     else
         codes.kindName(&buffer, @as(i16, record.kind));
-    return std.fmt.allocPrint(
-        level.arena,
-        "{s}_{d}",
-        .{ if (base.len == 0) "character" else base, index },
-    );
+    return std.fmt.allocPrint(level.arena, "{s}_{d}", .{
+        if (base.len == 0) "character" else base,
+        index,
+    });
 }
 
 fn labelOf(level: *Level, record: placement.Record) []const u8 {
@@ -262,35 +289,43 @@ fn labelOf(level: *Level, record: placement.Record) []const u8 {
 fn classifyParameters(level: *Level, behavior: *Behavior) !void {
     var link_use: [4]bool = @splat(false);
     var number_use: [4]?[]const u8 = @splat(null);
-    for (behavior.states) |state| for (state.first..state.first + state.count) |index| {
-        const rule = behavior.rules.at(index);
-        for ([_]rule_table.Operation{
-            rule.conditions[0],
-            rule.conditions[1],
-            rule.effect,
-        }) |operation| {
-            const known = codes.lookup(operation.code) orelse continue;
-            if (known.implicit) |p| {
-                if (number_use[p.parameter] == null) number_use[p.parameter] = p.default_name;
-            }
-            const arg = operation.argument;
-            switch (known.argument) {
-                .send_to_link => |p| link_use[p] = true,
-                .parameter_number => if (parameterIndex(arg, 0)) |p| {
-                    if (number_use[p] == null) number_use[p] = "";
-                },
-                .parameter_link_and_amount => if (parameterIndex(arg, 1)) |p| {
-                    link_use[p] = true;
-                    if (number_use[p + 1] == null) number_use[p + 1] = "";
-                },
-                .parameter_link_pair => if (parameterIndex(arg, 1)) |p| {
-                    link_use[p] = true;
-                    link_use[p + 1] = true;
-                },
-                else => {},
+    for (behavior.states) |state| {
+        for (state.first..state.first + state.count) |index| {
+            const rule = behavior.rules.at(index);
+            for ([_]rule_table.Operation{
+                rule.conditions[0],
+                rule.conditions[1],
+                rule.effect,
+            }) |operation| {
+                const known = codes.lookup(operation.code) orelse continue;
+                if (known.implicit) |p| {
+                    if (number_use[p.parameter] == null) {
+                        number_use[p.parameter] = p.default_name;
+                    }
+                }
+                const arg = operation.argument;
+                switch (known.argument) {
+                    .send_to_link => |p| link_use[p] = true,
+                    .parameter_number => if (parameterIndex(arg, 0)) |p| {
+                        if (number_use[p] == null) {
+                            number_use[p] = "";
+                        }
+                    },
+                    .parameter_link_and_amount => if (parameterIndex(arg, 1)) |p| {
+                        link_use[p] = true;
+                        if (number_use[p + 1] == null) {
+                            number_use[p + 1] = "";
+                        }
+                    },
+                    .parameter_link_pair => if (parameterIndex(arg, 1)) |p| {
+                        link_use[p] = true;
+                        link_use[p + 1] = true;
+                    },
+                    else => {},
+                }
             }
         }
-    };
+    }
     const overlay: names.Behavior = behavior.named orelse .{ .key = "", .name = "" };
     for (0..4) |p| {
         const parameter: u2 = @intCast(p);
@@ -298,13 +333,13 @@ fn classifyParameters(level: *Level, behavior: *Behavior) !void {
         // Links the rules never use may still be named, for the engine's own reads.
         if (link_use[p] or overlayParameter(overlay.links, parameter) != null) {
             behavior.links[p] = overlayParameter(overlay.links, parameter) orelse
-                try std.fmt.allocPrint(level.arena, "link_{d}", .{p});
+                try std.fmt.allocPrint(level.arena, "link_{d}", .{ p });
         }
         if (number_use[p]) |default| {
             const fallback = if (default.len != 0)
                 default
             else
-                try std.fmt.allocPrint(level.arena, "number_{d}", .{p});
+                try std.fmt.allocPrint(level.arena, "number_{d}", .{ p });
             behavior.numbers[p] = overlayParameter(overlay.numbers, parameter) orelse fallback;
         } else if (overlayParameter(overlay.numbers, parameter)) |name| {
             behavior.numbers[p] = name;
@@ -325,7 +360,9 @@ fn parameterIndex(argument: i16, extra: u2) ?u2 {
 }
 
 fn overlayParameter(list: []const names.Parameter, parameter: u2) ?[]const u8 {
-    for (list) |entry| if (entry.parameter == parameter) return entry.name;
+    for (list) |entry| {
+        if (entry.parameter == parameter) return entry.name;
+    }
     return null;
 }
 
@@ -333,9 +370,9 @@ fn messageName(level: *Level, value: i16) ![]const u8 {
     if (level.input.overlay.message(level.input.name, value)) |name| return name;
     if (codes.engineMessage(value)) |name| return name;
     return if (value < 0)
-        std.fmt.allocPrint(level.arena, "signal_minus_{d}", .{-@as(i32, value)})
+        std.fmt.allocPrint(level.arena, "signal_minus_{d}", .{ -@as(i32, value) })
     else
-        std.fmt.allocPrint(level.arena, "signal_{d}", .{value});
+        std.fmt.allocPrint(level.arena, "signal_{d}", .{ value });
 }
 
 fn writeBehavior(level: *Level, behavior: Behavior, out: *std.Io.Writer) !void {
@@ -346,7 +383,7 @@ fn writeBehavior(level: *Level, behavior: Behavior, out: *std.Io.Writer) !void {
         \\
     , .{ level.input.name, behavior.group });
     try w.open(null);
-    try w.line(".key = {f},", .{zon.string(&behavior.key)});
+    try w.line(".key = {f},", .{ zon.string(&behavior.key) });
     try writeNameList(&w, "links", behavior.links);
     try writeNameList(&w, "numbers", behavior.numbers);
     try w.open("states");
@@ -354,14 +391,16 @@ fn writeBehavior(level: *Level, behavior: Behavior, out: *std.Io.Writer) !void {
         try w.out.splatByteAll(' ', w.depth * 4);
         try w.out.print("{f} = .{{ // ordinal {d}\n", .{ zon.identifier(state.name), ordinal });
         w.depth += 1;
-        try w.line(".animation = {d},", .{state.animation});
+        try w.line(".animation = {d},", .{ state.animation });
         try w.open("rules");
-        for (state.first..state.first + state.count) |index| try writeRule(
-            level,
-            behavior,
-            behavior.rules.at(index),
-            &w,
-        );
+        for (state.first..state.first + state.count) |index| {
+            try writeRule(
+                level,
+                behavior,
+                behavior.rules.at(index),
+                &w,
+            );
+        }
         try w.close();
         try w.close();
     }
@@ -371,19 +410,23 @@ fn writeBehavior(level: *Level, behavior: Behavior, out: *std.Io.Writer) !void {
 
 fn writeNameList(w: *zon.Writer, field: []const u8, list: [4]?[]const u8) !void {
     var any = false;
-    for (list) |entry| any = any or entry != null;
+    for (list) |entry| {
+        any = any or entry != null;
+    }
     if (!any) return;
     var count: usize = 0;
-    for (list) |entry| count += @intFromBool(entry != null);
+    for (list) |entry| {
+        count += @intFromBool(entry != null);
+    }
     try w.out.splatByteAll(' ', w.depth * 4);
-    try w.out.print(".{s} = .{{", .{field});
+    try w.out.print(".{s} = .{{", .{ field });
     var first = true;
     for (list) |entry| if (entry) |name| {
         // zig fmt style: one element has no inner spaces, several do.
-        try w.out.print(
-            "{s}{f}",
-            .{ if (first) (if (count == 1) "" else " ") else ", ", zon.identifier(name) },
-        );
+        try w.out.print("{s}{f}", .{
+            if (first) (if (count == 1) "" else " ") else ", ",
+            zon.identifier(name),
+        });
         first = false;
     };
     try w.out.writeAll(if (count == 1) "},\n" else " },\n");
@@ -400,7 +443,9 @@ fn writeRule(level: *Level, behavior: Behavior, rule: rule_table.Rule, w: *zon.W
     var count: usize = 0;
     for ([_]rule_table.Operation{ first, second }, 0..) |operation, slot| {
         if (operation.code == 0) continue;
-        if (count != 0) try checks.writer.writeAll(", ");
+        if (count != 0) {
+            try checks.writer.writeAll(", ");
+        }
         try writeOperation(
             level,
             behavior,
@@ -419,28 +464,42 @@ fn writeRule(level: *Level, behavior: Behavior, rule: rule_table.Rule, w: *zon.W
     if (empty) return w.line(".{{}},", .{});
     try w.open(null);
     // zig fmt style: one element has no inner spaces, several do.
-    if (count == 1) try w.line(".when = .{{{s}}},", .{checks.written()});
-    if (count > 1) try w.line(".when = .{{ {s} }},", .{checks.written()});
+    if (count == 1) {
+        try w.line(".when = .{{{s}}},", .{ checks.written() });
+    }
+    if (count > 1) {
+        try w.line(".when = .{{ {s} }},", .{ checks.written() });
+    }
     if (rule.effect.code != 0) {
         var effect: std.Io.Writer.Allocating = .init(level.arena);
         try writeOperation(level, behavior, rule.effect, null, &effect.writer);
-        try w.line(".then = {s},", .{effect.written()});
+        try w.line(".then = {s},", .{ effect.written() });
     }
-    if (rule.flags & 1 != 0) try w.line(".turn = true,", .{});
-    if (rule.flags & 2 != 0) try w.line(".damage = true,", .{});
-    if (rule.flags & 4 != 0) try w.line(".heal = true,", .{});
-    if (rule.flags & 8 != 0) try w.line(".kill = true,", .{});
-    if (rule.flags >> 4 != 0) try w.line(
-        ".score = {d},",
-        .{level.input.score_awards[rule.flags >> 4]},
-    );
+    if (rule.flags & 1 != 0) {
+        try w.line(".turn = true,", .{});
+    }
+    if (rule.flags & 2 != 0) {
+        try w.line(".damage = true,", .{});
+    }
+    if (rule.flags & 4 != 0) {
+        try w.line(".heal = true,", .{});
+    }
+    if (rule.flags & 8 != 0) {
+        try w.line(".kill = true,", .{});
+    }
+    if (rule.flags >> 4 != 0) {
+        try w.line(".score = {d},", .{ level.input.score_awards[rule.flags >> 4] });
+    }
     // The original's horizontal movement points toward the character's back.
-    if (rule.dx != 0) try w.line(".forward = {d},", .{-@as(i16, rule.dx)});
-    if (rule.dy != 0) try w.line(".down = {d},", .{rule.dy});
-    if (rule.target != rule.source) try w.line(
-        ".next = {f},",
-        .{zon.identifier(behavior.stateName(rule.target))},
-    );
+    if (rule.dx != 0) {
+        try w.line(".forward = {d},", .{ -@as(i16, rule.dx) });
+    }
+    if (rule.dy != 0) {
+        try w.line(".down = {d},", .{ rule.dy });
+    }
+    if (rule.target != rule.source) {
+        try w.line(".next = {f},", .{ zon.identifier(behavior.stateName(rule.target)) });
+    }
     try w.close();
 }
 
@@ -452,17 +511,19 @@ fn writeOperation(
     out: *std.Io.Writer,
 ) !void {
     const known = codes.lookup(operation.code) orelse {
-        try level.report.unexpectedData(
-            level.arena,
-            "{s}: {s} uses unknown operation {d}",
-            .{ level.input.name, behavior.file, operation.code },
-        );
+        try level.report.unexpectedData(level.arena, "{s}: {s} uses unknown operation {d}", .{
+            level.input.name,
+            behavior.file,
+            operation.code,
+        });
         return out.print(".{{ .unknown_{d} = {d} }}", .{ operation.code, operation.argument });
     };
     const name = zon.identifier(known.name);
     if (known.argument == .none) {
-        if (operation.argument != 0) level.report.ignored_arguments += 1;
-        return out.print("{f}", .{name});
+        if (operation.argument != 0) {
+            level.report.ignored_arguments += 1;
+        }
+        return out.print("{f}", .{ name });
     }
     var value: std.Io.Writer.Allocating = .init(level.arena);
     if (!try writeValue(
@@ -475,21 +536,26 @@ fn writeOperation(
     )) {
         return invalid(level, behavior, known, operation.argument, out);
     }
-    const number = known.implicit orelse return out.print(
-        ".{{ {f} = {s} }}",
-        .{ name, value.written() },
-    );
+    const number = known.implicit orelse
+        return out.print(".{{ {f} = {s} }}", .{ name, value.written() });
     // The original also reads one placement number; the table names it explicitly.
     const slot = zon.identifier(behavior.numbers[number.parameter].?);
     if (number.main_field) |field| {
         try out.print(".{{ {f} = .{{ .{s} = {s}, .{s} = {f} }} }}", .{
-            name, field, value.written(), number.field, slot,
+            name,
+            field,
+            value.written(),
+            number.field,
+            slot,
         });
     } else {
         // The argument is written as `.{ fields }`: the number becomes one more field.
         const fields = value.written();
         try out.print(".{{ {f} = {s}, .{s} = {f} }} }}", .{
-            name, fields[0 .. fields.len - " }".len], number.field, slot,
+            name,
+            fields[0..fields.len - " }".len],
+            number.field,
+            slot,
         });
     }
 }
@@ -506,20 +572,22 @@ fn writeValue(
     var buffer: [32]u8 = undefined;
     switch (known.argument) {
         .none => unreachable,
-        .number => try out.print("{d}", .{arg}),
-        .cells_behind => try out.print("{d}", .{-@as(i32, arg)}),
-        .message => try out.print("{f}", .{zon.identifier(try messageName(level, arg))}),
+        .number => try out.print("{d}", .{ arg }),
+        .cells_behind => try out.print("{d}", .{ -@as(i32, arg) }),
+        .message => try out.print("{f}", .{ zon.identifier(try messageName(level, arg)) }),
         .send_to_link => |p| try out.print(".{{ .to = {f}, .message = {f} }}", .{
-            zon.identifier(behavior.links[p].?), zon.identifier(try messageName(level, arg)),
+            zon.identifier(behavior.links[p].?),
+            zon.identifier(try messageName(level, arg)),
         }),
         .parameter_number => {
             const p = parameterIndex(arg, 0) orelse return false;
-            try out.print("{f}", .{zon.identifier(behavior.numbers[p].?)});
+            try out.print("{f}", .{ zon.identifier(behavior.numbers[p].?) });
         },
         .parameter_link_and_amount => {
             const p = parameterIndex(arg, 1) orelse return false;
             try out.print(".{{ .purse = {f}, .amount = {f} }}", .{
-                zon.identifier(behavior.links[p].?), zon.identifier(behavior.numbers[p + 1].?),
+                zon.identifier(behavior.links[p].?),
+                zon.identifier(behavior.numbers[p + 1].?),
             });
         },
         .parameter_link_pair => |fields| {
@@ -533,37 +601,47 @@ fn writeValue(
         },
         .character => {
             if (arg < 0 or arg >= level.character_ids.len) return false;
-            try out.print("{f}", .{zon.identifier(level.character_ids[@intCast(arg)])});
+            try out.print("{f}", .{ zon.identifier(level.character_ids[@intCast(arg)]) });
         },
-        .kind => try out.print("{f}", .{zon.identifier(codes.kindName(&buffer, arg))}),
-        .button => try out.print(".{s}", .{switch (arg) {
-            0 => "shift",
-            1 => "enter",
-            2 => "space",
-            else => return false,
-        }}),
-        .hit_side => try out.print(".{s}", .{switch (arg) {
-            0 => "from_behind",
-            1 => "from_front",
-            // Accepted as a front hit, but a shot never treats the character as waiting for it.
-            else => "from_front_unannounced",
-        }}),
-        .height => try out.print(".{s}", .{switch (arg) {
-            0 => "standing",
-            1 => "crouched",
-            else => return false,
-        }}),
-        .flag => try out.print("{s}", .{switch (arg) {
-            0 => "false",
-            1 => "true",
-            else => return false,
-        }}),
+        .kind => try out.print("{f}", .{ zon.identifier(codes.kindName(&buffer, arg)) }),
+        .button => try out.print(".{s}", .{
+            switch (arg) {
+                0 => "shift",
+                1 => "enter",
+                2 => "space",
+                else => return false,
+            },
+        }),
+        .hit_side => try out.print(".{s}", .{
+            switch (arg) {
+                0 => "from_behind",
+                1 => "from_front",
+                // Accepted as a front hit, but a shot never treats the character as waiting for it.
+                else => "from_front_unannounced",
+            },
+        }),
+        .height => try out.print(".{s}", .{
+            switch (arg) {
+                0 => "standing",
+                1 => "crouched",
+                else => return false,
+            },
+        }),
+        .flag => try out.print("{s}", .{
+            switch (arg) {
+                0 => "false",
+                1 => "true",
+                else => return false,
+            },
+        }),
         .kind_and => |field| {
             const kind = zon.identifier(codes.kindName(&buffer, first_argument orelse 0));
             if (std.mem.eql(u8, field, "hit")) {
                 const hit = zon.identifier(try messageName(level, arg));
                 try out.print(".{{ .kind = {f}, .hit = {f} }}", .{ kind, hit });
-            } else try out.print(".{{ .kind = {f}, .{s} = {d} }}", .{ kind, field, arg });
+            } else {
+                try out.print(".{{ .kind = {f}, .{s} = {d} }}", .{ kind, field, arg });
+            }
         },
     }
     return true;
@@ -590,71 +668,93 @@ fn writeCharacters(level: *Level, out: *std.Io.Writer) !void {
         \\// Generated with --extract from the user's game files. Do not commit.
         \\// Every placement of {s}, in the original update order.
         \\
-    , .{level.input.name});
+    , .{ level.input.name });
     try w.open(null);
     for (0..level.table.count) |index| {
         const record = try level.table.record(@intCast(index));
         const behavior = level.behaviors.get(record.rule_group).?;
         var buffer: [32]u8 = undefined;
         try w.open(level.character_ids[index]);
-        try w.line(".placement = {d},", .{index});
+        try w.line(".placement = {d},", .{ index });
         const label = labelOf(level, record);
-        if (label.len != 0) try w.line(".label = {f},", .{zon.string(label)});
-        if (record.text_id != 0) try w.line(".label_number = {d},", .{record.text_id});
-        try w.line(
-            ".kind = {f},",
-            .{zon.identifier(codes.kindName(&buffer, @as(i16, record.kind)))},
-        );
-        try w.line(".behavior = {f},", .{zon.identifier(behavior.file)});
-        try w.line(".start = {f},", .{zon.identifier(behavior.stateName(record.initial_state))});
-        if (record.room < 64) try w.line(".room = {d},", .{record.room}) else {
-            if (record.room != 64) try level.report.note(
-                level.arena,
-                "{s}: placement {d} starts in room {d}",
-                .{ level.input.name, index, record.room },
-            );
+        if (label.len != 0) {
+            try w.line(".label = {f},", .{ zon.string(label) });
+        }
+        if (record.text_id != 0) {
+            try w.line(".label_number = {d},", .{ record.text_id });
+        }
+        try w.line(".kind = {f},", .{
+            zon.identifier(codes.kindName(&buffer, @as(i16, record.kind))),
+        });
+        try w.line(".behavior = {f},", .{ zon.identifier(behavior.file) });
+        try w.line(".start = {f},", .{ zon.identifier(behavior.stateName(record.initial_state)) });
+        if (record.room < 64) {
+            try w.line(".room = {d},", .{ record.room });
+        } else {
+            if (record.room != 64) {
+                try level.report.note(level.arena, "{s}: placement {d} starts in room {d}", .{
+                    level.input.name,
+                    index,
+                    record.room,
+                });
+            }
             try w.line(".room = .outside,", .{});
         }
-        try w.line(
-            ".position = .{{ .x = {d}, .y = {d} }},",
-            .{ record.position.x, record.position.y },
-        );
-        try w.line(".facing = .{s},", .{if (record.facing_right != 0) "right" else "left"});
-        try w.line(".health = {d},", .{record.life});
-        try w.line(".width = {d},", .{record.collision_width});
-        try w.line(".active = {},", .{record.initially_active != 0});
-        if (record.flags & 1 != 0) try w.line(".wakes_on_message = true,", .{});
-        if (record.flags & 2 != 0) try w.line(".wakes_on_contact = true,", .{});
-        if (record.flags & 4 != 0) try w.line(".wakes_when_near = true,", .{});
+        try w.line(".position = .{{ .x = {d}, .y = {d} }},", .{
+            record.position.x,
+            record.position.y,
+        });
+        try w.line(".facing = .{s},", .{ if (record.facing_right != 0) "right" else "left" });
+        try w.line(".health = {d},", .{ record.life });
+        try w.line(".width = {d},", .{ record.collision_width });
+        try w.line(".active = {},", .{ record.initially_active != 0 });
+        if (record.flags & 1 != 0) {
+            try w.line(".wakes_on_message = true,", .{});
+        }
+        if (record.flags & 2 != 0) {
+            try w.line(".wakes_on_contact = true,", .{});
+        }
+        if (record.flags & 4 != 0) {
+            try w.line(".wakes_when_near = true,", .{});
+        }
         const other_flags = record.flags & ~@as(u8, 7);
-        if (other_flags != 0) try w.line(".other_flags = {d},", .{other_flags});
+        if (other_flags != 0) {
+            try w.line(".other_flags = {d},", .{ other_flags });
+        }
         switch (record.minimum_difficulty) {
             0 => try w.line(".minimum_difficulty = .easy,", .{}),
             1 => try w.line(".minimum_difficulty = .normal,", .{}),
             2 => try w.line(".minimum_difficulty = .expert,", .{}),
-            else => |value| try w.line(".minimum_difficulty = {d}, // never placed", .{value}),
+            else => |value| try w.line(".minimum_difficulty = {d}, // never placed", .{ value }),
         }
-        if (record.visual_flags & 3 != 0) try w.line(
-            ".palette_bank = {d},",
-            .{record.visual_flags & 3},
-        );
-        if (record.visual_flags & 8 != 0) try w.line(".behind_player = true,", .{});
-        if (record.visual_flags & ~@as(u8, 11) != 0) try w.line(
-            ".other_visual_flags = {d},",
-            .{record.visual_flags & ~@as(u8, 11)},
-        );
-        if (record.contact_icon != 0) try w.line(".contact_icon = {d},", .{record.contact_icon});
-        if (record.inventory_icon != 0) try w.line(
-            ".inventory_icon = {d},",
-            .{record.inventory_icon},
-        );
-        if (record.object_id != 0) try w.line(".object = {d},", .{record.object_id});
-        if (record.reserved != 0) try w.line(".unknown_byte_29 = {d},", .{record.reserved});
+        if (record.visual_flags & 3 != 0) {
+            try w.line(".palette_bank = {d},", .{ record.visual_flags & 3 });
+        }
+        if (record.visual_flags & 8 != 0) {
+            try w.line(".behind_player = true,", .{});
+        }
+        if (record.visual_flags & ~@as(u8, 11) != 0) {
+            try w.line(".other_visual_flags = {d},", .{ record.visual_flags & ~@as(u8, 11) });
+        }
+        if (record.contact_icon != 0) {
+            try w.line(".contact_icon = {d},", .{ record.contact_icon });
+        }
+        if (record.inventory_icon != 0) {
+            try w.line(".inventory_icon = {d},", .{ record.inventory_icon });
+        }
+        if (record.object_id != 0) {
+            try w.line(".object = {d},", .{ record.object_id });
+        }
+        if (record.reserved != 0) {
+            try w.line(".unknown_byte_29 = {d},", .{ record.reserved });
+        }
         // Enemies (and rule group 73) draw library sprites only from their group's library.
         if (record.kind == 10 or record.rule_group == 73) {
             if (level.input.library_groups.library(record.rule_group)) |library| {
-                try w.line(".sprite_library = .{s},", .{library_names[library]});
-            } else try w.line(".sprite_library = .none,", .{});
+                try w.line(".sprite_library = .{s},", .{ library_names[library] });
+            } else {
+                try w.line(".sprite_library = .none,", .{});
+            }
         }
         try writeParameters(level, behavior, record, &w);
         try w.close();
@@ -669,17 +769,23 @@ fn writeParameters(
     w: *zon.Writer,
 ) !void {
     var has_links = false;
-    for (behavior.links) |link| has_links = has_links or link != null;
+    for (behavior.links) |link| {
+        has_links = has_links or link != null;
+    }
     if (has_links) {
         try w.open("links");
-        for (behavior.links, record.parameters) |link, value| if (link) |name| {
-            if (value >= 0 and value < level.character_ids.len) {
-                try w.line(
-                    "{f} = {f},",
-                    .{ zon.identifier(name), zon.identifier(level.character_ids[@intCast(value)]) },
-                );
-            } else try w.line("{f} = .none, // {d}", .{ zon.identifier(name), value });
-        };
+        for (behavior.links, record.parameters) |link, value| {
+            if (link) |name| {
+                if (value >= 0 and value < level.character_ids.len) {
+                    try w.line("{f} = {f},", .{
+                        zon.identifier(name),
+                        zon.identifier(level.character_ids[@intCast(value)]),
+                    });
+                } else {
+                    try w.line("{f} = .none, // {d}", .{ zon.identifier(name), value });
+                }
+            }
+        }
         try w.close();
     }
     var has_numbers = false;
@@ -691,7 +797,9 @@ fn writeParameters(
     for (behavior.links, behavior.numbers, record.parameters, 0..) |link, number, value, p| {
         if (number) |name| {
             try w.line("{f} = {d},", .{ zon.identifier(name), value });
-        } else if (link == null and value != 0) try w.line(".parameter_{d} = {d},", .{ p, value });
+        } else if (link == null and value != 0) {
+            try w.line(".parameter_{d} = {d},", .{ p, value });
+        }
     }
     try w.close();
 }
@@ -722,7 +830,9 @@ fn testPlacement(state: u16, group: u16, kind: u8, parameters: [4]i16, text: u16
     var r: [32]u8 = @splat(0);
     std.mem.writeInt(u16, r[0..2], state, .little);
     std.mem.writeInt(u16, r[6..8], group, .little);
-    for (parameters, 0..) |value, i| std.mem.writeInt(i16, r[10 + i * 2 ..][0..2], value, .little);
+    for (parameters, 0..) |value, i| {
+        std.mem.writeInt(i16, r[10 + i * 2..][0..2], value, .little);
+    }
     r[18] = kind;
     r[19] = 64;
     std.mem.writeInt(u16, r[30..32], text, .little);
@@ -756,14 +866,19 @@ test "a synthetic level becomes named, linked, valid ZON with dead rules dropped
     );
     var files: TestFiles = .{ .arena = arena };
     var report: Report = .{};
-    try extract(arena, .{
-        .name = "test",
-        .placements = &placements,
-        .rules = rules.items,
-        .labels = &labels,
-        .score_awards = score_awards,
-        .overlay = overlay,
-    }, .{ .context = &files, .put = TestFiles.put }, &report);
+    try extract(
+        arena,
+        .{
+            .name = "test",
+            .placements = &placements,
+            .rules = rules.items,
+            .labels = &labels,
+            .score_awards = score_awards,
+            .overlay = overlay,
+        },
+        .{ .context = &files, .put = TestFiles.put },
+        &report,
+    );
     try std.testing.expectEqual(@as(usize, 1), report.dead_rules);
     const guest = files.files.get("test/behaviors/behavior_1.zon").?;
     for ([_][]const u8{
@@ -775,7 +890,9 @@ test "a synthetic level becomes named, linked, valid ZON with dead rules dropped
         ".damage = true,",
         ".score = 200,",
         ".then = .remove,",
-    }) |expected| try std.testing.expect(std.mem.indexOf(u8, guest, expected) != null);
+    }) |expected| {
+        try std.testing.expect(std.mem.indexOf(u8, guest, expected) != null);
+    }
     const characters = files.files.get("test/characters.zon").?;
     for ([_][]const u8{
         ".man_1 = .{",
@@ -812,14 +929,19 @@ test "a placement starting in a state no rule names waits there; the report says
     const overlay = try names.parse(std.testing.allocator, arena, ".{}");
     var files: TestFiles = .{ .arena = arena };
     var report: Report = .{};
-    try extract(arena, .{
-        .name = "test",
-        .placements = &placements,
-        .rules = rules.items,
-        .labels = &labels,
-        .score_awards = @splat(0),
-        .overlay = overlay,
-    }, .{ .context = &files, .put = TestFiles.put }, &report);
+    try extract(
+        arena,
+        .{
+            .name = "test",
+            .placements = &placements,
+            .rules = rules.items,
+            .labels = &labels,
+            .score_awards = @splat(0),
+            .overlay = overlay,
+        },
+        .{ .context = &files, .put = TestFiles.put },
+        &report,
+    );
     try std.testing.expectEqual(@as(usize, 1), report.unexpected);
     const characters = files.files.get("test/characters.zon").?;
     try std.testing.expect(std.mem.indexOf(u8, characters, ".start = .state_9,") != null);

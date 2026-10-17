@@ -54,9 +54,17 @@ pub fn loadNamed(
     name: []const u8,
 ) !Assets {
     var path: [64]u8 = undefined;
-    var image_file = try read(source, try std.fmt.bufPrint(&path, "DATA/{s}.MAP", .{name}), 57344);
+    var image_file = try read(
+        source,
+        try std.fmt.bufPrint(&path, "DATA/{s}.MAP", .{ name }),
+        57344,
+    );
     defer image_file.deinit();
-    var palette_file = try read(source, try std.fmt.bufPrint(&path, "DATA/{s}.PAL", .{name}), 768);
+    var palette_file = try read(
+        source,
+        try std.fmt.bufPrint(&path, "DATA/{s}.PAL", .{ name }),
+        768,
+    );
     defer palette_file.deinit();
     var font_file = try read(source, "DATA/FB_TXT.FNT", 16384);
     defer font_file.deinit();

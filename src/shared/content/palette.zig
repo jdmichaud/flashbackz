@@ -2,7 +2,11 @@
 //! the six-bit DAC. Convert it at import to the observed eight-bit colors. Research: map 2.
 const std = @import("std");
 
-pub const Rgb = struct { r: u8, g: u8, b: u8 };
+pub const Rgb = struct {
+    r: u8,
+    g: u8,
+    b: u8,
+};
 pub const Palette = [256]Rgb;
 pub const Bank = [16]Rgb;
 
@@ -12,7 +16,7 @@ pub fn decodeActorBank(bytes: []const u8) !Bank {
     if (bytes.len != 32) return error.InvalidPaletteLength;
     var result: Bank = undefined;
     for (&result, 0..) |*color, i| {
-        const word = std.mem.readInt(u16, bytes[i * 2 ..][0..2], .little);
+        const word = std.mem.readInt(u16, bytes[i * 2..][0..2], .little);
         color.* = .{
             .r = expandDac((@as(u8, @truncate(word >> 8)) & 15) << 2),
             .g = expandDac((@as(u8, @truncate(word >> 4)) & 15) << 2),
@@ -31,7 +35,7 @@ pub fn decodeLevelBank(bytes: []const u8, bank: u8) !Bank {
     if (@as(usize, bank) >= bytes.len / 32) return error.InvalidPaletteBank;
     var result: Bank = undefined;
     for (&result, 0..) |*color, i| {
-        const word = std.mem.readInt(u16, bytes[@as(usize, bank) * 32 + i * 2 ..][0..2], .big);
+        const word = std.mem.readInt(u16, bytes[@as(usize, bank) * 32 + i * 2..][0..2], .big);
         const low: u8 = if (word == 0) 0 else 3;
         color.* = .{
             .r = expandDac((@as(u8, @truncate(word)) & 15) << 2 | low),
@@ -66,12 +70,18 @@ pub fn decodeRgb8(bytes: []const u8) !Palette {
 
 pub fn writeRgba(indices: []const u8, colors: *const Palette, destination: []u8) !void {
     if (destination.len % 4 != 0 or
-        destination.len / 4 != indices.len) return error.InvalidFrameLength;
+        destination.len / 4 != indices.len) {
+        return error.InvalidFrameLength;
+    }
     // Each color's four bytes once, then a copy per pixel.
     var rgba: [256][4]u8 = undefined;
-    for (&rgba, colors) |*bytes, color| bytes.* = .{ color.r, color.g, color.b, 255 };
+    for (&rgba, colors) |*bytes, color| {
+        bytes.* = .{ color.r, color.g, color.b, 255 };
+    }
     const pixels: [][4]u8 = @ptrCast(destination);
-    for (pixels, indices) |*pixel, index| pixel.* = rgba[index];
+    for (pixels, indices) |*pixel, index| {
+        pixel.* = rgba[index];
+    }
 }
 
 test "component quantization discards the source low bits and spans the full output range" {
@@ -89,7 +99,7 @@ test "RGB and alpha ordering is explicit and invalid buffers are refused" {
     var out: [8]u8 = undefined;
     try writeRgba(&.{ 1, 0 }, &colors, &out);
     try std.testing.expectEqualSlices(u8, &.{ 231, 16, 255, 255, 0, 0, 0, 255 }, &out);
-    try std.testing.expectError(error.InvalidFrameLength, writeRgba(&.{1}, &colors, &out));
+    try std.testing.expectError(error.InvalidFrameLength, writeRgba(&.{ 1 }, &colors, &out));
     try std.testing.expectError(error.InvalidPaletteLength, decodeRgb8(source[0..767]));
 }
 

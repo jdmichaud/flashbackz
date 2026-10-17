@@ -40,7 +40,7 @@ pub const Image = struct {
                 if (tx < 0 or tx >= self.width) continue;
                 const to = @as(usize, @intCast(ty)) * self.width + @as(usize, @intCast(tx));
                 const from = row * width + column;
-                self.rgb[to * 3 ..][0..3].* = rgb[from * 3 ..][0..3].*;
+                self.rgb[to * 3..][0..3].* = rgb[from * 3..][0..3].*;
                 self.covered[to] = true;
             }
         }
@@ -73,17 +73,25 @@ pub const Canvas = struct {
         var row = y;
         while (row < y + h) : (row += 1) {
             var column = x;
-            while (column < x + w) : (column += 1) self.put(column, row, color);
+            while (column < x + w) : (column += 1) {
+                self.put(column, row, color);
+            }
         }
     }
 
     /// Draws the covered pixels of `image` with its top-left at x, y.
     pub fn draw(self: *Canvas, image: *const Image, x: i32, y: i32) void {
-        for (0..image.height) |row| for (0..image.width) |column| {
-            const from = row * image.width + column;
-            if (!image.covered[from]) continue;
-            self.put(x + @as(i32, @intCast(column)), y + @as(i32, @intCast(row)), image.rgb[from * 3 ..][0..3].*);
-        };
+        for (0..image.height) |row| {
+            for (0..image.width) |column| {
+                const from = row * image.width + column;
+                if (!image.covered[from]) continue;
+                self.put(
+                    x + @as(i32, @intCast(column)),
+                    y + @as(i32, @intCast(row)),
+                    image.rgb[from * 3..][0..3].*,
+                );
+            }
+        }
     }
 
     /// Adds the light `image` (at x, y) casts around it: its colors averaged over 16-pixel
@@ -112,20 +120,28 @@ pub const Canvas = struct {
         const lit = try allocator.alloc(bool, small_w * small_h);
         defer allocator.free(lit);
         @memset(lit, false);
-        for (0..image.height) |row| for (0..image.width) |column| {
-            const from = row * image.width + column;
-            if (!image.covered[from]) continue;
-            const sx = (column + pad) / block;
-            const sy = (row + pad) / block;
-            if (sx >= small_w or sy >= small_h) continue;
-            lit[sy * small_w + sx] = true;
-            for (0..3) |c| small[(sy * small_w + sx) * 3 + c] += @floatFromInt(image.rgb[from * 3 + c]);
-        };
-        for (small) |*v| v.* /= block * block;
+        for (0..image.height) |row| {
+            for (0..image.width) |column| {
+                const from = row * image.width + column;
+                if (!image.covered[from]) continue;
+                const sx = (column + pad) / block;
+                const sy = (row + pad) / block;
+                if (sx >= small_w or sy >= small_h) continue;
+                lit[sy * small_w + sx] = true;
+                for (0..3) |c| {
+                    small[(sy * small_w + sx) * 3 + c] += @floatFromInt(image.rgb[from * 3 + c]);
+                }
+            }
+        }
+        for (small) |*v| {
+            v.* /= block * block;
+        }
         try blur(allocator, small, small_w, small_h, sigma);
         const at_edge = edgeLight(small, lit, small_w, small_h);
         const scale = if (at_edge > 0) edge / at_edge else 0;
-        for (small) |*v| v.* *= scale;
+        for (small) |*v| {
+            v.* *= scale;
+        }
 
         // Bilinear, sample centers aligned, clamped at the edges.
         const scale_x = @as(f32, @floatFromInt(small_w)) / @as(f32, @floatFromInt(full_w));
@@ -133,21 +149,31 @@ pub const Canvas = struct {
         for (0..full_h) |row| {
             const ty = y - pad + @as(i32, @intCast(row));
             if (ty < 0 or ty >= self.height) continue;
-            const fy = std.math.clamp((@as(f32, @floatFromInt(row)) + 0.5) * scale_y - 0.5, 0, @as(f32, @floatFromInt(small_h - 1)));
+            const fy = std.math.clamp(
+                (@as(f32, @floatFromInt(row)) + 0.5) * scale_y - 0.5,
+                0,
+                @as(f32, @floatFromInt(small_h - 1)),
+            );
             const y0: usize = @intFromFloat(@floor(fy));
             const y1 = @min(y0 + 1, small_h - 1);
             const wy = fy - @floor(fy);
             for (0..full_w) |column| {
                 const tx = x - pad + @as(i32, @intCast(column));
                 if (tx < 0 or tx >= self.width) continue;
-                const fx = std.math.clamp((@as(f32, @floatFromInt(column)) + 0.5) * scale_x - 0.5, 0, @as(f32, @floatFromInt(small_w - 1)));
+                const fx = std.math.clamp(
+                    (@as(f32, @floatFromInt(column)) + 0.5) * scale_x - 0.5,
+                    0,
+                    @as(f32, @floatFromInt(small_w - 1)),
+                );
                 const x0: usize = @intFromFloat(@floor(fx));
                 const x1 = @min(x0 + 1, small_w - 1);
                 const wx = fx - @floor(fx);
                 const at = (@as(usize, @intCast(ty)) * self.width + @as(usize, @intCast(tx))) * 3;
                 for (0..3) |c| {
-                    const top = small[(y0 * small_w + x0) * 3 + c] * (1 - wx) + small[(y0 * small_w + x1) * 3 + c] * wx;
-                    const bottom = small[(y1 * small_w + x0) * 3 + c] * (1 - wx) + small[(y1 * small_w + x1) * 3 + c] * wx;
+                    const top = small[(y0 * small_w + x0) * 3 + c] * (1 - wx) +
+                        small[(y0 * small_w + x1) * 3 + c] * wx;
+                    const bottom = small[(y1 * small_w + x0) * 3 + c] * (1 - wx) +
+                        small[(y1 * small_w + x1) * 3 + c] * wx;
                     const light = top * (1 - wy) + bottom * wy;
                     const sum = @as(f32, @floatFromInt(self.rgb[at + c])) + @min(light, 255);
                     self.rgb[at + c] = @intFromFloat(@min(sum, 255));
@@ -158,12 +184,23 @@ pub const Canvas = struct {
 
     /// Writes `text` in the game font, each font pixel a `scale`-sized square: the letters in
     /// `color`, their built-in shadow in `shadow`.
-    pub fn text(self: *Canvas, font: *const Font, string: []const u8, x: i32, y: i32, scale: i32, color: Rgb, shadow: Rgb) void {
+    pub fn text(
+        self: *Canvas,
+        font: *const Font,
+        string: []const u8,
+        x: i32,
+        y: i32,
+        scale: i32,
+        color: Rgb,
+        shadow: Rgb,
+    ) void {
         for (string, 0..) |character, i| {
             const glyph = font.glyph(character) orelse continue;
             for (glyph, 0..) |value, p| {
                 if (value == 0) continue;
-                const px = x + (@as(i32, @intCast(i)) * glyph_size + @as(i32, @intCast(p % glyph_size))) * scale;
+                const px = x +
+                    (@as(i32, @intCast(i)) * glyph_size + @as(i32, @intCast(p % glyph_size))) *
+                        scale;
                 const py = y + @as(i32, @intCast(p / glyph_size)) * scale;
                 self.fill(px, py, scale, scale, if (value == shadow_index) shadow else color);
             }
@@ -177,7 +214,15 @@ pub const Canvas = struct {
         self.fill(cx - half - 4, cy - half - 4, tag_size + 8, tag_size + 8, black);
         self.fill(cx - half, cy - half, tag_size, tag_size, color);
         const ink: Rgb = .{ 14, 14, 18 };
-        self.text(font, &.{letter}, cx - 4 * scale, cy - 4 * scale, scale, ink, darker(color, 0.62));
+        self.text(
+            font,
+            &.{ letter },
+            cx - 4 * scale,
+            cy - 4 * scale,
+            scale,
+            ink,
+            darker(color, 0.62),
+        );
     }
 };
 
@@ -192,7 +237,9 @@ pub fn textWidth(string: []const u8, scale: i32) i32 {
 
 pub fn darker(color: Rgb, factor: f32) Rgb {
     var result: Rgb = undefined;
-    for (color, &result) |c, *r| r.* = @intFromFloat(@as(f32, @floatFromInt(c)) * factor);
+    for (color, &result) |c, *r| {
+        r.* = @intFromFloat(@as(f32, @floatFromInt(c)) * factor);
+    }
     return result;
 }
 
@@ -210,7 +257,9 @@ pub fn hue(degrees: f32, saturation: f32, value: f32) Rgb {
         else => .{ c, 0, x },
     };
     var result: Rgb = undefined;
-    for (rgb, &result) |v, *r| r.* = @intFromFloat((v + m) * 255);
+    for (rgb, &result) |v, *r| {
+        r.* = @intFromFloat((v + m) * 255);
+    }
     return result;
 }
 
@@ -219,20 +268,28 @@ pub fn hue(degrees: f32, saturation: f32, value: f32) Rgb {
 fn edgeLight(light: []const f32, lit: []const bool, width: usize, height: usize) f32 {
     var total: f32 = 0;
     var count: usize = 0;
-    for (0..height) |sy| for (0..width) |sx| {
-        const i = sy * width + sx;
-        if (lit[i]) continue;
-        const beside = (sx > 0 and lit[i - 1]) or (sx + 1 < width and lit[i + 1]) or
-            (sy > 0 and lit[i - width]) or (sy + 1 < height and lit[i + width]);
-        if (!beside) continue;
-        total += @max(light[i * 3], @max(light[i * 3 + 1], light[i * 3 + 2]));
-        count += 1;
-    };
+    for (0..height) |sy| {
+        for (0..width) |sx| {
+            const i = sy * width + sx;
+            if (lit[i]) continue;
+            const beside = (sx > 0 and lit[i - 1]) or (sx + 1 < width and lit[i + 1]) or
+                (sy > 0 and lit[i - width]) or (sy + 1 < height and lit[i + width]);
+            if (!beside) continue;
+            total += @max(light[i * 3], @max(light[i * 3 + 1], light[i * 3 + 2]));
+            count += 1;
+        }
+    }
     return if (count == 0) 0 else total / @as(f32, @floatFromInt(count));
 }
 
 /// A separable Gaussian blur of an RGB float image, black beyond its edges.
-fn blur(allocator: std.mem.Allocator, pixels: []f32, width: usize, height: usize, sigma: f32) !void {
+fn blur(
+    allocator: std.mem.Allocator,
+    pixels: []f32,
+    width: usize,
+    height: usize,
+    sigma: f32,
+) !void {
     const radius: usize = @intFromFloat(@ceil(sigma * 3));
     const kernel = try allocator.alloc(f32, 2 * radius + 1);
     defer allocator.free(kernel);
@@ -242,23 +299,30 @@ fn blur(allocator: std.mem.Allocator, pixels: []f32, width: usize, height: usize
         k.* = @exp(-d * d / (2 * sigma * sigma));
         total += k.*;
     }
-    for (kernel) |*k| k.* /= total;
+    for (kernel) |*k| {
+        k.* /= total;
+    }
     const scratch = try allocator.alloc(f32, pixels.len);
     defer allocator.free(scratch);
     for (0..2) |pass| {
         const source = if (pass == 0) pixels else scratch;
         const target = if (pass == 0) scratch else pixels;
-        for (0..height) |row| for (0..width) |column| for (0..3) |c| {
-            var sum: f32 = 0;
-            for (kernel, 0..) |k, i| {
-                const offset = @as(isize, @intCast(i)) - @as(isize, @intCast(radius));
-                const sx = @as(isize, @intCast(column)) + if (pass == 0) offset else 0;
-                const sy = @as(isize, @intCast(row)) + if (pass == 1) offset else 0;
-                if (sx < 0 or sy < 0 or sx >= width or sy >= height) continue;
-                sum += k * source[(@as(usize, @intCast(sy)) * width + @as(usize, @intCast(sx))) * 3 + c];
+        for (0..height) |row| {
+            for (0..width) |column| {
+                for (0..3) |c| {
+                    var sum: f32 = 0;
+                    for (kernel, 0..) |k, i| {
+                        const offset = @as(isize, @intCast(i)) - @as(isize, @intCast(radius));
+                        const sx = @as(isize, @intCast(column)) + if (pass == 0) offset else 0;
+                        const sy = @as(isize, @intCast(row)) + if (pass == 1) offset else 0;
+                        if (sx < 0 or sy < 0 or sx >= width or sy >= height) continue;
+                        sum += k *
+                            source[(@as(usize, @intCast(sy)) * width + @as(usize, @intCast(sx))) * 3 + c];
+                    }
+                    target[(row * width + column) * 3 + c] = sum;
+                }
             }
-            target[(row * width + column) * 3 + c] = sum;
-        };
+        }
     }
 }
 

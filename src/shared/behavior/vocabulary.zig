@@ -222,7 +222,11 @@ pub const Rule = struct {
     next: u16,
 };
 
-pub const State = struct { name: []const u8, animation: u16, rules: []const Rule };
+pub const State = struct {
+    name: []const u8,
+    animation: u16,
+    rules: []const Rule,
+};
 
 pub const Behavior = struct {
     name: []const u8,
