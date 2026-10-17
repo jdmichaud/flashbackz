@@ -965,6 +965,21 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
     says "cannot open the data set directory", and the fingerprint also covers a stray file in
     a `behaviors/` subfolder (the data set did change).
 
+## Bugs the user reported — 2026-10-17
+
+- [ ] **BUG-1 — Conrad steps back before a throw next to a ledge** (user, 2026-10-17: "when
+  trying to throw a stone next to a ledge, Conrad is supposed to take a step back first").
+  The throw carries Conrad 16 pixels forward; the original first steps him back. Measure the
+  original with a capture (flashback-re `capture_floppy_gameplay.py --spawn`), find where the
+  port departs from it, fix it in the engine or the data, not in a Conrad-specific branch.
+  Gate: the capture compared update by update (`engine_regression.py`) matches; the SDL game
+  played at a ledge.
+- [ ] **BUG-2 — The menu and the inventory do not interrupt a Mega Drive tune** (user,
+  2026-10-17: "An in-game megadrive music should no be interrupted by the opening of the menu
+  or the inventory"). A user decision on the cartridge's music, our addition: the options
+  dialog and the inventory leave a playing tune to go on. Gate: an agent run with the
+  cartridge records the tune through both (`--pcm`); a test; the SDL game played.
+
 ## Historical CD implementation/research milestones
 
 The sibling flashback-re plan owns research. Exact fidelity and maintainability are independent
