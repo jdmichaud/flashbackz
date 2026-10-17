@@ -1,7 +1,15 @@
-//! flashbackz-agent: the headless host. It runs the game on the agent backend for a number of frames,
-//! at a fixed 60 Hz clock, presses keys at the frames it is told, and prints one JSON line with the
-//! counts and the hashes of the state and of the last frame. Two runs with the same arguments print
-//! the same line on every machine; a port builds its scripted tests and its debugging on this.
+//! flashbackz-agent: the headless host. It runs the game on the agent backend for a number of
+//! host frames at a fixed 60 Hz clock, with the input that the options give. At the end, it prints
+//! two JSON lines on standard output: the counts and the hashes, then the values of the scene.
+//! `--trace` writes more JSON lines to standard error. Two runs with the same arguments print the
+//! same lines on every machine. A port builds its scripted tests and its debugging on this.
+//!
+//! One host frame does these steps in this order:
+//! 1. It injects the keys, the buttons and the axes of the frame, with the time `clock_ns`.
+//! 2. It advances the clock for each stall of the frame.
+//! 3. It calls `game.update` once. A finished game stops the run here.
+//! 4. It saves or loads the slots of the frame.
+//! 5. It advances the clock by `frame_ns`.
 //!
 //! The game reads its files from the asset paths (both floppy images, or a directory extracted from
 //! them); without them it stops with a message. With `--saves` it saves there; without it, in

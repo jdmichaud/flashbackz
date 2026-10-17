@@ -1,6 +1,12 @@
 //! A behavior's structural key: a digest of its rules with state and message numbers replaced by
 //! their order of first appearance. Copies of one behavior that use different animations or
 //! message values share a key, so one overlay entry names them all.
+//!
+//! The digest reads each rule in order: the renumbered source and target states, dx, dy, the
+//! flags, `next`, then the code and the argument of each condition and of the effect. Only the
+//! arguments of message operations (`.message` and `.send_to_link`) are renumbered. The key is
+//! the first 8 bytes of a SHA-256 digest, in hexadecimal. A change to this encoding changes every
+//! key: then each entry of names.zon must get its new key.
 const std = @import("std");
 const rule_table = @import("rule_table.zig");
 const codes = @import("codes.zig");

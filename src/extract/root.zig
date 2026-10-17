@@ -1,7 +1,14 @@
-//! The extractor: converts the user's game files into the readable data set (DESIGN.md
-//! section 3). Images and sound are not extracted; the game reads them from the originals.
-//! The command-line tool writes the data set to a directory; a game host can keep it in
-//! memory instead.
+//! The extractor: it reads the original's tables from the user's disks and writes the readable
+//! data set (DESIGN.md section 3). Images and sound are not extracted: the game reads them from
+//! the originals. `extractAll` runs these stages in this order:
+//! 1. `names.parse` reads the naming overlay.
+//! 2. `floppy_interface.load` reads the tables of the game executable.
+//! 3. For each level, `level.extract` writes `LEVEL/characters.zon` and `LEVEL/behaviors/*.zon`.
+//! 4. `writeMessages` writes `messages.zon`, then `writeScenes` writes `scenes.zon`.
+//! 5. The counts and the notes go to `report.txt`.
+//! Each file goes to `Output.put` (the sinks are in native/data_set.zig). With `--extract`,
+//! `DirectoryWriter` writes every file into a directory. The extraction in memory (`Collector`)
+//! keeps only the `.zon` files.
 const std = @import("std");
 const flashbackz = @import("flashbackz");
 const level = @import("level.zig");
@@ -15,8 +22,9 @@ pub const Report = level.Report;
 /// The naming overlay built into the extractor.
 pub const built_in_names: [:0]const u8 = @embedFile("names.zon");
 
-/// Extracts every level and the world messages into `output`, named as in the data set
-/// (`city/characters.zon`, `city/behaviors/NAME.zon`, `messages.zon`, `report.txt`).
+/// Extracts every level, the world messages and the scenes into `output`, named as in the data
+/// set (`city/characters.zon`, `city/behaviors/NAME.zon`, `messages.zon`, `scenes.zon`,
+/// `report.txt`).
 pub fn extractAll(
     gpa: std.mem.Allocator,
     arena: std.mem.Allocator,

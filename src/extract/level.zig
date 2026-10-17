@@ -66,6 +66,8 @@ pub const Report = struct {
     }
 };
 
+/// A state of a behavior: an animation number and its rules. The rules are the run of the group's
+/// rules that starts at the state's first rule (`first`, `count`). A waiting state has no rules.
 const State = struct {
     animation: u16,
     name: []const u8,
@@ -128,7 +130,8 @@ pub fn extract(arena: std.mem.Allocator, input: Input, output: Output, report: *
         const record = try level.table.record(@intCast(index));
         const behavior = level.behaviors.getPtr(record.rule_group).?;
         if (behavior.hasState(record.initial_state)) continue;
-        // It only waits there.
+        // It only waits there. The waiting state goes after the states of the rules, so their
+        // ordinals do not change.
         try report.unexpectedData(
             arena,
             "{s}: placement {d} starts in state {d}, which no rule names",
@@ -172,6 +175,8 @@ pub fn extract(arena: std.mem.Allocator, input: Input, output: Output, report: *
 
 fn collectBehavior(level: *Level, group_index: u16) !Behavior {
     const rules = try rule_table.group(level.input.rules, group_index);
+    // A state's ordinal is its index here: its first appearance in the rules, the source of a
+    // rule before its target. The overlay names the states by ordinal, so this order must stay.
     var animations: std.ArrayList(u16) = .empty;
     for (0..rules.count()) |index| {
         const rule = rules.at(index);
@@ -549,7 +554,9 @@ fn writeOperation(
             slot,
         });
     } else {
-        // The argument is written as `.{ fields }`: the number becomes one more field.
+        // `writeValue` writes such an argument as `.{ fields }`, which ends with " }". The slice
+        // removes that end, and the number becomes one more field. This depends on the format
+        // of `writeValue`.
         const fields = value.written();
         try out.print(".{{ {f} = {s}, .{s} = {f} }} }}", .{
             name,

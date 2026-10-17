@@ -79,6 +79,8 @@ pub const Links = struct {
 /// and not the shared rooms cut off from the rest of its own.
 pub fn owned(links: *const Links, mine: RoomSet, theirs: ?RoomSet) RoomSet {
     const other = theirs orelse return links.present;
+    // Two passes in room order, not flood fills. The first adds each unclaimed room that touches
+    // the result so far. The second removes each shared room that touches no room of the result.
     var result = mine.intersectWith(links.present);
     const shared = result.intersectWith(other);
     var unclaimed = links.present.differenceWith(result).differenceWith(other);

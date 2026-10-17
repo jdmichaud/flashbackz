@@ -1,6 +1,14 @@
-//! Convert the edition's message directory and formatting bytes into owned dialogue pages.
+//! The world messages of the game executable: its message directory and text bytes, decoded into
+//! owned dialogue pages.
+//!
+//! The directory is a list of u16 offsets. The first offset also gives the size of the
+//! directory: at most 256 messages. The text of a message is a byte string:
+//! - At the start of a line, 0xff and an ink (u16) set the ink of the line and of the next lines.
+//! - 10 ends a line, 11 ends a line and its page, and 0 ends a line and the message.
+//! The default ink is 0xe8. A message has at most 64 pages, a page at most 32 lines, and a line
+//! at most 256 bytes.
 const std = @import("std");
-/// A world message: pages of lines, each with its ink.
+/// A line of text, and the ink of its glyphs.
 pub const Line = struct {
     text: []const u8,
     ink: u8,
@@ -8,6 +16,7 @@ pub const Line = struct {
 pub const Page = struct {
     lines: []const Line,
 };
+/// A world message: pages of lines, each with its ink.
 pub const Message = struct {
     pages: []const Page,
 };
@@ -120,7 +129,7 @@ pub fn decode(allocator: std.mem.Allocator, table: []const u8) !Assets {
 pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Assets {
     const image = try floppy_interface.loadImage(allocator, source);
     defer allocator.free(image);
-    // The message table sits at DS:0x13e9.
+    // The message table sits at a fixed offset in the data segment of the executable.
     return decode(allocator, image[floppy_interface.data_segment + 0x13e9..]);
 }
 test "message pages retain ink changes and reject truncated escapes" {

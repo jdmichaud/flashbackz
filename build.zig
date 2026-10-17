@@ -7,6 +7,12 @@
 //!                         -Ddisk2 and -Dmegadrive is given (DESIGN.md 3)
 //!   flashbackz-atlas      a PNG poster of every level's rooms, from the user's disks
 //! The hosts write the readable data set with `--extract DIR`.
+//!
+//! Modules: `flashbackz` (src/shared) is the game, and every other module imports it. `agent` and
+//! `extract` import only it, `native` also imports `extract`, and `sdl` also imports `native`.
+//! Each SDL executable also imports `built_in`, a module that the build generates: the name of
+//! the program, and the user's files for the standalone build.
+//!
 //! Steps: `zig build` installs both native hosts. `test` runs standalone unit tests;
 //! `smoke` runs the headless host without the game's files, which must stop it with a message;
 //! `verify` checks that it has no SDL dependency.
@@ -17,7 +23,8 @@ const std = @import("std");
 /// The compiler release used by this project's builds and checks.
 pub const pinned_zig_version = "0.17.0";
 
-/// The SDL2 release that the Linux host is built and tested against.
+/// The SDL2 release that the Linux host is built and tested against. Only the warning of
+/// `linkSdl` names it: no step compares it with the release that pkg-config finds.
 pub const pinned_sdl_version = "2.32.4";
 
 /// The SDL2 release that a Windows build links: the `sdl2` package of build.zig.zon,
@@ -336,6 +343,8 @@ fn linkSdl(
         const found = std.mem.trim(u8, out, " \t\r\n");
         versions.addOption([]const u8, "sdl", found);
     } else |_| {
+        // The recorded release is then "unknown". At run time, the host prints the linked release
+        // next to the recorded one. Nothing compares the linked release with the pin.
         std.log.warn(
             "pkg-config could not report the SDL2 version; the pin ({s}) is checked at run time only",
             .{ pinned_sdl_version },

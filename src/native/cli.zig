@@ -1,9 +1,15 @@
-//! The command-line options that both native hosts take and open for the game: the asset paths,
-//! `--scene`, `--saves` and `--data`, and `--extract` with `--names`, described for `clap` once.
+//! The options that both native hosts take, and the providers that open them for the game.
+//! `clap` reads their description once, for the parse and for `--help`.
 //!
-//! Each asset path is a directory or a FAT12 floppy image. `--saves` defaults to the per-user application data directory, which
-//! the game creates when it starts if it does not exist (the agent saves in memory instead). The result is a bound `AssetSource` and `Storage`. The game uses
-//! them and does not know which kind of source it has.
+//! - The asset paths: the two disks, each a directory or a FAT12 floppy image. Without them, the
+//!   standalone build uses its built-in files. `--megadrive` adds the cartridge, for its tunes.
+//! - `--saves`: the save directory. The default is the per-user application data directory, and
+//!   `Providers.open` creates it if necessary. The agent saves in memory instead.
+//! - `--data`: a data set directory. Without it, `Providers.open` extracts the data set in
+//!   memory from the disks.
+//! - `--extract` with `--names` writes the data set and exits. `--scene` selects the first scene.
+//!
+//! The game gets a bound `AssetSource` and `Storage`. It does not know which kind of source it has.
 const std = @import("std");
 const builtin = @import("builtin");
 const flashbackz = @import("flashbackz");
@@ -211,7 +217,9 @@ pub const Options = struct {
     /// The game's files, each a floppy image or an extracted directory: usually the two disks.
     assets: ?[]const u8 = null,
     second_assets: ?[]const u8 = null,
+    /// `--saves`: the save directory.
     saves: ?[]const u8 = null,
+    /// `--data`: a data set directory, written by `--extract`.
     data: ?[]const u8 = null,
     /// `--extract`: write the data set here instead of running the game.
     extract: ?[]const u8 = null,
@@ -315,8 +323,13 @@ pub const Providers = struct {
         }
     }
 
-    /// Opens the save directory, and creates it if it does not exist. If the options give an
-    /// asset path, also opens the asset source at that path.
+    /// Opens the providers that the options name, in this order:
+    /// 1. the save directory, which it creates if necessary (not when the agent saves in memory);
+    /// 2. the asset source, from the asset paths or else the built-in disks;
+    /// 3. the Mega Drive cartridge, from `--megadrive` or else the built-in one, if any;
+    /// 4. the data set, from `--data` or else extracted from the disks.
+    /// Without an asset path and built-in disks, it stops after step 1. Before each step, it sets
+    /// `failed` to that step, for `writeFailure`. A failure releases every provider.
     pub fn open(
         self: *Providers,
         allocator: std.mem.Allocator,
@@ -406,8 +419,8 @@ pub const Providers = struct {
         }
     }
 
-    /// Opens only asset paths, for tools that read the game and never save.
-    /// Opens the game's files only: the asset paths, else the built-in disks.
+    /// Opens only the game's files (the asset paths, else the built-in disks), for tools that read
+    /// the game and never save: `--extract` and the atlas. It opens no cartridge and no data set.
     pub fn openAssets(
         self: *Providers,
         allocator: std.mem.Allocator,
@@ -419,6 +432,8 @@ pub const Providers = struct {
         try self.importAssets(io, options);
     }
 
+    /// Adds the files of the asset paths, or else of the built-in disks, to a new pack. Then it
+    /// expands the archives of the disks in the pack.
     fn importAssets(self: *Providers, io: std.Io, options: Options) OpenError!void {
         self.content = Pack.init(self.allocator);
         if (options.assets) |path| {
@@ -510,7 +525,8 @@ pub const Providers = struct {
         self.* = .{ .failed = self.failed };
     }
 
-    /// The bound asset source. Null when the host has no asset path and uses its own assets.
+    /// The bound asset source. Null when the options give no asset path and the build has no
+    /// built-in disks: then `open` opens only the save directory.
     pub fn assetSource(self: *Providers) ?platform.AssetSource {
         return if (self.content) |*content| content.assetSource() else null;
     }

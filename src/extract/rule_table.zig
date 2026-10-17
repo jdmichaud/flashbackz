@@ -1,4 +1,14 @@
-//! Bounded legacy rule records for semantic content import, never runtime dispatch.
+//! The rule groups of a level's OBJ file, with their bounds checked. Only the extractor reads
+//! them, to write the behavior tables: the engine never runs these records.
+//!
+//! The file starts with the number of groups (u16, at most 256) and an offset (u32) for each
+//! group, counted from the end of the number. A group is a count (u16) and its records.
+//! A record has 18 bytes, all little-endian. The two condition codes are in the opposite order
+//! of their arguments:
+//! - 0: the source state (u16); 2: dx (i8); 3: dy (i8); 4: the target state (u16);
+//! - 6: the code of the second condition; 7: the code of the first condition;
+//! - 8: the flags; 9: the code of the effect; 10: `next` (u16);
+//! - 12, 14, 16: the arguments (i16) of the first condition, the second condition, the effect.
 const std = @import("std");
 pub const Operation = struct {
     code: u8,

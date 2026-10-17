@@ -181,6 +181,9 @@ pub fn line(
             if (bounds) |b| {
                 const from = (next_station orelse b.x) - below.x;
                 const free = @max(from, b.x + b.w + gap);
+                // The search tries x from `from` to `free` in steps of `step_x`. For each x, it
+                // tries the heights from `lowest` up in steps of `step_y`, or only `lowest` for a
+                // touching district. The smallest key wins: width plus height, then rise, then x.
                 var best: ?struct { key: [3]i64, at: Point } = null;
                 var x = from;
                 while (x <= free) : (x = if (x < free) @min(x + step_x, free) else free + 1) {

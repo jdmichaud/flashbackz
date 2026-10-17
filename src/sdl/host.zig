@@ -87,6 +87,8 @@ pub fn run(
     const err = &err_writer.interface;
     const name = options.program;
 
+    // The linked SDL2 release, and the release that build.zig recorded (`check.pinned`). The host
+    // only prints them and does not compare them.
     var ver_buf: [32]u8 = undefined;
     const check = version.checkVersion(&ver_buf);
     err.print("{s}: SDL2 {s} linked (pinned {s})\n", .{
@@ -96,8 +98,9 @@ pub fn run(
     }) catch {};
     err.flush() catch {};
 
-    // The providers: the save directory, and the game directory of the positional argument. They
-    // outlive the game and the backend, which only borrow their interfaces.
+    // The providers: the save directory, the game's files (the asset paths or the built-in
+    // disks), the cartridge and the data set. They outlive the game and the backend, which only
+    // borrow their interfaces.
     var providers: native.cli.Providers = .empty;
     defer providers.deinit();
     providers.open(gpa, io, environ, options.providers) catch |e| {
@@ -197,8 +200,9 @@ pub fn run(
                 if (now >= d) break;
             }
         }
-        // The display paces an iteration only if the iteration presented a frame.
+        // A late film or scene runs its next update at once, without a wait.
         if (game.needsCatchup(now)) continue;
+        // The display paces an iteration only if the iteration presented a frame.
         pacer.wait(now, backend.vsync and game.frames_presented != frames_before);
     }
 

@@ -20,6 +20,8 @@ pub fn linkedVersion(buf: []u8) []const u8 {
 
 pub const VersionCheck = struct {
     linked: []const u8,
+    /// The release that build.zig recorded, not `pinned_sdl_version`: "unknown" when pkg-config
+    /// did not report one.
     pinned: []const u8,
     matches: bool,
 };

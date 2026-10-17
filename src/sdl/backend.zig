@@ -1,8 +1,8 @@
 //! `SdlBackend`: the SDL platform, on Linux and Windows (DESIGN.md). It presents through a window,
 //! a renderer and one streaming RGBA32 texture. It translates SDL's event queue into the
 //! project's events, with monotonic nanosecond time stamps. The performance counter is the
-//! clock. SDL's queued-audio API implements the bounded PCM queue contract. This file has no palette logic
-//! and no game knowledge.
+//! clock. SDL's queued-audio API implements the bounded PCM queue contract. This file has no
+//! palette logic and no game knowledge.
 //!
 //! `SDL_InitSubSystem` starts each subsystem, and each one is released separately, so several
 //! backends (or the tests) can exist in one process. `deinit` is valid after a successful or a
@@ -42,6 +42,8 @@ pub const SdlBackend = struct {
     last_event_ns: u64 = 0,
 
     window: ?*c.SDL_Window = null,
+    /// Whether the window has the keyboard, as the backend last told the game. It is false until
+    /// the first `focus_gained`: until then, the backend drops the key events of the window.
     keyboard_focused: bool = false,
     renderer: ?*c.SDL_Renderer = null,
     texture: ?*c.SDL_Texture = null,
@@ -60,6 +62,9 @@ pub const SdlBackend = struct {
 
     audio: Audio = .{},
 
+    /// The units: a sample is one i16 of one channel, and a frame has one sample for each
+    /// channel. The game gives samples, the counts are in frames, and SDL's queue is in bytes.
+    /// The frames played are the accepted frames minus the discarded and the queued frames.
     pub const Audio = struct {
         device: c.SDL_AudioDeviceID = 0,
         format: platform.AudioFormat = .{},
@@ -243,9 +248,12 @@ pub const SdlBackend = struct {
     fn eventTimeNs(self: *SdlBackend, timestamp_ms: u32) u64 {
         const now = self.elapsedNs();
         const now_ms = c.SDL_GetTicks64();
+        // The stamp is the low 32 bits of the ticks, which wrap after about 49 days. The wrapping
+        // difference gives the age of the event, also across a wrap.
         const age_ms: u32 = @as(u32, @truncate(now_ms)) -% timestamp_ms;
         const event_ms = now_ms -| age_ms;
         var t = (event_ms -| self.ticks_base_ms) * std.time.ns_per_ms;
+        // The ticks and the performance counter are two clocks: the stamp can be later than now.
         if (t > now) {
             t = now;
         }
@@ -598,6 +606,7 @@ pub const SdlBackend = struct {
                     break :blk2 .focus_gained;
                 },
                 c.SDL_WINDOWEVENT_FOCUS_LOST => blk2: {
+                    // A key event can report the loss first (below): the game gets it only once.
                     const was_focused = self.keyboard_focused;
                     self.keyboard_focused = false;
                     if (!was_focused) return 0;
@@ -613,8 +622,9 @@ pub const SdlBackend = struct {
                 else => return 0,
             },
             c.SDL_KEYDOWN, c.SDL_KEYUP => blk: {
-                // SDL releases held keys before it queues WINDOWEVENT_FOCUS_LOST. Report the
-                // loss first, so these synthetic releases cannot commit a drag or a stroke.
+                // SDL releases held keys before it queues WINDOWEVENT_FOCUS_LOST. Thus the first
+                // key event after the focus is gone becomes `focus_lost`, and the backend drops
+                // the next ones: these synthetic releases cannot commit a drag or a stroke.
                 // Injected events without a window are kept.
                 if (ev.key.windowID != 0 and self.window != null and
                     (!self.keyboard_focused or c.SDL_GetKeyboardFocus() != self.window)) {
@@ -631,9 +641,10 @@ pub const SdlBackend = struct {
                 else
                     .{ .key_up = key };
             },
-            // A joystick SDL has no gamepad mapping for (the user's Mega Drive pad, say) gets the
-            // generic one (`genericMapping`) and is opened as a gamepad. One SDL maps comes as
-            // CONTROLLERDEVICEADDED.
+            // SDL sends JOYDEVICEADDED for every joystick. A joystick that SDL has a gamepad
+            // mapping for also comes as CONTROLLERDEVICEADDED, so this branch ignores it. A
+            // joystick without a mapping (for example, the user's Mega Drive pad) gets the generic
+            // one (`genericMapping`), and the backend opens it as a gamepad here.
             c.SDL_JOYDEVICEADDED => blk: {
                 const index = ev.jdevice.which;
                 if (c.SDL_IsGameController(index) != 0) return 0;
@@ -944,7 +955,7 @@ pub fn keyFromScancode(scancode: u32) platform.Key {
     return if (scancode < key_table.len) key_table[scancode] else .unknown;
 }
 
-// --- tests -----------------------------------------------------------------------------------
+// --- the tests' drivers ----------------------------------------------------------------------
 
 /// Picks SDL's video driver whatever the environment says, on every platform: SDL reads the
 /// driver from its hint, and a hint of override priority wins over the environment variable.
@@ -957,6 +968,8 @@ fn useDummyDrivers() void {
     useVideoDriver("dummy");
     _ = c.SDL_SetHintWithPriority(c.SDL_HINT_AUDIODRIVER, "dummy", c.SDL_HINT_OVERRIDE);
 }
+
+// --- local time and the generic gamepad mapping ----------------------------------------------
 
 /// The C library's clock and local time, `_time64` and `_localtime64_s` on Windows.
 const c_tm = struct {
@@ -1048,6 +1061,8 @@ fn genericMapping(
     buffer[n] = 0;
     return buffer[0..n :0];
 }
+
+// --- tests -----------------------------------------------------------------------------------
 
 test "the generic mapping: a Mega Drive pad's ten buttons and three axes; a small pad's last button START" {
     var buffer: [max_mapping]u8 = undefined;
