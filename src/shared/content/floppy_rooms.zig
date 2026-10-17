@@ -39,7 +39,8 @@ pub const Archive = struct {
         colors: []const u8,
         room: u8,
     ) !artwork.Artwork {
-        if (room >= 64 or self.rooms.len < 256) return error.InvalidRoomDirectory;
+        if (room >= 64) return error.RoomOutOfRange;
+        if (self.rooms.len < 256) return error.InvalidRoomDirectory;
         const end = try big32(self.rooms, @as(usize, room) * 4);
         const previous = if (room == 0) 256 else try big32(self.rooms, @as(usize, room - 1) * 4);
         if (end < previous or previous < 256) return error.InvalidRoomRange;

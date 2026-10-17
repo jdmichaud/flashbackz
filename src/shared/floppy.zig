@@ -63,7 +63,9 @@ const Volume = struct {
         prefix: []const u8,
         depth: usize,
     ) anyerror!void {
-        if (depth > 8) return error.DirectoryTooDeep;
+        // The asset names bound the depth: a name of more directories is refused before its
+        // directory is read (`validateAssetName`).
+        std.debug.assert(depth <= platform.max_asset_depth);
         const allocator = pack.source.allocator;
         var offset: usize = 0;
         while (offset + 32 <= bytes.len) : (offset += 32) {
