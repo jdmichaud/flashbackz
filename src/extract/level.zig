@@ -107,6 +107,8 @@ const Level = struct {
     table: placement.Table,
     report: *Report,
     behaviors: std.AutoArrayHashMapUnmanaged(u16, Behavior) = .empty,
+    /// Each placement's label: empty for none, or for a label that does not read (noted).
+    labels: [][]const u8 = &.{},
     character_ids: [][]const u8 = &.{},
 };
 
@@ -146,6 +148,26 @@ pub fn extract(arena: std.mem.Allocator, input: Input, output: Output, report: *
         behavior.states = try std.mem.concat(arena, State, &.{ behavior.states, &.{ waiting } });
     }
     try nameBehaviors(&level);
+    level.labels = try arena.alloc([]const u8, level.table.count);
+    for (level.labels, 0..) |*label, index| {
+        const record = try level.table.record(@intCast(index));
+        label.* = string_table.copy(arena, input.labels, record.text_id) catch |err| switch (err) {
+            error.OutOfMemory => return err,
+            else => empty: {
+                try report.unexpectedData(
+                    arena,
+                    "{s}: placement {d}: label {d} does not read ({s})",
+                    .{
+                        input.name,
+                        index,
+                        record.text_id,
+                        @errorName(err),
+                    },
+                );
+                break :empty "";
+            },
+        };
+    }
     level.character_ids = try arena.alloc([]const u8, level.table.count);
     for (level.character_ids, 0..) |*id, index| {
         id.* = try characterId(&level, @intCast(index));
@@ -265,6 +287,14 @@ fn nameBehaviors(level: *Level) !void {
         else
             try std.fmt.allocPrint(level.arena, "{s}_{d}", .{ behavior.name, behavior.group });
     }
+    // A name with the group added can be another behavior's name (`guard_5` and a `guard`
+    // shared by group 5): one file would replace the other.
+    const behaviors = level.behaviors.values();
+    for (behaviors, 0..) |behavior, i| {
+        for (behaviors[0..i]) |earlier| {
+            if (std.mem.eql(u8, earlier.file, behavior.file)) return error.DuplicateBehaviorFile;
+        }
+    }
 }
 
 fn characterId(level: *Level, index: u16) ![]const u8 {
@@ -272,7 +302,7 @@ fn characterId(level: *Level, index: u16) ![]const u8 {
     const record = try level.table.record(index);
     const behavior = level.behaviors.get(record.rule_group).?;
     var buffer: [64]u8 = undefined;
-    const label = labelOf(level, record);
+    const label = level.labels[index];
     const base = if (behavior.named != null)
         behavior.name
     else if (label.len != 0)
@@ -283,10 +313,6 @@ fn characterId(level: *Level, index: u16) ![]const u8 {
         if (base.len == 0) "character" else base,
         index,
     });
-}
-
-fn labelOf(level: *Level, record: placement.Record) []const u8 {
-    return string_table.copy(level.arena, level.input.labels, record.text_id) catch "";
 }
 
 /// Decide which placement parameters a behavior uses as links to other characters and which
@@ -524,6 +550,15 @@ fn writeOperation(
         return out.print(".{{ .unknown_{d} = {d} }}", .{ operation.code, operation.argument });
     };
     const name = zon.identifier(known.name);
+    if (known.argument == .kind_and and first_argument == null) {
+        // The kind is the first condition's argument, so only a second condition has one.
+        try level.report.unexpectedData(
+            level.arena,
+            "{s}: {s} has {s} where no first condition gives its kind",
+            .{ level.input.name, behavior.file, known.name },
+        );
+        return out.print(".{{ .{s}_raw = {d} }}", .{ known.name, operation.argument });
+    }
     if (known.argument == .none) {
         if (operation.argument != 0) {
             level.report.ignored_arguments += 1;
@@ -642,7 +677,7 @@ fn writeValue(
             },
         }),
         .kind_and => |field| {
-            const kind = zon.identifier(codes.kindName(&buffer, first_argument orelse 0));
+            const kind = zon.identifier(codes.kindName(&buffer, first_argument.?));
             if (std.mem.eql(u8, field, "hit")) {
                 const hit = zon.identifier(try messageName(level, arg));
                 try out.print(".{{ .kind = {f}, .hit = {f} }}", .{ kind, hit });
@@ -683,7 +718,7 @@ fn writeCharacters(level: *Level, out: *std.Io.Writer) !void {
         var buffer: [32]u8 = undefined;
         try w.open(level.character_ids[index]);
         try w.line(".placement = {d},", .{ index });
-        const label = labelOf(level, record);
+        const label = level.labels[index];
         if (label.len != 0) {
             try w.line(".label = {f},", .{ zon.string(label) });
         }
@@ -954,6 +989,44 @@ test "a placement starting in a state no rule names waits there; the report says
     try std.testing.expect(std.mem.indexOf(u8, characters, ".start = .state_9,") != null);
     const behavior = files.files.get("test/behaviors/behavior_0.zon").?;
     try std.testing.expect(std.mem.indexOf(u8, behavior, ".state_9 = ") != null);
+}
+
+test "a label that does not read and a kind no first condition gives are noted" {
+    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    // `sees` (64) takes its kind from the first condition; as an effect it has none.
+    const conrad_rules = testRule(1, 1, .{ 0, 0 }, .{ 64, 3 }, 0, 0);
+    var rules: std.ArrayList(u8) = .empty;
+    try rules.appendSlice(arena, &.{ 1, 0, 4, 0, 0, 0 });
+    try rules.appendSlice(arena, &([_]u8{ 1, 0 } ++ conrad_rules));
+    // The second placement asks for label 5; the file has one.
+    const placements = [_]u8{ 2, 0 } ++
+        testPlacement(1, 0, 1, .{ 0, 0, 0, 0 }, 0) ++
+        testPlacement(1, 0, 1, .{ 0, 0, 0, 0 }, 5);
+    const labels = [_]u8{ 2, 0, 0 };
+    const overlay = try names.parse(std.testing.allocator, arena, ".{}");
+    var files: TestFiles = .{ .arena = arena };
+    var report: Report = .{};
+    try extract(
+        arena,
+        .{
+            .name = "test",
+            .placements = &placements,
+            .rules = rules.items,
+            .labels = &labels,
+            .score_awards = @splat(0),
+            .overlay = overlay,
+        },
+        .{ .context = &files, .put = TestFiles.put },
+        &report,
+    );
+    try std.testing.expectEqual(@as(usize, 2), report.unexpected);
+    try std.testing.expect(
+        std.mem.indexOf(u8, report.notes.items, "label 5 does not read") != null,
+    );
+    const behavior = files.files.get("test/behaviors/behavior_0.zon").?;
+    try std.testing.expect(std.mem.indexOf(u8, behavior, ".then = .{ .sees_raw = 3 },") != null);
 }
 
 test "a parameter argument at the top of its range names no parameter" {

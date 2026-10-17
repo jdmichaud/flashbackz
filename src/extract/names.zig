@@ -2,6 +2,7 @@
 //! level messages. It is keyed by behavior structure and holds no original content.
 const std = @import("std");
 const zon = @import("zon.zig");
+const codes = @import("codes.zig");
 
 pub const Overlay = struct {
     behaviors: []const Behavior = &.{},
@@ -68,22 +69,47 @@ pub fn parse(gpa: std.mem.Allocator, arena: std.mem.Allocator, source: [:0]const
         }
         return err;
     };
-    for (overlay.behaviors) |entry| {
+    // Each name is a plain identifier, and nothing is named twice: a second entry would be
+    // ignored without a word, as the lookups take the first.
+    for (overlay.behaviors, 0..) |entry, b| {
         try plain(entry.name);
-        for (entry.states) |state| {
+        for (overlay.behaviors[0..b]) |earlier| {
+            if (std.mem.eql(u8, earlier.key, entry.key)) return error.DuplicateOverlayEntry;
+        }
+        for (entry.states, 0..) |state, s| {
             try plain(state.name);
+            for (entry.states[0..s]) |earlier| {
+                if (earlier.ordinal == state.ordinal or std.mem.eql(u8, earlier.name, state.name)) {
+                    return error.DuplicateOverlayEntry;
+                }
+            }
         }
-        for (entry.links) |link| {
-            try plain(link.name);
-        }
-        for (entry.numbers) |number| {
-            try plain(number.name);
-        }
+        try parameters(entry.links);
+        try parameters(entry.numbers);
     }
-    for (overlay.messages) |entry| {
+    for (overlay.messages, 0..) |entry, m| {
         try plain(entry.name);
+        // The engine gives these values its own names (hits, acknowledged); another name would
+        // make it miss them.
+        if (codes.engineMessage(entry.value) != null) return error.FixedMessageName;
+        for (overlay.messages[0..m]) |earlier| {
+            if (earlier.value == entry.value and std.mem.eql(u8, earlier.level, entry.level)) {
+                return error.DuplicateOverlayEntry;
+            }
+        }
     }
     return overlay;
+}
+
+fn parameters(list: []const Parameter) !void {
+    for (list, 0..) |entry, i| {
+        try plain(entry.name);
+        for (list[0..i]) |earlier| {
+            if (earlier.parameter == entry.parameter or std.mem.eql(u8, earlier.name, entry.name)) {
+                return error.DuplicateOverlayEntry;
+            }
+        }
+    }
 }
 
 fn plain(name: []const u8) !void {
@@ -110,6 +136,43 @@ test "overlay names behaviors by key and messages by level, then for all levels"
     try std.testing.expectEqualStrings("alarm", overlay.message("city", 20).?);
     try std.testing.expectEqualStrings("call", overlay.message("tower", 20).?);
     try std.testing.expectEqual(@as(?[]const u8, null), overlay.message("tower", 21));
+}
+
+test "overlay names nothing twice and leaves the engine's messages alone" {
+    var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena.deinit();
+    const refused = [_]struct { [:0]const u8, anyerror }{
+        .{
+            ".{ .behaviors = .{ .{ .key = \"1\", .name = \"a\" }, .{ .key = \"1\", .name = \"b\" } } }",
+            error.DuplicateOverlayEntry,
+        },
+        .{
+            ".{ .behaviors = .{.{ .key = \"1\", .name = \"a\", .states = .{ .{ .ordinal = 0, .name = \"x\" }, .{ .ordinal = 0, .name = \"y\" } } }} }",
+            error.DuplicateOverlayEntry,
+        },
+        .{
+            ".{ .behaviors = .{.{ .key = \"1\", .name = \"a\", .links = .{ .{ .parameter = 0, .name = \"x\" }, .{ .parameter = 1, .name = \"x\" } } }} }",
+            error.DuplicateOverlayEntry,
+        },
+        .{
+            ".{ .messages = .{ .{ .level = \"all\", .value = 20, .name = \"a\" }, .{ .level = \"all\", .value = 20, .name = \"b\" } } }",
+            error.DuplicateOverlayEntry,
+        },
+        .{
+            ".{ .messages = .{.{ .level = \"all\", .value = 3, .name = \"punch\" }} }",
+            error.FixedMessageName,
+        },
+        .{
+            ".{ .messages = .{.{ .level = \"city\", .value = 12, .name = \"ok\" }} }",
+            error.FixedMessageName,
+        },
+    };
+    for (refused) |case| {
+        try std.testing.expectError(
+            case[1],
+            parse(std.testing.allocator, arena.allocator(), case[0]),
+        );
+    }
 }
 
 test "overlay names must be plain identifiers" {
