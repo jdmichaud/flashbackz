@@ -183,7 +183,7 @@ fn writeDataSet(
     try providers.openAssets(gpa, io, options);
     providers.failed = .{ .what = "names file", .path = options.names orelse "" };
     const names: [:0]const u8 = if (options.names) |path|
-        try std.Io.Dir.cwd().readFileAllocOptions(io, path, arena, .limited(1 << 20), .of(u8), 0)
+        try readNames(io, arena, path)
     else
         extract.built_in_names;
     providers.failed = .{ .what = "data set directory", .path = options.extract.? };
@@ -195,6 +195,20 @@ fn writeDataSet(
         names,
         options.extract.?,
     );
+}
+
+/// The `--names` file. Its read errors become the providers' own, which `writeFailure` shows
+/// with the file's name.
+fn readNames(io: std.Io, arena: std.mem.Allocator, path: []const u8) OpenError![:0]const u8 {
+    const limit: std.Io.Limit = .limited(1 << 20);
+    return std.Io.Dir.cwd().readFileAllocOptions(io, path, arena, limit, .of(u8), 0) catch |err|
+        switch (err) {
+            error.FileNotFound => error.NotFound,
+            error.AccessDenied => error.AccessDenied,
+            error.OutOfMemory => error.OutOfMemory,
+            error.Canceled => error.Canceled,
+            else => error.Io,
+        };
 }
 
 fn nonEmpty(
