@@ -224,7 +224,7 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
         @memcpy(scene.film[0..length], data[name..][0..length]);
         scene.entry = data[0x101a + number * 4 + 2];
         scene.flagged = film & 0x8000 != 0;
-        // Scene 75 has a film but lies past the music table.
+        // The music table covers scenes 0 to 74 only.
         const cue = if (number < 75) data[0x114a + number] else 0xff;
         if (cue == 0xff) continue;
         if (cue >= 26) return error.InvalidSceneTable;
@@ -274,6 +274,7 @@ pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values 
     for (&ending_code, 0..) |*character, c| {
         character.* = data[0x12ad + 21 * 7 + c] ^ 0x55;
     }
+    if (std.mem.indexOfScalar(u8, &ending_code, 0) == null) return error.InvalidLevelCode;
     var passwords: [7][3][7]u8 = undefined;
     for (&passwords, 0..) |*level, l| {
         for (level, 0..) |*code, d| {
