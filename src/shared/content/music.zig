@@ -88,6 +88,10 @@ pub fn instrument(bytes: []const u8) !score.Instrument {
         .percussion = percussion,
         .modulator = operator(modulator, word(bytes, 74)),
         .carrier = operator(bytes[28..54], word(bytes, 76)),
+        // The supplied instruments hold a connection word of 0 or 1 and a feedback word of 0 to
+        // 7 (measured for PLAN FX-6). The two tests below read the connection word differently
+        // (whole, low byte), and a larger feedback reaches bits 4 to 7: other values are not
+        // checked against the original.
         .feedback_connection = @truncate(
             (field(modulator, .feedback) << 1) |
                 @as(u16, if (field(modulator, .connection) == 0) 1 else 0),

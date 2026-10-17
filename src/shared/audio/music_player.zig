@@ -205,7 +205,11 @@ pub const Player = struct {
         };
         self.configure(instrument, channel, note.velocity);
         const frequency = frequencies[note.pitch % 12];
-        // Register 0xB0: the block in bits 2 to 4, above bits 8 and 9 of the F-number.
+        // Register 0xB0: the block in bits 2 to 4, above bits 8 and 9 of the F-number. The block
+        // is not limited to 3 bits, as in the original: a pitch of 96 or more sets bit 5, the
+        // key-on bit, so its release leaves the note on. The title menu's cue plays 54 such
+        // notes within the writes compared exactly with the original (flashback-re
+        // docs/floppy-music.md; measured for PLAN FX-6).
         const high: u8 = @truncate((@as(u16, note.pitch / 12) << 2) | (frequency >> 8));
         if (instrument.percussion != null) {
             self.releaseDrum(channel);

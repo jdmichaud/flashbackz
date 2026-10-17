@@ -675,6 +675,10 @@ pub const World = struct {
     /// Show the current frame without playing it, as at level start, after `reveal` and after
     /// `transport`. An animation with frames left restarts; a finished one shows the frame
     /// past its end. Unlike playing, the mirroring ignores the frame's own flag.
+    /// The frame past the end names whatever sprite the next bytes of the file give, which the
+    /// level does not always decode (`character_art`); such a sprite draws nothing. Play with
+    /// the supplied files never shows that frame: none in the seven levels' trace sessions nor
+    /// in the three demos (measured for PLAN FX-6).
     pub fn showFrame(self: *World, index: u16) !void {
         const character = &self.characters[index];
         const animation = try self.animationOf(index);
