@@ -9,8 +9,9 @@ const asset_pack = @import("../asset_pack.zig");
 /// - bytes 0-13: the file name, ended by a 0 byte;
 /// - bytes 14-17: the offset; bytes 18-21: the stored size; bytes 22-25: the size;
 /// - bytes 26-29: the tag "D.M.".
-/// The files follow the records in order, and the last file ends the archive. A file whose
-/// stored size is smaller than its size is a packed `backward_stream`.
+/// The files follow the records in order and do not overlap; gaps can lie between them, but
+/// the last file ends the archive. A file whose stored size is smaller than its size is a packed
+/// `backward_stream`.
 pub fn expand(pack: *Pack, bytes: []const u8, prefix: []const u8) !void {
     if (bytes.len < 4) return error.TruncatedArchive;
     const count = std.mem.readInt(u16, bytes[0..2], .big);

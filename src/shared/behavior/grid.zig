@@ -117,14 +117,14 @@ pub fn columnOf(x: i16) i16 {
 
 /// The character's tier as a row index (0, 2 or 4): `(y / 36) & ~1`, truncating. This band is
 /// the tier's top row (2 * tier); its body row is band + 1 and its floor row band + 2. The
-/// update loop zero-extends the quotient's low byte, so heights from -71 to -36 give row 254.
+/// update loop zero-extends the quotient's low byte, so heights from -107 to -36 give row 254.
 pub fn bandOf(y: i16) i16 {
     const quotient: u8 = @truncate(@as(u16, @bitCast(@divTrunc(y, 36))));
     return quotient & 0xfe;
 }
 
 /// `bandOf`, the quotient sign-extended, as when a message ends an animation early: heights from
-/// -71 to -36 give row -2.
+/// -107 to -36 give row -2.
 pub fn bandSignExtended(y: i16) i16 {
     const quotient: i8 = @truncate(@divTrunc(y, 36));
     return @as(i16, quotient) & ~@as(i16, 1);
@@ -207,6 +207,10 @@ test "the tier variants agree in the room and differ above it and near a tier's 
     try std.testing.expectEqual(@as(i16, -2), bandSignExtended(-40));
     try std.testing.expectEqual(@as(i16, 1818), bandUnsigned(-40));
     try std.testing.expectEqual(@as(i16, 0), tierOf(-40));
+    // The band above the room reaches to 107 pixels above it.
+    try std.testing.expectEqual(@as(i16, 254), bandOf(-107));
+    try std.testing.expectEqual(@as(i16, -2), bandSignExtended(-107));
+    try std.testing.expectEqual(@as(i16, 252), bandOf(-108));
     // The top 8 pixels of a tier count as the tier above for contacts.
     try std.testing.expectEqual(@as(i16, 1), tierOf(75));
     try std.testing.expectEqual(@as(i16, 0), contactTierOf(75));

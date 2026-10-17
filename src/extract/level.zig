@@ -227,8 +227,9 @@ fn collectBehavior(level: *Level, group_index: u16) !Behavior {
         state.* = .{ .animation = animation, .name = "", .first = start, .count = end - start };
     }
     if (reachable != rules.count()) {
-        // The original scans a state's rules from its first one while the state matches, so a
-        // later run of the same state can never be reached.
+        // The original scans a state's rules from the rule that the record's `next` gives, which
+        // in the supplied files is always the state's first rule, while the state matches
+        // (flashback-re docs/rules/README.md). A later run of the same state is never reached.
         level.report.dead_rules += rules.count() - reachable;
         const format = "{s}: rule group {d} has {d} unreachable rules (dropped)";
         try level.report.note(level.arena, format, .{

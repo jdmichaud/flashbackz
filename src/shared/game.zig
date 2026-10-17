@@ -1008,7 +1008,7 @@ pub const Game = struct {
     }
 
     /// Keeps the settings in storage when they have changed since storage last kept them. A
-    /// failed save is tried again at the next change.
+    /// failed save is tried again at each update until one succeeds.
     fn keepSettings(self: *Game) void {
         if (std.meta.eql(self.settings, self.kept_settings)) return;
         settings_mod.save(self.storage, self.settings) catch return;
