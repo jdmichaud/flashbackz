@@ -246,4 +246,11 @@ test "SOUND FX starts the effects and MUSIC the Mega Drive tunes; turned off, th
     try std.testing.expect(!player.tunes.?.player.playing() and player.mixer.voices[0] != null);
     player.enable(.{ .effects = false, .tunes = false });
     try std.testing.expect(!player.started and player.mixer.voices[0] == null);
+    // The effects alone off (the options dialog open): a tune goes on.
+    player.enable(.{ .effects = true, .tunes = true });
+    player.submit(bank, tune, player.enabled);
+    player.submit(bank, effect, player.enabled);
+    player.enable(.{ .effects = false, .tunes = true });
+    try std.testing.expect(player.tunes.?.player.playing() and player.mixer.voices[0] == null);
+    try std.testing.expect(player.started);
 }

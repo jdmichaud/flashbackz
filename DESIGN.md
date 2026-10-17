@@ -244,7 +244,9 @@ message pages alternating between two video pages. The game content is 256 by 22
 films have their own measured dimensions and pacing. Music plays with films and on the title
 screens, chosen per scene (`docs/rules/engine-music.md`), and, with the Mega Drive cartridge, its
 tunes during play; effects follow the engine's sound requests. The MUSIC option controls the
-music and the tunes, SOUND FX the effects.
+music and the tunes, SOUND FX the effects. The options dialog silences the effects while it is
+open, as the original does; a tune goes on through it and through the inventory (user decision,
+2026-10-17).
 
 Audio sequencing and sample decoding are Flashback subsystems with measured priorities and
 timing. A generic OPL2/OPL3 synthesizer is reused from vpoolz after its code, tests and

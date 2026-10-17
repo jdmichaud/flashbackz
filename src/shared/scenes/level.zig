@@ -860,8 +860,9 @@ pub const Scene = struct {
         try palette.writeRgba(indices, &self.screen.colors, rgba);
     }
 
-    /// The level's sound, as the options have it: the dialog open stops it all, SOUND FX off
-    /// the effects, MUSIC off the Mega Drive tunes.
+    /// The level's sound, as the options have it: the dialog open stops the effects, as in the
+    /// original; SOUND FX off stops the effects, MUSIC off the Mega Drive tunes. A tune goes on
+    /// through the options dialog and the inventory (user decision, 2026-10-17, PLAN BUG-2).
     pub fn sound(self: *Scene, settings: Settings) ?audio_output.Sources.Level {
         self.effects.enable(self.soundEnabled(settings));
         if (!self.effects.started) return null;
@@ -869,10 +870,7 @@ pub const Scene = struct {
     }
 
     fn soundEnabled(self: *const Scene, settings: Settings) audio_effects.Enabled {
-        return .{
-            .effects = self.options == null and settings.sound_fx,
-            .tunes = self.options == null and settings.music and self.effects.tunes != null,
-        };
+        return enabledSound(self.options != null, settings, self.effects.tunes != null);
     }
 
     /// Stops the sound playing, as a film does in the cartridge.
@@ -880,6 +878,35 @@ pub const Scene = struct {
         self.effects.stop();
     }
 };
+
+/// What sounds: the effects with SOUND FX while the options dialog is closed, the tunes of a
+/// cartridge with MUSIC, the dialog open or not.
+fn enabledSound(dialog_open: bool, settings: Settings, cartridge: bool) audio_effects.Enabled {
+    return .{
+        .effects = !dialog_open and settings.sound_fx,
+        .tunes = settings.music and cartridge,
+    };
+}
+
+test "the options dialog stops the effects, not the Mega Drive tunes; MUSIC off stops them" {
+    const all: Settings = .{};
+    try std.testing.expectEqual(
+        audio_effects.Enabled{ .effects = false, .tunes = true },
+        enabledSound(true, all, true),
+    );
+    try std.testing.expectEqual(
+        audio_effects.Enabled{ .effects = true, .tunes = true },
+        enabledSound(false, all, true),
+    );
+    try std.testing.expectEqual(
+        audio_effects.Enabled{ .effects = false, .tunes = false },
+        enabledSound(true, .{ .music = false }, true),
+    );
+    try std.testing.expectEqual(
+        audio_effects.Enabled{ .effects = true, .tunes = false },
+        enabledSound(false, all, false),
+    );
+}
 
 /// What play animates and draws must be in the level's files: each state's animation, and the
 /// characters of the world messages and the labels. Checked at load, so that a data set fails
