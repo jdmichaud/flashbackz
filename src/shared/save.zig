@@ -230,29 +230,29 @@ pub fn readSlot(
     };
 }
 
-/// The data set's fingerprint: its files, in name order, hashed. Only the first 1024 files
-/// that `files` lists count; the others do not change the fingerprint.
+/// The data set's fingerprint: all its files, in name order, hashed, whatever order `files`
+/// lists them in. It finds the names in order one at a time, so it needs no list of its own.
 pub fn fingerprint(files: *const data_set.Files) u64 {
-    var names_buffer: [1024][]const u8 = undefined;
-    const count = @min(files.count(), names_buffer.len);
-    const names = names_buffer[0..count];
-    @memcpy(names, files.keys()[0..count]);
-    std.sort.pdq(
-        []const u8,
-        names,
-        {},
-        struct {
-            fn less(_: void, a: []const u8, b: []const u8) bool {
-                return std.mem.lessThan(u8, a, b);
-            }
-        }.less,
-    );
     var hash = std.hash.Wyhash.init(0);
-    for (names) |name| {
+    var previous: ?[]const u8 = null;
+    while (true) {
+        // The smallest name after the previous one.
+        var next: ?[]const u8 = null;
+        for (files.keys()) |name| {
+            if (previous) |p| {
+                if (!std.mem.lessThan(u8, p, name)) continue;
+            }
+            if (next) |n| {
+                if (!std.mem.lessThan(u8, name, n)) continue;
+            }
+            next = name;
+        }
+        const name = next orelse break;
         hash.update(name);
         hash.update(&.{ 0 });
         hash.update(files.get(name).?);
         hash.update(&.{ 0 });
+        previous = name;
     }
     return hash.final();
 }
@@ -325,6 +325,7 @@ pub fn restoreWorld(world: *world_mod.World, record: Record.World) Error!void {
         record.contacts.slots.len != world.contacts.slots.len) {
         return error.InvalidSave;
     }
+    try checkIndices(world, record);
     @memcpy(world.characters, record.characters);
     @memcpy(&world.room_lists, record.room_lists);
     @memcpy(&world.contacts.entries, record.contacts.entries);
@@ -371,9 +372,70 @@ pub fn restoreWorld(world: *world_mod.World, record: Record.World) Error!void {
     }
 }
 
+/// Refuses a record whose values point outside the world: an index past its list, or a state
+/// that the character's behavior does not have. The game never writes one; an edited record can,
+/// and the engine trusts these values.
+fn checkIndices(world: *const world_mod.World, record: Record.World) Error!void {
+    const characters = world.characters.len;
+    try checkCharacters(world, record.characters);
+    for (record.room_lists) |first| {
+        try within(first, characters);
+    }
+    if (record.contacts.entry_count > contacts.capacity) return error.InvalidSave;
+    for (record.contacts.entries) |entry| {
+        try within(entry.next, contacts.capacity);
+        try within(entry.character, characters);
+    }
+    for (record.contacts.slots) |head| {
+        try within(head, contacts.capacity);
+    }
+    for (record.letters) |letter| {
+        try within(letter.sender, characters);
+        try within(letter.next, world_mod.letter_capacity);
+    }
+    try within(record.free_letter, world_mod.letter_capacity);
+    for (record.inbox) |first| {
+        try within(first, world_mod.letter_capacity);
+    }
+    if (record.checkpoint) |saved| {
+        if (saved.characters.len != characters) return error.InvalidSave;
+        try checkCharacters(world, saved.characters);
+    }
+}
+
+fn checkCharacters(world: *const world_mod.World, saved: []const world_mod.Character) Error!void {
+    for (saved, 0..) |character, i| {
+        const states = world.behaviorOf(@intCast(i)).states.len;
+        if (character.state >= states) return error.InvalidSave;
+        try within(character.owner, saved.len);
+        try within(character.first_item, saved.len);
+        try within(character.next_item, saved.len);
+        try within(character.next_in_room, saved.len);
+    }
+}
+
+fn within(index: ?u16, limit: usize) Error!void {
+    if (index) |value| {
+        if (value >= limit) return error.InvalidSave;
+    }
+}
+
 fn restoreTerrain(history: *world_mod.TerrainHistory, record: Record.Terrain) Error!void {
     if (record.changes.len > history.changes.len or record.saved.len % 2 != 0 or
         record.saved.len / 2 > history.saved.len) {
+        return error.InvalidSave;
+    }
+    // What the history keeps true, so that the engine can trust it: each change's saved cells
+    // lie in the saved bytes, and every change cost at least 3 words and 1 word for each 2
+    // cells saved (`TerrainHistory.add`). The last keeps the next change inside the pools.
+    const saved_len = record.saved.len / 2;
+    for (record.changes) |change| {
+        if (@as(usize, change.saved_from) + change.saved_count > saved_len) {
+            return error.InvalidSave;
+        }
+    }
+    if (record.changes.len * 3 > record.used_words or
+        saved_len > 2 * @as(usize, record.used_words)) {
         return error.InvalidSave;
     }
     history.* = .{};
@@ -586,6 +648,50 @@ test "a save of another version or data set, or that does not read, is refused" 
     var shorter = record.world;
     shorter.characters = shorter.characters[0..2];
     try std.testing.expectError(error.InvalidSave, restoreWorld(&w, shorter));
+    // Values that point outside the world.
+    const characters = try arena.dupe(world_mod.Character, record.world.characters);
+    var edited = record.world;
+    edited.characters = characters;
+    characters[1].state = 999;
+    try std.testing.expectError(error.InvalidSave, restoreWorld(&w, edited));
+    characters[1] = record.world.characters[1];
+    characters[1].next_item = 999;
+    try std.testing.expectError(error.InvalidSave, restoreWorld(&w, edited));
+    characters[1] = record.world.characters[1];
+    edited.free_letter = 999;
+    try std.testing.expectError(error.InvalidSave, restoreWorld(&w, edited));
+    edited.free_letter = record.world.free_letter;
+    const change: world_mod.TerrainHistory.Change = .{
+        .start = 0,
+        .width = 2,
+        .saved_from = 1700,
+        .saved_count = 2,
+    };
+    edited.terrain = .{ .changes = &.{ change }, .used_words = 4, .saved = "0102" };
+    try std.testing.expectError(error.InvalidSave, restoreWorld(&w, edited));
+    edited.terrain = .{ .changes = &.{}, .used_words = 0, .saved = "0102" };
+    try std.testing.expectError(error.InvalidSave, restoreWorld(&w, edited));
+    edited.terrain = record.world.terrain;
+    try restoreWorld(&w, edited);
+}
+
+test "the fingerprint covers every file, whatever the order of the list" {
+    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    var forward: data_set.Files = .empty;
+    var backward: data_set.Files = .empty;
+    const count = 1100;
+    for (0..count) |i| {
+        try forward.put(arena, try std.fmt.allocPrint(arena, "level/{d:0>4}.zon", .{ i }), ".{}");
+        const j = count - 1 - i;
+        try backward.put(arena, try std.fmt.allocPrint(arena, "level/{d:0>4}.zon", .{ j }), ".{}");
+    }
+    try std.testing.expectEqual(fingerprint(&forward), fingerprint(&backward));
+    // The last file in name order counts too.
+    const before = fingerprint(&forward);
+    forward.getPtr("level/1099.zon").?.* = ".{ .changed = true }";
+    try std.testing.expect(fingerprint(&forward) != before);
 }
 
 test "a slot's info reads back; another version is shown, another data set not loadable" {
