@@ -791,9 +791,11 @@ pub const Scene = struct {
 
     /// Every character's state and inventory links, the score, the view and the random state.
     pub fn stateHash(self: *const Scene) u64 {
+        // The values are hashed little-endian, as the other scenes' are: one hash on every
+        // machine.
         var hash = std.hash.Wyhash.init(@backingInt(self.level));
         for (self.world.characters) |c| {
-            const fields = [_]i32{
+            var fields = [_]i32{
                 c.state,
                 c.cursor,
                 c.x,
@@ -808,9 +810,15 @@ pub const Scene = struct {
                 if (c.first_item) |item| item else -1,
                 if (c.next_item) |item| item else -1,
             };
+            for (&fields) |*field| {
+                field.* = std.mem.nativeToLittle(i32, field.*);
+            }
             hash.update(std.mem.asBytes(&fields));
         }
-        const globals = [_]u32{ self.world.score, self.world.view_room, self.world.random.state };
+        var globals = [_]u32{ self.world.score, self.world.view_room, self.world.random.state };
+        for (&globals) |*global| {
+            global.* = std.mem.nativeToLittle(u32, global.*);
+        }
         hash.update(std.mem.asBytes(&globals));
         return hash.final();
     }
