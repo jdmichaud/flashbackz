@@ -3,6 +3,9 @@
 //! reproduce the original codec; the result is owned content, not a simulated DOS buffer.
 const std = @import("std");
 
+/// The bits come from the low end of `word`, and `take` puts the first bit it reads highest.
+/// The highest set bit of `word` is a sentinel. When only the sentinel is left, `take` drops it
+/// and reads the next word backward; a new sentinel goes above that word's 31 high bits.
 const Bits = struct {
     bytes: []const u8,
     cursor: usize,
@@ -28,6 +31,15 @@ const Bits = struct {
     }
 };
 
+/// The six commands, with their prefix bits first:
+/// - `00` + 3 bits n: n + 1 literal bytes (1-8);
+/// - `01` + 8 bits d: copy 2 bytes from distance d;
+/// - `100` + 9 bits d: copy 3 bytes;
+/// - `101` + 10 bits d: copy 4 bytes;
+/// - `110` + 8 bits n + 12 bits d: copy n + 1 bytes;
+/// - `111` + 8 bits n: n + 9 literal bytes (9-264).
+/// A literal byte is 8 bits. A copy reads the byte d places after the current one, which the
+/// decoder wrote already; a short distance repeats bytes.
 const Command = union(enum) {
     literal: usize,
     reference: struct { length: usize, distance: usize },
@@ -49,6 +61,11 @@ const Command = union(enum) {
     }
 };
 
+/// Unpacks a stream into a new buffer of at most `maximum` bytes. The stream ends with three
+/// big-endian u32: the first bit word, the checksum and the unpacked size. The decoder reads
+/// the words before them from the end backward, and it fills the output from its last byte.
+/// The XOR of the checksum, the first bit word and every word that the decoder reads must be 0.
+/// Data that the decoder does not reach can come before the stream.
 pub fn decode(allocator: std.mem.Allocator, bytes: []const u8, maximum: usize) ![]u8 {
     if (bytes.len < 12 or bytes.len % 4 != 0) return error.InvalidBitstreamLength;
     const cursor = bytes.len - 12;

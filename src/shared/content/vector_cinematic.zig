@@ -56,6 +56,7 @@ fn wordAt(bytes: []const u8, at: usize) !u16 {
 /// Lattice scaling is anchored on the shape's first vertex. Keeping that rounded anchor
 /// separate from point displacement preserves integer ties without a legacy carry register.
 const Scale = struct {
+    /// In units of 1/512: 512 keeps the size.
     factor: i16,
     pivot: shapes.Point,
     origin: ?shapes.Point = null,
@@ -119,6 +120,8 @@ const Builder = struct {
         self.references += drawings.len;
         return self.allocator.dupe(film.Drawing, drawings);
     }
+    /// Starts the next picture. In background mode 0 it starts from the saved background;
+    /// in another mode it starts empty and removes the caption.
     fn clear(self: *Builder) !void {
         self.working.clearRetainingCapacity();
         if (self.background_mode != 0) {
@@ -201,6 +204,9 @@ const Builder = struct {
             });
         }
     }
+    /// Sets 16 film colors from POL palette `bank`: at 0xd0 for destination 0, at 0xc0 for 1.
+    /// A color is a big-endian 0RGB word, with the brightness rule of
+    /// `palette.decodeLevelBank`.
     fn setPalette(self: *Builder, bank: u8, destination: u8) !void {
         if (destination > 1) return error.InvalidCinematicPalette;
         const at = @as(usize, try wordAt(self.geometry, 6)) + @as(usize, bank) * 32;
@@ -218,6 +224,16 @@ const Builder = struct {
             };
         }
     }
+    /// Reads a shape command and adds the shape's primitives to the picture. The reference
+    /// word:
+    /// - bits 0-10: the shape number; bit 11: must be 0;
+    /// - bit 12 (rotated): a third angle word follows, else the angle is 90;
+    /// - bit 13 (rotated): a second angle word follows, else the angle is 180;
+    /// - bit 14 (rotated): a scale word follows, else the scale is 512;
+    /// - bit 15: signed x and y words follow; they move the shape from (8, 50).
+    /// Bits 11-14 must be 0 in a placed or scaled shape. Then a scaled or rotated shape has
+    /// its scale word (always for a scaled one), the pivot x and y bytes and, if rotated, the
+    /// first angle word. The scale word holds the factor minus 512.
     fn drawShape(self: *Builder, command: *Reader, treatment: Treatment) !void {
         const reference = try command.word();
         if (reference & @as(u16, if (treatment == .rotated) 0x0800 else 0x7800) != 0) {
@@ -238,6 +254,8 @@ const Builder = struct {
                 512;
             const pivot: shapes.Point = .{ .x = try command.byte(), .y = try command.byte() };
             scale = .{ .factor = factor, .pivot = pivot };
+            // The angles are in degrees, and the projection uses Q8 sines (256 is 1.0). A
+            // first angle of 0 with the default angles 180 and 90 gives the identity.
             if (treatment == .rotated) {
                 rotation = try transforms.Projection.fromDegrees(
                     try command.word(),
@@ -246,6 +264,15 @@ const Builder = struct {
                 );
             }
         }
+        // The POL header, in big-endian words:
+        // - at 2: the shape table, a word offset for each shape from the shape base;
+        // - at 6: the palettes (`setPalette`);
+        // - at 10: the vertex table, a word offset for each vertex record from the vertex base;
+        // - at 14: the shape base; at 18: the vertex base.
+        // A shape is a big-endian u16 count, then the primitives. A primitive:
+        // 1. a word: bits 0-13 the vertex record, bit 14 a see-through ink, bit 15 an offset;
+        // 2. with bit 15, the signed x and y words of the offset;
+        // 3. a color byte (0-15).
         const shape_table = try wordAt(self.geometry, 2);
         const shape_base = try wordAt(self.geometry, 14);
         const vertex_table = try wordAt(self.geometry, 10);
@@ -268,6 +295,7 @@ const Builder = struct {
             }
             const color = try records.byte();
             if (color > 15) return error.InvalidCinematicInk;
+            // The background (a nonzero mode) uses the colors at 0xc0, the rest those at 0xd0.
             const ink = color + @as(u8, if (self.background_mode == 0) 0xd0 else 0xc0);
             var vertices: Reader = .{
                 .bytes = self.geometry,
@@ -277,6 +305,9 @@ const Builder = struct {
                         @as(usize, vertex_table) + @as(usize, vertex_ref & 0x3fff) * 2,
                     ),
             };
+            // A vertex record: a kind byte, then the signed x and y words of the first point.
+            // With kind bit 7, it is an ellipse, and the signed x and y radii follow. Else the
+            // kind (0-63) counts the next points, each a signed dx and dy byte.
             const kind = try vertices.byte();
             var point: shapes.Point = .{
                 .x = (try vertices.signed()) +% offset.x,
@@ -288,9 +319,9 @@ const Builder = struct {
                 var rx = try vertices.signed();
                 var ry = try vertices.signed();
                 if (rx < 0 or ry < 0) return error.InvalidCinematicEllipse;
-                // In a rotated shape an ellipse's centre moves only vertically: it takes the rotated
-                // point's row and keeps its own column (the original's shapes, flashback-re
-                // engine-ending-zoom 3.5).
+                // In a rotated shape an ellipse's centre moves only vertically: it takes the
+                // rotated point's row and keeps its own column (the original's shapes,
+                // flashback-re engine-ending-zoom 3.5).
                 if (rotation) |projection| {
                     point.y = projection.point(point, scale.?.pivot).y;
                 }
@@ -321,6 +352,7 @@ const Builder = struct {
                     const dy: i8 = @bitCast(try vertices.byte());
                     point.x +%= dx;
                     point.y +%= dy;
+                    // A horizontal step that another horizontal step follows adds no point.
                     if (dy == 0 and i + 1 < kind) {
                         if (vertices.at + 2 > vertices.bytes.len) return error.TruncatedCinematic;
                         if (vertices.bytes[vertices.at + 1] == 0) continue;
@@ -362,6 +394,9 @@ pub fn compile(
     return compileFrom(allocator, commands, polygons, entry, null);
 }
 
+/// The CMD file starts with a big-endian u16 entry count, then a big-endian u16 offset for each
+/// entry; entry 0 starts at offset 0. The offsets, and the jump targets, count from the end of
+/// this table.
 fn compileFrom(
     allocator: std.mem.Allocator,
     commands: []const u8,
@@ -407,6 +442,19 @@ fn compileFrom(
             .frame = builder.frames.items.len,
             .wait_ticks = builder.wait_ticks,
         });
+        // A command byte: bit 7 ends the film, bits 2-6 are the opcode, bits 0-1 must be 0.
+        // The opcodes and their operands:
+        // - 0, 5: present the picture after 4 ticks, then start the next one (`clear`);
+        // - 1 (a byte): set the background mode; a nonzero mode starts a new background;
+        // - 2 (a byte n): wait n x 4 ticks;
+        // - 3, 10, 11: draw a shape, placed, scaled or rotated (`drawShape`);
+        // - 4 (a bank byte, a destination byte): set 16 colors (`setPalette`);
+        // - 6 (a word): show the caption band, with this text unless the word is 0xffff;
+        // - 7: nothing; 8 (3 bytes): the bytes are not used;
+        // - 9: present the page after 4 ticks, start the next picture, then a page loop;
+        // - 12: present the shown picture again after 9 ticks (a hold);
+        // - 13 (a word, then x and y bytes): place a text; 0xffff has no x and y bytes;
+        // - 14: a page loop.
         const encoded = try reader.byte();
         if (encoded & 128 != 0) {
             finished = true;
@@ -435,6 +483,8 @@ fn compileFrom(
             6 => try builder.caption(try reader.word()),
             7 => {},
             13 => {
+                // Bits 0-11 select the text, and bits 12-15 give the ink, plus 0xd0. The x and
+                // y bytes count 8-pixel cells from (8, 50).
                 const reference = try reader.word();
                 if (reference != 0xffff) {
                     try builder.positionedText(reference, try reader.byte(), try reader.byte());
@@ -452,6 +502,12 @@ fn compileFrom(
                     try builder.present(4, .page);
                     try builder.clear();
                 }
+                // A page loop:
+                // 1. a mask byte; 255 means no loop and no more operands;
+                // 2. a signed word: the target after a confirmation, negative for the end;
+                //    mask 0 with a negative target ends the film at once;
+                // 3. else mask 128, a 0 byte, a signed word (the target without a
+                //    confirmation) and a 255 byte.
                 const mask = try reader.byte();
                 if (mask == 255) continue;
                 const destination = try reader.signed();
@@ -475,7 +531,8 @@ fn compileFrom(
                 if (destination >= 0 and
                     start + @as(usize, @intCast(destination)) <= command_offset and
                     idle_target > command_offset) {
-                    reader.at = idle_target; // Release loop; the following page awaits confirmation.
+                    // A release loop: the next page waits for a confirmation.
+                    reader.at = idle_target;
                 } else if (destination < 0 and idle_target > command_offset) {
                     // A confirmation ends the film here; without one, it goes on.
                     builder.frames.items[builder.frames.items.len - 1].confirm_ends = true;

@@ -11,6 +11,7 @@ pub const Rect = struct {
     width: u16,
     height: u16,
 };
+/// `color` sets the pixel; `mask` ORs its bits into the pixel (a see-through tint).
 pub const Ink = union(enum) {
     color: u8,
     mask: u8,
@@ -155,7 +156,8 @@ pub const Canvas = struct {
         }
     }
 
-    /// Clockwise illustrations with one filled span per row. The picture importer rejects unsupported
+    /// Fills a clockwise illustration with one span a row. One point draws a pixel, two points
+    /// a line, and a shape has at most 64 points. The picture importer rejects unsupported
     /// curves and unsupported extents instead of substituting a different rasterization.
     pub fn draw(self: Canvas, points: []const Point, ink: Ink) !void {
         if (self.pixels.len != @as(usize, self.width) * self.height or
@@ -198,6 +200,8 @@ pub const Canvas = struct {
             }
             return;
         }
+        // From the top vertex, the left chain walks to lower indices and the right chain to
+        // higher ones; both stop at the bottom row.
         var left_storage: [64]Edge = undefined;
         var right_storage: [64]Edge = undefined;
         // Above the viewport each side starts from its last vertex there, walking from the top
@@ -262,6 +266,8 @@ pub const Canvas = struct {
 const Edge = struct {
     start: Point,
     end: Point,
+    /// The x change for each row, in 16.16 fixed point. `edges` keeps only 8 fraction bits,
+    /// so the step is a multiple of 1/256 pixel.
     step: i32,
     end_index: usize,
     fn outwardHalf(step: i32) i32 {

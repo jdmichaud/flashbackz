@@ -47,6 +47,8 @@ pub const Text = struct {
     }
 };
 
+/// ENGCINE.BIN holds a big-endian u16 offset into ENGCINE.TXT for each string. A string ends
+/// with a newline, and "|" splits it into lines (`Text.layout`).
 fn parseStrings(
     allocator: std.mem.Allocator,
     offsets: []const u8,

@@ -10,6 +10,7 @@ const art_bank = @import("art_bank.zig");
 const actor_art = @import("actor_art.zig");
 const animations = @import("animations.zig");
 
+/// A composed sprite and a plain sprite with the same number are different frames.
 pub const Key = struct {
     sprite: u15,
     composed: bool,
@@ -32,9 +33,13 @@ pub const Art = struct {
     }
 };
 
-/// Decodes every sprite named by a frame of the level's animations. A sprite that none of the
-/// level's files holds is left out, and frames that show it draw nothing (the tower names 48);
-/// a file that does not decode is an error.
+/// Decodes every sprite named by a frame of the level's animations. Each sprite decodes once,
+/// with the key (sprite, composed). The sources:
+/// - a composed sprite: its GLOBAL.SPC record, whose byte 0 selects an RP byte, which selects
+///   the MBK bank;
+/// - any other sprite: PERSO.SPR and PERSO.OFF, then the monster libraries in table order.
+/// A sprite that none of the level's files holds is counted and left out, and frames that show
+/// it draw nothing (the tower names 48); a file that does not decode is an error.
 pub fn load(
     allocator: std.mem.Allocator,
     source: platform.AssetSource,

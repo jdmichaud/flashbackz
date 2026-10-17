@@ -29,7 +29,7 @@ pub fn decodeActorBank(bytes: []const u8) !Bank {
 /// Level palettes store big-endian 0BGR words. For every nonzero word the DOS game
 /// sets BOTH low DAC bits in ALL channels, including channels whose nibble is zero.
 /// This differs from scaling a four-bit color to eight bits. A completely zero word
-/// remains black. Evidence: canonical routine 2a146h and original room captures.
+/// remains black. Evidence: the original's palette routine and room captures.
 pub fn decodeLevelBank(bytes: []const u8, bank: u8) !Bank {
     if (bytes.len == 0 or bytes.len % 32 != 0) return error.InvalidPaletteLength;
     if (@as(usize, bank) >= bytes.len / 32) return error.InvalidPaletteBank;

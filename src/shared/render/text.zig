@@ -32,6 +32,8 @@ pub fn draw(
                 const dx = cursor_x + @as(i32, @intCast(column));
                 if (dx < 0 or dx >= width) continue;
                 const ink = glyph[row * font_mod.glyph_width + column];
+                // Glyph ink 0 is transparent, 15 the foreground and 2 the shadow. Another ink
+                // needs a palette bank, which goes into its high nibble.
                 const color = switch (ink) {
                     0 => continue,
                     15 => style.foreground,

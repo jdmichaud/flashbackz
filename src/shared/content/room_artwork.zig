@@ -14,8 +14,11 @@ const strip_size = pixel_count / 4;
 
 pub const Artwork = struct {
     image: bitmap.IndexedImage,
+    /// The level bank numbers of slots 0-3.
     palette_banks: [4]u8,
+    /// All 256 colors; `level_pack` sets the shared blocks.
     colors: palette.Palette,
+    /// True where a pixel has bit 7: there the room hides the sprites.
     foreground: []bool,
 
     pub fn deinit(self: *Artwork) void {
@@ -25,8 +28,14 @@ pub const Artwork = struct {
     }
 };
 
-/// Decode one room using its four background palette banks. Actor and interface palettes
-/// are separate content. Absent rooms, invalid banks and unbound pixel indices are errors.
+/// Decodes one room of the installed MAP file with its four background palette banks. Actor
+/// and interface palettes are separate content. Absent rooms, invalid banks and unbound pixel
+/// indices are errors. The MAP file:
+/// - 64 directory entries of 6 bytes: a little-endian i32 offset (0 for an absent room), then
+///   a little-endian u16 size;
+/// - at the absolute offset: the four bank numbers, then the pixels;
+/// - the pixels of a negative offset: raw VGA planes (`bitmap.decodePlanar`);
+/// - else: four packed strips of 56 rows, each a little-endian u16 size and `decodeRuns` codes.
 pub fn decode(
     allocator: std.mem.Allocator,
     map: []const u8,
@@ -49,6 +58,7 @@ pub fn decode(
     const payload = map[start..][0..size];
 
     var colors: palette.Palette = @splat(.{ .r = 0, .g = 0, .b = 0 });
+    // Slot n shows at 0x10 x n and again at 0x80 + 0x10 x n, for pixels in front of sprites.
     for (payload[0..4], 0..) |bank, slot| {
         const decoded = try palette.decodeLevelBank(color_file, bank);
         @memcpy(colors[slot * 16..][0..16], &decoded);
@@ -77,6 +87,7 @@ pub fn decode(
         image = .{ .allocator = allocator, .width = width, .height = height, .pixels = pixels };
     }
     errdefer image.deinit();
+    // A pixel must use a room bank: 0x00-0x3f, or 0x80-0xbf in front of the sprites.
     for (image.pixels) |index| {
         if (!(index < 0x40 or
             (index >= 0x80 and index < 0xc0))) {
@@ -95,8 +106,10 @@ pub fn decode(
     };
 }
 
-/// Takes ownership of row-major pixels on success. Both installed and compact resources
-/// produce this same immutable artwork; no source layout reaches the renderer.
+/// Makes the artwork of a floppy room (`floppy_rooms.zig`), the only caller, from row-major
+/// pixels. It takes ownership of the pixels on success. Unlike `decode`, it does not check the
+/// pixel indices. Both paths give the same immutable artwork; no source layout reaches the
+/// renderer.
 pub fn fromPixels(
     allocator: std.mem.Allocator,
     pixels: []u8,

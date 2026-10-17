@@ -5,6 +5,7 @@ const std = @import("std");
 const Point = indexed_shapes.Point;
 const indexed_shapes = @import("../render/indexed_shapes.zig");
 
+/// The sine of each whole degree in Q8: 256 is 1.0.
 const sine_table: [360]i16 = table: {
     @setEvalBranchQuota(200000);
     var values: [360]i16 = undefined;
@@ -31,16 +32,19 @@ pub fn sine(degrees: u16) !i16 {
 
 pub fn cosine(degrees: u16) !i16 {
     if (degrees >= 360) return error.UnsupportedCinematicAngle;
+    // The cosine of 300 is 128, not the table's sine of 30 (127).
     if (degrees == 300) return 128;
     return sine((degrees + 90) % 360);
 }
 
+/// A 2 x 2 matrix in Q8 (256 is 1.0).
 pub const Projection = struct {
     xx: i32,
     xy: i32,
     yx: i32,
     yy: i32,
 
+    /// The three angles are whole degrees, 0-359. The angles 0, 180 and 90 give the identity.
     pub fn fromDegrees(turn: u16, vertical: u16, horizontal: u16) !Projection {
         const sa: i32 = try sine(turn);
         const ca: i32 = try cosine(turn);
@@ -56,6 +60,8 @@ pub const Projection = struct {
         };
     }
 
+    /// Moves `input` about `pivot`. The matrix acts on `pivot - input`, so the identity has
+    /// -256 on its diagonal.
     pub fn point(self: Projection, input: Point, pivot: Point) Point {
         const dx: i32 = @as(i32, pivot.x) - input.x;
         const dy: i32 = @as(i32, pivot.y) - input.y;

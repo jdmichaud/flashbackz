@@ -63,6 +63,12 @@ fn word(bytes: []const u8, at: usize) u16 {
 
 /// The EXEPACK variant in the supplied English release. Relocations are unnecessary for
 /// these immutable data fields; the image is freed immediately after their conversion.
+/// The decoder skips up to 16 bytes of 0xff padding, then reads the packets backward from the
+/// end. Each packet, from its last byte:
+/// 1. an opcode byte: 0xb0 fills, 0xb2 copies; bit 0 marks the last packet;
+/// 2. a little-endian u16 count;
+/// 3. one fill byte, or `count` bytes to copy.
+/// The decoder fills the output from its end too; the bytes before the packets stay in place.
 fn expand(allocator: std.mem.Allocator, encoded: []const u8, size: usize) ![]u8 {
     if (encoded.len == 0 or
         encoded.len > size or
@@ -107,7 +113,8 @@ fn expand(allocator: std.mem.Allocator, encoded: []const u8, size: usize) ![]u8 
     return output;
 }
 
-/// Owned unpacked metadata for edition-specific content importers only.
+/// Owned unpacked metadata for edition-specific content importers only. FB.EXE (or
+/// DATA/FB.EXE) must match the SHA-256 of the supported edition.
 pub fn loadImage(allocator: std.mem.Allocator, source: platform.AssetSource) ![]u8 {
     var file = source.readAll("FB.EXE", 256 * 1024) catch |err| switch (err) {
         error.NotFound => try source.readAll("DATA/FB.EXE", 256 * 1024),
@@ -134,6 +141,7 @@ pub fn loadImage(allocator: std.mem.Allocator, source: platform.AssetSource) ![]
 /// Where the executable's data segment starts in its unpacked image.
 pub const data_segment = 0x1bcc0;
 
+/// Reads the interface values. There is no cache: each call reads, hashes and unpacks FB.EXE.
 pub fn load(allocator: std.mem.Allocator, source: platform.AssetSource) !Values {
     const image = try loadImage(allocator, source);
     defer allocator.free(image);

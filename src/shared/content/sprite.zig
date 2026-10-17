@@ -7,6 +7,8 @@ pub const Frame = struct {
     image: bitmap.IndexedImage,
     origin_x: i16,
     origin_y: i16,
+    /// `local4` pixels are 0-15, and the renderer puts the bank in their high nibble. `full8`
+    /// pixels have 8 bits, and the renderer ORs the bank into their high nibble.
     color_bits: enum { local4, full8 } = .local4,
 
     pub fn deinit(self: *Frame) void {
@@ -17,6 +19,9 @@ pub const Frame = struct {
 
 /// The offset index is a compatibility identifier. Scene and animation definitions keep
 /// references to decoded frames, rather than looking up DOS records while drawing.
+/// - SPR: a 12-byte header that starts with "SPP", then the records.
+/// - OFF: 6-byte entries, then 0xffff. An entry is a little-endian u16 sprite number and a
+///   little-endian u32 offset from byte 12 of SPR. The offset 0xffffffff gives an empty sprite.
 pub fn fromArchive(
     allocator: std.mem.Allocator,
     sprites: []const u8,
@@ -90,6 +95,14 @@ pub fn fromIcons(allocator: std.mem.Allocator, file: []const u8, index: u16) !Fr
     };
 }
 
+/// Decodes one sprite record. The header:
+/// - bytes 0 and 1: the signed origin x and y;
+/// - byte 2: bit 7 raw, bit 6 stored column by column, bits 0-5 the first size (a raw
+///   record keeps bit 7 in the size too);
+/// - byte 3: the second size.
+/// The first size is the width, or the height of a record stored column by column.
+/// A raw record has one byte a pixel from byte 4. A packed record has a big-endian u16 byte
+/// count at 4, then the packed nibbles (`decodePixels`).
 pub fn decode(allocator: std.mem.Allocator, record: []const u8) !Frame {
     if (record.len < 4) return error.TruncatedSprite;
     const columns_first = record[2] & 0x40 != 0;
@@ -147,6 +160,10 @@ const Tokens = struct {
     }
 };
 
+/// The nibbles, the high nibble of each byte first, give runs of pixels:
+/// - c (0-14): one pixel of color c;
+/// - 15, c, n (c is not 15): n + 4 pixels of color c;
+/// - 15, 15, h, l, c: h x 16 + l + 4 pixels of color c.
 fn decodePixels(allocator: std.mem.Allocator, encoded: []const u8, pixels: []u8) !void {
     // The original expands nibbles 1024 bytes above its output. A sufficiently long run
     // can overwrite a token before it is read. This affects a supplied GLUE frame, so a

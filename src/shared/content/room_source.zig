@@ -1,5 +1,6 @@
 //! Room artwork from the original files: the installed MAP file, or the floppy's compact LEV,
-//! BNQ and SGD files. Rooms decode one at a time with the level's colors.
+//! BNQ and SGD files. Rooms decode one at a time with the level's colors. Both forms give
+//! the same `room_artwork.Artwork`.
 const std = @import("std");
 const platform = @import("../platform.zig");
 const level_mod = @import("level.zig");
@@ -14,6 +15,8 @@ pub const RoomSource = union(enum) {
         background: ?platform.OwnedBytes,
         tile_bias: u16,
     },
+    /// Uses the installed MAP file if it is present. Else it reads LEV and BNQ, and it reads
+    /// SGD only when the level has a `tile_bias` (the jungle).
     pub fn open(source: platform.AssetSource, files: level_mod.Files) !RoomSource {
         if (readLevel(
             source,
@@ -53,6 +56,8 @@ pub const RoomSource = union(enum) {
             },
         }
     }
+    /// Decodes `room` with the level's PAL file, `colors`. An absent room gives
+    /// `error.AbsentRoom`.
     pub fn decode(
         self: *const RoomSource,
         allocator: std.mem.Allocator,

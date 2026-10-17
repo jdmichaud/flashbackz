@@ -14,6 +14,8 @@ pub const IndexedImage = struct {
     }
 };
 
+/// The bytes hold four planes, one after another. Plane p holds the pixels of the columns x
+/// with x mod 4 = p, with width / 4 bytes a row.
 pub fn decodePlanar(
     allocator: std.mem.Allocator,
     bytes: []const u8,

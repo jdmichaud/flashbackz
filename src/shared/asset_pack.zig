@@ -18,6 +18,9 @@ pub const Pack = struct {
         self.source.deinit();
         self.* = undefined;
     }
+    /// Copies a file into the pack. Names compare without case. A second file with the same
+    /// name must have the same bytes, and then the pack keeps only one copy. The pack holds at
+    /// most 4096 files and `limit` bytes.
     pub fn add(self: *Pack, name: []const u8, bytes: []const u8) !void {
         try platform.validateAssetName(name);
         for (self.source.entries.keys(), self.source.entries.values()) |existing, data| {

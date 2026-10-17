@@ -1,5 +1,7 @@
-//! Lazy sprite libraries share the animation namespace. Decoded frames remain owned by
-//! the content pack; compressed archives are released as soon as import finishes.
+//! Lazy sprite libraries share the animation namespace. `Catalog` reads a library's SPR and
+//! OFF files, as stored, when a sprite first needs them; only the sprite records are run-length
+//! packed. The content pack owns the decoded frames. `Catalog.deinit` frees the files when the
+//! import ends.
 const std = @import("std");
 const platform = @import("../platform.zig");
 const sprite = @import("sprite.zig");
@@ -30,6 +32,7 @@ pub const Catalog = struct {
         }
     }
 
+    /// Decodes sprite `index` from the first library, in table order, that holds it.
     pub fn resolve(self: *Catalog, allocator: std.mem.Allocator, index: u16) !sprite.Frame {
         for (self.libraries, 0..) |library, i| {
             if (i >= self.loaded.len) return error.TooManySpriteLibraries;

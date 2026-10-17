@@ -4,9 +4,12 @@ const sprites = @import("../content/sprite.zig");
 
 pub const Facing = enum { original, mirrored };
 pub const Style = struct {
+    /// The bank, which goes into the high nibble of every drawn pixel.
     palette_bank: u4,
     facing: Facing = .original,
+    /// `respect` skips the pixels that `occlusion` marks; `overwrite` draws over them.
     foreground: enum { respect, overwrite } = .respect,
+    /// One flag for each destination pixel: true where the background hides the sprites.
     occlusion: ?[]const bool = null,
 };
 
@@ -29,6 +32,8 @@ pub fn draw(
     if (image.pixels.len != @as(usize, image.width) * image.height) {
         return error.InvalidSpriteLength;
     }
+    // A mirrored frame turns over about the left edge of column x: its origin pixel lands
+    // at x - 1.
     const left: i64 = switch (style.facing) {
         .original => @as(i64, x) - frame.origin_x,
         .mirrored => @as(i64, x) + frame.origin_x - image.width,
@@ -56,6 +61,7 @@ pub fn draw(
                     }
                 }
             }
+            // A `full8` pixel keeps its own high bits, and the bank ORs into them.
             target.* = (@as(u8, style.palette_bank) << 4) | color;
         }
     }

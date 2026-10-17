@@ -1,5 +1,9 @@
-//! Installation-time LEV/BNQ/SGD artwork, decoded directly into owned room pixels.
-//! Recovered from INSTALL.EXE; no installer execution or intermediate files are required.
+//! Installation-time LEV/BNQ/SGD artwork, decoded directly into owned room pixels. The format
+//! comes from INSTALL.EXE. The game does not run the installer and writes no other files.
+//! - LEV: the rooms. Bytes 0-255 hold 64 big-endian u32 end offsets, and the data starts at
+//!   256. Each room is a packed `backward_stream` that ends at its end offset.
+//! - BNQ: the banks of 8x8 tiles.
+//! - SGD: the background pieces; `room_source` reads it only for a level with a `tile_bias`.
 const std = @import("std");
 const backward = @import("backward_stream.zig");
 const artwork = @import("room_artwork.zig");
@@ -21,6 +25,14 @@ pub const Archive = struct {
     background: []const u8 = &.{},
     tile_bias: u16 = 0,
 
+    /// Decodes `room`. A room whose end offset equals the previous one is absent. The decoder
+    /// reads backward from the end offset, so it does not need the room's start.
+    /// The unpacked room description (the words are big-endian):
+    /// - byte 1: 0 for a background of tiles, else a list of SGD pieces;
+    /// - words at 2, 4, 6 and 8: the palette banks of slots 0-3;
+    /// - word at 10: the offset of the background (cells or the piece list);
+    /// - word at 12: the offset of the front cells;
+    /// - word at 14: the offset of the bank list.
     pub fn decode(
         self: Archive,
         allocator: std.mem.Allocator,
@@ -70,6 +82,11 @@ pub const Archive = struct {
         return artwork.fromPixels(allocator, pixels, colors, selectors);
     }
 
+    /// Collects the room's tiles from the bank list, which has at most 256 entries. An entry:
+    /// 1. a big-endian u16: bits 0-14 the BNQ bank, bit 15 the last entry;
+    /// 2. a byte: 255 to take all the bank's tiles, else n;
+    /// 3. if the byte is not 255, n + 1 bytes, each the number of a tile in the bank.
+    /// The tiles follow one another, after tile 0, which is transparent.
     fn loadTiles(self: Archive, allocator: std.mem.Allocator, description: []const u8) ![]u8 {
         if (self.banks.len < 6 or self.banks[0] == 0) return error.InvalidArtBankDirectory;
         const directory = @as(usize, self.banks[0]) * 6;
@@ -83,9 +100,12 @@ pub const Archive = struct {
             at += 2;
             const bank: usize = selection & 0x7fff;
             if (bank >= self.banks[0]) return error.InvalidArtBank;
-            const offset = try big16(self.banks, bank * 6 + 2);
+            // BNQ starts with the bank count, then 6-byte entries: bytes 2-3 the offset, bytes 4-5
+            // the signed count of 32-byte tiles. Bytes 0-1 are not used (byte 0 of entry 0 is the
+            // bank count). A raw bank starts at its offset, and a packed bank ends there.
             // A negative size marks a raw bank, as the original's BNQ routine reads it
             // (flashback-re docs/floppy-gameplay-entry.md); MBK banks use a flag bit instead.
+            const offset = try big16(self.banks, bank * 6 + 2);
             const count: i16 = @bitCast(try big16(self.banks, bank * 6 + 4));
             const size = @as(usize, @abs(count)) * 32;
             if (count == 0 or size > 32768 or offset < directory) return error.InvalidArtBank;
@@ -116,6 +136,10 @@ pub const Archive = struct {
         return error.UnterminatedRoomBanks;
     }
 
+    /// Draws the SGD pieces of the list at `at`: a big-endian u16 count, then 6-byte placements.
+    /// A placement, in big-endian words:
+    /// - word 0: the piece number in bits 0-14, or 0xffff for no piece;
+    /// - words 2 and 4: the signed x and y of the piece's top left corner.
     fn drawBackground(
         self: Archive,
         allocator: std.mem.Allocator,
@@ -134,6 +158,9 @@ pub const Archive = struct {
                 index >= self.background[0]) {
                 return error.InvalidBackgroundIndex;
             }
+            // SGD starts with a big-endian u32 offset for each piece; byte 0, the high byte of
+            // the first offset, is the piece count. A negative offset marks a raw piece. A piece
+            // starts with a big-endian u16 size.
             var offset: i32 = @bitCast(try big32(self.background, @as(usize, index) * 4));
             if (index == 0) {
                 offset &= 0x00ffffff;
@@ -156,6 +183,7 @@ pub const Archive = struct {
     }
 };
 
+/// Codes 0-127 copy code + 1 literal bytes; codes 128-255 repeat the next byte 257 - code times.
 fn expandRuns(allocator: std.mem.Allocator, encoded: []const u8) ![]u8 {
     var result: std.ArrayList(u8) = .empty;
     errdefer result.deinit(allocator);
@@ -177,6 +205,12 @@ fn expandRuns(allocator: std.mem.Allocator, encoded: []const u8) ![]u8 {
     return result.toOwnedSlice(allocator);
 }
 
+/// A piece, after `expandRuns` if it is packed:
+/// - byte 0: the width / 8 - 1; byte 1: the height - 1;
+/// - a big-endian u16 at 2: the mask size, width / 8 x height bytes;
+/// - the mask, one bit for each pixel and the high bit first;
+/// - the 4-bit pixels, the high nibble first.
+/// The room clips the piece. A pixel uses palette slot 0 and stays behind the sprites.
 fn drawBackgroundPiece(pixels: []u8, bytes: []const u8, x: i32, y: i32) !void {
     _ = try slice(bytes, 0, 4);
     const width: usize = (@as(usize, bytes[0]) + 1) * 8;
@@ -205,6 +239,13 @@ fn drawBackgroundPiece(pixels: []u8, bytes: []const u8, x: i32, y: i32) !void {
     }
 }
 
+/// Draws 32 x 28 cells of 8 x 8 pixels. A cell is a little-endian u16:
+/// - bits 0-10: the tile number, plus `tile_bias`; 0 is no tile;
+/// - bit 11: flip left to right; bit 12: flip top to bottom;
+/// - bits 13-14: the palette slot (times 0x10);
+/// - bit 15: in front of the sprites (0x80 in the pixel).
+/// A tile is 32 bytes of 4-bit pixels, the high nibble first, and pixel value 0 is
+/// transparent. A drawn pixel keeps bit 7 of the pixel under it.
 fn drawTiles(pixels: []u8, cells: []const u8, tiles: []const u8, bias: u16) !void {
     for (0..896) |cell| {
         const flags = std.mem.readInt(u16, cells[cell * 2..][0..2], .little);

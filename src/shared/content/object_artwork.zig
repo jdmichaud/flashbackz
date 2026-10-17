@@ -4,6 +4,8 @@ const std = @import("std");
 const sprite = @import("sprite.zig");
 const art_bank = @import("art_bank.zig");
 
+/// Returns record `index` of GLOBAL.SPC. The file starts with big-endian u16 record offsets;
+/// the first offset is also the size of this directory. Records can share their bytes.
 pub fn recordAt(archive: []const u8, index: u16) ![]const u8 {
     if (archive.len < 2) return error.InvalidObjectArtDirectory;
     const directory_end = std.mem.readInt(u16, archive[0..2], .big);
@@ -34,6 +36,16 @@ pub fn fromArchive(
     return decode(allocator, record, bank);
 }
 
+/// Composes a record's parts into one frame. The record:
+/// - byte 0: the RP selector of the bank;
+/// - bytes 1 and 2: the signed origin x and y;
+/// - bytes 3 and 4: the source bounds (not used);
+/// - byte 5: the part count; then 4 bytes for each part.
+/// A part:
+/// - byte 0: its offset in the bank, in units of 32 bytes;
+/// - bytes 1 and 2: its unsigned x and y in the frame;
+/// - byte 3: bits 0-1 the height / 8 - 1, bits 2-3 the width / 8 - 1, bit 4 mirrored.
+/// The pixels are 4-bit, the high nibble first, and 0 is transparent.
 pub fn decode(allocator: std.mem.Allocator, record: []const u8, bank: []const u8) !sprite.Frame {
     if (record.len < 6 or
         record.len != 6 + @as(usize, record[5]) * 4) {

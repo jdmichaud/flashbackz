@@ -45,6 +45,13 @@ pub const Animation = struct {
     }
 };
 
+/// The file starts with a little-endian u16 animation count, then a little-endian u16 offset
+/// for each animation, from byte 2. An animation:
+/// - a 6-byte header: a u16 frame count, the sound + 1 (0 for none), the pose tag, and a u16
+///   that is nonzero for composed sprites;
+/// - 4 bytes a frame: a u16 sprite (0xffff for none, bit 15 mirrored), then the signed dx
+///   and dy bytes.
+/// All the words are little-endian.
 pub const Animations = struct {
     bytes: []const u8,
 

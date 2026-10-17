@@ -16,6 +16,7 @@ const Volume = struct {
     cluster_count: usize,
     claimed: [4086]bool = @splat(false),
 
+    /// A FAT12 entry has 12 bits, so two entries share 3 bytes. Values from 0xff8 end a chain.
     fn next(self: *const Volume, cluster: usize) !usize {
         const at = cluster + cluster / 2;
         if (at + 2 > self.fat.len) return error.InvalidFat;
@@ -67,6 +68,8 @@ const Volume = struct {
         var offset: usize = 0;
         while (offset + 32 <= bytes.len) : (offset += 32) {
             const record = bytes[offset..][0..32];
+            // Byte 0: 0 ends the directory, 0xe5 marks a deleted entry. Byte 11 holds the
+            // attributes: 0x0f is a long name part, bit 3 a volume label, bit 4 a directory.
             if (record[0] == 0) break;
             if (record[0] == 0xe5 or record[11] == 0x0f or record[11] & 8 != 0) continue;
             if (record[0] == '.') continue;
@@ -101,6 +104,9 @@ const Volume = struct {
     }
 };
 
+/// Reads every file of a FAT12 floppy image into a new pack. The boot sector fields, all
+/// little-endian: the sector size at 11, sectors a cluster at 13, reserved sectors at 14,
+/// the FAT count at 16, root entries at 17, the sector count at 19 and FAT sectors at 22.
 pub fn load(allocator: std.mem.Allocator, image: []const u8) !Pack {
     if (image.len < 512 or word(image, 510) != 0xaa55) return error.InvalidBootSector;
     const sector: usize = word(image, 11);

@@ -18,6 +18,8 @@ const collision = @import("collision.zig");
 
 pub const room_count = 64;
 
+/// The content of one level. The level scene owns the pack. The world keeps a copy of
+/// `animations`, which reads `animation_file` in place, so the pack must outlive the world.
 pub const Pack = struct {
     allocator: std.mem.Allocator,
     /// Rooms the level does not use are null.
@@ -64,7 +66,14 @@ pub const Pack = struct {
 };
 
 /// Loads level `id`. `first_room` is where Conrad starts: its colors are the level's reference
-/// for the actor and icon color blocks.
+/// for the actor and icon color blocks. The steps, in order:
+/// 1. the animations (ANI) and the collision grid (CT);
+/// 2. the character art (`character_art.load`);
+/// 3. the rooms and their colors (`loadRooms`);
+/// 4. the item icons (GLOBAL.ICN) and the font (FB_TXT.FNT);
+/// 5. the inventory art, from the icon and font bytes;
+/// 6. the library colors and the password, from `interface`;
+/// 7. the sound effects (GLOBAL.FIB).
 pub fn load(
     allocator: std.mem.Allocator,
     source: platform.AssetSource,
@@ -114,6 +123,8 @@ pub fn load(
         &interface.level_label,
     );
     errdefer inventory.deinit();
+    // The level screen indexes these colors with `data_set.SpriteLibrary`. That enum must
+    // keep the order of the executable's library table.
     var library_colors: [4]palette.Bank = undefined;
     for (&library_colors, interface.actor_libraries) |*colors, library| {
         colors.* = library.colors;
@@ -159,8 +170,14 @@ fn loadIcons(allocator: std.mem.Allocator, file: []const u8) ![]sprite.Frame {
     return icons.toOwnedSlice(allocator);
 }
 
-/// Each room's 256 colors: its own background blocks, then the shared blocks for actors
-/// (0x40), icons (0xa0), text (0xe0) and the interface (0xf0).
+/// Decodes every room, then sets the shared blocks of each room's 256 colors. Bit 7 of a room
+/// pixel puts it in front of the sprites, so the room's four banks show twice:
+/// - 0x00-0x3f: the room's banks (slots 0-3), mirrored at 0x80-0xbf;
+/// - 0x40: Conrad, in the alternate colors when slot 2 differs from the first room's;
+/// - 0x50: the enemy library, which the level screen sets;
+/// - 0xa0: the icons, in the first room's slot 2 colors; they overwrite the mirror of slot 2;
+/// - 0xc0-0xdf: the films, which this function does not set;
+/// - 0xe0: the text; 0xf0: the interface.
 fn loadRooms(
     allocator: std.mem.Allocator,
     source: platform.AssetSource,

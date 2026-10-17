@@ -20,12 +20,15 @@ pub const Archive = struct {
     pub fn decode(self: Archive, allocator: std.mem.Allocator, index: u8) ![]u8 {
         if (index >= self.count) return error.MissingArtBank;
         const entry = self.bytes[@as(usize, index) * 6..][0..6];
-        // The high half of the first offset carries archive metadata in this DOS format.
+        // An entry is a big-endian u32 offset and a big-endian u16 size. DOS reads only the low
+        // 16 bits of each offset, so bytes 0-1 of every entry are not used. Byte 0 of entry 0
+        // holds the bank count.
         const offset: usize = std.mem.readInt(u16, entry[2..4], .big);
         const units = std.mem.readInt(u16, entry[4..6], .big);
         const size = @as(usize, units & 0x7fff) * 32;
         if (size == 0) return error.MissingArtBank;
-        // Object parts have an eight-bit tile address, with at most sixteen tiles per part.
+        // A part reads at most 8,672 bytes of its bank: an offset of up to 255 units of 32
+        // bytes, then at most 16 units. The limit, 16,384 bytes, is higher than that.
         if (size > 16384) return error.ArtBankTooLarge;
         const start = @as(usize, self.count) * 6;
         if (offset < start or offset > self.bytes.len) return error.InvalidArtBankOffset;
@@ -33,8 +36,8 @@ pub const Archive = struct {
             if (size > self.bytes.len - offset) return error.TruncatedArtBank;
             return allocator.dupe(u8, self.bytes[offset..][0..size]);
         }
-        // Earlier packets may precede this packet. The backward codec only consumes the
-        // words needed by this bank and checks their checksum, independently of that prefix.
+        // Earlier packets can come before this packet. The backward codec reads only the words
+        // of this bank, and their checksum does not include that prefix.
         const decoded = try backward.decode(allocator, self.bytes[start..offset], size);
         errdefer allocator.free(decoded);
         if (decoded.len != size) return error.ArtBankSizeMismatch;

@@ -68,6 +68,7 @@ pub const View = struct {
     font: ?font_mod.Font = null,
     width: u16 = 256,
     height: u16 = 224,
+    /// The film's picture area. The shapes clip to it, and the frame's background fills it.
     viewport: shapes.Rect = .{ .x = 8, .y = 50, .width = 240, .height = 128 },
     background: u8 = 0,
     /// The ending's replay mode leaves out the films' captions and placed texts.
@@ -138,6 +139,7 @@ pub const View = struct {
             }
         }
         if (!self.texts) return;
+        // The caption band covers rows 178-202 in color 0xc0.
         if (frame.caption_band) {
             const start = @min(pixels.len, @as(usize, self.width) * 178);
             const end = @min(pixels.len, @as(usize, self.width) * 203);
@@ -151,6 +153,7 @@ pub const View = struct {
             try self.drawText(pixels[0..caption_rows * self.width], @intCast(caption_rows), run);
         }
     }
+    /// The run gives the foreground. The shadow is 0xe2, and other glyph inks use bank 14.
     fn drawText(self: View, pixels: []u8, rows: u16, run: TextRun) !void {
         const font = self.font orelse return error.MissingCinematicFont;
         try text_renderer.draw(
