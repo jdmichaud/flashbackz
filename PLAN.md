@@ -915,12 +915,15 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
     unsigned loop and its cast; `Contacts.cellKey`'s negative column). A test for each; the
     contacts case fails without its fix. The agent with a 60-character slot reports InvalidName
     and writes nothing. Tests 279/279, smoke and verify, sessions and traces unchanged.
-- [ ] **FX-2 — Bad data is refused, not let through.** The save reader checks the values it
+- [x] **FX-2 — Bad data is refused, not let through.** The save reader checks the values it
   restores, not only the lengths. The extractor notes a label error and a missing kind, and
   refuses two behaviors with one file name; the naming overlay refuses duplicate keys, link and
   number names, and names for the engine's fixed messages. The data-set reader refuses unknown
   fields everywhere and reads only the files directly in `behaviors/`. The data-set fingerprint
   does not depend on the order of the listing.
+  - 2026-10-17, `c0715e5` (settings), `c118f47`, `85beec8`, `a04a6d7`: each refusal has a test;
+    a save made by the previous build loads (same fingerprint); every level loads from a data
+    set extracted to disk. Tests 283/283, smoke and verify, sessions and traces unchanged.
 - [ ] **FX-3 — The hosts and the agent say what happens.** A missing `--names` file and a failed
   extraction show their reason in every build. `--trace` keeps its help true, a failed `--load`
   leaves the walk count, trace lines escape the slot name, and the level's state hash has one
