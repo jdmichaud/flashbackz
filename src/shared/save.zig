@@ -11,6 +11,7 @@ const world_mod = @import("behavior/world.zig");
 const grid = @import("behavior/grid.zig");
 const contacts = @import("behavior/contacts.zig");
 const palette = @import("content/palette.zig");
+const platform = @import("platform.zig");
 
 /// The record's format. Any change to it is a new version, and records of the others are
 /// refused.
@@ -125,9 +126,10 @@ pub const picture_width = 64;
 pub const picture_height = 56;
 pub const Picture = [picture_width * picture_height * 3]u8;
 
-/// The info record of save `slot`.
-pub fn infoName(slot: []const u8, buffer: *[16]u8) []const u8 {
-    return std.fmt.bufPrint(buffer, "{s}.INFO", .{ slot }) catch unreachable;
+/// The info record of save `slot`. A slot name longer than the storage allows for this name is
+/// refused, so that a save is never written without its info record.
+pub fn infoName(slot: []const u8, buffer: *[platform.max_name_len]u8) ![]const u8 {
+    return std.fmt.bufPrint(buffer, "{s}.INFO", .{ slot }) catch error.InvalidName;
 }
 
 /// The game's picture (`width` by `height` palette indices), a quarter of its size each way: each
@@ -615,6 +617,15 @@ test "a slot's info reads back; another version is shown, another data set not l
         Slot.broken,
         try readSlot(std.testing.allocator, arena, "nonsense", 0xff),
     );
+}
+
+test "a slot name whose info name the storage would refuse is refused before any write" {
+    var buffer: [platform.max_name_len]u8 = undefined;
+    try std.testing.expectEqualStrings("SAVE1.INFO", try infoName("SAVE1", &buffer));
+    const longest: [platform.max_name_len - ".INFO".len]u8 = @splat('A');
+    try platform.validateName(try infoName(&longest, &buffer));
+    const too_long: [longest.len + 1]u8 = @splat('A');
+    try std.testing.expectError(error.InvalidName, infoName(&too_long, &buffer));
 }
 
 test "the picture is the game's, a quarter of its size, each pixel a 4 by 4 mean" {

@@ -832,8 +832,8 @@ pub const Game = struct {
             const print = if (self.data) |files| save.fingerprint(files) else 0;
             for (&list.slots, 0..) |*slot, row| {
                 var name: [8]u8 = undefined;
-                var info_name: [16]u8 = undefined;
-                const info = save.infoName(save_slots.slotName(row, &name), &info_name);
+                var info_name: [platform.max_name_len]u8 = undefined;
+                const info = try save.infoName(save_slots.slotName(row, &name), &info_name);
                 const storage = self.storage orelse {
                     slot.* = .empty;
                     continue;
@@ -902,6 +902,10 @@ pub const Game = struct {
         if (!self.canSave()) return error.NothingToSave;
         const storage = self.storage orelse return error.NoStorage;
         const files = self.data orelse return error.DataSetRequired;
+        // The info record's name is checked first: a slot name the storage refuses for it
+        // writes nothing.
+        var name: [platform.max_name_len]u8 = undefined;
+        const info_name = try save.infoName(slot, &name);
         var arena_state: std.heap.ArenaAllocator = .init(self.allocator);
         defer arena_state.deinit();
         const arena = arena_state.allocator();
@@ -944,8 +948,7 @@ pub const Game = struct {
             .date = when,
             .picture = try save.hex(arena, &pixels),
         });
-        var name: [16]u8 = undefined;
-        try storage.save(save.infoName(slot, &name), info);
+        try storage.save(info_name, info);
         self.dropSlots();
     }
 
