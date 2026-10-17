@@ -131,7 +131,7 @@ more field of the operation, with the name of the parameter.
 | 49 | 0x31 | `drop_at` | Items | Character | |
 | 50 | 0x32 | `selected_item_is` | Items | Number | |
 | 51 | 0x33 | `send_to_selected_item` | Messages | Message | |
-| 52 | 0x34 | `shift_over_gap` | Input | Number | |
+| 52 | 0x34 | `use_over_gap` | Input | Number | |
 | 53 | 0x35 | `input_buttons_only` | Input | Button | |
 | 54 | 0x36 | `make_solid` | Terrain change | Number | |
 | 55 | 0x37 | `make_empty` | Terrain change | Number | |
@@ -291,6 +291,12 @@ that is not the second condition. It writes a field with the raw value, `.unknow
 `.name_raw`, and adds a note to `report.txt`.
 
 ## Quirks
+
+- **Code 52 tests Enter.** The DOS executable prepares the Enter entry of its button table but
+  reads the Shift entry, so its Conrad throws a stone at a gap with no step back and can fall.
+  The Mega Drive edition reads the Enter entry, and its Conrad steps back first. flashbackz
+  tests Enter, as the Mega Drive does (user decision, 2026-10-17; flashback-re
+  `docs/floppy-stones.md`). Conrad's rules use code 52 one time in each level.
 
 - **The `next` field.** The original starts the scan of the target state at rule `next`
   (research: flashback-re `docs/rules/README.md`). The extractor ignores `next`, except in the key,

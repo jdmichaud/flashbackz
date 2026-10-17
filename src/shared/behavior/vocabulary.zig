@@ -87,8 +87,8 @@ pub const Operation = union(enum) {
     input_forward_and: Button,
     input_none,
     input_button: Button,
-    /// Shift held (any direction, no other button) and no floor that many cells ahead.
-    shift_over_gap: i16,
+    /// Enter held (any direction, no other button) and no floor that many cells ahead.
+    use_over_gap: i16,
     input_buttons_only: Button,
     // Terrain around the character; "ahead" follows its facing.
     ceiling_ahead: i16,

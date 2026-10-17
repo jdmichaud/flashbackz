@@ -145,9 +145,16 @@ pub fn stepClearAhead(world: *World, actor: u16, cells: i16) !bool {
     return solid(world, actor, floor, cells + 1);
 }
 
-/// Shift held (any direction, no other button) with no floor that many cells ahead.
-pub fn shiftOverGap(world: *World, actor: u16, cells: i16) !bool {
-    const controls: u8 = @bitCast(world.controls);
-    if (controls & 0xf0 != 0x40) return false;
+/// Enter held (any direction, no other button) with no floor that many cells ahead. Conrad's
+/// rules use it once: Enter at a gap with a stone selected steps him back before the throw,
+/// whose own step would carry him over the edge.
+/// The Mega Drive edition tests Enter here; the DOS executable tests Shift, though it prepares
+/// Enter's entry of the button table, so its Conrad throws at once and can fall. Enter, as the
+/// Mega Drive does, is the user's decision (2026-10-17: "Conrad is supposed to take a step back
+/// first"; flashback-re docs/floppy-stones.md, PLAN BUG-1).
+pub fn useOverGap(world: *World, actor: u16, cells: i16) !bool {
+    const held: u8 = @bitCast(world.controls);
+    const enter: u8 = @bitCast(world_module.Controls{ .enter = true });
+    if (held & 0xf0 != enter) return false;
     return !solid(world, actor, floor, cells);
 }

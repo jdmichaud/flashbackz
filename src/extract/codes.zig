@@ -70,7 +70,7 @@ pub fn lookup(code: u8) ?Operation {
         8 => op("input_forward_and", .button),
         9 => op("input_none", .none),
         10 => op("input_button", .button),
-        52 => op("shift_over_gap", .number),
+        52 => op("use_over_gap", .number),
         53 => op("input_buttons_only", .button),
         // Terrain around the character; "ahead" follows its facing.
         11 => op("ceiling_ahead", .number),

@@ -280,7 +280,7 @@ where the description says otherwise.
 | `input_none` | — | Nothing is held. |
 | `input_button` | button | That button is the only button held. Directions do not matter. |
 | `input_buttons_only` | button | Only that button is held, with no direction. |
-| `shift_over_gap` | integer | Shift is the only button held, and the floor that many cells ahead is empty. Directions do not matter. |
+| `use_over_gap` | integer | Enter is the only button held, and the floor that many cells ahead is empty. Directions do not matter. The DOS original tests Shift here; Enter is a user decision ([rule-groups.md](rule-groups.md#quirks)). |
 
 ### Terrain
 
