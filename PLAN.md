@@ -902,6 +902,38 @@ flashback-re MD1–MD3.
     decoder), `reference-environment.md` (three archives), `gameplay-sound.md` (35 ms queue),
     `floppy-demo.md` (the opening scene).
 
+## Fixes from the format specifications — user request, 2026-10-17
+
+The user, on DOC-2's list: "Fix the bug, update the docs, strengthen the scripts." Each item
+keeps play unchanged unless it says so: the gate of each is `zig build test`, smoke and verify,
+zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reproduced.
+
+- [ ] **FX-1 — No crash on unusual input.** A slot name of any length (`--save`), a settings
+  record of 8 pads with long button names, a start room of 64 or more, a frame dx of -128: each
+  is refused with an error or handled, never a panic. A test for each.
+- [ ] **FX-2 — Bad data is refused, not let through.** The save reader checks the values it
+  restores, not only the lengths. The extractor notes a label error and a missing kind, and
+  refuses two behaviors with one file name; the naming overlay refuses duplicate keys, link and
+  number names, and names for the engine's fixed messages. The data-set reader refuses unknown
+  fields everywhere and reads only the files directly in `behaviors/`. The data-set fingerprint
+  does not depend on the order of the listing.
+- [ ] **FX-3 — The hosts and the agent say what happens.** A missing `--names` file and a failed
+  extraction show their reason in every build. `--trace` keeps its help true, a failed `--load`
+  leaves the walk count, trace lines escape the slot name, and the level's state hash has one
+  byte order on every machine.
+- [ ] **FX-4 — The scripts fail loudly.** `agent_sessions.sh` and `agent_traces.sh` read the
+  agent's standard output and standard error apart, check its exit status, and stop with a
+  message when a run fails, rather than print empty or partial hashes.
+- [ ] **FX-5 — True comments and names, no dead code.** The wrong comments listed under DOC-2,
+  the ending's code notice read from FB.EXE, the eighth level code checked like the others, no
+  unreachable error, error names that match their condition.
+- [ ] **FX-6 — The fidelity questions, measured before any change.** The music block above 3
+  bits, register 0xc0's connection and feedback bits, and the frame after an animation's last
+  frame in `showFrame`: find what the original does and what the supplied files reach. Change
+  the code only with that evidence; otherwise the format documents state the limit.
+- [ ] **DOC-3 — The documents follow.** `docs/formats/` follows FX-1 to FX-6; the flashback-re
+  documents that the code contradicts are corrected there, under that repository's own plan.
+
 ## Historical CD implementation/research milestones
 
 The sibling flashback-re plan owns research. Exact fidelity and maintainability are independent
