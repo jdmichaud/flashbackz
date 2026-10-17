@@ -99,11 +99,15 @@ disk images --------------------------------------------> art and sound decoders
 The data set uses ZON (Zig object notation): human-readable, parsed by the standard library,
 no new dependency. Per level it contains `characters.zon` (every placement: name, label, kind,
 room, position, facing, behavior, links, numeric settings) and one `behaviors/<name>.zon`
-table per behavior. `messages.zon` holds the world messages that `show_message` refers to. Names are ours. The extractor's vocabulary maps every original
-condition and effect to a named, typed form. A committed naming overlay, keyed by the behavior's
-structure, names behaviors and states (`frightened_civilian`, `aiming`). Unnamed states keep a
-systematic name until someone names them. Overlays are committed ZON files in the same format.
-They may rename, add or replace data, and must not contain original content.
+table per behavior. `messages.zon` holds the world messages that `show_message` refers to, and
+`scenes.zon` the film of each scene, each level's opening scene and the ending. Names are ours.
+The extractor's vocabulary maps every original condition and effect to a named, typed form. A
+committed naming overlay, keyed by the behavior's structure, names behaviors and states
+(`frightened_civilian`, `aiming`). Unnamed states keep a systematic name until someone names
+them. Overlays are committed ZON files. They may rename, add or replace data, and must not
+contain original content. The one overlay so far, the naming overlay (`src/extract/names.zon`),
+only gives names, in its own format. `docs/formats/` specifies each format, the original's and
+ours.
 
 **A standalone build** (approved by the user, 2026-10-10) is the one place where original files
 enter a binary: `zig build -Ddisk1=PATH -Ddisk2=PATH [-Dmegadrive=PATH]` checks the user's
@@ -164,9 +168,10 @@ the original on every capture, so the planned Zig controller was not needed).
 - A **state** has a name and an animation, given as original frames, per-frame movement and
   sound cues.
 - Each state lists its **transitions** in order. A transition has a list of checks (`when`), at
-  most one effect (`then`), changes to the character (turn, damage, heal, score), a movement and
-  a target state. Some original checks are actions that always succeed, such as `set_timer` or
-  `send`. They stay in `when`, in order, because they run even when a later check fails.
+  most one effect (`then`), changes to the character (turn, damage, heal, kill, score), a
+  movement and a target state. Some original checks are actions that always succeed, such as
+  `set_timer` or `send`. They stay in `when`, in order, because they run even when a later check
+  fails.
 - **Conditions and effects** form a fixed vocabulary implemented once in Zig. Each is a small
   named function with typed arguments, written in the data set as, for example,
   `.{ .sees = .{ .kind = .player, .cells = 16 } }`, `.{ .chance = 20 }`,
@@ -175,7 +180,7 @@ the original on every capture, so the planned Zig controller was not needed).
   documented there (for example, the sight scan's leftward continuation).
 - **Links** connect a character to others. A behavior names its links (`cover`, `gunman`);
   each placement binds them to characters (`cover = papers_20`). Signals travel over links.
-- **Messages** have names: engine-wide ones for fixed meanings (hits, talk, acknowledgement)
+- **Messages** have names: engine-wide ones for fixed meanings (the four hits, acknowledgement)
   and level-wide ones from the naming overlay. Unnamed messages keep a systematic name.
 
 The evaluation order is part of the behavior and is stated explicitly:
