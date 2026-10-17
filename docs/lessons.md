@@ -96,9 +96,9 @@ time once.
   bare Xvfb, and Wine emulates DPI scaling. The Windows gate needs Windows.
 - **Zig development versions** move: `@cImport` was removed (translate the C headers in
   build.zig with `b.addTranslateC`; write no extern by hand);
-  `zig fmt` rewrites renamed builtins such as `@enumFromInt` into `@fromBackingInt(@intCast(...))`,
-  so run it before every commit; `**` array repetition is refused (use `@splat`); standard output
-  needs a streaming writer; directory entries can report an unknown kind; `std.process.Args.iterate`
+  the formatter (zigfmt, like `zig fmt`) rewrites renamed builtins such as `@enumFromInt` into
+  `@fromBackingInt(@intCast(...))`, so run it before every commit where it is installed; `**`
+  array repetition is refused (use `@splat`); standard output needs a streaming writer; directory entries can report an unknown kind; `std.process.Args.iterate`
   does not compile for Windows (use `iterateAllocator`); `setenv` does not exist there (set SDL's
   hints with override priority instead).
 - **The browser build without compiler-rt** imports the helpers the compiler calls (128-bit

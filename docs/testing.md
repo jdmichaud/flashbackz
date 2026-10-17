@@ -11,7 +11,8 @@ depends on the game, and the port builds it as its checks need (below).
 - The port's own suites, once it has them.
 - `zig build smoke` (the agent host without the game's files: it must say so and stop) and `zig
   build verify` (the agent binary links no SDL).
-- `zig fmt --check src build.zig`.
+- `zigfmt src build.zig`: the formatter, with the settings in `zigfmt.zon`. Where zigfmt is not
+  installed, skip this step; never format with `zig fmt`, whose style differs.
 
 The steps are listed at the top of `build.zig`; agents build into a prefix and a cache under
 `/tmp/<project>`, never into `zig-out`.
