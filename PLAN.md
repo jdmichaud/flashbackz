@@ -1060,6 +1060,13 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   second) of the original in its emulator against ours. Gate: an original capture of a mutant
   firing at Conrad compared update by update with the port, and the two update rates compared;
   a fix only where the port departs, in the engine or the data, not for one enemy.
+  - [x] Measured (flashback-re SP1, `4245a9e`, `docs/floppy-update-rate.md`): six original
+    captures of the jungle gunmen match the port on every update and character, with the same
+    17 shots in 600 updates; both run at 35.04 updates a second. No departure, so no fix.
+    Under DOSBox's default cycles the original runs at 32.7 updates a second: the same shots
+    about 7% later in seconds.
+  - [ ] Which original the user compares with (DOSBox at its default speed, a real PC, the Mega
+    Drive cartridge), and whether flashbackz offers that pace (a change to DESIGN.md 5).
 - [ ] **UX-4 — A key for an information overlay** (user, 2026-10-18: "add a key in the game to
   add some overlay data like the room ID and the FPS"). F3 shows or hides, over the picture: the
   frames presented each second, and in a level its name, the view room and Conrad's position.
