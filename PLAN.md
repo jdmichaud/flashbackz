@@ -1052,6 +1052,21 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   - [x] `8af2090`: tests 289/289; sessions and traces unchanged; a preview drawn with the
     supplied FB_TXT.FNT shows the strip, then the half fade.
   - [ ] The SDL game shows it when a pad is plugged and unplugged (user).
+- [ ] **BUG-3 — The mutants shoot sooner than in the original?** (user, 2026-10-18: "Aren't the
+  mutant a little too trigger happy? They seem to shoot quicker than the original game no?").
+  Measure before any change: the jungle's mutants first, then the speed of play (updates each
+  second) of the original in its emulator against ours. Gate: an original capture of a mutant
+  firing at Conrad compared update by update with the port, and the two update rates compared;
+  a fix only where the port departs, in the engine or the data, not for one enemy.
+- [ ] **UX-4 — A key for an information overlay** (user, 2026-10-18: "add a key in the game to
+  add some overlay data like the room ID and the FPS"). F3 shows or hides, over the picture: the
+  frames presented each second, and in a level its name, the view room and Conrad's position.
+  Drawn as the pads' messages are, over the presented picture only. Gate: unit tests; agent
+  sessions and traces unchanged; the SDL game shows it (user).
+- [ ] **UX-5 — HELP in the in-game menu** (user, 2026-10-18: "add an entry in the in-game menu to
+  open an help menu"). The options dialog gets a HELP entry that opens a page of the controls:
+  the keys and the pad's buttons, in play and outside it. Gate: unit tests of the menu; agent
+  sessions and traces unchanged, or the changes explained; the SDL game shows it (user).
 
 ## Historical CD implementation/research milestones
 
