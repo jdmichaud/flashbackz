@@ -138,7 +138,7 @@ pub fn main(init: std.process.Init) !void {
         &diagnostic,
     ) catch |err|
         return fail(io, err, diagnostic);
-    if (args.help) return help(io);
+    if (args.help) return help(io, arena, init.environ_map);
     const frames = (args.number(u64, "frames", 0, std.math.maxInt(u64), &diagnostic) catch |err|
         return fail(io, err, diagnostic)) orelse 120;
     var options = native.cli.fromArgs(args, &diagnostic) catch |err|
@@ -478,9 +478,10 @@ fn fail(io: std.Io, err: clap.Error, diagnostic: clap.Diagnostic) !void {
     std.process.exit(2);
 }
 
-fn help(io: std.Io) !void {
+fn help(io: std.Io, allocator: std.mem.Allocator, environ: *const std.process.Environ.Map) !void {
     var buf: [4096]u8 = undefined;
     var w = std.Io.File.stdout().writerStreaming(io, &buf);
     try Args.writeHelp(&w.interface);
+    try native.cli.writeSavesHelp(&w.interface, allocator, environ, .memory);
     try w.interface.flush();
 }

@@ -43,6 +43,9 @@ The host finds the save directory in this order:
    set and not empty. Else it is `$HOME/.local/share/flashbackz/saves`.
 4. The host creates the directory if necessary.
 
+The settings record is in the same directory ([settings.md](settings.md)). The end of
+`flashbackz --help` gives the directory of steps 2 and 3 for the current environment.
+
 When the necessary variable is missing or empty, the host stops with "no per-user data directory
 here; give --saves DIR". Without `--saves`, the agent host keeps its records in memory only.
 

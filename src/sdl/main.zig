@@ -50,6 +50,7 @@ pub fn main(init: std.process.Init) !void {
         var buf: [4096]u8 = undefined;
         var w = std.Io.File.stdout().writerStreaming(init.io, &buf);
         try Args.writeHelp(&w.interface);
+        try native.cli.writeSavesHelp(&w.interface, arena, init.environ_map, .user_directory);
         return w.interface.flush();
     }
     const status = try sdl.host.run(init.gpa, init.io, init.environ_map, options);

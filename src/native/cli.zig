@@ -3,8 +3,9 @@
 //!
 //! - The asset paths: the two disks, each a directory or a FAT12 floppy image. Without them, the
 //!   standalone build uses its built-in files. `--megadrive` adds the cartridge, for its tunes.
-//! - `--saves`: the save directory. The default is the per-user application data directory, and
-//!   `Providers.open` creates it if necessary. The agent saves in memory instead.
+//! - `--saves`: the save directory, which also holds the settings. The default is the per-user
+//!   application data directory, and `Providers.open` creates it if necessary. The agent saves in
+//!   memory instead. The end of each host's help names the default (`writeSavesHelp`).
 //! - `--data`: a data set directory. Without it, `Providers.open` extracts the data set in
 //!   memory from the disks.
 //! - `--extract` with `--names` writes the data set and exits. `--scene` selects the first scene.
@@ -35,7 +36,7 @@ pub const shared_options = [_]clap.Option{
     .{
         .long = "saves",
         .value = "DIR",
-        .help = "where saves are kept\n(default: the per-user application data directory)",
+        .help = "where the saves and the settings are kept\n(default: the end of this help)",
     },
     .{
         .long = "data",
@@ -243,9 +244,7 @@ pub const Options = struct {
     megadrive: ?[]const u8 = null,
     /// The standalone build's files, read when no path names them.
     built_in: BuiltIn = .{},
-    /// Where the game saves without `--saves`: the user's save directory, or in memory for the
-    /// agent, whose runs touch no file they are not given.
-    default_saves: enum { user_directory, memory } = .user_directory,
+    default_saves: DefaultSaves = .user_directory,
     entry: flashbackz.game.Entry = .automatic,
 
     pub fn addAsset(self: *Options, path: []const u8) error{ MissingValue, TooManyAssets }!void {
@@ -259,6 +258,10 @@ pub const Options = struct {
         }
     }
 };
+
+/// Where the game saves without `--saves`: the user's save directory, or in memory for the agent,
+/// whose runs touch no file they are not given.
+pub const DefaultSaves = enum { user_directory, memory };
 
 /// The standalone build's files (DESIGN.md 3): the disks, read when no asset path is given, and
 /// the cartridge, read without `--megadrive`.
@@ -322,7 +325,7 @@ pub const Providers = struct {
             error.InvalidImage => "not a floppy image of the game, nor a directory from one",
             error.ConflictingAsset => "a file differs from the other disk's (two editions?)",
             error.AccessDenied => "permission denied",
-            error.NoApplicationDirectory => "no per-user data directory here; give --saves DIR",
+            error.NoApplicationDirectory => no_user_directory,
             error.Io => "read error",
             error.Canceled => "canceled",
             error.OutOfMemory => "out of memory",
@@ -561,7 +564,7 @@ pub const Providers = struct {
 pub fn defaultSaveDirectory(
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
-) OpenError![]u8 {
+) error{ NoApplicationDirectory, OutOfMemory }![]u8 {
     if (builtin.os.tag == .windows) {
         const appdata = environ.get("APPDATA") orelse return error.NoApplicationDirectory;
         if (appdata.len == 0) return error.NoApplicationDirectory;
@@ -578,6 +581,29 @@ pub fn defaultSaveDirectory(
     if (home.len == 0) return error.NoApplicationDirectory;
     return std.fmt.allocPrint(allocator, "{s}/.local/share/flashbackz/saves", .{ home }) catch
         return error.OutOfMemory;
+}
+
+/// Why the environment gives no default save directory, for the failure and for the help.
+const no_user_directory = "no per-user data directory here; give --saves DIR";
+
+/// The end of a host's help: where the saves and the settings go without `--saves`. For the
+/// user's directory, the path comes from this run's environment, as `Providers.open` makes it.
+pub fn writeSavesHelp(
+    w: *std.Io.Writer,
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+    default_saves: DefaultSaves,
+) (std.Io.Writer.Error || error{ OutOfMemory })!void {
+    try w.writeAll("\nSaves and settings, without --saves:\n");
+    if (default_saves == .memory) {
+        return w.writeAll("  in memory, for this run only\n");
+    }
+    const path = defaultSaveDirectory(allocator, environ) catch |err| switch (err) {
+        error.NoApplicationDirectory => return w.writeAll("  none: " ++ no_user_directory ++ "\n"),
+        error.OutOfMemory => return error.OutOfMemory,
+    };
+    defer allocator.free(path);
+    try w.print("  {s}\n", .{ path });
 }
 
 const contract = @import("contract.zig");
@@ -630,6 +656,44 @@ test "the save directory follows the platform's application data convention" {
         try std.testing.expectError(
             error.NoApplicationDirectory,
             defaultSaveDirectory(allocator, &env),
+        );
+    }
+}
+
+test "the help names the save directory of this run" {
+    const allocator = std.testing.allocator;
+    var buf: [256]u8 = undefined;
+    {
+        var w: std.Io.Writer = .fixed(&buf);
+        var env = try testEnviron(
+            allocator,
+            &.{.{ "HOME", "/home/player" }, .{ "APPDATA", "C:\\Users\\player\\AppData\\Roaming" }},
+        );
+        defer env.deinit();
+        try writeSavesHelp(&w, allocator, &env, .user_directory);
+        const want = if (builtin.os.tag == .windows)
+            "  C:\\Users\\player\\AppData\\Roaming\\flashbackz\\saves\n"
+        else
+            "  /home/player/.local/share/flashbackz/saves\n";
+        try std.testing.expectEqualStrings(
+            "\nSaves and settings, without --saves:\n" ++ want,
+            w.buffered(),
+        );
+    }
+    {
+        var w: std.Io.Writer = .fixed(&buf);
+        var env = try testEnviron(allocator, &.{});
+        defer env.deinit();
+        try writeSavesHelp(&w, allocator, &env, .user_directory);
+        try std.testing.expect(std.mem.endsWith(u8, w.buffered(), "give --saves DIR\n"));
+    }
+    {
+        var w: std.Io.Writer = .fixed(&buf);
+        var env = try testEnviron(allocator, &.{});
+        defer env.deinit();
+        try writeSavesHelp(&w, allocator, &env, .memory);
+        try std.testing.expect(
+            std.mem.endsWith(u8, w.buffered(), "  in memory, for this run only\n"),
         );
     }
 }

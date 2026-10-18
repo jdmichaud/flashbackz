@@ -7,7 +7,7 @@ which SDL identifies by a GUID. A pad layout gives the button of each action for
 | Item | Value |
 |---|---|
 | Files | `SETTINGS` |
-| Place | The save directory, with the saves. [save.md](save.md) gives the directory, the name rules and the replacement procedure. |
+| Place | The save directory, with the saves. [save.md](save.md) gives the directory, the name rules and the replacement procedure. The end of `flashbackz --help` gives the default directory. |
 | Format | ZON text in ASCII, with a newline (`0x0a`) at the end. At most 4096 bytes. |
 | Byte order | Not applicable: the record is text. |
 | Reader | `src/shared/settings.zig` (`load`, `decode`), called by `Game.initWithEntry` in `src/shared/game.zig` |
