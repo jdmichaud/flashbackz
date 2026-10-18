@@ -116,6 +116,9 @@ Films and sound:
 
 ## Our files
 
+The game does not operate on the original file directly. It converts them (by default on the
+fly) to a set of files with more modern format that can be customized for modding.
+
 The extractor, the game and the hosts write these files.
 
 - [Data set](data-set.md): the directory that the extractor writes, with `messages.zon`,
