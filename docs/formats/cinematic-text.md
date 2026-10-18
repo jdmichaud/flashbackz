@@ -1,8 +1,8 @@
 # Cinematic text (`ENGCINE.BIN`, `ENGCINE.TXT`)
 
 ENGCINE.TXT holds the English strings of the vector films, and ENGCINE.BIN holds the offset of each
-string. The film reader puts the strings on the frames as captions and positioned texts, with the
-font `FB_TXT.FNT`.
+string. The film reader puts the strings on the film frames as captions and positioned texts, with
+the font `FB_TXT.FNT`.
 
 | Item | Value |
 | --- | --- |
@@ -43,10 +43,10 @@ string has 1 to 7 lines, and a line has at most 30 characters.
 5. String i is the bytes from the offset to that 0x0a.
 
 The reader also reads `DATA/FB_TXT.FNT` and the text color bank of the executable
-([executable.md](executable.md#data-tables)). The bank gives the film colors 0xe0-0xef. A film reads
-these files at its first caption or positioned text that has a string, and not before.
+([executable.md](executable.md#data-tables)). The color bank gives the film colors 0xe0-0xef. A film
+reads these files at its first caption or positioned text that has a string, and not before.
 
-### Put a string on a frame
+### Put a string on a film frame
 
 1. Divide the string into lines at each `|`. Refuse more than 28 lines, or a line of more than
    255 characters.
@@ -56,7 +56,7 @@ these files at its first caption or positioned text that has a string, and not b
 
 So each line moves right by half of W − L, rounded down to a whole character of 8 pixels.
 
-| Text | Command | String number | x0 | y0 | Foreground ink |
+| Text | Command | String number | x0 | y0 | Text color |
 | --- | --- | --- | --- | --- | --- |
 | Caption | 0x18 | The full u16 | 8 | 179 | 0xef |
 | Positioned text | 0x34 | Bits 0-11 of the u16 | 8 + 8 × column | 50 + 8 × row | 0xd0 + bits 12-15 |
@@ -72,7 +72,7 @@ Each character is 8 pixels wide. The pixel inks of a glyph give these film color
 | --- | --- |
 | 0x0 | None: the pixel stays as it is |
 | 0x2 | 0xe2, the shadow |
-| 0xf | The foreground ink of the text |
+| 0xf | The text color |
 | Other | 0xe0 + the glyph ink |
 
 The texts do not clip to the film viewport. The replay mode of `src/shared/scenes/ending.zig`
@@ -88,7 +88,7 @@ does not show the captions and the positioned texts.
 | `UnterminatedCinematicText` | A string without a 0x0a after it |
 | `InvalidCinematicText` | A string number of S or more, in a film command |
 | `CinematicTextTooLarge` | A string of more than 28 lines, or a line of more than 255 characters |
-| `MissingGlyph` | A character that the font does not have, when the player draws it |
+| `MissingGlyph` | A character that the font does not have, when the film player draws it |
 | The errors of [font.md](font.md) and [executable.md](executable.md) | An FB_TXT.FNT or an FB.EXE that its reader refuses |
 
 ## Quirks
@@ -96,7 +96,7 @@ does not show the captions and the positioned texts.
 - When W − L is odd, the line is 4 pixels to the left of its exact center.
 - A caption puts its lines at the center of 30 characters, also when all its lines are shorter.
 - The caption command uses all 16 bits as the string number. The positioned text command uses
-  bits 0-11, and its bits 12-15 select the ink.
+  bits 0-11, and its bits 12-15 select the text color.
 
 ## Sources
 

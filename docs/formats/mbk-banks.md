@@ -1,8 +1,9 @@
 # Object art banks (`LEVELn.MBK`)
 
-An MBK file holds the banks of 4-bit tiles that the composed object art of a level uses. Each
-bank is a stream of the backward codec, or raw bytes. [object-art.md](object-art.md) gives how a
-composition selects a bank and reads its tiles.
+An MBK file holds the art banks of a level: banks of 4-bit tiles that the composed object art uses.
+Each art bank is a packed stream, or raw bytes. A composition is the recipe of one frame of object
+art: a list of object-art parts, each a tile of an art bank at a position.
+[object-art.md](object-art.md) gives how a composition selects a bank and reads its tiles.
 
 | Item | Value |
 | --- | --- |
@@ -30,9 +31,9 @@ A size of 0 gives no bank. The pixels of a bank are 4-bit, two in each byte, wit
 first. A tile of the object art starts at a multiple of 32 bytes in its bank
 ([object-art.md](object-art.md)).
 
-A packed bank is a stream of the backward codec ([packed-stream.md](packed-stream.md)). The last
-byte of the stream is at the offset minus 1. The codec reads the stream from its end. Thus, other
-data can come before the stream. A raw bank is the bytes from its offset, as many as its size.
+A packed bank is a packed stream ([packed-stream.md](packed-stream.md)). The last byte of the stream
+is at the offset minus 1. The decoder reads the stream from its end. Thus, other data can come
+before the stream. A raw bank is the bytes from its offset, as many as its size.
 
 A writer must obey these rules:
 
@@ -54,8 +55,8 @@ In the supplied files, 131 of the 398 entries have a bank, and all the banks are
 3. Read the size word, the u16 at byte 6 × i + 4.
 4. Multiply bits 0-14 of the size word by 32. If the result is 0, there is no bank.
 5. If bit 15 of the size word is 1, copy the bank from the offset.
-6. Else, give the bytes from 6 × n to the offset to the backward codec.
-7. Make sure that the codec gives exactly the bank size.
+6. Else, give the bytes from 6 × n to the offset to the decoder of the packed stream.
+7. Make sure that the decoder gives exactly the bank size.
 
 ## Checks
 
@@ -68,7 +69,7 @@ In the supplied files, 131 of the 398 entries have a bank, and all the banks are
 | A raw bank goes past the end of the file. | `TruncatedArtBank` |
 | The unpacked size in the stream is more than the bank size. | `ExpandedContentTooLarge` |
 | The unpacked size in the stream is less than the bank size. | `ArtBankSizeMismatch` |
-| The codec refuses the stream, for example a length that is not a multiple of 4. | The codec error ([packed-stream.md](packed-stream.md)) |
+| The decoder refuses the stream, for example a length that is not a multiple of 4. | The decoder error ([packed-stream.md](packed-stream.md)) |
 | The file has more than 65,536 bytes. | `TooLarge` |
 
 The level loader counts a `MissingArtBank` as a missing sprite and continues. The other errors

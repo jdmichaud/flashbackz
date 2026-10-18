@@ -24,8 +24,8 @@ A label is a text of bytes that ends with a 0 byte. Two entries can give the sam
 original files, label 0 is empty, the texts follow each other with no gap, and each text has at
 most 16 bytes.
 
-The game draws a label with the game font ([font.md](font.md)) and with the inventory font. When
-a level loads, the game refuses a label with a character that one of these fonts does not have
+The touch label and the inventory draw a label with the game font ([font.md](font.md)). When a
+level loads, the game refuses a label with a character that the font does not have
 (`error.MissingGlyph`).
 
 ## Procedures

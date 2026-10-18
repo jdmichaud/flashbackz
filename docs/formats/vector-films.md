@@ -1,9 +1,9 @@
 # Vector films (`*.CMD`, `*.POL`)
 
 A film is a pair of files with the same base name. The CMD file holds the commands, and the POL
-file holds the shapes, the vertices and the palettes. The reader turns one entry of a film into a
-list of still frames with hold times. The title, the levels, the end sequence and the Continue
-screen show these frames.
+file holds the shapes, the vertices and the palettes. The reader turns one film entry into a list
+of film frames: still pictures with hold times. The title menu, the levels, the ending and the
+continue screen show these film frames.
 
 | Item | Value |
 | --- | --- |
@@ -40,7 +40,7 @@ set. A page loop can also end the film.
 | 0x04 | 0x01 | u8 mode | Set the background mode. A mode other than 0 starts a new background. |
 | 0x08 | 0x02 | u8 n | Wait n × 4 ticks. |
 | 0x0c | 0x03 | Shape operands | Draw a shape without scale or rotation. |
-| 0x10 | 0x04 | u8 bank, u8 destination | Set 16 film colors from a POL palette. |
+| 0x10 | 0x04 | u8 palette, u8 destination | Set 16 film colors from a POL palette. |
 | 0x14 | 0x05 | None | The same as 0x00. |
 | 0x18 | 0x06 | u16 text | Show the caption band and a caption. |
 | 0x1c | 0x07 | None | Nothing. |
@@ -103,8 +103,8 @@ use form C in the supplied files.
 | --- | --- | --- |
 | 0x18 | u16 | The string number of the caption. 0xffff shows the band without a caption. |
 | 0x34 | u16, bits 0-11 | The string number |
-| 0x34 | u16, bits 12-15 | The ink: 0xd0 plus this value |
-| 0x34 | u8 column, u8 row | The place, in 8-pixel cells from the film origin (8, 50) |
+| 0x34 | u16, bits 12-15 | The text color: 0xd0 plus this value |
+| 0x34 | u8 column, u8 row | The place, in units of 8 pixels from the film origin (8, 50) |
 
 ## Layout of the POL file
 
@@ -135,7 +135,7 @@ vertex records. The reader does not need this order.
 | --- | --- | --- |
 | Shape table | u16 for each shape | The offset of the shape record from the shape base |
 | Vertex table | u16 for each vertex record | The offset of the vertex record from the vertex base |
-| Palettes | 32 bytes for each bank | 16 colors, one u16 for each color |
+| Palettes | 32 bytes for each palette | 16 colors, one u16 for each color |
 
 ### Shape record
 
@@ -188,27 +188,27 @@ To get the 8-bit components of a color:
    c is the component.
 2. Each 8-bit component is (v << 2) | (v >> 4).
 
-## The screen
+## The film frame
 
-A frame is 256 × 224 pixels. The viewport starts at (8, 50), and it is 240 pixels wide and 128
+A film frame is 256 × 224 pixels. The viewport starts at (8, 50), and it is 240 pixels wide and 128
 rows high. Index 0xc0 fills the viewport, then the primitives clip to it. The texts do not clip to
 the viewport. The caption band covers the rows 178 to 202 on the full width, in index 0xc0.
 
 ## The film colors
 
-A frame has 256 colors. At the start of a film, all of them are black.
+A film frame has 256 colors. At the start of a film, all of them are black.
 
 | Index | Content |
 | --- | --- |
 | 0x00-0xbf | Black. The area outside the viewport uses index 0x00. |
-| 0xc0-0xcf | Command 0x10 with destination 1: the background inks. Index 0xc0 also fills the viewport and the caption band. |
-| 0xd0-0xdf | Command 0x10 with destination 0: the foreground inks and the inks of the positioned texts. |
+| 0xc0-0xcf | Command 0x10 with destination 1: the background colors. Index 0xc0 also fills the viewport and the caption band. |
+| 0xd0-0xdf | Command 0x10 with destination 0: the foreground colors and the text colors of the positioned texts. |
 | 0xe0-0xef | The text color bank of the executable ([executable.md](executable.md#data-tables)), set at the first text command that has a string. |
 | 0xf0-0xff | Black |
 
-Command 0x10 reads bank b at the palette offset plus 32 × b. It sets 16 colors from 0xd0 for
-destination 0, or from 0xc0 for destination 1. The colors of a frame are a copy of the film colors
-at its present.
+Command 0x10 reads palette b at the palette offset plus 32 × b. It sets 16 colors from 0xd0 for
+destination 0, or from 0xc0 for destination 1. The colors of a film frame are a copy of the film
+colors at its present.
 
 ## Procedures
 
@@ -219,11 +219,13 @@ at its present.
 2. Find the start of the entry (see the CMD layout).
 3. Set the start state. The new picture, the saved background and the shown picture are empty.
    All film colors are black. The background mode and the wait sum are 0, and no caption shows.
-4. Add frame 0. It is empty and black. Its hold is the time before the first present, and the
-   replay mode does not present it.
+4. Add film frame 0. It is empty and black. Its hold is the time before the first present. The
+   ending plays the films of its list in replay mode: each picture shows for the time of its own
+   present, then again every 2 ticks while the film waits ([Time](#time)). The replay mode does
+   not present film frame 0.
 5. Do the commands from the start of the entry. Stop at a command byte with bit 7 set, or when a
    page loop ends the film. Refuse more than 100,000 commands.
-6. Add the wait sum to the hold of the last frame.
+6. Add the wait sum to the hold of the last film frame.
 
 The new picture is the list of primitives and texts that the next present shows. The shown
 picture is the list of the last present.
@@ -232,12 +234,12 @@ picture is the list of the last present.
 
 A present has its own time: 4 ticks for 0x00, 0x14 and 0x24, and 9 ticks for 0x30.
 
-1. Add the wait sum and the time of the present to the hold of the last frame.
+1. Add the wait sum and the time of the present to the hold of the last film frame.
 2. Set the wait sum to 0.
-3. Add a frame: a copy of the new picture, the film colors, the caption and the caption band.
+3. Add a film frame: a copy of the new picture, the film colors, the caption and the caption band.
 4. Keep the new picture as the shown picture.
 
-So the hold of a frame is the time from its present to the next present.
+So the hold of a film frame is the time from its present to the next present.
 
 ### Start a new picture
 
@@ -255,8 +257,8 @@ picture. The commands after it draw on top of that picture.
 
 1. Find the shape record: the shape base plus the shape table word of the shape number.
 2. For each primitive, read the vertex reference, the offset and the color. Refuse a color above
-   0x0f. The ink is the color plus 0xd0 in background mode 0, and the color plus 0xc0 in another
-   mode.
+   0x0f. The color index is the color plus 0xd0 in background mode 0, and the color plus 0xc0 in
+   another mode.
 3. Find the vertex record: the vertex base plus the vertex table word of the record number. Read
    the kind and the first point, and add the offset of the primitive to the first point.
 4. For a polygon, add each step to the point. A step with dy 0 adds no point when the step after
@@ -264,10 +266,10 @@ picture. The commands after it draw on top of that picture.
    then scale), then the placement.
 5. For an ellipse, find the center and the radii (see the ellipse procedure below). Then add the
    placement to the center.
-6. The primitive is see-through when bit 14 of its vertex reference is set and its ink is above
-   0xc7. Only an ellipse or a polygon of 3 points or more can be see-through. A see-through
-   primitive sets bit 3 of each pixel under it (pixel | 0x08). Another primitive sets each pixel
-   to its ink.
+6. The primitive is see-through when bit 14 of its vertex reference is set and its color index is
+   above 0xc7. Only an ellipse or a polygon of 3 points or more can be see-through. A see-through
+   primitive sets bit 3 of each pixel under it (pixel | 0x08). Another primitive sets each pixel to
+   its color index.
 7. Add the primitive to the new picture.
 8. After the last primitive, in a background mode other than 0, copy the new picture to the saved
    background.
@@ -277,13 +279,13 @@ additions wrap around at 16 bits.
 
 ### Captions and texts
 
-- Command 0x18 turns the caption band on and sets the caption: the lines of the string, or no
-  lines for 0xffff. The band and the caption stay on the frames after it, until a picture starts
-  in a background mode other than 0. The next 0x18 replaces them.
+- Command 0x18 turns the caption band on and sets the caption: the lines of the string, or no lines
+  for 0xffff. The band and the caption stay on the film frames after it, until a picture starts in a
+  background mode other than 0. The next 0x18 replaces them.
 - Command 0x34 adds a text to the new picture for each line of its string. These texts are
   part of the picture, as the primitives are.
-- The player draws the primitives and texts of a frame in their sequence, then the band, then the
-  caption.
+- The film player is the code that plays a film (`src/shared/scenes/vector_player.zig`). It draws
+  the primitives and texts of a film frame in their sequence, then the band, then the caption.
 
 ### Projection
 
@@ -337,11 +339,12 @@ The rotation does not change the radii.
 
 ### Time
 
-A tick is one period of the PC timer: 17,024 counts of the 1,193,182 Hz clock, about 70.09 Hz.
-The player shows each frame for its hold, then waits for the next display refresh (about 59.94
-Hz), in `src/shared/scenes/vector_player.zig`. The film ends after the hold of its last frame.
+The holds, the waits and the presents count timer ticks ([README.md](README.md#terms)). The film
+player shows each film frame for its hold, then waits for the next display refresh (about 59.94
+Hz). The film ends after the hold of its last film frame.
 
-For the replay mode of `src/shared/scenes/ending.zig`, a frame also keeps:
+In replay mode (`src/shared/scenes/ending.zig`), the credits type one step at each present. For
+the replay mode, a film frame also keeps:
 
 - the time of its own present (4 or 9 ticks);
 - the number of 2-tick presents of the waits after it: 2 × n + 1 for each wait of n;
@@ -355,31 +358,32 @@ count from the command base.
 
 1. Target ≥ 0, target at or before here, fallback after here (a release loop): go on at the
    fallback.
-2. Target < 0, fallback after here: mark the last frame "a confirmation ends the film". Go on at
-   the fallback.
-3. Fallback at or before here, and target < 0 or after here: the last frame closes an input loop.
+2. Target < 0, fallback after here: mark the last film frame "a confirmation ends the film". Go on
+   at the fallback.
+3. Fallback at or before here, and target < 0 or after here: the last film frame closes an input
+   loop.
    Go on at the target, or end the film when the target is negative.
 4. Refuse all other cases.
 
-For case 3, the fallback must be a command that the reader did before. The loop starts at the
-frame that the first present after the fallback added. When no present came after the fallback,
-the loop has only the last frame. The loop time is W + H − F:
+For case 3, the fallback must be a command that the reader did before. The loop starts at the film
+frame that the first present after the fallback added. When no present came after the fallback, the
+loop has only the last film frame. The loop time is W + H − F:
 
 - W is the wait sum.
-- H is the hold of the frame before the loop start. H is 0 when no present came after the
+- H is the hold of the film frame before the loop start. H is 0 when no present came after the
   fallback.
 - F is the wait sum at the fallback.
 
 The reader refuses a negative loop time.
 
-The player does these steps at the end of a frame:
+The film player does these steps at the end of a film frame:
 
-1. When the frame has the mark and a confirmation came, the film ends.
-2. When the frame closes a loop without a confirmation, the player goes to the loop start after
-   the loop time.
-3. Else the player goes to the next frame after the hold.
+1. When the film frame has the mark and a confirmation came, the film ends.
+2. When the film frame closes a loop without a confirmation, the film player goes to the loop
+   start after the loop time.
+3. Else the film player goes to the next film frame after the hold.
 
-A loop of one frame with a loop time of 0 waits for a confirmation without a time limit.
+A loop of one film frame with a loop time of 0 waits for a confirmation without a time limit.
 
 ## Film entries and scene records
 
@@ -390,7 +394,7 @@ The code names five films directly. All of them use entry 0.
 | LOGOS | `src/shared/scenes/front_end.zig` | The first film of the title |
 | INTRO1, INTRO2 | `src/shared/scenes/front_end.zig` | The introduction. The title stops with an error when one of their 4 files is not there. |
 | OVER | `src/shared/scenes/front_end.zig` | The game over film, after Abort |
-| SCORE | `src/shared/content/continue_artwork.zig` | The last frame is the still picture of the Continue screen. Its colors 0xe0-0xef are the text colors of the executable. |
+| SCORE | `src/shared/content/continue_artwork.zig` | The last film frame is the still picture of the continue screen. Its colors 0xe0-0xef are the text colors of the executable. |
 
 The other films come from the 76 scene records of the executable
 ([executable.md](executable.md#scene-record)). A scene record gives the index of a film name (0 to
@@ -420,14 +424,14 @@ stops the start when the reader refuses one. A film can have more entries than t
 | `UnsupportedCinematicPolygon` | A polygon kind of 64 to 127 |
 | `InvalidCinematicEllipse` | A negative radius, before or after the scale |
 | `UnsupportedCinematicInteraction` | A page loop that is not form A, B or C, a case-4 loop, a loop back to a command that the reader did not do, or a negative loop time |
-| `CinematicTooLarge` | More than 1,024 primitives in a shape, 10,000 frames, 1,000,000 primitives in all the picture copies, about 2,000,000 points in all, or 100,000 commands without an end |
+| `CinematicTooLarge` | More than 1,024 primitives in a shape, 10,000 film frames, 1,000,000 primitives in all the picture copies, about 2,000,000 points in all, or 100,000 commands without an end |
 | `Overflow` | A hold above the u32 range |
 | `CinematicTextRequired` | A text command with a string in `compile`, which has no files for the text |
 
-The text commands can also give the errors of [cinematic-text.md](cinematic-text.md). The player
-refuses a film without frames (`EmptyFilm`) and an input loop without time
-(`UnboundedFilmInputLoop`), in `film.View.validate`. The renderer refuses a point beyond ±4096 in
-a polygon of 3 points or more (`UnsupportedVectorExtent`, `src/shared/render/indexed_shapes.zig`).
+The text commands can also give the errors of [cinematic-text.md](cinematic-text.md). The film
+player refuses a film without film frames (`EmptyFilm`) and an input loop without time
+(`UnboundedFilmInputLoop`), in `film.View.validate`. The renderer refuses a point beyond ±4096 in a
+polygon of 3 points or more (`UnsupportedVectorExtent`, `src/shared/render/indexed_shapes.zig`).
 
 ## Quirks
 
@@ -437,10 +441,10 @@ a polygon of 3 points or more (`UnsupportedVectorExtent`, `src/shared/render/ind
 - The first point of the shape command anchors the scale, together with the pivot.
 - In a rotated shape, an ellipse center takes only the rotated y, and the radii do not turn.
 - The Q8 table is not symmetric on its exact points: S(30) is 127, but C(300) is 128.
-- A see-through polygon of one or two points uses its ink.
+- A see-through polygon of one or two points uses its color index.
 - The caption shows its bottom pixel row only on every second present after command 0x18. A hold
-  (0x30) copies the shown page to the other page, so its frame shows the same row as the frame
-  before it. The two display pages of the original cause this (`film.Frame.caption_tail`).
+  (0x30) copies the shown page to the other page, so its film frame shows the same row as the film
+  frame before it. The two display pages of the original cause this (`film.Frame.caption_tail`).
 
 ## Sources
 

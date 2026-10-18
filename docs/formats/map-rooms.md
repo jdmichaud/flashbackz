@@ -1,7 +1,7 @@
 # Installed room images (`LEVELn.MAP`)
 
 An installed MAP file holds the 64 room images of a level as indexed pixels, with the four
-palette banks of each room. The DOS installer writes it from the LEV, BNQ and SGD files. When a
+PAL banks of each room. The DOS installer writes it from the LEV, BNQ and SGD files. When a
 MAP file is present, the reader uses it and does not open the LEV, BNQ and SGD files.
 
 | Item | Value |
@@ -45,7 +45,7 @@ of the room records.
 | 3 | 1 | u8 | The PAL bank of palette slot 3 |
 | 4 | size - 4 | – | The pixels: raw planes or four packed strips |
 
-The four banks select the colors of the room ([level-palette.md](level-palette.md)).
+The four PAL banks select the colors of the room ([level-palette.md](level-palette.md)).
 
 ### Raw planes
 
@@ -111,7 +111,7 @@ To read room r:
 | The offset is 0. | `AbsentRoom` (not a failure: no room) |
 | The room record starts in the directory or goes past the end of the file. | `InvalidRoomRange` |
 | The room record is shorter than 4 bytes. | `TruncatedRoomPalette` |
-| A bank is not in the PAL file. | See [level-palette.md](level-palette.md#checks) |
+| A PAL bank is not in the PAL file. | See [level-palette.md](level-palette.md#checks) |
 | The raw planes are not 57,344 bytes. | `InvalidBitmapLength` |
 | The size of a strip is not in the room record. | `TruncatedStripLength` |
 | The run codes of a strip go past the end of the room record. | `TruncatedStrip` |

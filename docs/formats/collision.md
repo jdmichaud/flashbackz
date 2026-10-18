@@ -1,8 +1,10 @@
 # Collision grid (`LEVELn.CT`)
 
 A collision file holds the terrain of a level. For each of the 64 rooms, it gives the four
-neighbors and a grid of 7 rows by 16 columns of cells. The behavior rules probe the cells, and the
-level atlas uses the neighbors to put the rooms on a map.
+neighbors and a grid of 7 rows by 16 columns of terrain cells. A terrain cell is empty or solid.
+The engine is the part of the game that runs a level: it updates the characters from their
+behaviors and probes the terrain. The behavior rules probe the cells, and the atlas uses the
+neighbors to put the rooms on a map.
 
 | Item | Value |
 | --- | --- |
@@ -28,8 +30,13 @@ A link table has one byte for each room. The byte for room `r` is at offset `r` 
 link is a room number from 0 to 63. The value 0xff tells that there is no room on that side. The
 original files contain no other link values.
 
-A room record has 7 rows of 16 cells. The cell at row `row` and column `column` of room `r` is at
-offset `256 + 112 * r + 16 * row + column`.
+A room record has 7 rows of 16 terrain cells. The cell at row `row` and column `column` of room `r`
+is at offset `256 + 112 * r + 16 * row + column`.
+
+A sight scan is the search of `sees` (code 64) for another character, from the looking character
+to the left or to the right, on its tier ([Room geometry](#room-geometry)). The names in this
+style, for example `low_passage_ahead`, `shoot` and `strike`, are the names of operations
+([behaviors.md](behaviors.md)).
 
 | Cell value | Description |
 | --- | --- |
@@ -84,16 +91,16 @@ reads row 6 of the room above.
 The effects `make_solid`, `make_empty` and `make_low_passage` write 0x01, 0x00 and 0x02:
 
 1. If the character is in a room above 63, stop.
-2. Find the first cell: the cell of room `room` in the column of the character, on the row
+2. Find the start cell: the cell of room `room` in the column of the character, on the row
    `band + argument`. For this column and band, the engine uses the current position, with `y`
    read as `u16`.
-3. If the character faced right at the start of its update, move the first cell back by
+3. If the character faced right at the start of its update, move the start cell back by
    `width - 1` bytes. The width is byte 28 of the placement ([placements.md](placements.md)).
-4. Write `width` consecutive bytes from the first cell. The bytes continue into the next row or
+4. Write `width` consecutive bytes from the start cell. The bytes continue into the next row or
    room record. The engine skips bytes outside the grid.
 
 The engine keeps the old bytes, so that `restore_terrain` can write them back. If the history of
-changes is full, a change at a new first cell writes nothing (`TerrainHistory` in `world.zig`).
+changes is full, a change at a new start cell writes nothing (`TerrainHistory` in `world.zig`).
 
 ## Checks
 

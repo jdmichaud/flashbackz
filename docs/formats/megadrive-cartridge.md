@@ -29,13 +29,13 @@ parentheses are the values in the code.
 
 | Offset | Size | Type | Content |
 |---|---|---|---|
-| 1,457,324 (0x163cac) | 6 × effects | record | The effect table: one record for each effect of the cartridge, by effect number |
+| 1,457,324 (0x163cac) | 6 × sound effects | record | The sound effect table: one record for each sound effect of the cartridge, by sound effect number |
 | 1,547,528 (0x179d08) | 510 | 255 × u16 | The note table |
 
-The reader reads only the records of the effects 68 to 75, at the offsets 1,457,732 to 1,457,779.
-flashback-re `docs/megadrive-music.md` describes the other records.
+The reader reads only the records of the sound effects 68 to 75, at the offsets 1,457,732 to
+1,457,779. flashback-re `docs/megadrive-music.md` describes the other records.
 
-An effect record:
+A sound effect record:
 
 | Offset | Size | Type | Content |
 |---|---|---|---|
@@ -48,20 +48,20 @@ holds the block and the frequency number of the note. Its high byte goes to the 
 
 ### The tune
 
-A tune starts at the address of its effect record.
+A tune starts at the address of its sound effect record.
 
 | Offset | Size | Type | Content |
 |---|---|---|---|
 | 0 | 60 | 15 × u32 | The addresses of the instruments 1 to 15 |
 | 60 | 2 | u16 | The number of rows, not 0 |
-| 62 | 2 | u16 | The frames in one row, without the tempo (see the playback) |
+| 62 | 2 | u16 | The Mega Drive frames in one row, without the tempo ([Playback](#playback)) |
 | 64 | 30 | 15 × i16 | The detune of the instruments 1 to 15 |
 | 94 | 6 × rows | row | The rows |
 
 The 35 bytes of each of the 15 instruments must be in the file, also for the instruments that the
 rows do not use.
 
-A row has one cell of 2 bytes for each of the 3 channels:
+A row has one tune cell of 2 bytes for each of the 3 channels:
 
 | Offset | Size | Type | Content |
 |---|---|---|---|
@@ -72,10 +72,10 @@ A row has one cell of 2 bytes for each of the 3 channels:
 
 ### The instrument
 
-An instrument has 35 bytes. Bytes 0 to 32 go to the YM2612 registers in this order. In the
-table, `c` is the channel: 0, 1 or 2 for the channels 1, 2 and 3. The player adds `c` to each
-register in the table but 0x22 and 0x28. The four bytes of an operator group go to the four
-registers in the order of the register numbers.
+An instrument has 35 bytes. Bytes 0 to 32 go to the YM2612 registers in this order. In the table,
+`c` is the channel: 0, 1 or 2 for the channels 1, 2 and 3. The tune player adds `c` to each register
+in the table but 0x22 and 0x28. The four bytes of an operator group go to the four registers in the
+order of the register numbers.
 
 | Offset | Size | Type | Content | Register |
 |---|---|---|---|---|
@@ -89,31 +89,31 @@ registers in the order of the register numbers.
 | 25 | 4 | u8 | SSG-EG | 0x90, 0x94, 0x98, 0x9c |
 | 29 | 1 | u8 | Stereo output and modulation sensitivity | 0xb4 |
 | 30 | 1 | u8 | LFO, for all channels | 0x22 |
-| 31 | 2 | u16 | The frequency. The player replaces it with the note's word. | 0xa4, then 0xa0 |
+| 31 | 2 | u16 | The frequency. The tune player replaces it with the note's word. | 0xa4, then 0xa0 |
 | 33 | 1 | u8 | The length of the note, in frames. 0: no release before the next note. | – |
 | 34 | 1 | u8 | The key-on mask of the operators | 0x28, with `c` in the value |
 
 ## Read the tunes
 
 1. Read the 255 words of the note table.
-2. For each effect e from 68 to 75, read its record at 1,457,324 + 6 × e.
+2. For each sound effect e from 68 to 75, read its record at 1,457,324 + 6 × e.
 3. Refuse the cartridge when the length is not 0xffff.
 4. At the address of the tune, read the number of rows and the frames in one row. Refuse a tune
    without rows.
 5. Copy the rows.
 6. For each instrument from 1 to 15, read its address, copy its 35 bytes and read its detune.
 
-Tune k, from 0 to 7, is the effect 68 + k.
+Tune k, from 0 to 7, is the sound effect 68 + k.
 
 ## Playback
 
-A level asks for the effects 68 to 75 as for the other effects (see
+A level asks for the sound effects 68 to 75 as for the other sound effects (see
 [sound-effects.md](sound-effects.md)). With the cartridge and the MUSIC option on, such a request
-starts tune id − 68 from its first row at the next frame. The new tune replaces the tune that
-plays. The instrument of each channel stays from one tune to the next.
+starts tune id − 68 from its first row at the next frame. The new tune replaces the tune that plays.
+The instrument of each channel stays from one tune to the next.
 
-A frame is one vertical blank of an NTSC console: 896,040 cycles of the 53,693,175 Hz master
-clock, about 59.92 frames each second. At each frame, the player does these steps:
+A Mega Drive frame is one vertical blank of an NTSC console: 896,040 cycles of the 53,693,175 Hz
+master clock, about 59.92 frames each second. At each frame, the tune player does these steps:
 
 1. When a tune plays and its wait is 0, it reads the next row. Else it decreases the wait by 1.
 2. For each cell of the row, an instrument that is not 0 becomes the instrument of the channel.
@@ -123,12 +123,12 @@ clock, about 59.92 frames each second. At each frame, the player does these step
    their registers. Then it writes the bitwise OR of `c` and byte 34 to 0x28 (key on).
 6. Bytes 31 and 32 hold the note's word from the note table plus the instrument's detune, with
    16-bit wrap.
-7. The player keeps byte 33 of the instrument as the counter of the channel.
-8. For a channel without a new note, a counter above 0 decreases by 1. At 0, the player writes `c`
-   to 0x28 (key off).
+7. The tune player keeps byte 33 of the instrument as the counter of the channel.
+8. For a channel without a new note, a counter above 0 decreases by 1. At 0, the tune player writes
+   `c` to 0x28 (key off).
 
 The cartridge adds a tempo value to the frames of each row. On an NTSC console this value is 1,
-and the player uses 1. Thus a row lasts the frames in one row plus 2 frames.
+and the tune player uses 1. Thus a row lasts the frames in one row plus 2 frames.
 
 The chips get the writes of a frame from 148,000 master cycles after the vertical blank, one write
 each 2,925 cycles. Each write is the register to port 0, then the value to port 1. The chips read
@@ -141,8 +141,8 @@ nothing else of the cartridge: the tunes use no DAC samples and no PSG.
 | The `--megadrive` file is not there | `error.NotFound` |
 | The size or the SHA-256 digest is not the accepted one | `error.UnsupportedCartridge` |
 | The file in the asset source is larger than 2,097,152 bytes | `error.TooLarge` |
-| The note table, an effect record, a tune header, the rows or an instrument go past the end of the file | `error.InvalidCartridge` |
-| The length of an effect record from 68 to 75 is not 0xffff | `error.InvalidCartridge` |
+| The note table, a sound effect record, a tune header, the rows or an instrument go past the end of the file | `error.InvalidCartridge` |
+| The length of a sound effect record from 68 to 75 is not 0xffff | `error.InvalidCartridge` |
 | A tune has 0 rows | `error.InvalidCartridge` |
 
 ## Quirks

@@ -1,7 +1,8 @@
 # Settings (`SETTINGS`)
 
 The settings record holds the options of the player and the pad layouts as one ZON record. The
-game reads it at start and writes it after a setting changes.
+game reads it at start and writes it after a setting changes. A pad model is a model of gamepad,
+which SDL identifies by a GUID. A pad layout gives the button of each action for one pad model.
 
 | Item | Value |
 |---|---|
@@ -91,12 +92,12 @@ write the defaults back. The record stays as it is until a setting changes.
 ### Write
 
 1. Compare the settings with the settings that the storage keeps. Do this at the start of each
-   game update and when the game stops.
+   host frame and when the game stops.
 2. If they are the same, stop.
 3. Write all the fields in the order of the Record table, then a newline.
 4. In `pads`, write only the models that do not have the fixed layout, in the order of the list.
 5. If the write succeeds, keep the settings as the settings of the storage. If it fails, step 1
-   tries again at the next update.
+   tries again at the next host frame.
 
 Without storage, the game writes nothing. The agent host without `--saves` keeps the record in
 memory, and the record does not stay after the run.

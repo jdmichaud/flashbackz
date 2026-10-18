@@ -1,8 +1,12 @@
 # Saves (`QUICK`, `SAVE1` to `SAVE8`, `.INFO`)
 
 A save holds a level in play as one ZON record: the session, the world and the play state of the
-level. Beside each save, an INFO record holds what the slot pages show. The game writes the two
-records into the save directory and reads them back.
+level. The session is the game in progress: the level, the difficulty, the score, and what passes
+from one level to the next. The world is the state of the level that the engine keeps, for example
+the characters and the terrain. A checkpoint is a copy of the characters, the score and the
+terrain that the effect `checkpoint` makes. After a defeat, play can continue from the last
+checkpoint. Beside each save, an INFO record holds what the pages of the save slots show. The game
+writes the two records into the save directory and reads them back.
 
 | Item | Value |
 |---|---|
@@ -15,8 +19,8 @@ records into the save directory and reads them back.
 
 ## Slots
 
-The SAVE GAME page (in the options dialog) and the LOAD GAME page (on the title menu) show 9
-rows. Row 0 is the quick slot. Row r is slot r.
+The options dialog is the dialog that Escape opens during play. Its SAVE GAME page and the LOAD
+GAME page of the title menu show 9 rows. Row 0 is the quick slot. Row r is save slot r.
 
 | Row | Save record | INFO record | Other access |
 |---|---|---|---|
@@ -123,8 +127,8 @@ the field must be present.
 | Field | Type | Default | Content |
 |---|---|---|---|
 | `last_direction` | u8 | - | The last input byte without a diagonal. An input with a diagonal uses its bits 0 to 3. |
-| `inventory_delay` | u8 | - | The presented frames before the inventory key works. |
-| `catch_up_due` | bool | - | The last frame ended late: the next frame walks the characters two times. |
+| `inventory_delay` | u8 | - | The pictures that the level presents before the inventory key works. |
+| `catch_up_due` | bool | - | The last host frame ended late: the next host frame runs two updates. |
 | `requested_scene` | ?i16 | - | The scene that the last update requested. It plays at the start of the next update. |
 
 ### World
@@ -134,12 +138,12 @@ the field must be present.
 | `characters` | list of Character | - | One item for each character of the level, in the order of the data set ([characters.md](characters.md)). |
 | `room_lists` | list of 256 ?u16 | - | By room value: the first character in the list of that room. |
 | `contacts` | Contacts | - | The contact registrations of the last update. |
-| `letters` | list of 256 Letter | - | The message pool. |
+| `letters` | list of 256 Letter | - | The message pool. A letter is one sent message that waits in the pool. |
 | `free_letter` | ?u16 | - | The first free letter of the pool. |
 | `inbox` | list of ?u16 | - | One item for each character: the first letter that waits for it. |
 | `random` | u32 | - | The state of the random generator. |
 | `controls` | u8 | - | The controls of the last walk. Bits 0 to 7: up, down, left, right, enter, space, shift, inventory. |
-| `view_room` | u8 | - | The room on the screen. |
+| `view_room` | u8 | - | The view room ([animations.md](animations.md)). |
 | `view_dirty` | bool | - | The view must go to the room of Conrad after the update. |
 | `room_loads` | u32 | - | The count of loads of the view room. |
 | `checkpoint_saves` | u32 | - | The count of checkpoint saves. |
@@ -314,11 +318,11 @@ The game needs the storage, the data set and the original files.
 4. Compare `data_set` with the fingerprint of the data set in use.
 5. Load the level again from the data set, at the difficulty of the record and with the
    `inherited` flags.
-6. Put back the world (`restoreWorld`) and the scene state.
-7. Stop the scene in play. The loaded level takes its place, with the level, the difficulty and
+6. Put back the world (`restoreWorld`) and the play state (`scene`).
+7. Stop the screen in play. The loaded level takes its place, with the level, the difficulty and
    the play walks of the record.
 
-If a step fails, the scene in play continues. F9 and the agent host do not read the INFO record.
+If a step fails, the screen in play continues. F9 and the agent host do not read the INFO record.
 
 ### Slot list
 

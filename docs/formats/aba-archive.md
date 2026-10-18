@@ -34,8 +34,8 @@ The file data comes after the records.
 | 26 | 4 | ASCII | The tag `D.M.`. |
 
 When the stored size is equal to the size, the file data is the file. When the stored size is
-less than the size, the file data is a [packed stream](packed-stream.md). Its trailer must give
-the same size.
+less than the size, the file data is a [packed stream](packed-stream.md). The trailer of the
+stream (its last 12 bytes) must give the same size.
 
 The file data of each record starts at or after the end of the file data of the record before it.
 The file data of the first record starts at or after the end of the records. The file data of the
@@ -90,7 +90,7 @@ the same bytes (names compare without case).
 | The set has 4,096 files already. | `TooLarge` |
 
 The hosts change each error, except `ConflictingAsset`, `OutOfMemory` and `Canceled`, into
-`InvalidImage`. The message starts with "cannot open the disks' archives", then gives the reason
+`InvalidImage`. The error text starts with "cannot open the disks' archives", then gives the reason
 as for an image ([floppy-image.md](floppy-image.md#checks)).
 
 The rules for a valid asset name are in [floppy-image.md](floppy-image.md#asset-names). A name can

@@ -31,6 +31,9 @@ same in all the records.
 
 ### Icon numbers
 
+The selected item is the first item in the list of items of Conrad. The player selects it in the
+inventory screen.
+
 | Icon number | User | Use |
 | --- | --- | --- |
 | 0 to n − 1 | `level_pack.zig` | The level loader decodes all the icons. |
@@ -57,7 +60,7 @@ The inventory panel is 144 × 80 pixels: 9 columns and 5 rows of tiles. Tile k (
 ### Show an icon
 
 The level screen writes each pixel p that is not 0 as the color 0xa0 + p. Color block 10 (0xa0
-to 0xaf) holds the colors of bank slot 2 of the room where Conrad starts
+to 0xaf) holds the colors of palette slot 2 of the room where Conrad starts
 ([level-palette.md](level-palette.md#give-a-room-its-colors)). The level screen also writes the
 icon of the selected item into the room background. There, the icon hides the sprites.
 

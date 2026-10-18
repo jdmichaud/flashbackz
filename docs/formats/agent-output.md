@@ -45,9 +45,9 @@ only one time.
 | `--button-down F:BUTTON` | | At frame F, `controller_button_down` of BUTTON on pad 0. |
 | `--button-up F:BUTTON` | | At frame F, `controller_button_up` of BUTTON on pad 0. |
 | `--axis F:AXIS:VALUE` | VALUE: -32768 to 32767 | At frame F, `controller_axis` of AXIS on pad 0. |
-| `--save F:SLOT` | | After the update of frame F, save the level in play into the record SLOT. |
-| `--load F:SLOT` | | After the update of frame F, load the record SLOT. |
-| `--stall F:MS` | MS: 0 to 3600000 | Before the update of frame F, advance the clock by MS milliseconds. |
+| `--save F:SLOT` | | After the game runs in frame F, save the level in play into the record SLOT. |
+| `--load F:SLOT` | | After the game runs in frame F, load the record SLOT. |
+| `--stall F:MS` | MS: 0 to 3600000 | Before the game runs in frame F, advance the clock by MS milliseconds. |
 | `--trace` | | Write the trace lines on standard error: the state hash of the level after each host frame in which it walked. |
 | `--pcm FILE` | | Write the audio that the game queued into FILE. |
 
@@ -83,8 +83,8 @@ The clock starts at 0. Each host frame does these steps:
 5. Do the `--save` and `--load` options of the frame, in the order of the command line.
 6. Advance the clock by 16666666 ns (1/60 s, rounded down).
 
-The game gets an event at the first update with a clock at or after the time of the event. The
-first update starts the platform. It reads events only when the game starts in a level.
+The game gets an event in the first host frame with a clock at or after the time of the event. The
+first host frame starts the platform. It reads events only when the game starts in a level.
 
 At the end of the run, the host writes the PCM file, and then the two lines on standard output.
 
@@ -98,13 +98,13 @@ At the end of the run, the host writes the PCM file, and then the two lines on s
 
 | Field | Type | Content |
 |---|---|---|
-| `updates` | integer | The game updates that ran. |
+| `updates` | integer | The host frames in which the game ran (the calls of `game.update`). |
 | `frames_presented` | integer | The pictures that the game presented. |
 | `events_consumed` | integer | The device events that the game read. |
 | `state_hash` | string | The hash of the state of the scene in play, in 16 lower-case hexadecimal digits (see below). |
 | `frame_hash` | string | The Wyhash (seed 0) of the last presented picture as 256 × 224 palette indices, in 16 lower-case hexadecimal digits. 0 when the game presented no picture. |
 
-The frame hash covers only the palette indices. A change of the palette, or of the save picture
+`frame_hash` covers only the palette indices. A change of the palette, or of the save picture
 on a slot page, does not change it.
 
 The state hash is a Wyhash of the state of the scene in play. The function `stateHash` of each
@@ -115,9 +115,9 @@ the same on every machine. The hash covers these values:
 | Scene | Values |
 |---|---|
 | `level` | For each character, as `i32`: state, cursor, x, y, room, health, counter, active, direction, sprite, mirrored, first item and next item (-1 for none). Then, as `u32`: the score, the view room and the random state. |
-| `menu` | The stage, the page, the selected row, the difficulty, the next difficulty, the selected level, the typed code, the part of the introduction and the frame of the film in play. |
+| `menu` | The stage, the page, the selected row, the difficulty, the next difficulty, the selected level, the typed code, the part of the introduction and the film frame in play. |
 | `continue_game` | The choice, the pulse and its direction, the countdown, the pending and held presses, the view, the score, the clock, the result and the queued events. |
-| `ending` | The stage, the end flag, the film, the frame of the film, and the step and the typed characters of the credits. |
+| `ending` | The stage, the end flag, the film, its film frame, and the step and the typed characters of the credits. |
 
 ### Line 2
 
@@ -141,7 +141,7 @@ The fields of line 2 depend on the scene in play.
 | `stage` | string | `branding`, `introduction`, `game_over`, `menu`, `ready`, `demo_ready`, `ending_ready` or `quit`. |
 | `page` | string | `main`, `skill`, `info`, `password` or `load`. |
 | `selected` | string | The selected row of the main page: `start`, `load`, `skill`, `password`, `info`, `demo` or `quit`. |
-| `film_frame` | integer or `null` | The frame of the film of the title scene, or `null` when no film plays. |
+| `film_frame` | integer or `null` | The film frame of the film of the title scene, or `null` when no film plays. |
 
 ## Standard error
 
@@ -151,7 +151,7 @@ With `--trace`, the host writes these lines during the run:
 
 | Line | When |
 |---|---|
-| `{"frame":F,"walks":W,"state_hash":"H"}` | After the update of frame F, when a level is in play and the walk total of the game is not the last total. |
+| `{"frame":F,"walks":W,"state_hash":"H"}` | After the game runs in frame F, when a level is in play and the walk total of the game is not the last total. |
 | `{"frame":F,"save":SLOT}` | After each `--save` of frame F, also when the save fails. |
 | `{"frame":F,"load":SLOT}` | After each `--load` of frame F, also when the load fails. |
 
@@ -164,7 +164,7 @@ With `--trace`, the host writes these lines during the run:
   than one time in it.
 - `W` is the count of walks of the level since it started or loaded. It can increase by more than
   1 between two lines.
-- `H` is the state hash of the level after the update, as in line 1.
+- `H` is the state hash of the level after the game runs, as in line 1.
 - `SLOT` is the text of the option as a JSON string, for example `"a\"b"` for the text `a"b`.
 
 ### Other lines
@@ -197,38 +197,38 @@ no header. The samples are i16, interleaved, 2 channels at 44100 Hz.
 
 ### `tools/agent_sessions.sh`
 
-The script runs scripted sessions. Its output must agree with the accepted output
-`tools/agent_sessions.txt`:
+The script runs scripted sessions: each is one run of the agent host with fixed options. Its
+output must agree with the accepted output `tools/agent_sessions.txt`:
 
 ```sh
 tools/agent_sessions.sh AGENT DISK1 DISK2 | diff tools/agent_sessions.txt -
 ```
 
-For each session, the script:
+For each scripted session, the script:
 
 1. Makes a new save directory in a temporary directory, and gives it with `--saves`.
-2. Runs the agent with the session options and the two disks. It reads standard output and
-   standard error apart.
+2. Runs the agent with the options of the scripted session and the two disks. It reads standard
+   output and standard error apart.
 3. Checks the exit status (0) and standard output (exactly two lines, with the hashes in line 1).
-4. If the check fails, writes `NAME: FAILED (exit status N)` and the agent's messages, each with 2
-   spaces in front. Then it goes to the next session.
+4. If the check fails, writes `NAME: FAILED (exit status N)` and the agent's stderr lines, each with
+   2 spaces in front. Then it goes to the next scripted session.
 5. Writes `NAME: "state_hash":"H","frame_hash":"F" LINE2`. The hashes come from line 1 of
    standard output, and `LINE2` is line 2.
-6. Writes each of the agent's messages as `  stderr: LINE`.
-7. Writes `  settings: RECORD` when the session wrote a `SETTINGS` record. `RECORD` is the record
+6. Writes each of the agent's stderr lines as `  stderr: LINE`.
+7. Writes `  settings: RECORD` when the run wrote a `SETTINGS` record. `RECORD` is the record
    without spaces and newlines.
 
-The agent's messages are the lines of standard error that do not start with `info:`.
+The agent's stderr lines are the lines of standard error that do not start with `info:`.
 
-After the last session, if a session failed, the script writes `agent_sessions.sh: a session
+After the last scripted session, if one failed, the script writes `agent_sessions.sh: a session
 failed` on standard error and stops with status 1.
 
-Most sessions start with `--key-down 5:escape --key-up 8:escape`: this skips the film at the
-start of the level. The script deletes the temporary directory at the end.
+Most scripted sessions start with `--key-down 5:escape --key-up 8:escape`: this skips the film at
+the start of the level. The script deletes the temporary directory at the end.
 
 ### `tools/agent_traces.sh`
 
-The script plays a session of 2400 frames in each level with `--trace`. Its output must agree
+The script plays 2400 host frames in each level with `--trace`. Its output must agree
 with the accepted output `tools/agent_traces.txt`:
 
 ```sh

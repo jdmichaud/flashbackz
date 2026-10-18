@@ -8,14 +8,17 @@ The reader makes from it the same room image as an installed MAP room (research:
 | Item | Value |
 | --- | --- |
 | Files | `DATA/LEVEL1.LEV` to `DATA/LEVEL5.LEV`, plain files on disk 1 |
-| Byte order | Big-endian. The cells are little-endian. |
+| Byte order | Big-endian. The grid cells are little-endian. |
 | Reader | `src/shared/content/floppy_rooms.zig` (`Archive.decode`), opened by `room_source.zig` |
 | Writer | None in flashbackz. The files come with the game. |
 | Largest file | 1,048,576 bytes |
 
 ## The files of a level
 
-Two levels can share one set of room files. The reader uses these names (`level.zig`):
+Two levels can share one set of room files. The reader uses these names (`level.zig`). The tile
+bias is a number that the reader subtracts from the tile numbers of the rooms of a level
+([sgd-pieces.md](sgd-pieces.md#the-tile-bias)). It is a constant of the reader, not a field of a
+file.
 
 | Level | Room files | Tile bias |
 | --- | --- | --- |
@@ -32,8 +35,8 @@ A level uses these files:
 - If the MAP file is absent, `LEVELn.LEV`, this file, and `LEVELn.BNQ`, the tile banks
   ([bnq-tiles.md](bnq-tiles.md)).
 - `LEVELn.SGD`, the background pieces ([sgd-pieces.md](sgd-pieces.md)), only for a level with a
-  tile bias. The tile bias is a constant of the reader, not a field of a file.
-- `LEVELn.PAL`, the color banks ([level-palette.md](level-palette.md)), with each of the two
+  tile bias.
+- `LEVELn.PAL`, the PAL banks ([level-palette.md](level-palette.md)), with each of the two
   room forms.
 
 ## Layout
@@ -61,21 +64,22 @@ offsets in the description start at the start of the description.
 | Offset | Size | Type | Content |
 | --- | --- | --- | --- |
 | 0 | 1 | u8 | Unknown. The reader ignores it. |
-| 1 | 1 | u8 | The background form: 0 for background cells, another value for a piece list |
+| 1 | 1 | u8 | The background form: 0 for a background grid, another value for a piece list |
 | 2 | 2 | u16 | The PAL bank of palette slot 0 |
 | 4 | 2 | u16 | The PAL bank of palette slot 1 |
 | 6 | 2 | u16 | The PAL bank of palette slot 2 |
 | 8 | 2 | u16 | The PAL bank of palette slot 3 |
-| 10 | 2 | u16 | The offset of the background: the background cells or the piece list |
-| 12 | 2 | u16 | The offset of the front cells |
+| 10 | 2 | u16 | The offset of the background: the background grid or the piece list |
+| 12 | 2 | u16 | The offset of the front grid |
 | 14 | 2 | u16 | The offset of the bank list |
 
 Each PAL bank must be 255 or less. The reader reads only the parts that the offsets give.
 
-### A cell grid
+### A tile grid
 
-A cell grid is 1,792 bytes: 28 rows of 32 cells, the top row first. Each cell is a `u16 (LE)`.
-Cell n covers the 8 x 8 pixels with the top left corner at x = 8 x (n mod 32), y = 8 x (n / 32).
+A tile grid is 1,792 bytes: 28 rows of 32 grid cells, the top row first. Each grid cell is a
+`u16 (LE)`. Grid cell n covers the 8 x 8 pixels with the top left corner at
+x = 8 x (n mod 32), y = 8 x (n / 32).
 
 | Bits | Content |
 | --- | --- |
@@ -85,7 +89,7 @@ Cell n covers the 8 x 8 pixels with the top left corner at x = 8 x (n mod 32), y
 | 13-14 | The palette slot, 0 to 3 |
 | 15 | 1: the tile is in front of the sprites |
 
-A cell with tile number n, not 0, shows tile n - b of the room's tile set. The value b is the
+A grid cell with tile number n, not 0, shows tile n - b of the room's tile set. The value b is the
 tile bias of the level ([sgd-pieces.md](sgd-pieces.md#the-tile-bias)).
 
 ### The bank list
@@ -100,7 +104,7 @@ The bank list selects the tiles of the room from the BNQ banks. It has 1 to 256 
 
 ### The piece list
 
-The piece list places SGD pieces on the room. It replaces the background cells when byte 1 of
+The piece list places SGD pieces on the room. It replaces the background grid when byte 1 of
 the description is not 0.
 
 | Offset | Size | Type | Content |
@@ -142,22 +146,22 @@ The tile set is a list of 32-byte tiles ([bnq-tiles.md](bnq-tiles.md#a-tile)).
 
 1. Make an image of 256 x 224 pixels. Set all the pixels to `0x00`.
 2. Make the tile set.
-3. If byte 1 of the description is 0, draw the background cells.
+3. If byte 1 of the description is 0, draw the background grid.
 4. If byte 1 is not 0, draw the pieces of the piece list
    ([sgd-pieces.md](sgd-pieces.md#draw-a-piece-list)).
-5. Draw the front cells.
+5. Draw the front grid.
 6. Give the room the colors of its four PAL banks ([level-palette.md](level-palette.md)).
 
 The result has the pixel layout of a MAP room ([map-rooms.md](map-rooms.md#a-pixel)).
 
-### Draw a cell grid
+### Draw a tile grid
 
-Do these steps for each cell, cell 0 first:
+Do these steps for each grid cell, grid cell 0 first:
 
-1. If the tile number is 0, go to the next cell.
+1. If the tile number is 0, go to the next grid cell.
 2. Find tile n - b in the tile set, where n is the tile number and b is the tile bias.
-3. For each pixel (x, y) of the 8 x 8 cell, read the tile pixel at (x, y). Use 7 - x when bit 11
-   is 1. Use 7 - y when bit 12 is 1.
+3. For each pixel (x, y) of the 8 x 8 grid cell, read the tile pixel at (x, y). Use 7 - x when bit
+   11 is 1. Use 7 - y when bit 12 is 1.
 4. If the tile pixel is 0, keep the image pixel.
 5. If the tile pixel is not 0, change the image pixel. The new value is the tile pixel plus
    16 x the palette slot. Add `0x80` when bit 15 is 1. Keep bit 7 of the old image pixel.
@@ -175,7 +179,7 @@ Do these steps for each cell, cell 0 first:
 | The stream is not a valid packed stream. | See [packed-stream.md](packed-stream.md#checks) |
 | The description is longer than 16,384 bytes. | `ExpandedContentTooLarge` |
 | A stream, a description part or a tile is outside its data. | `TruncatedRoomContent` |
-| A bank word at offset 2 to 8 is more than 255. | `InvalidPaletteBank` |
+| A PAL bank at offset 2 to 8 is more than 255. | `InvalidPaletteBank` |
 | The first 256 entries of the bank list have no last entry. | `UnterminatedRoomBanks` |
 | The tile set has more than 1,024 tiles (32,768 bytes), with tile 0. | `RoomTilesTooLarge` |
 | A tile number is not 0 and is less than the tile bias. | `InvalidRoomTile` |

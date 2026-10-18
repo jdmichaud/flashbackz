@@ -47,10 +47,13 @@ entries give the end of the file, and no state uses them.
 - **State numbers.** The number of a state is the index of its animation in the directory. The
   rule groups ([rule-groups.md](rule-groups.md)) and the placements
   ([placements.md](placements.md)) use these numbers.
-- **Entry sound.** When a rule moves a character into a state, the engine requests sound
-  `byte - 1` of the sound effects ([sound-effects.md](sound-effects.md)). The engine plays it
-  only for an active character in the view room or in a room next to it. The effect
-  `sleep_unless_near_player` (code 67) cancels the sound.
+- **Entry sound.** When a rule moves a character into a state, the engine requests sound `byte - 1`
+  of the sound effects ([sound-effects.md](sound-effects.md)). The engine plays it only for an awake
+  character in the view room or in a room next to it. The effect `sleep_unless_near_player` (code
+  67) cancels the sound. An awake character runs in each update. An asleep character does not run
+  until an event wakes it, as its flags allow
+  ([characters.md](characters.md#how-a-character-wakes-during-play)). The view room is the room on
+  the screen, the room of Conrad.
 - **Pose tag.** `touching_kind_in_pose` (code 60) and `touching_in_pose` (code 61) compare the
   low byte of their argument with this byte.
 - **Art kind.** For 0, the sprite number selects a character sprite ([sprites.md](sprites.md)).
@@ -81,8 +84,10 @@ entries give the end of the file, and no state uses them.
 
 ### Play an animation
 
-1. When a rule fires, the engine sets the cursor of the character to 0. It plays frame 0 in the
-   same update.
+1. When a rule fires, the engine sets the cursor of the character to 0. It plays frame 0 in the same
+   update. A rule fires when its conditions hold: its effect runs, and the character goes into the
+   next state of the rule ([rule-groups.md](rule-groups.md)). The cursor is the index of the next
+   frame of the animation.
 2. In each next update, if the frame count is more than the cursor, the engine plays the frame at
    the cursor. Then it adds 1 to the cursor.
 3. If no frames remain, the engine tries the rules of the state. If no rule fires, the character
@@ -90,8 +95,10 @@ entries give the end of the file, and no state uses them.
 
 Thus an animation of `N` frames takes `N` updates.
 
-A message that a rule of the state waits for stops the animation before its end. The engine then
-adds the movement of each remaining frame with a sprite, and tries the rules in the same update.
+A message is a signal that a character sends to a character: a number in the original, a name in the
+data set. A message that a rule of the state waits for stops the animation before its end. The
+engine then adds the movement of each remaining frame with a sprite, and tries the rules in the same
+update.
 
 ## Checks
 

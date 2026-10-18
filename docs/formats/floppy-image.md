@@ -1,7 +1,8 @@
 # FAT12 floppy image (`*.IMG`, `*.IMA`)
 
 A floppy image is a sector copy of one game disk, with a FAT12 file system. The hosts read the
-files of the two images into one set of game files, then expand the archives in that set.
+files of the two images into one set of game files, then expand the archives in that set. This set
+is the asset source: the original's files, by name, that a host gives the game.
 
 | Item | Value |
 | --- | --- |
@@ -107,8 +108,9 @@ Each name must be a valid asset name (`validateAssetName` in `src/shared/platfor
 - A component is not a Windows device name: `CON`, `PRN`, `AUX`, `NUL`, `COM1`-`COM9` or
   `LPT1`-`LPT9`, with or without an extension.
 
-The providers compare names without case (ASCII). A list of names gives the upper-case form of
-each name (`canonicalAssetName`).
+A provider is the code of a host that gives the game its files and its storage. The providers
+compare names without case (ASCII). A list of names gives the upper-case form of each name
+(`canonicalAssetName`).
 
 ## Procedures
 
@@ -141,14 +143,16 @@ A loop in a chain gives `CrossLinkedCluster` (step 4), or `InvalidChainLength` (
 
 ### Open the disks (hosts)
 
-1. Take 0, 1 or 2 asset paths from the command line. Refuse a third path.
+1. Take 0, 1 or 2 asset paths from the command line. An asset path is the path of a disk image or
+   of a directory of game files. Refuse a third path.
 2. For each path, open it as a directory. If it is not a directory, read it as an image of at most
    4 MiB.
 3. Add the files of each disk to one set. A name on both disks must have the same bytes on both.
 4. Expand each archive in the set ([aba-archive.md](aba-archive.md)).
 
-Without a path, the standalone build reads its built-in images with the same procedure. The set
-holds at most 4,096 files and 32 MiB. The image reader does not check that the files are the
+The standalone build (`flashbackz-standalone`) is the SDL host with the user's disks, and the
+cartridge if given, built in. Without a path, it reads its built-in images with the same procedure.
+The set holds at most 4,096 files and 32 MiB. The image reader does not check that the files are the
 game's files. The reader of `FB.EXE` checks the edition ([executable.md](executable.md)).
 
 ## Checks
@@ -175,9 +179,9 @@ game's files. The reader of `FB.EXE` checks the edition ([executable.md](executa
 | The set has more than 4,096 files or 32 MiB. | `TooLarge` |
 
 The hosts change each error, except `ConflictingAsset`, `OutOfMemory` and `Canceled`, into
-`InvalidImage`. The message names the disk, then gives "not a floppy image of the game, nor a
-directory from one". For `ConflictingAsset`, the message ends with "a file differs from the
-other disk's (two editions?)".
+`InvalidImage`. The error text names the disk, then gives "not a floppy image of the game, nor a
+directory from one". For `ConflictingAsset`, the error text ends with "a file differs from the other
+disk's (two editions?)".
 
 ## Sources
 

@@ -1,7 +1,7 @@
 # Level palettes (`LEVELn.PAL`)
 
-A level PAL file holds the color banks of a level, with 16 colors in each bank. Each room selects
-four banks for its four palette slots. The reader converts each color to 8-bit RGB.
+A level PAL file holds the PAL banks of a level, with 16 colors in each bank. Each room selects
+four PAL banks for its four palette slots. The reader converts each color to 8-bit RGB.
 
 | Item | Value |
 | --- | --- |
@@ -61,23 +61,23 @@ The colors of a room:
 
 | Colors | Content |
 | --- | --- |
-| `0x00`-`0x3f` | Slots 0 to 3: the bank of slot n at `0x10` x n |
+| `0x00`-`0x3f` | Palette slots 0 to 3: the PAL bank of palette slot n at `0x10` x n |
 | `0x40`-`0x4f` | The colors of Conrad, from the executable ([executable.md](executable.md)) |
 | `0x50`-`0x5f` | The colors of the enemy sprite library, from the executable. The level screen sets them. |
 | `0x60`-`0x7f` | Not set: black |
-| `0x80`-`0x9f` | Slots 0 and 1 again, for the pixels in front of the sprites |
-| `0xa0`-`0xaf` | The icon colors: the slot 2 bank of the first room |
-| `0xb0`-`0xbf` | Slot 3 again, for the pixels in front of the sprites |
+| `0x80`-`0x9f` | Palette slots 0 and 1 again, for the pixels in front of the sprites |
+| `0xa0`-`0xaf` | The icon colors: the PAL bank of palette slot 2 of the first room |
+| `0xb0`-`0xbf` | Palette slot 3 again, for the pixels in front of the sprites |
 | `0xc0`-`0xdf` | The film colors ([vector-films.md](vector-films.md)). The room does not set them. |
 | `0xe0`-`0xef` | The text colors, from the executable |
 | `0xf0`-`0xff` | The interface colors, from the executable |
 
 The first room is the room where Conrad starts the level. The executable has two sets of colors
-for Conrad. A room uses the second set when its slot 2 bank is not the slot 2 bank of the first
-room.
+for Conrad. A room uses the second set when its palette slot 2 has a different PAL bank from the
+first room.
 
-The icon colors replace the second copy of slot 2. For this reason, a pixel of slot 2 in front of
-the sprites shows the slot 2 colors of the first room.
+The icon colors replace the second copy of palette slot 2. For this reason, a pixel of palette
+slot 2 in front of the sprites shows the palette slot 2 colors of the first room.
 
 ## Checks
 
@@ -86,7 +86,7 @@ the sprites shows the slot 2 colors of the first room.
 | The file is absent. | `NotFound` |
 | The file is larger than 8,192 bytes. | `TooLarge` |
 | The file is empty, or its size is not a multiple of 32. | `InvalidPaletteLength` |
-| A room selects a bank that the file does not have. | `InvalidPaletteBank` |
+| A room selects a PAL bank that the file does not have. | `InvalidPaletteBank` |
 | The room where Conrad starts is 64 or more, or is absent. | `AbsentRoom` |
 
 ## Quirks

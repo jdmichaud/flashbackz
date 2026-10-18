@@ -22,6 +22,10 @@ of a character. The extractor converts the records into `characters.zon` of the 
 The file has no other bytes. Placement 0 is Conrad. The engine updates the characters in the
 order of the records.
 
+Two characters touch, and have a contact, when they cover a common terrain cell (byte 28 gives
+the cells that a character covers). A contact slot is the record of the engine for the
+characters in one terrain cell.
+
 ### Record
 
 | Offset | Size | Type | Content |
@@ -34,7 +38,7 @@ order of the records.
 | 10 | 8 | `i16[4]` | The parameters 0 to 3: links to other placements, or numbers. The rule group gives the use of each parameter. Data set: `links` and `numbers`. |
 | 18 | 1 | `u8` | The kind (see below). Data set: `kind`. |
 | 19 | 1 | `u8` | The room, from 0 to 63. The value 64 tells that the character is in no room. Data set: `room`. |
-| 20 | 1 | `u8` | Not 0: the character is active at the start. Data set: `active`. |
+| 20 | 1 | `u8` | Not 0: the character is awake at the start. Data set: `active`. |
 | 21 | 1 | `u8` | The visual flags (see below). |
 | 22 | 1 | `u8` | The contact icon. Data set: `contact_icon`. |
 | 23 | 1 | `u8` | The inventory icon: an icon of `GLOBAL.ICN` ([icons.md](icons.md)). Data set: `inventory_icon`. |
@@ -42,7 +46,7 @@ order of the records.
 | 25 | 1 | `u8` | The minimum difficulty: 0 easy, 1 normal, 2 expert. A larger value tells that the game never places the character. Data set: `minimum_difficulty`. |
 | 26 | 1 | `u8` | Not 0: the character faces right at the start. Data set: `facing`. |
 | 27 | 1 | `u8` | The wake flags (see below). |
-| 28 | 1 | `u8` | The width: the number of cells that the character covers, for contacts and terrain changes. Data set: `width`. |
+| 28 | 1 | `u8` | The width: the number of terrain cells that the character covers, from its column to the right. These cells are its footprint ([behaviors.md](behaviors.md#vocabulary)). The contacts and the terrain changes use them. Data set: `width`. |
 | 29 | 1 | `u8` | Unknown. The extractor keeps the value. Data set: `unknown_byte_29`. |
 | 30 | 2 | `u16` | The label number: an entry of the label file ([labels.md](labels.md)). Data set: `label_number` and `label`. |
 
@@ -62,7 +66,7 @@ An enemy starts with double health at the expert difficulty.
 
 | Bit | Mask | Description | Data set field |
 | --- | --- | --- | --- |
-| 0 to 1 | 0x03 | The colors. For composed object art, the room bank 0 to 3. For a sprite, the value 3 selects the colors at 0x50, and the other values the colors at 0x40. | `palette_bank` |
+| 0 to 1 | 0x03 | The colors. For composed object art, the palette slot 0 to 3 of the room. For a sprite, the value 3 selects the colors at 0x50, and the other values the colors at 0x40. | `palette_bank` |
 | 2 | 0x04 | The inventory shows the health of the item as a quantity. | `other_visual_flags` |
 | 3 | 0x08 | The engine draws the character behind Conrad and the other characters. | `behind_player` |
 | 4 to 7 | 0xf0 | Unknown. The extractor keeps the bits. | `other_visual_flags` |
@@ -78,8 +82,9 @@ An enemy starts with double health at the expert difficulty.
 
 ### Icons and objects
 
-- **Contact icon.** When Conrad touches the character, the touch label can show icon
-  `value - 1` of `GLOBAL.ICN` ([icons.md](icons.md)). A value of 0, or of 0x80 or more, shows no
+- **Contact icon.** The touch label shows the name and the icon of the character that Conrad
+  touches. For this character, the touch label can show icon `value - 1` of `GLOBAL.ICN`
+  ([icons.md](icons.md)). A value of 0, or of 0x80 or more, shows no
   icon. `touching_pickup` (code 109) compares the contact icon with its argument.
 - **Object number.** `selected_item_is` (code 50) and `player_has_item` (code 131) compare it with
   the low byte of their argument.
@@ -132,8 +137,9 @@ The extractor does not refuse these values. It writes a note in `report.txt`:
 - **Characters that the difficulty leaves out.** The game does not place a record whose minimum
   difficulty is above the chosen difficulty. That character keeps the direction, the wake state,
   the mirror and the art kind of the character at the same index in the previous level.
-- **Carriers 120 and 248.** `board_touching` (code 115) never finds a carrier at placement 120 or
-  248. The original tests only the low byte of an address that it calculates from the index.
+- **Carriers 120 and 248.** A carrier is a character that carries others, for example a lift.
+  `board_touching` (code 115) never finds a carrier at placement 120 or 248. The original tests only
+  the low byte of an address that it calculates from the index.
 
 ## Sources
 

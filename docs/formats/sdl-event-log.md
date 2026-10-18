@@ -18,11 +18,12 @@ Give the option `--event-log SECONDS` to the SDL host, for example
 `flashbackz --event-log 30 disk1.img disk2.img`.
 
 - `SECONDS` is a decimal number more than 0 and at most 86400. It can have a fraction.
-- The host stops after that time. The time starts after the first update, which starts the
-  platform.
+- The host stops after that time. The time starts after the first host frame, which starts the
+  platform. The platform is the interface between a host and the game: the events, the clock,
+  the screen, the sound and the storage.
 - With `--run-for` also, the host stops at the first of the two times.
 - Standard output holds only the log lines. The status lines of the host go to standard error.
-- The host sends the lines to the output after each game update, and at the end.
+- The host sends the lines to the output after each host frame, and at the end.
 - The host ignores a write error: the log loses lines, but the game gets all its events.
 
 ## Layout
@@ -50,7 +51,7 @@ kind. The values are JSON strings, integers or booleans.
 | `controller_axis` | `controller`, `axis`, `value` | A pad axis moves to `value`, an i16 (-32768 to 32767). |
 | `focus_gained` | none | The window gets the keyboard. |
 | `focus_lost` | none | The window loses the keyboard. |
-| `drawable_resized` | `width`, `height` | The window size changes. The values are the output size of the renderer in pixels, as u32 values. Without it, the window size of the SDL event. |
+| `drawable_resized` | `width`, `height` | The window size changes. The values are the output size of the SDL renderer in pixels, as u32 values. Without it, the window size of the SDL event. |
 | `quit` | none | The user asks the program to stop. |
 
 ### Values

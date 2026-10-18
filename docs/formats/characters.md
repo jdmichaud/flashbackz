@@ -32,30 +32,30 @@ The "Placement" column gives the byte of the original placement record that the 
 | Field | Type and range | If absent | Placement | Content |
 | --- | --- | --- | --- | --- |
 | `placement` | Integer, 0 to 65535 | Necessary | Index | The index of the placement in the original file. Comparisons with the original use it. The engine uses the index in this file. |
-| `label` | String | `""` | 30 (labels file) | The name that the touch label and the inventory show. Each byte must have a glyph in the level font and in the inventory font. |
+| `label` | String | `""` | 30 (labels file) | The name that the touch label and the inventory show. Each byte must have a glyph in the game font ([font.md](font.md)). |
 | `label_number` | Integer, 0 to 65535 | 0 | 30 | The number of the label in the level's labels file ([labels.md](labels.md)) |
 | `kind` | Kind name ([Kinds](#kinds)) | Necessary | 18 | The kind of the character |
 | `behavior` | Name | Necessary | 6 | The behavior table: the name of a file in `<level>/behaviors/`, with no `.zon` ([behaviors.md](behaviors.md)) |
 | `start` | Name | Necessary | 0 | The state of the behavior at level start |
-| `room` | Integer 0 to 255, or `.outside` | Necessary | 19 | The start room. Rooms 0 to 63 are the rooms of the level. `.outside`: out of the world (room 64) until an effect moves the character in. |
+| `room` | Integer 0 to 255, or `.outside` | Necessary | 19 | The start room. Rooms 0 to 63 are the rooms of the level. `.outside`: outside the rooms of the level (room 64) until an effect moves the character in. |
 | `position` | `.{ .x = X, .y = Y }`, each -4096 to 4096 | Necessary | 2, 4 | The position in the room, in pixels. Both fields are necessary, and the reader refuses other fields. |
 | `facing` | `.left` or `.right` | Necessary | 26 | The start direction. The extractor writes `.right` for a byte that is not 0. |
 | `health` | Integer, -32768 to 32767 | Necessary | 8 | The health. Items use it as a charge, a code, a price or an amount of money. |
-| `width` | Integer, 0 to 16 | Necessary | 28 | The number of cells (columns) of the footprint. The terrain effects also use it. |
+| `width` | Integer, 0 to 16 | Necessary | 28 | The number of terrain cells (columns) of the footprint. The terrain effects also use it. |
 | `active` | Boolean | `false` | 20 | The character is awake at level start. |
 | `wakes_on_message` | Boolean | `false` | 27, bit 0 | A message wakes the character. |
 | `wakes_on_contact` | Boolean | `false` | 27, bit 1 | A character in one of its cells wakes it. |
 | `wakes_when_near` | Boolean | `false` | 27, bit 2 | The character wakes when it is in the view room, or near Conrad's new room. |
 | `other_flags` | Integer, 0 to 255 | 0 | 27, bits 3 to 7 | The other bits of the byte, in their positions. The engine reads them only where it copies the original's memory. |
 | `minimum_difficulty` | `.easy`, `.normal`, `.expert`, or an integer from 3 to 255 | Necessary | 25 | The lowest difficulty that places the character. With an integer, no difficulty places it. |
-| `palette_bank` | Integer, 0 to 255 | 0 | 21, bits 0 and 1 | Selects the palette of the character's art. The extractor writes 1 to 3. |
-| `behind_player` | Boolean | `false` | 21, bit 3 | The screen draws the character behind Conrad. |
+| `palette_bank` | Integer, 0 to 255 | 0 | 21, bits 0 and 1 | Selects the colors of the character's art ([placements.md](placements.md#visual-flags-byte-21)). The extractor writes 1 to 3. |
+| `behind_player` | Boolean | `false` | 21, bit 3 | The level screen draws the character behind Conrad. |
 | `other_visual_flags` | Integer, 0 to 255 | 0 | 21, bit 2 and bits 4 to 7 | The other bits of the byte, in their positions. Bit 2 (value 4): the inventory shows the item's health as a quantity. |
 | `contact_icon` | Integer, 0 to 255 | 0 | 22 | The icon that the touch label shows ([icons.md](icons.md)). `touching_pickup` compares it. |
 | `inventory_icon` | Integer, 0 to 255 | 0 | 23 | The icon of the item in the inventory ([icons.md](icons.md)) |
 | `object` | Integer, 0 to 255 | 0 | 24 | The object number that `selected_item_is` and `player_has_item` compare |
 | `unknown_byte_29` | Integer, 0 to 255 | 0 | 29 | Unknown. The engine reads it only where it copies the original's memory. |
-| `sprite_library` | `.junky`, `.mercenai`, `.replican`, `.glue` or `.none` | No library | — | The enemy sprite library of the character's art ([sprites.md](sprites.md)). `.none`: the art needs a library but has none, so the screen never draws it. |
+| `sprite_library` | `.junky`, `.mercenai`, `.replican`, `.glue` or `.none` | No library | — | The enemy sprite library of the character's art ([sprites.md](sprites.md)). `.none`: the art needs a library but has none, so the level screen never draws it. |
 | `links` | Struct literal | No links | 10 to 17 | Binds the links of the behavior ([Links](#links)). |
 | `numbers` | Struct literal | All 0 | 10 to 17 | Gives the numbers of the behavior ([Numbers](#numbers)). |
 
@@ -93,7 +93,9 @@ from the same parameter value.
 ### Kinds
 
 The extractor writes each placement kind (a byte) by name. The rules also use kinds
-([behaviors.md](behaviors.md)).
+([behaviors.md](behaviors.md)). The first cell of a character is the first terrain cell of its
+footprint ([behaviors.md](behaviors.md#vocabulary)). Protection is a time after a hit to Conrad, in
+which other hits do not reach him.
 
 | Name | Value | Use in the engine |
 | --- | --- | --- |
@@ -101,7 +103,7 @@ The extractor writes each placement kind (a byte) by name. The rules also use ki
 | `player` | 1 | Conrad's kind. Room changes move the view with it. `damage` starts its protection from hits. |
 | `interactive` | 3 | Items and devices: the touch label, the pickups and the object messages look for this kind. |
 | `enemy` | 10 | Double health at difficulty expert. `damage`, `defeated` and `remove` give points. Shots and blows hit it. The extractor gives it a sprite library. |
-| `overlay` | 11 | The screen draws its composed art over the foreground of the room. |
+| `overlay` | 11 | The level screen draws its composed art over the foreground of the room. |
 | `kind_N` | N | Any other kind, with N in decimal. The engine also uses kinds 5, 9 and 12 ([behaviors.md](behaviors.md)). |
 
 Many checks compare kinds by their low byte ([behaviors.md](behaviors.md#kinds-in-the-rules)).
@@ -175,7 +177,8 @@ This example is synthetic.
 3. A present character starts awake when `active` is true. It also starts awake when
    `wakes_when_near` is true and its room is the `room` of the first character.
 4. A character that is not present goes into no room. It keeps the direction, the look and the
-   awake flag of the same index in the previous level.
+   awake flag of the same index in the previous level. The look of a character is the sprite,
+   the mirror and the art kind that it shows.
 5. Each present character shows the frame of its start state's animation.
 
 ### How a character wakes during play
@@ -191,7 +194,7 @@ This example is synthetic.
 
 ## Checks
 
-The loader stops at the first failure. The game logs `data set: TEXT` as an error. CHAR is the
+The reader stops at the first failure. The game logs `data set: TEXT` as an error. CHAR is the
 character name.
 
 | Check | Text |

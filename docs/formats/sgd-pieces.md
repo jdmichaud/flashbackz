@@ -21,8 +21,8 @@ The tile bias has two effects:
 
 - The reader opens the SGD file only for a level with a tile bias that is not 0. It opens it only
   when the installed MAP file of the level is absent.
-- A LEV cell with tile number n, not 0, shows tile n - 896 of the room's tile set
-  ([lev-rooms.md](lev-rooms.md#a-cell-grid)). A tile number from 1 to 895 is an error. The tile
+- A LEV grid cell with tile number n, not 0, shows tile n - 896 of the room's tile set
+  ([lev-rooms.md](lev-rooms.md#a-tile-grid)). A tile number from 1 to 895 is an error. The tile
   number 896 shows tile 0, the transparent tile.
 
 A room of a level without a tile bias cannot place pieces, because the reader has no SGD file
@@ -103,7 +103,7 @@ Do these steps for each placement of the piece list, the first placement first:
 4. If the position is in the 256 x 224 room, set the room pixel to the piece pixel.
 
 A piece pixel uses palette slot 0, and it is behind the sprites: bits 4-7 of the room pixel are
-0. A later piece covers an earlier piece. The front cells of the room come after the pieces
+0. A later piece covers an earlier piece. The front grid of the room comes after the pieces
 ([lev-rooms.md](lev-rooms.md#draw-the-room)).
 
 ## Checks

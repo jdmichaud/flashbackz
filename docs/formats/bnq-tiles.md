@@ -1,8 +1,8 @@
 # Tile banks (`LEVELn.BNQ`)
 
-A BNQ file holds the banks of 8 x 8 tiles of a level. The bank list of a LEV room description
-selects banks and tiles from it ([lev-rooms.md](lev-rooms.md#the-bank-list)). A bank is raw or
-packed.
+A BNQ file holds the tile banks of a level: banks of 8 x 8 tiles. The bank list of a LEV room
+description selects banks and tiles from it ([lev-rooms.md](lev-rooms.md#the-bank-list)). A bank is
+raw or packed.
 
 | Item | Value |
 | --- | --- |
@@ -51,9 +51,9 @@ This length must be 12 or more, and a multiple of 4.
 
 ### A tile
 
-A tile is 32 bytes: 8 rows of 4 bytes, the top row first. A byte holds two pixels. Bits 4-7 are
-the left pixel and bits 0-3 are the right pixel. A pixel is a color from 0 to 15 in the palette
-slot of the cell ([lev-rooms.md](lev-rooms.md#a-cell-grid)). Pixel 0 is transparent.
+A tile is 32 bytes: 8 rows of 4 bytes, the top row first. A byte holds two pixels. Bits 4-7 are the
+left pixel and bits 0-3 are the right pixel. A pixel is a color from 0 to 15 in the palette slot of
+the grid cell ([lev-rooms.md](lev-rooms.md#a-tile-grid)). Pixel 0 is transparent.
 
 ## Procedure
 

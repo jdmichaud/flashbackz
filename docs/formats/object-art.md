@@ -33,7 +33,7 @@ A record:
 | 5 | 1 | u8 | The part count p, 1 or more |
 | 6 | 4 × p | part × p | The parts, in the order that the reader composes them |
 
-A part:
+An object-art part:
 
 | Offset | Size | Type | Content |
 | --- | --- | --- | --- |
@@ -94,8 +94,8 @@ An animation shows composed frames when the u16 at bytes 4 and 5 of its header i
 frame and a sprite with the same number are different frames ([sprites.md](sprites.md)).
 
 The level screen draws a composed frame with the origin at the position of the character plus
-(8, 2). The palette bank of the character (0 to 3) gives the color block
-([placements.md](placements.md)). These four blocks hold the colors of the room
+(8, 2). `palette_bank` of the character (0 to 3) gives the color block, a palette slot
+([placements.md](placements.md)). These four color blocks hold the colors of the room
 ([level-palette.md](level-palette.md#give-a-room-its-colors)). The renderer mirrors the full
 frame as it mirrors a sprite.
 

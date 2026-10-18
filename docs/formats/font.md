@@ -2,7 +2,7 @@
 
 `FB_TXT.FNT` holds the glyphs of the game font: 8 × 8 pixels with 4-bit inks, from the
 character 32 (space) up. The menus, the level screen, the inventory screen, the films, the
-continue screen, the credits and the level atlas use it.
+continue screen, the credits and the atlas use it.
 
 | Item | Value |
 | --- | --- |
@@ -29,11 +29,11 @@ characters 32 to 136. A character below 32 or after the last glyph has no glyph.
 | 0 | Transparent |
 | 2 | The shadow color |
 | 15 | The foreground color |
-| Other | The palette bank × 16 + ink, if the caller gives a palette bank. Else, the renderer refuses the glyph. |
+| Other | The color block × 16 + ink, if the caller gives a color block. Else, the renderer refuses the glyph. |
 
-The supplied font uses one more ink in some glyphs. Most callers give the palette bank 14 and
-the shadow color 0xe2. The title menu and its pages give no palette bank. The renderer moves 8
-pixels to the right after each character. The level atlas draws ink 2 in its shadow color and
+The supplied font uses one more ink in some glyphs. Most callers give the color block 14 and
+the shadow color 0xe2. The title menu and its pages give no color block. The renderer moves 8
+pixels to the right after each character. The atlas draws ink 2 in its shadow color and
 the other inks in its text color.
 
 ## Procedures
@@ -58,11 +58,11 @@ the other inks in its text color.
 | The file has more than 224 glyphs. | `InvalidFontLength` |
 | The file has more than 16,384 bytes. | `TooLarge` |
 | A text has a character with no glyph. | `MissingGlyph` |
-| A glyph has an ink other than 0, 2 and 15, and the caller gives no palette bank. | `UnknownGlyphInk` |
+| A glyph has an ink other than 0, 2 and 15, and the caller gives no color block. | `UnknownGlyphInk` |
 
 The level loader examines the characters of the world messages and of the labels when the level
-loads. The end sequence examines the characters of the credits when it loads, except the
-character `|`. The level atlas skips a character that has no glyph.
+loads. The ending examines the characters of the credits when it loads, except the character
+`|`. The atlas skips a character that has no glyph.
 
 ## Sources
 

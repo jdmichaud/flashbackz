@@ -85,6 +85,8 @@ discards the extra pixel. Thus a writer adds one 0 nibble to an odd count of nib
 
 ### Pixel values
 
+The renderer is the code that draws the pictures on the screen.
+
 - A packed record has pixels from 0 to 15. The renderer puts the color block in the high
   nibble.
 - A raw record has 8-bit pixels. The renderer does an OR of the color block into the high
@@ -128,9 +130,10 @@ for the rule group, the library is `none`.
 
 ### Find the sprite of an animation frame
 
-The level loader decodes each sprite that a frame of the level's animations shows
-([animations.md](animations.md)). A frame of a composed animation shows object art
-([object-art.md](object-art.md)). For the other frames, the loader does these steps:
+The level loader is the code that loads the files of a level when the level starts. It decodes each
+sprite that a frame of the level's animations shows ([animations.md](animations.md)). A frame of a
+composed animation shows object art ([object-art.md](object-art.md)). For the other frames, the
+level loader does these steps:
 
 1. Look for the sprite number in PERSO.
 2. If PERSO does not hold it, look in the monster libraries, in the order of the library table.
@@ -138,7 +141,7 @@ The level loader decodes each sprite that a frame of the level's animations show
 4. If no library holds the number, count the sprite as missing. The frames that show it show
    nothing.
 
-The loader reads the files of a monster library when it first needs them. In the supplied
+The level loader reads the files of a monster library when it first needs them. In the supplied
 files, no sprite number is in two libraries.
 
 ### Draw a frame
@@ -147,10 +150,10 @@ The renderer puts the origin of a frame at the anchor point (x, y). The top-left
 frame goes to (x − origin x, y − origin y). A mirrored frame turns over about the left edge of
 column x: its left edge goes to x + origin x − width.
 
-The level screen uses the position of the character plus (8, 2) as the anchor point. It draws
-the sprites of a character with color block 5 when the palette bank of the character is 3
-([placements.md](placements.md)). Else, it uses block 4, which holds the colors of Conrad. The
-level screen copies the colors of the library of an enemy in the view room into block 5
+The level screen uses the position of the character plus (8, 2) as the anchor point. It draws the
+sprites of a character with color block 5 when `palette_bank` of the character is 3
+([placements.md](placements.md)). Else, it uses block 4, which holds the colors of Conrad. The level
+screen copies the colors of the library of an enemy in the view room into block 5
 ([level-palette.md](level-palette.md#give-a-room-its-colors)).
 
 ## Checks

@@ -80,6 +80,10 @@ each code that the extractor knows. "Also reads" gives a placement parameter tha
 reads in addition to the argument ([placements.md](placements.md)). The extractor writes it as one
 more field of the operation, with the name of the parameter.
 
+A hit is the message that a shot (`shoot`) or a blow (`strike`) sends to the character that it
+reaches. The message gives the side and the height of the hit: 1 `hit_behind_high`,
+2 `hit_behind_low`, 3 `hit_front_high` and 4 `hit_front_low`.
+
 | Code | Hex | Name | Area | Argument | Also reads |
 | --- | --- | --- | --- | --- | --- |
 | 1 | 0x01 | `input_up` | Input | None | |

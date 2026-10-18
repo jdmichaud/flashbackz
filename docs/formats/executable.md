@@ -69,8 +69,11 @@ end of the image. In the tables below:
 - A color bank is 16 `u16` words, one for each color. Bits 8-11 are red, bits 4-7 green and
   bits 0-3 blue. The reader uses each 4-bit value v as the 6-bit DAC value v × 4.
 - A 6-bit DAC value c gives the 8-bit value (c × 4) OR (c / 16). For example, v = 15 gives 243.
-- The color blocks of a room are in
-  [level-palette.md](level-palette.md#give-a-room-its-colors).
+- A color block is 16 consecutive colors of the 256 colors of the screen: block n is colors
+  16 × n to 16 × n + 15.
+- A PAL bank is 16 colors of a level PAL file. A palette slot is one of the color blocks 0 to 3
+  of a room. The room gives a PAL bank to each palette slot
+  ([level-palette.md](level-palette.md#give-a-room-its-colors)).
 
 #### Data tables
 
@@ -83,24 +86,24 @@ end of the image. In the tables below:
 | 3694 | `0xe6e` | 14 | 7 pointers, one for each level, to a library list ([Library list](#library-list)). | extractor (`extract/level.zig`) |
 | 3753 | `0xea9` | 8 | 4 pointers, one for each sprite library, to a color bank. | `level_pack` |
 | 3889 | `0xf31` | 32 | Actor color bank 1. | `level_pack` (colors `0x40`-`0x4f`) |
-| 3921 | `0xf51` | 32 | Actor color bank 2, for a room whose third palette bank differs from that of the room where Conrad starts. | `level_pack` (colors `0x40`-`0x4f`) |
+| 3921 | `0xf51` | 32 | Actor color bank 2, for a room whose palette slot 2 has a different PAL bank from the room where Conrad starts. | `level_pack` (colors `0x40`-`0x4f`) |
 | 3953 | `0xf71` | 32 | Text color bank. | `level_pack` (colors `0xe0`-`0xef`), `continue_artwork`, `cinematic_text`, `scenes/ending` |
 | 3985 | `0xf91` | 48 | Interface colors: 16 colors of 3 `u8` (red, green, blue). The 6 high bits of each byte are the DAC value. | `level_pack` (colors `0xf0`-`0xff`) |
 | 4064 | `0xfe0` | 12 | 3 demo descriptors ([demo.md](demo.md)). | `demo` |
 | 4076 | `0xfec` | 24 | 3 demo start positions ([demo.md](demo.md)). | `demo` |
 | 4122 | `0x101a` | 304 | 76 scene records ([Scene record](#scene-record)). | extractor (`scenes.zon`) |
-| 4426 | `0x114a` | 75 | The music cue of scenes 0-74: an index into the music names, or `0xff` for no music. | extractor (`scenes.zon`) |
+| 4426 | `0x114a` | 75 | The music cue of scenes 0-74: an index into the music names, or `0xff` for no music. A music cue is a PRF profile, with its MIDI file and its instruments ([music.md](music.md)). | extractor (`scenes.zon`) |
 | 4501 | `0x1195` | 62 | 31 pointers to film names. A name is a string of at most 11 characters ([vector-films.md](vector-films.md)). | extractor (`scenes.zon`) |
-| 4756 | `0x1294` | 2 × (n + 1) | The final scene list: n `i16` scene numbers, then a negative value. n is at most 16. | extractor (`scenes.zon`) |
-| 4781 | `0x12ad` | 147 | The level codes ([Level codes](#level-codes)). | `level_codes`, `level_pack` |
-| 4928 | `0x1340` | 7 | The eighth code, which starts the final films ([Level codes](#level-codes)). | `level_codes`, `scenes/ending` |
+| 4756 | `0x1294` | 2 × (n + 1) | The ending list: n `i16` scene numbers, then a negative value. n is at most 16. The ending plays these scenes after scene 61. | extractor (`scenes.zon`) |
+| 4781 | `0x12ad` | 147 | The level codes. The player types a level code on the PASSWORD page of the title menu to start a level at a difficulty ([Level codes](#level-codes)). | `level_codes`, `level_pack` |
+| 4928 | `0x1340` | 7 | The eighth code, which starts the ending ([Level codes](#level-codes)). | `level_codes`, `scenes/ending` |
 | 5090 | `0x13e2` | 6 | The level label, which the inventory shows below the score. The reader keeps all 6 bytes. | `inventory_artwork` |
 | 5097 | `0x13e9` | var | The world messages ([world-messages.md](world-messages.md)). | extractor (`extract/world_messages.zig`) |
 | 8543 | `0x215f` | var | Continue label 1, a string: the title of the continue screen. | `continue_artwork` |
 | 8573 | `0x217d` | var | Continue label 2, a string: the label of the time. | `continue_artwork` |
 | 8581 | `0x2185` | var | Continue label 3, a string: the retry choice. | `continue_artwork` |
 | 8590 | `0x218e` | var | Continue label 4, a string: the abort choice. | `continue_artwork` |
-| 8596 | `0x2194` | var | Continue label 5, a string: the score label, which the final films use too. | `continue_artwork`, `scenes/ending` |
+| 8596 | `0x2194` | var | Continue label 5, a string: the score label, which the ending uses too. | `continue_artwork`, `scenes/ending` |
 | 8998 | `0x2326` | var | The credits stream ([Credits stream](#credits-stream)). | extractor (`scenes.zon`) |
 
 A continue label has at most 47 characters. The film names, music names and library names are
@@ -137,7 +140,7 @@ A list of 2-byte entries, with the byte `0xff` at its end. It has at most 8 entr
 | Offset | Size | Type | Content |
 | --- | --- | --- | --- |
 | 0 | 2 | `u16` | `0xffff`: the scene plays no film. Else bits 0-14: the index of the film name (0-30). Bit 15: a flag. |
-| 2 | 1 | `u8` | The entry of the film to play. |
+| 2 | 1 | `u8` | The film entry to play. A film can hold several film entries ([vector-films.md](vector-films.md)). |
 | 3 | 1 | `u8` | Unknown. The reader ignores it. |
 
 One scene has the flag. The extractor copies it to `scenes.zon`. No code uses it.
@@ -160,7 +163,7 @@ The credits are a byte stream with `0xff` at its end. The reader copies it as is
 | Byte | Size | Content |
 | --- | --- | --- |
 | `0x00` | 1 | The end of a block. |
-| `0x01` | 3 | A position: the column, then the row, in 8-pixel cells. |
+| `0x01` | 3 | A position: the column, then the row, in units of 8 pixels. |
 | `0xfe` | 2 | A hold: the time in timer ticks. |
 | `0xff` | 1 | The end of the stream. |
 | Other | 1 or more | Text, up to the next `0x00`, `0x01`, `0xfe` or `0xff`. The character `\|` starts a new line. |
@@ -188,12 +191,12 @@ The credits are a byte stream with `0xff` at its end. The reader copies it as is
 2. The first code that is equal gives the level and the difficulty.
 3. If no code is equal and the input is not empty, compare it with the eighth code. Ignore the
    case of ASCII letters.
-4. If the eighth code is equal, start the final films.
+4. If the eighth code is equal, start the ending.
 
 ### Show the code notice
 
 The level screen shows the prefix, then the 7 bytes of the code for the level and the difficulty.
-The score page of the final films shows the prefix, then the eighth code up to its first 0 byte.
+The score page of the ending shows the prefix, then the eighth code up to its first 0 byte.
 
 ## Checks
 
@@ -212,7 +215,7 @@ The score page of the final films shows the prefix, then the eighth code up to i
 | A library list has more than 8 entries, or a library of 4 or more. | `InvalidLibraryTable` |
 | A film index is 31 or more, or a film name has no 0 in 12 bytes. | `InvalidSceneTable` |
 | A music cue is not `0xff` and is 26 or more, or a music name has no 0 in 9 bytes. | `InvalidSceneTable` |
-| The final scene list has more than 16 scenes, or a scene of 76 or more. | `InvalidEndingList` |
+| The ending list has more than 16 scenes, or a scene of 76 or more. | `InvalidEndingList` |
 | An item of the credits stream starts at byte 4,094 or after. | `InvalidCredits` |
 | One of the 21 level codes, or the eighth code, has no 0 byte. | `InvalidLevelCode` |
 
@@ -227,7 +230,7 @@ The extractor (`src/extract/root.zig`) reads these values from the executable:
 
 - the score awards and the library lists, for `LEVEL/characters.zon` and `LEVEL/behaviors/*.zon`;
 - the scene records, music cues, film names, music names and level records, for `scenes.zon`;
-- the final scene list and the credits stream, for `scenes.zon`;
+- the ending list and the credits stream, for `scenes.zon`;
 - the world messages, for `messages.zon` ([world-messages.md](world-messages.md)).
 
 [data-set.md](data-set.md) gives the files that it writes.

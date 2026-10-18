@@ -15,7 +15,7 @@ vocabulary of conditions and effects.
 ## Layout
 
 The name of the file, with no `.zon`, is the behavior name. A character refers to its behavior
-by this name ([characters.md](characters.md)). The loader reads the behavior files of a level in
+by this name ([characters.md](characters.md)). The reader reads the behavior files of a level in
 the byte order of their names. It reads only the `.zon` files directly in `behaviors/`, not the
 files in its subdirectories.
 
@@ -232,9 +232,9 @@ These steps give the order of one update. The order is part of each behavior.
    update.
 8. The engine clears the mailbox of the character.
 
-A check that changes the world (`set_timer`, `send`, `chance`) does its change when the engine
-runs it. The change stays when a later check of the same rule is false. A random draw occurs only
-where a check runs.
+A check that changes the state of the level (`set_timer`, `send`, `chance`) does its change when the
+engine runs it. The change stays when a later check of the same rule is false. A random draw occurs
+only where a check runs.
 
 A message goes into the mailbox of the recipient at once, at the front. A recipient later in the
 walk reads it in the same update; an earlier one reads it in the next update. The engine loses
@@ -367,8 +367,8 @@ Each character has one counter. Items use the health as a charge, a code or an a
 | `sleep_unless_near_player` | — | The engine stops the updates of the character, unless it has `wakes_when_near` and is in or beside the view room. The animation that starts in this update has no entry sound. Always true. |
 | `reveal` | number | Moves the character to the room that the number holds and shows its frame. For the `player` kind, the view follows after the update. Always true. |
 | `appear_at_sender` | message | Takes the position, room and direction of the newest sender of a message with that name, and leaves its owner. True when there is such a message. |
-| `remove` | — | The character leaves the world, and the engine stops its updates. An `enemy` gives 200 points. Always true. |
-| `use_up` | character | The character leaves the world and the inventory of that character, and the engine stops its updates. Always true. |
+| `remove` | — | The character goes outside the rooms of the level, and the engine stops its updates. An `enemy` gives 200 points. Always true. |
+| `use_up` | character | The character goes outside the rooms of the level and out of the inventory of that character, and the engine stops its updates. Always true. |
 | `checkpoint` | — | Keeps the state that a continue restores: all characters, the score and the terrain. Always true. |
 
 ### Perception and contact
@@ -382,10 +382,10 @@ Each character has one counter. Items use the health as a charge, a code or an a
 | `touching_kind_in_pose` | `.{ .kind = kind, .pose = integer }` | A character of that kind in its cells plays an animation with that pose. The character itself counts. |
 | `touching_in_pose` | integer | Another character in its cells plays an animation with that pose. |
 | `player_touching` | kind | Conrad's first cell holds another character of that kind. |
-| `sees` | `.{ .kind = kind, .cells = integer }` | An active character of that kind is on its tier, within that many cells (at most 16) and before a solid body cell. A positive value looks ahead. |
+| `sees` | `.{ .kind = kind, .cells = integer }` | An awake character of that kind is on its tier, within that many cells (at most 16) and before a solid body cell. A positive value looks ahead. |
 | `enemy_in_line` | integer | An awake `player` or `enemy` is on its tier, within the integer + 1 cells and before a solid body cell. Its health is 0 or more. A positive value looks ahead. |
-| `facing_target_unhittable` | `.{ .kind = kind, .hit = message, .range = number }` | An active character of that kind within the range faces the other way and does not wait for that hit. |
-| `backturned_target_unhittable` | `.{ .kind = kind, .hit = message, .range = number }` | An active character of that kind within the range faces the same way and does not wait for that hit. |
+| `facing_target_unhittable` | `.{ .kind = kind, .hit = message, .range = number }` | An awake character of that kind within the range faces the other way and does not wait for that hit. |
+| `backturned_target_unhittable` | `.{ .kind = kind, .hit = message, .range = number }` | An awake character of that kind within the range faces the same way and does not wait for that hit. |
 | `player_above` | — | Conrad is on a higher tier of the same room, or in the room above. |
 | `player_below` | — | Conrad is on a lower tier of the same room, or in the room below. |
 | `player_ahead` | integer | Conrad is on this tier, ahead by more than 0 and less than that many cells. With 0: anywhere ahead in this room, or on this tier of the next room ahead. |
@@ -408,7 +408,7 @@ behind when the two characters face the same way.
 | Name | Argument | Description |
 | --- | --- | --- |
 | `hit` | side | A hit from that side is in the mailbox, at either height. `from_front` and `from_front_unannounced` both match a hit from the front. |
-| `shoot` | `.{ .height = height, .range = number }` | Fires along its tier, from the next cell, up to the range (positive: ahead). The first active `player`, `enemy` or `kind_12` character that waits for the hit gets it. True when it sends a hit. |
+| `shoot` | `.{ .height = height, .range = number }` | Shoots along its tier, from the next cell, up to the range (positive: ahead). The first awake `player`, `enemy` or `kind_12` character that waits for the hit gets it. True when it sends a hit. |
 | `strike` | `.{ .height = height, .range = number }` | A close blow, as `shoot`, but only a `player` or an `enemy` can get it. |
 | `snap_to_wall_ahead` | `.{ .through_low_gaps = boolean, .range = number }` | Moves x to the first wall within the range, from its own cell. With `true`, a low passage does not stop it. True when it finds a wall. |
 | `start_defeat` | integer | Starts a defeat countdown of that many updates, unless one runs. Always true. |
@@ -466,7 +466,7 @@ hits kind 12.
 
 ## Checks
 
-The loader stops at the first failure. The game logs `data set: TEXT` as an error. FILE is the
+The reader stops at the first failure. The game logs `data set: TEXT` as an error. FILE is the
 name of the behavior file, for example `guard.zon`. OP is the name of an operation.
 
 | Check | Text |
@@ -507,7 +507,7 @@ name of the behavior file, for example `guard.zon`. OP is the name of an operati
 | At level start, an animation is not in the level's files | `behavior B, state S: animation N is not in the level's files (ERROR)` |
 
 The extractor writes `.{ .unknown_C = A }` for an original code C that it does not know, and
-`.{ .NAME_raw = A }` for an argument that it cannot write. The loader refuses both as unknown
+`.{ .NAME_raw = A }` for an argument that it cannot write. The reader refuses both as unknown
 operations. The report notes them ([data-set.md](data-set.md)).
 
 ## Quirks

@@ -35,7 +35,7 @@ DIR/
 | Path | Content | Specification |
 | --- | --- | --- |
 | `<level>/characters.zon` | Every placement of the level | [characters.md](characters.md) |
-| `<level>/behaviors/<name>.zon` | One behavior table. `<name>` is the behavior name. The loader reads only the files directly in `behaviors/`. | [behaviors.md](behaviors.md) |
+| `<level>/behaviors/<name>.zon` | One behavior table. `<name>` is the behavior name. The reader reads only the files directly in `behaviors/`. | [behaviors.md](behaviors.md) |
 | `messages.zon` | The world messages | This document |
 | `scenes.zon` | The film of each scene, the opening scene of each level, and the ending | This document |
 | `report.txt` | The extraction report. No code reads it. | This document |
@@ -99,17 +99,17 @@ gives.
 
 | Level | Type | Content |
 | --- | --- | --- |
-| Root | List of messages | One message for each number, from 0 |
-| Message | List of pages | The pages show one after the other |
+| Root | List of world messages | One world message for each number, from 0 |
+| World message | List of pages | The pages show one after the other |
 | Page | List of lines | The lines, from the top |
 | Line | `.{ .text = ..., .ink = ... }` | One line of text |
 
 | Field | Type | Content |
 | --- | --- | --- |
-| `text` | String | The glyph codes of the line, one byte for each glyph of the level font ([font.md](font.md)) |
-| `ink` | `u8` | The color index of the glyphs. The extractor writes 232 (0xe8) where the original sets no ink. |
+| `text` | String | The glyph codes of the line, one byte for each glyph of the game font ([font.md](font.md)) |
+| `ink` | `u8` | The text color of the line. The extractor writes 232 (0xe8) where the original sets no text color. |
 
-A message with no pages shows nothing. A number past the end of the list shows nothing.
+A world message with no pages shows nothing. A number past the end of the list shows nothing.
 
 ```zon
 // Generated with --extract from the user's game files. Do not commit.
@@ -209,9 +209,9 @@ The report is plain text. `--extract` also prints it.
 | `L: placement P starts in state S, which no rule names` | Yes | The extractor adds a state with no rules |
 | `L: placement P starts in room R` | No | A start room above 64. The extractor writes `.outside`. |
 | `L: F uses parameter P both as a link and as a number` | No | One placement parameter is a link and a number of behavior F |
-| `L: F uses unknown operation C` | Yes | The extractor writes `.{ .unknown_C = A }`, which the loader refuses |
-| `L: F gives N the unexpected argument A` | Yes | The extractor writes `.{ .N_raw = A }`, which the loader refuses |
-| `L: F has N where no first condition gives its kind` | Yes | N takes its kind from the first condition, but it is not the second condition ([rule-groups.md](rule-groups.md#arguments)). The extractor writes `.{ .N_raw = A }`, which the loader refuses |
+| `L: F uses unknown operation C` | Yes | The extractor writes `.{ .unknown_C = A }`, which the reader refuses |
+| `L: F gives N the unexpected argument A` | Yes | The extractor writes `.{ .N_raw = A }`, which the reader refuses |
+| `L: F has N where no first condition gives its kind` | Yes | N takes its kind from the first condition, but it is not the second condition ([rule-groups.md](rule-groups.md#arguments)). The extractor writes `.{ .N_raw = A }`, which the reader refuses |
 | `L: placement P: label N does not read (ERROR)` | Yes | The labels file gives no valid label N ([labels.md](labels.md#checks)). The extractor writes no `label` |
 
 An unexpected note is a note on data that the extractor does not understand. The supported edition
@@ -228,7 +228,7 @@ gives none.
    naming overlay ([naming-overlay.md](naming-overlay.md)). It keeps only the `.zon` files.
    When there are unexpected notes, it logs a warning with all the notes.
 3. When the extraction in memory fails, the game logs `data set not extracted: ERROR` and starts
-   with no data set. The scenes that need no data set still run. A level, a demo or the ending
+   with no data set. The screens that need no data set still run. A level, a demo or the ending
    cannot start.
 
 `--extract DIR` writes the data set into DIR and prints the report. DIR must be a new or empty
@@ -243,13 +243,13 @@ directory. `--names FILE` replaces the built-in naming overlay; it is valid only
 | A level or a demo starts | `<level>/characters.zon`, the `.zon` files directly in `<level>/behaviors/`, `messages.zon`, `scenes.zon` |
 | The ending starts | `scenes.zon` |
 
-The loader reads the behavior files of a level in the byte order of their names. This order gives
+The reader reads the behavior files of a level in the byte order of their names. This order gives
 the same result from a directory and from memory.
 
 ## Checks
 
-The loader stops at the first failure. The game logs `data set: TEXT` as an error. TEXT is one
-of the texts below. A text of the loader has at most 256 bytes. [characters.md](characters.md) and
+The reader stops at the first failure. The game logs `data set: TEXT` as an error. TEXT is one
+of the texts below. A text of the reader has at most 256 bytes. [characters.md](characters.md) and
 [behaviors.md](behaviors.md) give the checks of their files.
 
 | Check | Text |
@@ -261,9 +261,9 @@ of the texts below. A text of the loader has at most 256 bytes. [characters.md](
 | A credit text is empty | `scenes.zon: a credit's text is empty` |
 | The level has no `characters.zon` | `the data set has no <level>/characters.zon` |
 | A level file is not valid ZON | `FILE: not valid ZON` |
-| A glyph of a message is not in the level font | `message N: the font has no character B` |
+| A character of a world message is not in the game font | `message N: the font has no character B` |
 | Scene 61 and the scenes of `ending.scenes` have no film | `scenes.zon: no film for the ending (scene 61 and the scenes of ending)` |
-| A glyph of the credits is not in the font | `scenes.zon: the font has no character B of the credits` |
+| A character of the credits is not in the game font | `scenes.zon: the font has no character B of the credits` |
 
 Other failures have other texts:
 

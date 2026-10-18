@@ -1,9 +1,10 @@
 # Music (`.PRF`, `.MID`, `.INS`)
 
 A music cue has three kinds of file. The profile (`.PRF`) names a MIDI file and up to 16
-instruments, and gives the tick length. The MIDI file holds the notes, and an instrument file
-(`.INS`) holds the OPL2 values of one instrument. The title menu, the films and the end sequence
-play the cues on an emulated OPL2 chip.
+instruments, and gives the length of a music tick ([Playback](#playback)). The MIDI file holds the
+notes, and an instrument file (`.INS`) holds the OPL2 values of one instrument. The title menu, the
+films and the ending play the cues on an emulated OPL2 chip. The music player is the code that
+plays a cue.
 
 | Item | Value |
 |---|---|
@@ -16,7 +17,7 @@ play the cues on an emulated OPL2 chip.
 ## File names
 
 The reader starts from the name of a cue. The title menu uses the cues `PRESENT3`, `INTROL3`,
-`GAMEOVE3` and `OPTION3`. A film and the end sequence use the `music` name of their film in
+`GAMEOVE3` and `OPTION3`. A film and the ending use the `music` name of their film in
 `scenes.zon` (see [data-set.md](data-set.md)).
 
 1. The profile is `<cue>.PRF`. The reader does not shorten the cue name.
@@ -35,7 +36,7 @@ The size of a profile is 752 or 753 bytes. The game's profiles have 753 bytes, b
 
 | Offset | Size | Type | Content |
 |---|---|---|---|
-| 0 | 480 | 16 × 30 bytes | The instrument names of the slots 0 to 15. Each name ends with a 0 byte. An empty name gives an empty slot. |
+| 0 | 480 | 16 × 30 bytes | The instrument names of the instrument slots 0 to 15. Each name ends with a 0 byte. An empty name gives an empty slot. |
 | 480 | 32 | 16 × u16 | The pitch additions |
 | 512 | 32 | 16 × u16 | The velocity additions |
 | 544 | 2 | u16 | `interval`: the timer interrupts in one tick, 1 to 1000 |
@@ -45,14 +46,14 @@ The size of a profile is 752 or 753 bytes. The game's profiles have 753 bytes, b
 | 570 | 2 | u16 | The program switch. 0 is off. |
 | 572 | 32 | 16 × u16 | The program of each instrument slot |
 | 604 | 128 | – | Unknown. The reader ignores it. |
-| 732 | 16 | 16 × u8 | One byte for each part. 0: the part repeats. Not 0: the part plays one time. |
+| 732 | 16 | 16 × u8 | One byte for each music part (MIDI track). 0: the part repeats. Not 0: the part plays one time. |
 | 748 | 4 | i32 | `limit`. Positive: the cue stops. Negative: the cue starts again. 0: no limit. |
 | 752 | 0 or 1 | – | Unknown. The reader ignores it. |
 
 ### The slot of a part
 
-Each MIDI track is a part. A part plays the instrument of its current slot (`binding` in the code).
-At the start of the track, the slot is the index of the part.
+Each MIDI track is a music part. A part plays the instrument of its current slot (`binding` in the
+code). At the start of the track, the slot is the index of the part.
 
 - When the program switch is 0, the reader ignores the program changes.
 - When the program switch is not 0, a program change to program p changes the slot of the part.
@@ -159,8 +160,8 @@ An operator record has 13 words (u16):
 
 ### The OPL2 registers
 
-The player writes an operator to the registers of its operator offset (`op`). The table gives the
-bits of each register and the operator field (by its offset) that sets them.
+The music player writes an operator to the registers of its operator offset (`op`). The table gives
+the bits of each register and the operator field (by its offset) that sets them.
 
 | Register | Bits | Value |
 |---|---|---|
@@ -190,26 +191,28 @@ The channels and their operator offsets:
 | 9 | Cymbal | – | 0x15 |
 | 10 | Hi-hat | – | 0x11 |
 
-- For a melodic instrument and the bass drum, the player writes the modulator, register 0xc0 and the
-  carrier.
-- For the other drums, the player writes only the carrier record, to the one operator of the drum.
+- For a melodic instrument and the bass drum, the music player writes the modulator, register 0xc0
+  and the carrier.
+- For the other drums, the music player writes only the carrier record, to the one operator of the
+  drum.
 
 ### The volume of a note
 
-The player calculates the total level of an operator for each note:
+The music player calculates the total level of an operator for each note:
 
 1. volume = ⌊velocity × master / 64⌋. The master volume is 0 to 63. It is 48 at the start, and the
    keypad + and − keys change it.
 2. level = 63 − ⌊(2 × (63 − total level) × volume + 127) / 254⌋.
 
-The player always uses this level for the carrier. It uses it for the modulator only when the
+The music player always uses this level for the carrier. It uses it for the modulator only when the
 modulator's connection is 0. Else the modulator keeps its total level. For register 0xc0 the reader
 tests the whole connection word, but for the volume it tests only the low byte (offset 26 of the
 file).
 
 With the connections and the feedbacks of the original files, the two tests give the same result,
-and the player agrees with the original. No measurement compares other values with the original.
-For them, the two tests can differ, and a feedback above 7 sets bits 4 to 7 of register 0xc0.
+and the music player agrees with the original. No measurement compares other values with the
+original. For them, the two tests can differ, and a feedback above 7 sets bits 4 to 7 of register
+0xc0.
 
 ### The frequency of a note
 
@@ -227,15 +230,15 @@ For a pitch p, the F-number is entry p mod 12 of this table, and the block is �
   channel 6 (bass drum), 7 (snare drum, hi-hat) or 8 (tom-tom, cymbal). Then it sets its bit in
   register 0xbd: bit 4 bass drum, bit 3 snare drum, bit 2 tom-tom, bit 1 cymbal, bit 0 hi-hat.
   Bit 5 of that register sets the rhythm mode, and each drum write sets it.
-- The player does not limit the block to 3 bits (see the quirks).
+- The music player does not limit the block to 3 bits (see the quirks).
 
 ## Playback
 
-The music timer runs at 1,193,182 / 532 Hz. A tick is `interval` periods of the timer. Thus an event
-at tick t starts at output frame ⌊t × 532 × `interval` × rate / 1,193,182⌋. Example: an
+The music timer runs at 1,193,182 / 532 Hz. A music tick is `interval` periods of the timer. Thus an
+event at tick t starts at output frame ⌊t × 532 × `interval` × rate / 1,193,182⌋. Example: an
 `interval` of 7 gives a tick of about 3.1 ms.
 
-At each tick, the player does these steps:
+At each tick, the music player does these steps:
 
 1. It adds 1 to the local tick. The local tick counts from the start, or from the last restart.
 2. For a negative `limit` −L: when the local tick is L + 2, the chip stops all sounds. Every part
@@ -278,8 +281,8 @@ At each tick, the player does these steps:
 
 ## Quirks
 
-- The player writes a waveform to register 0x0e + op, not 0xe0 + op. At its reset, it turns the
-  waveform select on and then off. Thus every operator keeps the sine wave.
+- The music player writes a waveform to register 0x0e + op, not 0xe0 + op. At its reset, it turns
+  the waveform select on and then off. Thus every operator keeps the sine wave.
 - For the operators 0x12 to 0x15, the address 0x0e + op is 0x20 to 0x23. That write sets the
   multiple of the operators 0x00 to 0x03 and clears their other bits, until their next note.
 - The velocity addition wraps at 8 bits before the limit of 127.
@@ -288,8 +291,8 @@ At each tick, the player does these steps:
 - A pitch bend adds (size × 25) / 8192, with the sign, to the F-number of the part's notes. The
   product wraps to a signed 16-bit value before the division, so the change is −4 to +3 steps. The
   bend writes a block one lower than the block of the note.
-- A note that finds no free channel does not play. The player does not take the channel of a note
-  that sounds.
+- A note that finds no free channel does not play. The music player does not take the channel of a
+  note that sounds.
 - The block of a note is not limited to 3 bits. A pitch of 96 or more gives a block above 7, which
   sets bit 5 of register 0xb0, the key-on bit. Thus the release of a melodic note of that pitch
   does not stop it. The original does the same: the cue of the title menu plays such notes, and
