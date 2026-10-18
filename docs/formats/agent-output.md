@@ -25,6 +25,7 @@ or a directory extracted from one. The run needs the two disks
 |---|---|
 | `--scene NAME` | Start on the title menu (`menu`), or in a level: `jungle`, `city`, `tower`, `earth_city`, `spaceport`, `alien_surface` or `alien_base`. Default: the introduction. |
 | `--saves DIR` | The save directory ([save.md](save.md)). Default for the agent: the records stay in memory. |
+| `--config DIR` | The configuration directory ([settings.md](settings.md)). Default for the agent: the settings stay in memory. |
 | `--data DIR` | Read the data set from `DIR` ([data-set.md](data-set.md)). Default: extract it in memory. |
 | `--extract DIR` | Write the data set into `DIR`, a new or empty directory. Then write the report on standard output, and stop. Only `--names` and `ASSET_PATH` can go with it. |
 | `--names FILE` | With `--extract` only: the naming overlay ([naming-overlay.md](naming-overlay.md)). |
@@ -175,7 +176,7 @@ With `--trace`, the host writes these lines during the run:
 | `flashbackz-agent: load SLOT: ERROR` | A `--load` failed, for example `NotFound` or `OtherDataSet` ([save.md](save.md#checks)). |
 | `info: ...`, `warning: ...`, `error: ...` | Log lines of the game. |
 | `flashbackz-agent: ...`, then the usage lines | An option has an error (see [Checks](#checks)). The status is 2. |
-| `flashbackz-agent: cannot open the ...` | A provider does not open (a disk, the save directory, the data set or the cartridge). The status is 2. |
+| `flashbackz-agent: cannot open the ...` | A provider does not open (a disk, the save or configuration directory, the data set or the cartridge). The status is 2. |
 | `flashbackz-agent: the game's files are missing: ...` | The command line has no `ASSET_PATH`. The status is 2. |
 
 The host writes these lines before the two lines of standard output.
@@ -206,7 +207,8 @@ tools/agent_sessions.sh AGENT DISK1 DISK2 | diff tools/agent_sessions.txt -
 
 For each scripted session, the script:
 
-1. Makes a new save directory in a temporary directory, and gives it with `--saves`.
+1. Makes a new save directory and a new configuration directory in a temporary directory, and
+   gives them with `--saves` and `--config`.
 2. Runs the agent with the options of the scripted session and the two disks. It reads standard
    output and standard error apart.
 3. Checks the exit status (0) and standard output (exactly two lines, with the hashes in line 1).
@@ -215,7 +217,7 @@ For each scripted session, the script:
 5. Writes `NAME: "state_hash":"H","frame_hash":"F" LINE2`. The hashes come from line 1 of
    standard output, and `LINE2` is line 2.
 6. Writes each of the agent's stderr lines as `  stderr: LINE`.
-7. Writes `  settings: RECORD` when the run wrote a `SETTINGS` record. `RECORD` is the record
+7. Writes `  settings: RECORD` when the run wrote a `settings.zon` record. `RECORD` is the record
    without spaces and newlines.
 
 The agent's stderr lines are the lines of standard error that do not start with `info:`.

@@ -128,7 +128,7 @@ The extractor, the game and the hosts write these files.
 - [Naming overlay](naming-overlay.md) (`src/extract/names.zon`): our names for behaviors and
   states.
 - [Saves](save.md) (`QUICK`, `SAVE1` to `SAVE8`, `.INFO`) and [settings](settings.md)
-  (`SETTINGS`).
+  (`settings.zon`).
 - [SDL event log](sdl-event-log.md) (`--event-log`).
 - [Agent host output](agent-output.md): the JSON lines of `flashbackz-agent`.
 

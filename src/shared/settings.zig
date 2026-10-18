@@ -150,7 +150,7 @@ pub const Settings = struct {
     }
 };
 
-pub const record_name = "SETTINGS";
+pub const record_name = "settings.zon";
 
 /// The record's format. Any change to it is a new version, and records of the others are
 /// refused.

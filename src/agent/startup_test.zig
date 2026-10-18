@@ -19,13 +19,11 @@ test "floppy menu preview rejects a missing introduction; Start readies the jung
     try source.add("DATA/FB_TXT.FNT", &font);
     try std.testing.expectError(
         error.NotFound,
-        game.Game.init(allocator, source.assetSource(), null),
+        game.Game.init(allocator, .{ .assets = source.assetSource() }),
     );
     var preview = try game.Game.initWithEntry(
         allocator,
-        source.assetSource(),
-        null,
-        null,
+        .{ .assets = source.assetSource() },
         .menu_development,
     );
     defer preview.deinit();
@@ -105,7 +103,7 @@ test "normal startup completes three vector chapters and skipping introduction r
     var backend = Backend.init(allocator, .{});
     defer backend.deinit();
     var platform = backend.asPlatform();
-    var app = try game.Game.init(allocator, source.assetSource(), null);
+    var app = try game.Game.init(allocator, .{ .assets = source.assetSource() });
     defer app.deinit();
     var first = false;
     var second = false;

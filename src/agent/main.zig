@@ -12,8 +12,8 @@
 //! 5. It advances the clock by `frame_ns`.
 //!
 //! The game reads its files from the asset paths (both floppy images, or a directory extracted from
-//! them); without them it stops with a message. With `--saves` it saves there; without it, in
-//! memory: a run touches no file it is not given.
+//! them); without them it stops with a message. With `--saves` it saves there, and with `--config`
+//! it keeps the settings there; without them, in memory: a run touches no file it is not given.
 const std = @import("std");
 const flashbackz = @import("flashbackz");
 const agent = @import("agent");
@@ -143,7 +143,7 @@ pub fn main(init: std.process.Init) !void {
         return fail(io, err, diagnostic)) orelse 120;
     var options = native.cli.fromArgs(args, &diagnostic) catch |err|
         return fail(io, err, diagnostic);
-    options.default_saves = .memory;
+    options.default_storage = .memory;
     if (options.extract != null) {
         const status = native.cli.extractCommand(gpa, io, "flashbackz-agent", options);
         if (status != 0) {
@@ -217,15 +217,18 @@ pub fn main(init: std.process.Init) !void {
         }
     }
 
-    // The files the options name, and saves in memory unless they name a directory. The providers
-    // outlive the game.
+    // The files the options name, and the saves and the settings in memory unless the options
+    // name their directories. The providers outlive the game.
     var providers: native.cli.Providers = .empty;
     defer providers.deinit();
-    var memory_storage = flashbackz.memory.MemoryStorage.init(gpa);
-    defer memory_storage.deinit();
+    var memory_saves = flashbackz.memory.MemoryStorage.init(gpa);
+    defer memory_saves.deinit();
+    var memory_config = flashbackz.memory.MemoryStorage.init(gpa);
+    defer memory_config.deinit();
     var assets: ?flashbackz.platform.AssetSource = null;
-    var storage = memory_storage.storage();
-    if (options.assets != null or options.saves != null) {
+    var save_storage = memory_saves.storage();
+    var config_storage = memory_config.storage();
+    if (options.assets != null or options.saves != null or options.config != null) {
         providers.open(gpa, io, init.environ_map, options) catch |err| {
             var buffer: [256]u8 = undefined;
             var stderr = std.Io.File.stderr().writerStreaming(io, &buffer);
@@ -235,8 +238,11 @@ pub fn main(init: std.process.Init) !void {
             std.process.exit(2);
         };
         assets = providers.assetSource();
-        if (providers.storage()) |directory| {
-            storage = directory;
+        if (providers.savesStorage()) |directory| {
+            save_storage = directory;
+        }
+        if (providers.configStorage()) |directory| {
+            config_storage = directory;
         }
     }
     if (assets == null) {
@@ -255,9 +261,12 @@ pub fn main(init: std.process.Init) !void {
     backend.audio.record = pcm_path != null;
     var game = try flashbackz.Game.initWithEntry(
         gpa,
-        assets,
-        storage,
-        providers.dataSet(),
+        .{
+            .assets = assets,
+            .saves = save_storage,
+            .config = config_storage,
+            .data = providers.dataSet(),
+        },
         options.entry,
     );
     defer game.deinit();
@@ -482,6 +491,6 @@ fn help(io: std.Io, allocator: std.mem.Allocator, environ: *const std.process.En
     var buf: [4096]u8 = undefined;
     var w = std.Io.File.stdout().writerStreaming(io, &buf);
     try Args.writeHelp(&w.interface);
-    try native.cli.writeSavesHelp(&w.interface, allocator, environ, .memory);
+    try native.cli.writeStorageHelp(&w.interface, allocator, environ, .memory);
     try w.interface.flush();
 }

@@ -98,9 +98,9 @@ pub fn run(
     }) catch {};
     err.flush() catch {};
 
-    // The providers: the save directory, the game's files (the asset paths or the built-in
-    // disks), the cartridge and the data set. They outlive the game and the backend, which only
-    // borrow their interfaces.
+    // The providers: the save and configuration directories, the game's files (the asset paths
+    // or the built-in disks), the cartridge and the data set. They outlive the game and the
+    // backend, which only borrow their interfaces.
     var providers: native.cli.Providers = .empty;
     defer providers.deinit();
     providers.open(gpa, io, environ, options.providers) catch |e| {
@@ -109,10 +109,11 @@ pub fn run(
         err.flush() catch {};
         return 1;
     };
-    err.print("{s}: assets: {s}, saves: {s}\n", .{
+    err.print("{s}: assets: {s}, saves: {s}, settings: {s}\n", .{
         name,
         @tagName(providers.kind),
         providers.saves_path,
+        providers.config_path,
     }) catch {};
     err.flush() catch {};
 
@@ -136,9 +137,12 @@ pub fn run(
 
     var game = flashbackz.Game.initWithEntry(
         gpa,
-        providers.assetSource(),
-        providers.storage(),
-        providers.dataSet(),
+        .{
+            .assets = providers.assetSource(),
+            .saves = providers.savesStorage(),
+            .config = providers.configStorage(),
+            .data = providers.dataSet(),
+        },
         options.providers.entry,
     ) catch |e| {
         if (e == error.NotFound) {
@@ -316,6 +320,8 @@ test "the host options are parsed, bounded and defaulted" {
             "game",
             "--saves",
             "saves",
+            "--config",
+            "config",
         },
     );
     try std.testing.expectEqual(@as(?u32, 2), all.scale);
@@ -324,6 +330,7 @@ test "the host options are parsed, bounded and defaulted" {
     try std.testing.expectEqual(@as(?u64, 1_000_000_000), all.deadlineNs());
     try std.testing.expectEqualStrings("game", all.providers.assets.?);
     try std.testing.expectEqualStrings("saves", all.providers.saves.?);
+    try std.testing.expectEqualStrings("config", all.providers.config.?);
 
     for ([_][]const []const u8{
         &.{ "--scale", "0" },

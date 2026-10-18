@@ -5,7 +5,7 @@
 #
 #   tools/agent_sessions.sh zig-out/bin/flashbackz-agent disk1.img disk2.img | diff tools/agent_sessions.txt -
 #
-# Each session saves into its own temporary directory, never the user's.
+# Each session keeps its saves and its settings in its own temporary directories, never the user's.
 #
 # A session whose agent fails (an exit status other than 0, or not its two JSON lines) prints
 # FAILED with the agent's messages, and the script then exits with status 1. Other lines on the
@@ -21,10 +21,11 @@ skip="--key-down 5:escape --key-up 8:escape" # the level's opening film
 run() {
   local name=$1
   shift
-  local saves="$saves_root/$name"
-  mkdir "$saves"
+  local saves="$saves_root/$name" config="$saves_root/$name.config"
+  mkdir "$saves" "$config"
   local out status=0
-  out="$("$agent" --saves "$saves" "$@" "${disks[@]}" 2>"$saves_root/stderr")" || status=$?
+  out="$("$agent" --saves "$saves" --config "$config" "$@" "${disks[@]}" 2>"$saves_root/stderr")" ||
+    status=$?
   local messages
   messages="$(grep -v '^info:' "$saves_root/stderr" || true)"
   local hashes
@@ -37,7 +38,8 @@ run() {
   fi
   echo "$name: $hashes $(printf '%s\n' "$out" | tail -1)"
   if [ -n "$messages" ]; then printf '%s\n' "$messages" | sed 's/^/  stderr: /'; fi
-  if [ -f "$saves/SETTINGS" ]; then echo "  settings: $(tr -d '\n ' <"$saves/SETTINGS")"; fi
+  local settings="$config/settings.zon"
+  if [ -f "$settings" ]; then echo "  settings: $(tr -d '\n ' <"$settings")"; fi
 }
 
 # Play: walk, run, crouch, jump.

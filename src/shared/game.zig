@@ -65,22 +65,34 @@ const SlotList = struct {
     slots: [save_slots.row_count]save.Slot,
 };
 
+/// What a host gives the game. Each is null when the host has none.
+pub const Sources = struct {
+    /// The original's files.
+    assets: ?platform.AssetSource = null,
+    /// The saves.
+    saves: ?platform.Storage = null,
+    /// The configuration: the settings record.
+    config: ?platform.Storage = null,
+    /// The data set that levels run from.
+    data: ?*const data_set.Files = null,
+};
+
 pub const Game = struct {
     allocator: std.mem.Allocator,
-    /// The original's files and the saves, bound by the host. Null when the host has none.
+    /// The host's sources, bound for the whole game (`Sources`).
     assets: ?platform.AssetSource,
-    storage: ?platform.Storage,
-    /// The data set that levels run from, when the host provides one.
-    data: ?*const data_set.Files = null,
+    saves: ?platform.Storage,
+    config: ?platform.Storage,
+    data: ?*const data_set.Files,
     phase: Phase = .startup,
     update_count: u64 = 0,
     frames_presented: u64 = 0,
     events_consumed: u64 = 0,
     /// The hash of the last presented page, as palette indices.
     last_frame_hash: u64 = 0,
-    /// The player's settings, which the game owns and keeps in storage.
+    /// The player's settings, which the game owns and keeps in `config`.
     settings: settings_mod.Settings = .{},
-    /// The settings as storage last kept them.
+    /// The settings as `config` last kept them.
     kept_settings: settings_mod.Settings = .{},
     /// What the pads hold, for the screens outside a level (a level tracks its own).
     pads: input.Pads = .{},
@@ -116,21 +128,13 @@ pub const Game = struct {
     /// for every level; on the heap so that the levels' pointers outlive moves of the game.
     tunes: ?*megadrive.Tunes = null,
 
-    pub fn init(
-        allocator: std.mem.Allocator,
-        assets: ?platform.AssetSource,
-        storage: ?platform.Storage,
-    ) !Game {
-        return initWithEntry(allocator, assets, storage, null, .automatic);
+    pub fn init(allocator: std.mem.Allocator, sources: Sources) !Game {
+        return initWithEntry(allocator, sources, .automatic);
     }
 
-    pub fn initWithEntry(
-        allocator: std.mem.Allocator,
-        assets: ?platform.AssetSource,
-        storage: ?platform.Storage,
-        data: ?*const data_set.Files,
-        entry: Entry,
-    ) !Game {
+    pub fn initWithEntry(allocator: std.mem.Allocator, sources: Sources, entry: Entry) !Game {
+        const assets = sources.assets;
+        const data = sources.data;
         const page = try allocator.alloc(u8, picture_pixels);
         errdefer allocator.free(page);
         const rgba = try allocator.alloc(u8, picture_pixels * platform.RgbaFrame.bytes_per_pixel);
@@ -140,7 +144,7 @@ pub const Game = struct {
                 try content_check.check(allocator, source, files);
             }
         }
-        const settings = settings_mod.load(storage);
+        const settings = settings_mod.load(sources.config);
         const tunes = try loadTunes(allocator, assets);
         errdefer if (tunes) |t| freeTunes(allocator, t);
         if (entry == .level_development) {
@@ -155,7 +159,8 @@ pub const Game = struct {
             return .{
                 .allocator = allocator,
                 .assets = assets,
-                .storage = storage,
+                .saves = sources.saves,
+                .config = sources.config,
                 .data = data,
                 .page = page,
                 .rgba = rgba,
@@ -176,7 +181,8 @@ pub const Game = struct {
         return .{
             .allocator = allocator,
             .assets = assets,
-            .storage = storage,
+            .saves = sources.saves,
+            .config = sources.config,
             .data = data,
             .page = page,
             .rgba = rgba,
@@ -824,7 +830,7 @@ pub const Game = struct {
         return true;
     }
 
-    /// The save slots, read from storage the first time a slot page needs them.
+    /// The save slots, read from the saves the first time a slot page needs them.
     fn slotList(self: *Game) ![]const save.Slot {
         if (self.slot_list == null) {
             var list: SlotList = .{ .arena = .init(self.allocator), .slots = undefined };
@@ -834,11 +840,11 @@ pub const Game = struct {
                 var name: [8]u8 = undefined;
                 var info_name: [platform.max_name_len]u8 = undefined;
                 const info = try save.infoName(save_slots.slotName(row, &name), &info_name);
-                const storage = self.storage orelse {
+                const saves = self.saves orelse {
                     slot.* = .empty;
                     continue;
                 };
-                var bytes = storage.load(info) catch |err| {
+                var bytes = saves.load(info) catch |err| {
                     slot.* = if (err == error.NotFound) .empty else .broken;
                     continue;
                 };
@@ -900,7 +906,7 @@ pub const Game = struct {
     /// it what the slot list shows: the level, the play time, the date and the picture.
     pub fn saveGame(self: *Game, p: *platform.Platform, slot: []const u8) !void {
         if (!self.canSave()) return error.NothingToSave;
-        const storage = self.storage orelse return error.NoStorage;
+        const saves = self.saves orelse return error.NoStorage;
         const files = self.data orelse return error.DataSetRequired;
         // The info record's name is checked first: a slot name the storage refuses for it
         // writes nothing.
@@ -923,7 +929,7 @@ pub const Game = struct {
             .scene = level.saveState(),
             .world = try save.captureWorld(arena, &level.world),
         });
-        try storage.save(slot, text);
+        try saves.save(slot, text);
 
         const indices = try arena.alloc(u8, level_scene.width * level_scene.height);
         const colors = level.playPicture(indices);
@@ -948,7 +954,7 @@ pub const Game = struct {
             .date = when,
             .picture = try save.hex(arena, &pixels),
         });
-        try storage.save(info_name, info);
+        try saves.save(info_name, info);
         self.dropSlots();
     }
 
@@ -959,10 +965,10 @@ pub const Game = struct {
     /// 4. The scene in play ends (`endScene`), and the loaded level takes its place.
     /// If a step fails, the scene in play continues.
     pub fn loadGame(self: *Game, slot: []const u8) !void {
-        const storage = self.storage orelse return error.NoStorage;
+        const saves = self.saves orelse return error.NoStorage;
         const files = self.data orelse return error.DataSetRequired;
         const assets = self.assets orelse return error.OriginalContentRequired;
-        var bytes = try storage.load(slot);
+        var bytes = try saves.load(slot);
         defer bytes.deinit();
         var arena_state: std.heap.ArenaAllocator = .init(self.allocator);
         defer arena_state.deinit();
@@ -1007,11 +1013,11 @@ pub const Game = struct {
         }
     }
 
-    /// Keeps the settings in storage when they have changed since storage last kept them. A
-    /// failed save is tried again at each update until one succeeds.
+    /// Keeps the settings in `config` when they have changed since it last kept them. A failed
+    /// save is tried again at each update until one succeeds.
     fn keepSettings(self: *Game) void {
         if (std.meta.eql(self.settings, self.kept_settings)) return;
-        settings_mod.save(self.storage, self.settings) catch return;
+        settings_mod.save(self.config, self.settings) catch return;
         self.kept_settings = self.settings;
     }
 

@@ -11,7 +11,7 @@ writes the two records into the save directory and reads them back.
 | Item | Value |
 |---|---|
 | Files | Save records: `QUICK`, `SAVE1` to `SAVE8`. INFO records: the same names with `.INFO` at the end. |
-| Place | The save directory, with the [settings](settings.md) record (see [Storage](#storage)). |
+| Place | The save directory (see [Storage](#storage)). The [settings](settings.md) record is in the configuration directory. |
 | Format | ZON text in ASCII, with a newline (`0x0a`) at the end. |
 | Byte order | Not applicable: the records are text. |
 | Reader | `src/shared/save.zig` (`decode`, `readSlot`, `restoreWorld`), `src/shared/game.zig` (`loadGame`, `slotList`) |
@@ -43,11 +43,12 @@ The host finds the save directory in this order:
    set and not empty. Else it is `$HOME/.local/share/flashbackz/saves`.
 4. The host creates the directory if necessary.
 
-The settings record is in the same directory ([settings.md](settings.md)). The end of
-`flashbackz --help` gives the directory of steps 2 and 3 for the current environment.
+The end of `flashbackz --help` gives the directory of steps 2 and 3 for the current
+environment.
 
-When the necessary variable is missing or empty, the host stops with "no per-user data directory
-here; give --saves DIR". Without `--saves`, the agent host keeps its records in memory only.
+When the necessary variable is missing or empty, the host stops with "no per-user directory here;
+give --saves DIR and --config DIR". Without `--saves`, the agent host keeps its records in memory
+only.
 
 A record name has 1 to 64 ASCII characters: letters, digits, `.`, `_` and `-`. It must not start
 or end with `.`, and it must not contain `..`. Its part before the first `.` must not be a Windows

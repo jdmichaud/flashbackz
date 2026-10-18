@@ -3,9 +3,10 @@
 //!
 //! - The asset paths: the two disks, each a directory or a FAT12 floppy image. Without them, the
 //!   standalone build uses its built-in files. `--megadrive` adds the cartridge, for its tunes.
-//! - `--saves`: the save directory, which also holds the settings. The default is the per-user
-//!   application data directory, and `Providers.open` creates it if necessary. The agent saves in
-//!   memory instead. The end of each host's help names the default (`writeSavesHelp`).
+//! - `--saves`: the save directory, by default the per-user data directory. `--config`: the
+//!   configuration directory, for the settings, by default the per-user configuration directory.
+//!   `Providers.open` creates them if necessary. The agent keeps both in memory instead. The end
+//!   of each host's help names the defaults (`writeStorageHelp`).
 //! - `--data`: a data set directory. Without it, `Providers.open` extracts the data set in
 //!   memory from the disks.
 //! - `--extract` with `--names` writes the data set and exits. `--scene` selects the first scene.
@@ -36,7 +37,12 @@ pub const shared_options = [_]clap.Option{
     .{
         .long = "saves",
         .value = "DIR",
-        .help = "where the saves and the settings are kept\n(default: the end of this help)",
+        .help = "where the saves are kept\n(default: the end of this help)",
+    },
+    .{
+        .long = "config",
+        .value = "DIR",
+        .help = "where the settings are kept\n(default: the end of this help)",
     },
     .{
         .long = "data",
@@ -82,6 +88,9 @@ pub fn fromArgs(args: anytype, diagnostic: *clap.Diagnostic) clap.Error!Options 
     }
     if (args.value("saves")) |dir| {
         result.saves = try nonEmpty("--saves", dir, diagnostic);
+    }
+    if (args.value("config")) |dir| {
+        result.config = try nonEmpty("--config", dir, diagnostic);
     }
     if (args.value("data")) |dir| {
         result.data = try nonEmpty("--data", dir, diagnostic);
@@ -234,6 +243,8 @@ pub const Options = struct {
     second_assets: ?[]const u8 = null,
     /// `--saves`: the save directory.
     saves: ?[]const u8 = null,
+    /// `--config`: the configuration directory, for the settings.
+    config: ?[]const u8 = null,
     /// `--data`: a data set directory, written by `--extract`.
     data: ?[]const u8 = null,
     /// `--extract`: write the data set here instead of running the game.
@@ -244,7 +255,7 @@ pub const Options = struct {
     megadrive: ?[]const u8 = null,
     /// The standalone build's files, read when no path names them.
     built_in: BuiltIn = .{},
-    default_saves: DefaultSaves = .user_directory,
+    default_storage: DefaultStorage = .user_directories,
     entry: flashbackz.game.Entry = .automatic,
 
     pub fn addAsset(self: *Options, path: []const u8) error{ MissingValue, TooManyAssets }!void {
@@ -259,9 +270,9 @@ pub const Options = struct {
     }
 };
 
-/// Where the game saves without `--saves`: the user's save directory, or in memory for the agent,
-/// whose runs touch no file they are not given.
-pub const DefaultSaves = enum { user_directory, memory };
+/// Where the game keeps its saves and its settings without `--saves` and `--config`: in the user's
+/// directories, or in memory for the agent, whose runs touch no file they are not given.
+pub const DefaultStorage = enum { user_directories, memory };
 
 /// The standalone build's files (DESIGN.md 3): the disks, read when no asset path is given, and
 /// the cartridge, read without `--megadrive`.
@@ -295,8 +306,11 @@ pub const Providers = struct {
     kind: AssetKind = .none,
     /// The save directory in use (owned).
     saves_path: []u8 = &.{},
+    /// The configuration directory in use (owned).
+    config_path: []u8 = &.{},
     content: ?Pack = null,
     saves: ?DirectoryStorage = null,
+    config: ?DirectoryStorage = null,
     /// The data set, when original files are open: read from `--data` or extracted from them.
     data_arena: ?*std.heap.ArenaAllocator = null,
     data: ?flashbackz.behavior.data_set.Files = null,
@@ -325,7 +339,8 @@ pub const Providers = struct {
             error.InvalidImage => "not a floppy image of the game, nor a directory from one",
             error.ConflictingAsset => "a file differs from the other disk's (two editions?)",
             error.AccessDenied => "permission denied",
-            error.NoApplicationDirectory => no_user_directory,
+            error.NoApplicationDirectory => "no per-user directory here; give --saves DIR and " ++
+                "--config DIR",
             error.Io => "read error",
             error.Canceled => "canceled",
             error.OutOfMemory => "out of memory",
@@ -341,7 +356,8 @@ pub const Providers = struct {
     }
 
     /// Opens the providers that the options name, in this order:
-    /// 1. the save directory, which it creates if necessary (not when the agent saves in memory);
+    /// 1. the save and configuration directories, which it creates if necessary (not when the
+    ///    agent keeps them in memory);
     /// 2. the asset source, from the asset paths or else the built-in disks;
     /// 3. the Mega Drive cartridge, from `--megadrive` or else the built-in one, if any;
     /// 4. the data set, from `--data` or else extracted from the disks.
@@ -356,13 +372,21 @@ pub const Providers = struct {
     ) OpenError!void {
         self.allocator = allocator;
         errdefer self.deinit();
-        if (options.saves != null or options.default_saves == .user_directory) {
+        if (options.saves != null or options.default_storage == .user_directories) {
             self.failed = .{ .what = "save directory", .path = options.saves orelse "" };
             self.saves_path = if (options.saves) |path|
                 try allocator.dupe(u8, path)
             else
                 try defaultSaveDirectory(allocator, environ);
             self.saves = try mapOpen(DirectoryStorage.open(allocator, io, self.saves_path, true));
+        }
+        if (options.config != null or options.default_storage == .user_directories) {
+            self.failed = .{ .what = "configuration directory", .path = options.config orelse "" };
+            self.config_path = if (options.config) |path|
+                try allocator.dupe(u8, path)
+            else
+                try defaultConfigDirectory(allocator, environ);
+            self.config = try mapOpen(DirectoryStorage.open(allocator, io, self.config_path, true));
         }
         if (options.assets == null and options.built_in.disks.len == 0) {
             self.failed = .{};
@@ -538,7 +562,11 @@ pub const Providers = struct {
         if (self.saves) |*s| {
             s.deinit();
         }
+        if (self.config) |*s| {
+            s.deinit();
+        }
         self.allocator.free(self.saves_path);
+        self.allocator.free(self.config_path);
         self.* = .{ .failed = self.failed };
     }
 
@@ -548,9 +576,14 @@ pub const Providers = struct {
         return if (self.content) |*content| content.assetSource() else null;
     }
 
-    /// The save directory's storage; null when the options save in memory.
-    pub fn storage(self: *Providers) ?platform.Storage {
+    /// The save directory's storage; null when the saves stay in memory.
+    pub fn savesStorage(self: *Providers) ?platform.Storage {
         return if (self.saves) |*saves| saves.storage() else null;
+    }
+
+    /// The configuration directory's storage; null when the settings stay in memory.
+    pub fn configStorage(self: *Providers) ?platform.Storage {
+        return if (self.config) |*config| config.storage() else null;
     }
 
     pub fn dataSet(self: *const Providers) ?*const flashbackz.behavior.data_set.Files {
@@ -558,52 +591,121 @@ pub const Providers = struct {
     }
 };
 
-/// The per-user application data directory for the flashbackz saves:
-/// `$XDG_DATA_HOME/flashbackz/saves`, else `$HOME/.local/share/flashbackz/saves`, and
-/// `%APPDATA%\flashbackz\saves` on Windows. The caller owns the result.
+/// The per-user directory of the saves: `$XDG_DATA_HOME/flashbackz/saves`, else
+/// `$HOME/.local/share/flashbackz/saves`, and `%APPDATA%\flashbackz\saves` on Windows. The caller
+/// owns the result.
 pub fn defaultSaveDirectory(
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
 ) error{ NoApplicationDirectory, OutOfMemory }![]u8 {
-    if (builtin.os.tag == .windows) {
-        const appdata = environ.get("APPDATA") orelse return error.NoApplicationDirectory;
-        if (appdata.len == 0) return error.NoApplicationDirectory;
-        return std.fmt.allocPrint(allocator, "{s}\\flashbackz\\saves", .{ appdata }) catch
-            return error.OutOfMemory;
-    }
-    if (environ.get("XDG_DATA_HOME")) |data_home| {
-        if (data_home.len != 0) {
-            return std.fmt.allocPrint(allocator, "{s}/flashbackz/saves", .{ data_home }) catch
-                return error.OutOfMemory;
-        }
-    }
-    const home = environ.get("HOME") orelse return error.NoApplicationDirectory;
-    if (home.len == 0) return error.NoApplicationDirectory;
-    return std.fmt.allocPrint(allocator, "{s}/.local/share/flashbackz/saves", .{ home }) catch
-        return error.OutOfMemory;
+    return userDirectory(allocator, environ, save_directory);
 }
 
-/// Why the environment gives no default save directory, for the failure and for the help.
-const no_user_directory = "no per-user data directory here; give --saves DIR";
+/// The per-user configuration directory, for the settings: `$XDG_CONFIG_HOME/flashbackz`, else
+/// `$HOME/.config/flashbackz`, and `%APPDATA%\flashbackz` on Windows. The caller owns the result.
+pub fn defaultConfigDirectory(
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+) error{ NoApplicationDirectory, OutOfMemory }![]u8 {
+    return userDirectory(allocator, environ, config_directory);
+}
 
-/// The end of a host's help: where the saves and the settings go without `--saves`. For the
-/// user's directory, the path comes from this run's environment, as `Providers.open` makes it.
-pub fn writeSavesHelp(
+/// Where a per-user directory is, by the platform's conventions.
+const UserDirectory = struct {
+    /// The path below `%APPDATA%`, on Windows.
+    windows: []const u8,
+    /// Elsewhere, the XDG variable that gives the base, and the base below `$HOME` without it.
+    xdg_variable: []const u8,
+    home_base: []const u8,
+    /// The path below the base.
+    below: []const u8,
+};
+
+const save_directory: UserDirectory = .{
+    .windows = "flashbackz\\saves",
+    .xdg_variable = "XDG_DATA_HOME",
+    .home_base = ".local/share",
+    .below = "flashbackz/saves",
+};
+
+const config_directory: UserDirectory = .{
+    .windows = "flashbackz",
+    .xdg_variable = "XDG_CONFIG_HOME",
+    .home_base = ".config",
+    .below = "flashbackz",
+};
+
+fn userDirectory(
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+    comptime place: UserDirectory,
+) error{ NoApplicationDirectory, OutOfMemory }![]u8 {
+    if (builtin.os.tag == .windows) {
+        const appdata = variable(environ, "APPDATA") orelse return error.NoApplicationDirectory;
+        return std.fmt.allocPrint(allocator, "{s}\\" ++ place.windows, .{ appdata });
+    }
+    if (variable(environ, place.xdg_variable)) |base| {
+        return std.fmt.allocPrint(allocator, "{s}/" ++ place.below, .{ base });
+    }
+    const home = variable(environ, "HOME") orelse return error.NoApplicationDirectory;
+    return std.fmt.allocPrint(allocator, "{s}/" ++ place.home_base ++ "/" ++ place.below, .{
+        home,
+    });
+}
+
+/// The value of an environment variable that is set and not empty.
+fn variable(environ: *const std.process.Environ.Map, name: []const u8) ?[]const u8 {
+    const value = environ.get(name) orelse return null;
+    return if (value.len == 0) null else value;
+}
+
+/// The end of a host's help: where the saves and the settings go without `--saves` and
+/// `--config`. The user's directories come from this run's environment, as `Providers.open`
+/// makes them.
+pub fn writeStorageHelp(
     w: *std.Io.Writer,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
-    default_saves: DefaultSaves,
+    default_storage: DefaultStorage,
 ) (std.Io.Writer.Error || error{ OutOfMemory })!void {
-    try w.writeAll("\nSaves and settings, without --saves:\n");
-    if (default_saves == .memory) {
-        return w.writeAll("  in memory, for this run only\n");
+    try w.writeAll("\nWithout --saves and --config:\n");
+    if (default_storage == .memory) {
+        return w.writeAll("  the saves and the settings stay in memory, for this run only\n");
     }
-    const path = defaultSaveDirectory(allocator, environ) catch |err| switch (err) {
-        error.NoApplicationDirectory => return w.writeAll("  none: " ++ no_user_directory ++ "\n"),
+    try writeDefault(w, allocator, environ, "saves     ", save_directory, "", "--saves");
+    const settings_file = std.fs.path.sep_str ++ flashbackz.settings.record_name;
+    try writeDefault(
+        w,
+        allocator,
+        environ,
+        "settings  ",
+        config_directory,
+        settings_file,
+        "--config",
+    );
+}
+
+/// One line of `writeStorageHelp`: the label, then the directory and `file`, or the option to
+/// give when the environment names no directory.
+fn writeDefault(
+    w: *std.Io.Writer,
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+    comptime label: []const u8,
+    comptime place: UserDirectory,
+    comptime file: []const u8,
+    comptime option: []const u8,
+) (std.Io.Writer.Error || error{ OutOfMemory })!void {
+    const directory = userDirectory(allocator, environ, place) catch |err| switch (err) {
+        error.NoApplicationDirectory => {
+            return w.writeAll(
+                "  " ++ label ++ "no per-user directory here: give " ++ option ++ " DIR\n",
+            );
+        },
         error.OutOfMemory => return error.OutOfMemory,
     };
-    defer allocator.free(path);
-    try w.print("  {s}\n", .{ path });
+    defer allocator.free(directory);
+    try w.print("  " ++ label ++ "{s}" ++ file ++ "\n", .{ directory });
 }
 
 const contract = @import("contract.zig");
@@ -660,9 +762,41 @@ test "the save directory follows the platform's application data convention" {
     }
 }
 
-test "the help names the save directory of this run" {
+test "the configuration directory follows the platform's conventions" {
     const allocator = std.testing.allocator;
-    var buf: [256]u8 = undefined;
+    {
+        var env = try testEnviron(allocator, &.{.{ "XDG_CONFIG_HOME", "/config" }});
+        defer env.deinit();
+        if (builtin.os.tag == .windows) {
+            try std.testing.expectError(
+                error.NoApplicationDirectory,
+                defaultConfigDirectory(allocator, &env),
+            );
+        } else {
+            const path = try defaultConfigDirectory(allocator, &env);
+            defer allocator.free(path);
+            try std.testing.expectEqualStrings("/config/flashbackz", path);
+        }
+    }
+    {
+        var env = try testEnviron(
+            allocator,
+            &.{.{ "HOME", "/home/player" }, .{ "APPDATA", "C:\\Users\\player\\AppData\\Roaming" }},
+        );
+        defer env.deinit();
+        const path = try defaultConfigDirectory(allocator, &env);
+        defer allocator.free(path);
+        const want = if (builtin.os.tag == .windows)
+            "C:\\Users\\player\\AppData\\Roaming\\flashbackz"
+        else
+            "/home/player/.config/flashbackz";
+        try std.testing.expectEqualStrings(want, path);
+    }
+}
+
+test "the help names the save and configuration directories of this run" {
+    const allocator = std.testing.allocator;
+    var buf: [512]u8 = undefined;
     {
         var w: std.Io.Writer = .fixed(&buf);
         var env = try testEnviron(
@@ -670,13 +804,15 @@ test "the help names the save directory of this run" {
             &.{.{ "HOME", "/home/player" }, .{ "APPDATA", "C:\\Users\\player\\AppData\\Roaming" }},
         );
         defer env.deinit();
-        try writeSavesHelp(&w, allocator, &env, .user_directory);
+        try writeStorageHelp(&w, allocator, &env, .user_directories);
         const want = if (builtin.os.tag == .windows)
-            "  C:\\Users\\player\\AppData\\Roaming\\flashbackz\\saves\n"
+            "  saves     C:\\Users\\player\\AppData\\Roaming\\flashbackz\\saves\n" ++
+                "  settings  C:\\Users\\player\\AppData\\Roaming\\flashbackz\\settings.zon\n"
         else
-            "  /home/player/.local/share/flashbackz/saves\n";
+            "  saves     /home/player/.local/share/flashbackz/saves\n" ++
+                "  settings  /home/player/.config/flashbackz/settings.zon\n";
         try std.testing.expectEqualStrings(
-            "\nSaves and settings, without --saves:\n" ++ want,
+            "\nWithout --saves and --config:\n" ++ want,
             w.buffered(),
         );
     }
@@ -684,16 +820,21 @@ test "the help names the save directory of this run" {
         var w: std.Io.Writer = .fixed(&buf);
         var env = try testEnviron(allocator, &.{});
         defer env.deinit();
-        try writeSavesHelp(&w, allocator, &env, .user_directory);
-        try std.testing.expect(std.mem.endsWith(u8, w.buffered(), "give --saves DIR\n"));
+        try writeStorageHelp(&w, allocator, &env, .user_directories);
+        try std.testing.expectEqualStrings(
+            "\nWithout --saves and --config:\n" ++
+                "  saves     no per-user directory here: give --saves DIR\n" ++
+                "  settings  no per-user directory here: give --config DIR\n",
+            w.buffered(),
+        );
     }
     {
         var w: std.Io.Writer = .fixed(&buf);
         var env = try testEnviron(allocator, &.{});
         defer env.deinit();
-        try writeSavesHelp(&w, allocator, &env, .memory);
+        try writeStorageHelp(&w, allocator, &env, .memory);
         try std.testing.expect(
-            std.mem.endsWith(u8, w.buffered(), "  in memory, for this run only\n"),
+            std.mem.endsWith(u8, w.buffered(), "stay in memory, for this run only\n"),
         );
     }
 }
@@ -713,20 +854,26 @@ test "the options open a game directory, or none" {
 
     var env = try testEnviron(allocator, &.{.{ "XDG_DATA_HOME", "/unused" }});
     defer env.deinit();
-    var paths: [2][]u8 = undefined;
-    inline for (.{ "game", "saves" }, 0..) |sub, i| {
+    var paths: [3][]u8 = undefined;
+    inline for (.{ "game", "saves", "config" }, 0..) |sub, i| {
         paths[i] = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ base, sub });
     }
     defer for (paths) |p| allocator.free(p);
 
-    // A game directory: the asset source passes the contract, and the storage keeps a record.
+    // A game directory: the asset source passes the contract, and each storage keeps a record.
     {
         var providers: Providers = .empty;
-        try providers.open(allocator, io, &env, .{ .assets = paths[0], .saves = paths[1] });
+        const options: Options = .{ .assets = paths[0], .saves = paths[1], .config = paths[2] };
+        try providers.open(allocator, io, &env, options);
         defer providers.deinit();
         try std.testing.expect(providers.kind != .none);
         try contract.assetContract(providers.assetSource().?);
-        const s = providers.storage().?;
+        const config = providers.configStorage().?;
+        try config.save("settings.zon", ".{}");
+        var settings = try config.load("settings.zon");
+        defer settings.deinit();
+        try std.testing.expectEqualStrings(".{}", settings.bytes);
+        const s = providers.savesStorage().?;
         try s.save("CLI.PT", "position");
         var loaded = try s.load("CLI.PT");
         defer loaded.deinit();
@@ -734,16 +881,17 @@ test "the options open a game directory, or none" {
         try s.deleteSave("CLI.PT");
     }
 
-    // Without an asset path, only the save directory opens, and `open` creates it.
+    // Without an asset path, only the storage opens, and `open` creates its directories.
     {
         var providers: Providers = .empty;
-        try providers.open(allocator, io, &env, .{ .saves = paths[1] });
+        try providers.open(allocator, io, &env, .{ .saves = paths[1], .config = paths[2] });
         defer providers.deinit();
         try std.testing.expectEqual(AssetKind.none, providers.kind);
         try std.testing.expect(providers.assetSource() == null);
-        var names = try providers.storage().?.listSaves();
+        var names = try providers.savesStorage().?.listSaves();
         names.deinit();
         try std.testing.expectEqualStrings(paths[1], providers.saves_path);
+        try std.testing.expectEqualStrings(paths[2], providers.config_path);
     }
 
     // A path that is missing, or not a directory.
@@ -751,7 +899,7 @@ test "the options open a game directory, or none" {
         var providers: Providers = .empty;
         const missing = try std.fmt.allocPrint(allocator, "{s}/absent", .{ base });
         defer allocator.free(missing);
-        const options: Options = .{ .assets = missing, .saves = paths[1] };
+        const options: Options = .{ .assets = missing, .saves = paths[1], .config = paths[2] };
         const failed = providers.open(allocator, io, &env, options);
         try std.testing.expectError(error.NotFound, failed);
         var message: std.Io.Writer.Allocating = .init(allocator);
@@ -768,7 +916,11 @@ test "the options open a game directory, or none" {
         defer allocator.free(not_a_directory);
         try std.testing.expectError(
             error.InvalidImage,
-            providers.open(allocator, io, &env, .{ .assets = not_a_directory, .saves = paths[1] }),
+            providers.open(allocator, io, &env, .{
+                .assets = not_a_directory,
+                .saves = paths[1],
+                .config = paths[2],
+            }),
         );
     }
 }
@@ -790,7 +942,11 @@ test "the positional source reads a floppy through owned provider storage" {
     const path = try std.fmt.allocPrint(allocator, "{s}/game.ima", .{ base });
     defer allocator.free(path);
     var providers: Providers = .empty;
-    try providers.open(allocator, io, &env, .{ .assets = path, .saves = saves });
+    try providers.open(allocator, io, &env, .{
+        .assets = path,
+        .saves = saves,
+        .default_storage = .memory,
+    });
     defer providers.deinit();
     try std.testing.expectEqual(AssetKind.floppy, providers.kind);
     var content = try providers.assetSource().?.readAll("data/file.dat", 600);
@@ -817,7 +973,11 @@ test "the standalone build's files stand in for paths, which still take preceden
     {
         var providers: Providers = .empty;
         defer providers.deinit();
-        const options: Options = .{ .saves = saves, .built_in = .{ .disks = disks } };
+        const options: Options = .{
+            .saves = saves,
+            .default_storage = .memory,
+            .built_in = .{ .disks = disks },
+        };
         try providers.open(allocator, io, &env, options);
         try std.testing.expectEqual(AssetKind.built_in, providers.kind);
         var content = try providers.assetSource().?.readAll("data/file.dat", 600);
@@ -829,6 +989,7 @@ test "the standalone build's files stand in for paths, which still take preceden
         var providers: Providers = .empty;
         const options: Options = .{
             .saves = saves,
+            .default_storage = .memory,
             .built_in = .{ .disks = disks, .megadrive = "not a cartridge" },
         };
         const failed = providers.open(allocator, io, &env, options);
@@ -848,6 +1009,7 @@ test "the standalone build's files stand in for paths, which still take preceden
         const options: Options = .{
             .assets = missing,
             .saves = saves,
+            .default_storage = .memory,
             .built_in = .{ .disks = disks },
         };
         try std.testing.expectError(error.NotFound, providers.open(allocator, io, &env, options));
@@ -876,7 +1038,7 @@ test "multiple disks merge files and conflicting editions fail without partial p
     defer for (paths) |path| allocator.free(path);
     var env = try testEnviron(allocator, &.{});
     defer env.deinit();
-    var options: Options = .{ .saves = paths[3] };
+    var options: Options = .{ .saves = paths[3], .default_storage = .memory };
     try options.addAsset(paths[0]);
     try options.addAsset(paths[1]);
     {
@@ -894,7 +1056,7 @@ test "multiple disks merge files and conflicting editions fail without partial p
         defer second.deinit();
         try std.testing.expectEqualSlices(u8, first.bytes, second.bytes);
     }
-    var conflicting: Options = .{ .saves = paths[3] };
+    var conflicting: Options = .{ .saves = paths[3], .default_storage = .memory };
     try conflicting.addAsset(paths[0]);
     try conflicting.addAsset(paths[2]);
     var failed: Providers = .empty;
@@ -906,7 +1068,11 @@ test "multiple disks merge files and conflicting editions fail without partial p
     // The game's files are the two disks: a third path is refused.
     try std.testing.expectError(error.TooManyAssets, options.addAsset("third.img"));
     // A --megadrive file that is not the accepted cartridge is refused, leaving no provider.
-    var cartridge: Options = .{ .saves = paths[3], .megadrive = paths[1] };
+    var cartridge: Options = .{
+        .saves = paths[3],
+        .default_storage = .memory,
+        .megadrive = paths[1],
+    };
     try cartridge.addAsset(paths[0]);
     try std.testing.expectError(
         error.UnsupportedCartridge,

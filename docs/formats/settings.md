@@ -1,4 +1,4 @@
-# Settings (`SETTINGS`)
+# Settings (`settings.zon`)
 
 The settings record holds the options of the player and the pad layouts as one ZON record. The
 game reads it at start and writes it after a setting changes. A pad model is a model of gamepad,
@@ -6,12 +6,27 @@ which SDL identifies by a GUID. A pad layout gives the button of each action for
 
 | Item | Value |
 |---|---|
-| Files | `SETTINGS` |
-| Place | The save directory, with the saves. [save.md](save.md) gives the directory, the name rules and the replacement procedure. The end of `flashbackz --help` gives the default directory. |
+| Files | `settings.zon` |
+| Place | The configuration directory (see [Configuration directory](#configuration-directory)). |
 | Format | ZON text in ASCII, with a newline (`0x0a`) at the end. At most 4096 bytes. |
 | Byte order | Not applicable: the record is text. |
 | Reader | `src/shared/settings.zig` (`load`, `decode`), called by `Game.initWithEntry` in `src/shared/game.zig` |
 | Writer | `src/shared/settings.zig` (`save`, `encode`), called by `Game.keepSettings` in `src/shared/game.zig` |
+
+## Configuration directory
+
+The host finds the configuration directory in this order:
+
+1. The `--config DIR` option gives the directory.
+2. On Windows, the directory is `%APPDATA%\flashbackz`.
+3. On other systems, the directory is `$XDG_CONFIG_HOME/flashbackz` when `XDG_CONFIG_HOME` is set
+   and not empty. Else it is `$HOME/.config/flashbackz`.
+4. The host creates the directory if necessary.
+
+The end of `flashbackz --help` gives the directory of steps 2 and 3 for the current environment.
+The saves are in another directory ([save.md](save.md#storage)), which also gives the name rules
+and the procedure that replaces a record. An old `SETTINGS` record in the save directory has no
+effect.
 
 ## Layout
 
@@ -74,7 +89,7 @@ A synthetic record with one pad model:
 The game reads the record once, when it starts:
 
 1. Without storage, use the defaults.
-2. Read the record `SETTINGS`. If the read fails (for example, the record is missing), use the
+2. Read the record `settings.zon`. If the read fails (for example, the record is missing), use the
    defaults.
 3. If the record has more than 4096 bytes, use the defaults.
 4. Parse the ZON text. If the parse fails, use the defaults.
@@ -99,7 +114,7 @@ write the defaults back. The record stays as it is until a setting changes.
 5. If the write succeeds, keep the settings as the settings of the storage. If it fails, step 1
    tries again at the next host frame.
 
-Without storage, the game writes nothing. The agent host without `--saves` keeps the record in
+Without storage, the game writes nothing. The agent host without `--config` keeps the record in
 memory, and the record does not stay after the run.
 
 ### Pad list
