@@ -1049,6 +1049,9 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   page and the agent's hashes never hold it. Gate: unit tests (text, numbering, timing, fade);
   agent sessions and traces unchanged; the SDL game shows it when a pad is plugged and unplugged
   (user).
+  - [x] `8af2090`: tests 289/289; sessions and traces unchanged; a preview drawn with the
+    supplied FB_TXT.FNT shows the strip, then the half fade.
+  - [ ] The SDL game shows it when a pad is plugged and unplugged (user).
 
 ## Historical CD implementation/research milestones
 
