@@ -34,6 +34,7 @@ const audio_output = @import("audio/output.zig");
 const content_check = @import("content_check.zig");
 const font_mod = @import("content/font.zig");
 const pad_notice = @import("pad_notice.zig");
+const info_overlay = @import("info_overlay.zig");
 pub const Entry = union(enum) {
     automatic,
     menu_development,
@@ -154,8 +155,11 @@ pub const Game = struct {
     connected_pads: ConnectedPads = .{},
     /// The message that a pad came or went, while it shows.
     pad_notice: ?pad_notice.PadNotice = null,
-    /// The game font, for the pads' messages. Null without the original's files.
+    /// The game font, for the pads' messages and the information overlay. Null without the
+    /// original's files.
     notice_font: ?font_mod.Font = null,
+    /// The information overlay that F3 shows or hides.
+    info: info_overlay.InfoOverlay = .{},
     /// The pad that pressed last: the CONTROLS page shows and changes its layout.
     last_pad: ?platform.ControllerId = null,
     /// The walks of this game's levels before the one in play, which its play time counts.
@@ -750,12 +754,19 @@ pub const Game = struct {
     }
 
     /// The keys the original's keyboard interrupt acts on whatever the screen, except the code
-    /// entry: P, the keypad's + and -, S, J and K. The event still goes on to the scene.
+    /// entry: P, the keypad's + and -, S, J and K. Then ours: F3 shows or hides the information
+    /// overlay, also on the code entry. The event still goes on to the scene.
     fn globalKey(self: *Game, event: platform.Event) void {
         const press = switch (event.payload) {
             .key_down => |key| key,
             else => return,
         };
+        if (press.key == .f3) {
+            if (!press.repeat) {
+                self.info.shown = !self.info.shown;
+            }
+            return;
+        }
         // While a code is typed the original leaves the keyboard to the BIOS: these keys are
         // only characters of the code.
         if (self.scene == .menu and self.scene.menu.view == .password) return;
@@ -955,6 +966,20 @@ pub const Game = struct {
         }
     }
 
+    /// What the information overlay shows of the level in play, if one is.
+    fn infoLevel(self: *const Game) ?info_overlay.Level {
+        if (self.scene != .level) return null;
+        const level = &self.scene.level;
+        const conrad = level.world.characters[0];
+        return .{
+            .name = @tagName(level.level),
+            .view_room = level.world.view_room,
+            .room = conrad.room,
+            .x = conrad.x,
+            .y = conrad.y,
+        };
+    }
+
     /// The walks played in this game, the level in play's included: its play time.
     pub fn playedWalks(self: *const Game) u64 {
         return self.play_walks + if (self.scene == .level) self.scene.level.walk_count else 0;
@@ -1097,9 +1122,12 @@ pub const Game = struct {
         if (self.story == null) {
             self.drawSlotPicture(frame);
         }
-        if (self.pad_notice) |*notice| {
-            if (self.notice_font) |*font| {
-                const now = p.nowNs();
+        // This machine's own overlays, over the picture only.
+        const now = p.nowNs();
+        self.info.count(now, self.frames_presented, self.playedWalks());
+        if (self.notice_font) |*font| {
+            self.info.draw(frame, picture_width, picture_height, font, self.infoLevel());
+            if (self.pad_notice) |*notice| {
                 if (!notice.draw(frame, picture_width, picture_height, font, now)) {
                     self.pad_notice = null;
                 }

@@ -7,6 +7,7 @@
 //! picture only. The indexed page, and the hashes that the agent prints from it, never hold it.
 const std = @import("std");
 const font_mod = @import("content/font.zig");
+const rgba_text = @import("render/rgba_text.zig");
 
 /// How long the message shows, and the fade out of its last part.
 pub const shown_ns: u64 = 3 * std.time.ns_per_s;
@@ -14,9 +15,6 @@ pub const fade_ns: u64 = std.time.ns_per_s;
 
 /// The text's row of 8 pixels, the fourth from the bottom, as sorz puts it.
 const row_from_bottom = 4;
-
-const black: [3]u8 = .{ 0, 0, 0 };
-const white: [3]u8 = .{ 255, 255, 255 };
 
 pub const PadNotice = struct {
     /// The pad's number: its place among the connected pads, from 1.
@@ -46,35 +44,16 @@ pub const PadNotice = struct {
         const age = now_ns -| since;
         if (age >= shown_ns) return false;
         const left = shown_ns - age;
-        const light: u32 = if (left < fade_ns) @intCast(left * 255 / fade_ns) else 255;
+        const light: u8 = if (left < fade_ns) @intCast(left * 255 / fade_ns) else 255;
 
         var buffer: [24]u8 = undefined;
         const line = self.text(&buffer);
-        const left_x = (width / font_mod.glyph_width - line.len) / 2 * font_mod.glyph_width;
-        const top = height - row_from_bottom * font_mod.glyph_height;
-        for (0..font_mod.glyph_height) |row| {
-            for (0..line.len * font_mod.glyph_width) |x| {
-                const color = colorAt(line, font, x, row) orelse continue;
-                const at = ((top + row) * width + left_x + x) * 4;
-                for (frame[at..][0..3], color) |*under, over| {
-                    under.* = @intCast((@as(u32, under.*) * (255 - light) + over * light) / 255);
-                }
-            }
-        }
+        const x = (width / font_mod.glyph_width - line.len) / 2 * font_mod.glyph_width;
+        const y = height - row_from_bottom * font_mod.glyph_height;
+        rgba_text.draw(frame, width, height, font, line, x, y, light);
         return true;
     }
 };
-
-/// The color of the text at (`x`, `row`): white for a glyph's letter, black for its shadow, and
-/// null where the glyph is transparent.
-fn colorAt(line: []const u8, font: *const font_mod.Font, x: usize, row: usize) ?[3]u8 {
-    const glyph = font.glyph(line[x / font_mod.glyph_width]) orelse return null;
-    return switch (glyph[row * font_mod.glyph_width + x % font_mod.glyph_width]) {
-        0 => null,
-        2 => black,
-        else => white,
-    };
-}
 
 test "the message names the pad and what it did" {
     var buffer: [24]u8 = undefined;
@@ -85,11 +64,7 @@ test "the message names the pad and what it did" {
 }
 
 test "the message shows for 3 seconds over the picture, and fades over the last one" {
-    const allocator = std.testing.allocator;
-    // A synthetic font: every glyph is the foreground ink, but the space, which is transparent.
-    var bytes: [96 * font_mod.glyph_bytes]u8 = @splat(0xff);
-    @memset(bytes[0..font_mod.glyph_bytes], 0);
-    var font = try font_mod.decode(allocator, &bytes);
+    var font = try rgba_text.testFont(std.testing.allocator);
     defer font.deinit();
     const width = 256;
     const height = 224;

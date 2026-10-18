@@ -37,10 +37,12 @@ pub const save_slots = @import("scenes/save_slots.zig");
 pub const vector_player = @import("scenes/vector_player.zig");
 pub const vector_film = @import("vector_film.zig");
 pub const pad_notice = @import("pad_notice.zig");
+pub const info_overlay = @import("info_overlay.zig");
 
 // Drawing and sound.
 pub const indexed_shapes = @import("render/indexed_shapes.zig");
 pub const sprite_renderer = @import("render/sprite.zig");
+pub const rgba_text = @import("render/rgba_text.zig");
 pub const music_player = @import("audio/music_player.zig");
 pub const score = @import("content/score.zig");
 pub const opl = @import("audio/opl.zig");
