@@ -1026,6 +1026,15 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   - 2026-10-18, `7ad5c1a`: "Saves and settings, without --saves:" closes both helps; here it
     reads `~/.local/share/flashbackz/saves` (expanded), and without HOME the reason to give
     --saves. Tests 285/285; save.md and settings.md point to it.
+- [ ] **UX-2 — The settings in the configuration directory** (user, 2026-10-18: "It's strange to
+  have the config and saves in the same folders. Having the saves in share makes sense but not
+  the config"). The settings record goes to the per-user configuration directory:
+  `$XDG_CONFIG_HOME/flashbackz`, else `~/.config/flashbackz`, and `%APPDATA%\flashbackz` on
+  Windows, as `settings.zon`; the saves stay in `~/.local/share/flashbackz/saves`. `--config DIR`
+  overrides it as `--saves DIR` does for the saves; the agent keeps both in memory unless told.
+  The game gets two storages. No migration: an old `SETTINGS` in the save directory is ignored.
+  Gate: unit tests; both helps name the two places; the SDL game writes `settings.zon` there;
+  the agent sessions unchanged with `--config`; the format documents follow.
 
 ## Historical CD implementation/research milestones
 
