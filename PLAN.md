@@ -1040,6 +1040,15 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
     with temporary XDG directories, creates both and names them at start; the documents follow.
   - [ ] The SDL game writes `settings.zon` in `~/.config/flashbackz` after an option changes
     (user).
+- [ ] **UX-3 — A message when a gamepad connects or disconnects** (user, 2026-10-18: "add a
+  message when a gamepad connects or disconnects, the same way sorz does"). As sorz shows it:
+  "GAMEPAD n CONNECTED" or "GAMEPAD n DISCONNECTED", centred on a strip near the bottom, in the
+  game font, over every screen and film, 3 seconds, fading out over the last one; the game does
+  not stop. n is the pad's place among the connected pads, from 1: a pad that comes takes the
+  lowest free number. The message is this machine's, drawn over the presented picture only: the
+  page and the agent's hashes never hold it. Gate: unit tests (text, numbering, timing, fade);
+  agent sessions and traces unchanged; the SDL game shows it when a pad is plugged and unplugged
+  (user).
 
 ## Historical CD implementation/research milestones
 
