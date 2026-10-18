@@ -32,6 +32,8 @@ const save_slots = @import("scenes/save_slots.zig");
 const megadrive = @import("content/megadrive.zig");
 const audio_output = @import("audio/output.zig");
 const content_check = @import("content_check.zig");
+const font_mod = @import("content/font.zig");
+const pad_notice = @import("pad_notice.zig");
 pub const Entry = union(enum) {
     automatic,
     menu_development,
@@ -54,9 +56,60 @@ const picture_pixels = picture_width * picture_height;
 pub const Phase = enum { startup, playing, finished };
 pub const UpdateResult = enum { running, finished };
 
-const ConnectedPad = struct {
-    id: platform.ControllerId,
-    model: platform.ControllerModel,
+/// The connected pads, each in the place it took when it came. A pad's number, in its messages,
+/// is its place + 1: a pad that comes takes the lowest free number.
+const ConnectedPads = struct {
+    slots: [8]?Pad = @splat(null),
+
+    const Pad = struct {
+        id: platform.ControllerId,
+        /// Null when the platform does not know it.
+        model: ?platform.ControllerModel,
+    };
+
+    /// Notes a pad that came, in the lowest free place. Returns its number, or null when the
+    /// eight places are taken.
+    fn add(self: *ConnectedPads, id: platform.ControllerId, model: ?platform.ControllerModel) ?u8 {
+        for (&self.slots, 1..) |*slot, number| {
+            if (slot.* == null) {
+                slot.* = .{ .id = id, .model = model };
+                return @intCast(number);
+            }
+        }
+        return null;
+    }
+
+    /// Frees the place of a pad that went. Returns its number, or null when it had none.
+    fn remove(self: *ConnectedPads, id: platform.ControllerId) ?u8 {
+        for (&self.slots, 1..) |*slot, number| {
+            if (slot.*) |pad| {
+                if (pad.id == id) {
+                    slot.* = null;
+                    return @intCast(number);
+                }
+            }
+        }
+        return null;
+    }
+
+    fn modelOf(self: *const ConnectedPads, id: platform.ControllerId) ?platform.ControllerModel {
+        for (self.slots) |slot| {
+            if (slot) |pad| {
+                if (pad.id == id) return pad.model;
+            }
+        }
+        return null;
+    }
+
+    /// The model of the first connected pad that has one.
+    fn firstModel(self: *const ConnectedPads) ?platform.ControllerModel {
+        for (self.slots) |slot| {
+            if (slot) |pad| {
+                if (pad.model) |known| return known;
+            }
+        }
+        return null;
+    }
 };
 
 /// The save slots as a slot page shows them, read from storage.
@@ -96,8 +149,13 @@ pub const Game = struct {
     kept_settings: settings_mod.Settings = .{},
     /// What the pads hold, for the screens outside a level (a level tracks its own).
     pads: input.Pads = .{},
-    /// The connected pads' models, which give their layouts (PLAN GS-3a).
-    pad_models: [8]?ConnectedPad = @splat(null),
+    /// The connected pads: their models give their layouts (PLAN GS-3a), and their places the
+    /// numbers in their messages.
+    connected_pads: ConnectedPads = .{},
+    /// The message that a pad came or went, while it shows.
+    pad_notice: ?pad_notice.PadNotice = null,
+    /// The game font, for the pads' messages. Null without the original's files.
+    notice_font: ?font_mod.Font = null,
     /// The pad that pressed last: the CONTROLS page shows and changes its layout.
     last_pad: ?platform.ControllerId = null,
     /// The walks of this game's levels before the one in play, which its play time counts.
@@ -147,6 +205,8 @@ pub const Game = struct {
         const settings = settings_mod.load(sources.config);
         const tunes = try loadTunes(allocator, assets);
         errdefer if (tunes) |t| freeTunes(allocator, t);
+        var notice_font = try loadNoticeFont(allocator, assets);
+        errdefer if (notice_font) |*font| font.deinit();
         if (entry == .level_development) {
             const level = entry.level_development;
             const scene = try level_scene.Scene.load(
@@ -169,6 +229,7 @@ pub const Game = struct {
                 .level = level,
                 .scene = .{ .level = scene },
                 .tunes = tunes,
+                .notice_font = notice_font,
             };
         }
         const source = assets orelse return error.OriginalContentRequired;
@@ -190,6 +251,7 @@ pub const Game = struct {
             .kept_settings = settings,
             .scene = .{ .menu = front },
             .tunes = tunes,
+            .notice_font = notice_font,
         };
     }
 
@@ -217,6 +279,14 @@ pub const Game = struct {
         allocator.destroy(tunes);
     }
 
+    /// The game font, for the pads' messages, when the host gives the original's files.
+    fn loadNoticeFont(allocator: std.mem.Allocator, assets: ?platform.AssetSource) !?font_mod.Font {
+        const source = assets orelse return null;
+        var file = try source.readAll("DATA/FB_TXT.FNT", 16384);
+        defer file.deinit();
+        return try font_mod.decode(allocator, file.bytes);
+    }
+
     pub fn deinit(self: *Game) void {
         self.dropSlots();
         if (self.story) |*story| {
@@ -235,6 +305,9 @@ pub const Game = struct {
         self.allocator.free(self.rgba);
         if (self.tunes) |tunes| {
             freeTunes(self.allocator, tunes);
+        }
+        if (self.notice_font) |*font| {
+            font.deinit();
         }
         self.* = undefined;
     }
@@ -709,29 +782,22 @@ pub const Game = struct {
         }
     }
 
-    /// A pad's event as the game reads it (PLAN GS-3a). A pad connected has its model noted; a
+    /// A pad's event as the game reads it (PLAN GS-3a). A pad that comes or goes takes or frees
+    /// its number and shows its message (`pad_notice`); a pad connected has its model noted; a
     /// button stands for the fixed layout's, by its model's layout, or goes no further when it
     /// gives no action; on the CONTROLS page, a button pressed on an action's row becomes that
     /// action's and goes no further.
     fn padEvent(self: *Game, p: *platform.Platform, event: platform.Event) ?platform.Event {
         switch (event.payload) {
             .controller_added => |id| {
-                const model = p.controllerModel(id) orelse return event;
-                for (&self.pad_models) |*slot| {
-                    if (slot.* == null) {
-                        slot.* = .{ .id = id, .model = model };
-                        break;
-                    }
+                if (self.connected_pads.add(id, p.controllerModel(id))) |number| {
+                    self.pad_notice = .{ .number = number, .connected = true };
                 }
                 return event;
             },
             .controller_removed => |id| {
-                for (&self.pad_models) |*slot| {
-                    if (slot.*) |pad| {
-                        if (pad.id == id) {
-                            slot.* = null;
-                        }
-                    }
+                if (self.connected_pads.remove(id)) |number| {
+                    self.pad_notice = .{ .number = number, .connected = false };
                 }
                 if (self.last_pad == id) {
                     self.last_pad = null;
@@ -768,12 +834,7 @@ pub const Game = struct {
     }
 
     fn padModel(self: *const Game, id: platform.ControllerId) ?platform.ControllerModel {
-        for (self.pad_models) |slot| {
-            if (slot) |pad| {
-                if (pad.id == id) return pad.model;
-            }
-        }
-        return null;
+        return self.connected_pads.modelOf(id);
     }
 
     /// The model of the pad the CONTROLS page shows: the last to press, or the first connected.
@@ -781,10 +842,7 @@ pub const Game = struct {
         if (self.last_pad) |id| {
             if (self.padModel(id)) |model| return model;
         }
-        for (self.pad_models) |slot| {
-            if (slot) |pad| return pad.model;
-        }
-        return null;
+        return self.connected_pads.firstModel();
     }
 
     /// The action the CONTROLS page gives a pad's button pressed now, if it is open.
@@ -1039,6 +1097,14 @@ pub const Game = struct {
         if (self.story == null) {
             self.drawSlotPicture(frame);
         }
+        if (self.pad_notice) |*notice| {
+            if (self.notice_font) |*font| {
+                const now = p.nowNs();
+                if (!notice.draw(frame, picture_width, picture_height, font, now)) {
+                    self.pad_notice = null;
+                }
+            }
+        }
         self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
         try p.present(.{
             .width = picture_width,
@@ -1049,3 +1115,21 @@ pub const Game = struct {
         self.frames_presented += 1;
     }
 };
+
+test "a pad that comes takes the lowest free number, and gives it back when it goes" {
+    var pads: ConnectedPads = .{};
+    const first: platform.ControllerId = @fromBackingInt(10);
+    const second: platform.ControllerId = @fromBackingInt(11);
+    const third: platform.ControllerId = @fromBackingInt(12);
+    try std.testing.expectEqual(@as(?u8, 1), pads.add(first, null));
+    try std.testing.expectEqual(@as(?u8, 2), pads.add(second, null));
+    try std.testing.expectEqual(@as(?u8, 1), pads.remove(first));
+    try std.testing.expectEqual(@as(?u8, null), pads.remove(first));
+    try std.testing.expectEqual(@as(?u8, 1), pads.add(third, null));
+    // Six more fill the eight places; a ninth gets no number.
+    for (20..26) |id| {
+        try std.testing.expect(pads.add(@fromBackingInt(@intCast(id)), null) != null);
+    }
+    try std.testing.expectEqual(@as(?u8, null), pads.add(@fromBackingInt(99), null));
+    try std.testing.expectEqual(@as(?u8, 2), pads.remove(second));
+}

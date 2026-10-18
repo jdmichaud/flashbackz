@@ -36,6 +36,7 @@ pub const inventory_menu = @import("scenes/inventory_menu.zig");
 pub const save_slots = @import("scenes/save_slots.zig");
 pub const vector_player = @import("scenes/vector_player.zig");
 pub const vector_film = @import("vector_film.zig");
+pub const pad_notice = @import("pad_notice.zig");
 
 // Drawing and sound.
 pub const indexed_shapes = @import("render/indexed_shapes.zig");
