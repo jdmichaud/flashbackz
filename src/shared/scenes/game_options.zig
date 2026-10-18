@@ -11,7 +11,8 @@ const platform = @import("../platform.zig");
 const save = @import("../save.zig");
 const save_slots = @import("save_slots.zig");
 const Settings = settings_mod.Settings;
-/// The rows; SAVE GAME and CONTROLS are ours (PLAN GS-5, GS-3), the others the original's.
+/// The rows; SAVE GAME, CONTROLS and HELP are ours (PLAN GS-5, GS-3, UX-5), the others the
+/// original's.
 pub const Item = enum {
     resume_game,
     save_game,
@@ -21,13 +22,14 @@ pub const Item = enum {
     joystick,
     zoom,
     controls,
+    help,
     abort_game,
 };
 const item_count = @typeInfo(Item).@"enum".field_names.len;
 pub const Outcome = enum { resume_game, abort_game };
-/// The dialog's page: its rows, the save slots' page, or the CONTROLS page that lists each
-/// action's key and button.
-pub const Page = enum { rows, save, controls };
+/// The dialog's page: its rows, the save slots' page, the CONTROLS page that lists each
+/// action's key and button, or the HELP page that lists all the keys.
+pub const Page = enum { rows, save, controls, help };
 /// The CONTROLS page's rows: the actions a pad's buttons give, DEFAULT and BACK.
 pub const ControlsRow = enum { act, gun, use, inventory, pause, default, back };
 const controls_row_count = @typeInfo(ControlsRow).@"enum".field_names.len;
@@ -54,8 +56,16 @@ pub const Menu = struct {
     free_memory_mb: ?u64 = null,
     /// A press of `action`: up and down choose the row, and left and right change it. Escape,
     /// USE, GUN or ACT chooses the row: most rows close the dialog, and ABORT GAME abandons the
-    /// game. CONTROLS, and SAVE GAME without Escape, open their pages instead.
+    /// game. CONTROLS, HELP, and SAVE GAME without Escape, open their pages instead. On the HELP
+    /// page, these four go back to the rows.
     pub fn press(self: *Menu, action: input.Action, settings: *Settings) void {
+        if (self.page == .help) {
+            switch (action) {
+                .pause, .use, .gun, .act => self.page = .rows,
+                else => {},
+            }
+            return;
+        }
         if (self.page == .save) {
             // Until the game has read the slots, the page only waits.
             if (self.slots.len == save_slots.row_count) {
@@ -110,6 +120,7 @@ pub const Menu = struct {
             },
             .pause, .use, .gun, .act => switch (self.selection) {
                 .controls => self.page = .controls,
+                .help => self.page = .help,
                 .save_game => if (action != .pause) {
                     self.page = .save;
                     self.save_page = .{ .mode = .save };
@@ -123,14 +134,15 @@ pub const Menu = struct {
         }
     }
 
-    /// A pad's START (its pause action): on the CONTROLS page as any button, on the save page
-    /// back, or play resumes, never abandoned (PLAN GS-3). A pad's B is not START: with the
-    /// fixed layout, it comes to `press` as GUN.
+    /// A pad's START (its pause action): on the CONTROLS page as any button, on the save and
+    /// HELP pages back, or play resumes, never abandoned (PLAN GS-3). A pad's B is not START:
+    /// with the fixed layout, it comes to `press` as GUN.
     pub fn back(self: *Menu) void {
         switch (self.page) {
             .rows => self.outcome = .resume_game,
             .save => self.save_page.back(),
             .controls => self.controlsButton(),
+            .help => self.page = .rows,
         }
     }
 
@@ -163,8 +175,12 @@ pub const Menu = struct {
             try drawPanel(pixels, glyphs, controls_panel);
             return self.drawControls(pixels, glyphs, style);
         }
+        if (self.page == .help) {
+            try drawPanel(pixels, glyphs, full_panel);
+            return drawHelp(pixels, glyphs, style);
+        }
         if (self.page == .save) {
-            try drawPanel(pixels, glyphs, slots_panel);
+            try drawPanel(pixels, glyphs, full_panel);
             if (self.slots.len != save_slots.row_count) return;
             var selected = style;
             selected.foreground = 0xe4;
@@ -180,6 +196,7 @@ pub const Menu = struct {
             "JOYSTICK",
             "ZOOM",
             "CONTROLS",
+            "HELP",
             "ABORT GAME",
         };
         for (labels, 0..) |label, i| {
@@ -302,10 +319,10 @@ const Panel = struct {
     bottom: i32,
 };
 
-/// The original's panel, 8 pixels higher and a row longer for CONTROLS.
+/// The original's panel, 8 pixels higher and two rows longer for CONTROLS and HELP.
 const rows_panel: Panel = .{ .left = 48, .right = 200, .top = 16, .bottom = 200 };
-/// The whole screen, for the save slots' page.
-const slots_panel: Panel = .{ .left = 0, .right = 248, .top = 0, .bottom = 216 };
+/// The whole screen, for the save slots' page and the HELP page.
+const full_panel: Panel = .{ .left = 0, .right = 248, .top = 0, .bottom = 216 };
 /// A wider one for the CONTROLS page's three columns.
 const controls_panel: Panel = .{ .left = 16, .right = 232, .top = 24, .bottom = 184 };
 
@@ -340,6 +357,37 @@ fn drawPanel(pixels: []u8, glyphs: *const font.Font, panel: Panel) !void {
         try text.draw(pixels, 256, 224, glyphs, &.{ 134 }, panel.left, y, border);
         try text.draw(pixels, 256, 224, glyphs, &.{ 135 }, panel.right, y, border);
     }
+}
+
+/// The HELP page: each key, or keys, and what it does. A pad's buttons are on the CONTROLS
+/// page. A meaning has at most 17 characters, to end before the panel's frame.
+const help_lines = [_][2][]const u8{
+    .{ "ARROWS", "MOVE" },
+    .{ "SHIFT", "ACTION" },
+    .{ "SPACE", "GUN" },
+    .{ "ENTER", "USE THE ITEM" },
+    .{ "TAB", "ITEMS" },
+    .{ "ESC", "MENU, SKIPS FILMS" },
+    .{ "F5  F9", "QUICK SAVE, LOAD" },
+    .{ "F3", "INFORMATION" },
+    .{ "S", "SOUND FX ON, OFF" },
+    .{ "J  K", "JOYSTICK ON, OFF" },
+    .{ "P", "PAUSES A FILM" },
+    .{ "KEYPAD + -", "MUSIC VOLUME" },
+    .{ "PAD", "SEE CONTROLS" },
+};
+
+/// The HELP page: its title, a line for each key, then BACK, the one row, selected.
+fn drawHelp(pixels: []u8, glyphs: *const font.Font, style: text.Style) !void {
+    var selected = style;
+    selected.foreground = 0xe4;
+    try text.draw(pixels, 256, 224, glyphs, "HELP", (256 - 4 * 8) / 2, 16, style);
+    for (help_lines, 0..) |line, i| {
+        const y = 36 + @as(i32, @intCast(i)) * 12;
+        try text.draw(pixels, 256, 224, glyphs, line[0], 16, y, style);
+        try text.draw(pixels, 256, 224, glyphs, line[1], 104, y, style);
+    }
+    try text.draw(pixels, 256, 224, glyphs, "BACK", 16, 196, selected);
 }
 
 /// Each action's label and key.
@@ -417,6 +465,7 @@ test "the CONTROLS page: rows for each action, DEFAULT asks for the fixed layout
     var menu: Menu = .{};
     menu.press(.up, &settings);
     menu.press(.up, &settings);
+    menu.press(.up, &settings);
     try std.testing.expectEqual(Item.controls, menu.selection);
     menu.press(.use, &settings);
     try std.testing.expectEqual(Page.controls, menu.page);
@@ -455,4 +504,43 @@ test "SAVE GAME opens the save slots' page, which goes back to the rows" {
     try std.testing.expectEqual(@as(?save_slots.Outcome, null), menu.save_page.outcome);
     menu.back();
     try std.testing.expectEqual(@as(?save_slots.Outcome, .back), menu.save_page.outcome);
+}
+
+test "HELP opens its page, which any button or Escape closes" {
+    var settings: Settings = .{};
+    var menu: Menu = .{};
+    menu.press(.up, &settings);
+    menu.press(.up, &settings);
+    try std.testing.expectEqual(Item.help, menu.selection);
+    menu.press(.use, &settings);
+    try std.testing.expectEqual(Page.help, menu.page);
+    // The arrows do nothing there.
+    menu.press(.down, &settings);
+    menu.press(.left, &settings);
+    try std.testing.expectEqual(Page.help, menu.page);
+    menu.press(.pause, &settings);
+    try std.testing.expectEqual(Page.rows, menu.page);
+    try std.testing.expectEqual(@as(?Outcome, null), menu.outcome);
+    try std.testing.expectEqual(Item.help, menu.selection);
+    // Escape on the HELP row opens it too, and a pad's START comes back.
+    menu.press(.pause, &settings);
+    try std.testing.expectEqual(Page.help, menu.page);
+    menu.back();
+    try std.testing.expectEqual(Page.rows, menu.page);
+    try std.testing.expectEqual(@as(?Outcome, null), menu.outcome);
+}
+
+test "the HELP page draws each key in the game font, inside the panel" {
+    var font_bytes: [105 * font.glyph_bytes]u8 = @splat(0xff);
+    var glyphs = try font.decode(std.testing.allocator, &font_bytes);
+    defer glyphs.deinit();
+    var pixels: [256 * 224]u8 = @splat(0);
+    const menu: Menu = .{ .page = .help, .selection = .help };
+    try menu.draw(&pixels, &glyphs, .{});
+    for (help_lines) |line| {
+        try std.testing.expect(104 + line[1].len * 8 <= full_panel.right);
+    }
+    // The first key's first glyph, and BACK in the selected color.
+    try std.testing.expectEqual(@as(u8, 0xee), pixels[36 * 256 + 16]);
+    try std.testing.expectEqual(@as(u8, 0xe4), pixels[196 * 256 + 16]);
 }

@@ -33,6 +33,7 @@ pub const front_end = @import("scenes/front_end.zig");
 pub const menu = @import("scenes/menu.zig");
 pub const continue_game = @import("scenes/continue_game.zig");
 pub const inventory_menu = @import("scenes/inventory_menu.zig");
+pub const game_options = @import("scenes/game_options.zig");
 pub const save_slots = @import("scenes/save_slots.zig");
 pub const vector_player = @import("scenes/vector_player.zig");
 pub const vector_film = @import("vector_film.zig");
