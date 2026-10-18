@@ -1017,12 +1017,15 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
 
 ## User requests — 2026-10-18
 
-- [ ] **UX-1 — `--help` shows where the settings are kept** (user, 2026-10-18: "Please add the
+- [x] **UX-1 — `--help` shows where the settings are kept** (user, 2026-10-18: "Please add the
   config path used in the --help message"). The settings record and the saves share one
   directory (`docs/formats/settings.md`). The help of both hosts ends with the directory that
   applies without `--saves`: the SDL host's per-user directory, computed from this run's
   environment, or the agent's memory. Gate: a unit test of the section; `flashbackz --help` and
   `flashbackz-agent --help` run and show it; the format documents say where to look.
+  - 2026-10-18, `7ad5c1a`: "Saves and settings, without --saves:" closes both helps; here it
+    reads `~/.local/share/flashbackz/saves` (expanded), and without HOME the reason to give
+    --saves. Tests 285/285; save.md and settings.md point to it.
 
 ## Historical CD implementation/research milestones
 
