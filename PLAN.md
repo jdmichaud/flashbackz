@@ -1051,6 +1051,8 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   (user).
   - [x] `8af2090`: tests 289/289; sessions and traces unchanged; a preview drawn with the
     supplied FB_TXT.FNT shows the strip, then the half fade.
+  - [x] `9672325`: the background transparent (user, 2026-10-18: "make the background of the
+    gamepad connection message transparent"): the letters white, their shadow black.
   - [ ] The SDL game shows it when a pad is plugged and unplugged (user).
 - [ ] **BUG-3 — The mutants shoot sooner than in the original?** (user, 2026-10-18: "Aren't the
   mutant a little too trigger happy? They seem to shoot quicker than the original game no?").
@@ -1063,10 +1065,18 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   frames presented each second, and in a level its name, the view room and Conrad's position.
   Drawn as the pads' messages are, over the presented picture only. Gate: unit tests; agent
   sessions and traces unchanged; the SDL game shows it (user).
+  - [x] `6dc17b3`: FPS and UPS of the last whole second, the level, the view room, Conrad;
+    tests 294/294; sessions and traces unchanged; F3 in an agent run leaves the state and frame
+    hashes as they were; a preview with the supplied font.
+  - [ ] The SDL game shows it (user).
 - [ ] **UX-5 — HELP in the in-game menu** (user, 2026-10-18: "add an entry in the in-game menu to
   open an help menu"). The options dialog gets a HELP entry that opens a page of the controls:
   the keys and the pad's buttons, in play and outside it. Gate: unit tests of the menu; agent
   sessions and traces unchanged, or the changes explained; the SDL game shows it (user).
+  - [x] `7541e25`: HELP between CONTROLS and ABORT GAME, a page of the keys (the pad's buttons
+    stay on CONTROLS); tests 299/299, with game_options.zig's tests, which did not run before;
+    sessions and traces unchanged; previews with the supplied font.
+  - [ ] The SDL game shows it (user).
 
 ## Historical CD implementation/research milestones
 
