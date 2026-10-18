@@ -964,7 +964,7 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
     restart, the player starts in a room); two are kept: an extraction that runs out of memory
     says "cannot open the data set directory", and the fingerprint also covers a stray file in
     a `behaviors/` subfolder (the data set did change).
-- [ ] **DOC-4 — Define the terms of the format documents** (user, 2026-10-18: "consider the set
+- [x] **DOC-4 — Define the terms of the format documents** (user, 2026-10-18: "consider the set
   of documents in this folder as a tree with a root starting at README. As you walk that tree,
   if you encounter a term with a special meaning that has not been yet [defined] in the walk,
   then it needs a definition"; the list of terms agreed the same day). A Terms section in
@@ -973,6 +973,12 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   for one thing (the ending, the level screen, the game font, the packed stream, the reader,
   the color block); the standards named once. Gate: a walk of the tree finds each agreed term
   defined at or before its first use; links, line widths and modal verbs checked by script.
+  - 2026-10-18, `90d0e17`: `tools/check_format_docs.py` walks README, then the documents of its
+    file lists, and finds the 57 agreed terms each defined at or before its first use; links,
+    widths, modal verbs and retired names clean. Two choices made on the way: a bank, a slot, a
+    part or a frame gets its kind at its first use in each document (always qualifying them made
+    music.md and object-art.md hard to read); "message" alone is the signal between characters,
+    and the dialogue texts are world messages. The inventory font was an error: one FB_TXT.FNT.
 
 ## Bugs the user reported — 2026-10-17
 
