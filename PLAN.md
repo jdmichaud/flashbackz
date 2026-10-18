@@ -1035,6 +1035,11 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   The game gets two storages. No migration: an old `SETTINGS` in the save directory is ignored.
   Gate: unit tests; both helps name the two places; the SDL game writes `settings.zon` there;
   the agent sessions unchanged with `--config`; the format documents follow.
+  - [x] `d09f596`: tests 286/286; both helps end with the two places; `agent_sessions.sh` (now
+    with `--config`) and `agent_traces.sh` give their accepted output; the SDL host, run headless
+    with temporary XDG directories, creates both and names them at start; the documents follow.
+  - [ ] The SDL game writes `settings.zon` in `~/.config/flashbackz` after an option changes
+    (user).
 
 ## Historical CD implementation/research milestones
 
