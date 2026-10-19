@@ -80,7 +80,7 @@ default options:
 - An integer is in decimal. A bool is `true` or `false`. An enum value is `.name`. An optional
   value is the value or `null`. A string is in double quotes.
 - A hex string holds two hexadecimal digits for each byte, first byte first. The writer writes
-  lower-case digits. The reader also reads upper-case digits, but not in `data_set`.
+  lower-case digits. The reader also reads upper-case digits, but not in `level_shape`.
 
 The reader (`std.zon.parse.fromSlice`) accepts the fields in any order, with any white space. It
 refuses an unknown field. It refuses a missing field, unless the tables give a default for it.
@@ -90,8 +90,8 @@ A synthetic INFO record, with the picture cut short:
 
 ```zon
 .{
-    .version = 2,
-    .data_set = "00000000000000ff",
+    .version = 3,
+    .level_shape = "00000000000000ff",
     .level = .city,
     .play_walks = 3505,
     .date = "2026-10-10 14:32",
@@ -108,13 +108,13 @@ the field must be present.
 
 | Field | Type | Default | Content |
 |---|---|---|---|
-| `version` | u32 | - | The format version. It must be 2. |
-| `data_set` | string | - | The fingerprint of the data set, in 16 lower-case hexadecimal digits (see [Fingerprint](#fingerprint)). |
+| `version` | u32 | - | The format version. It must be 3. |
+| `level_shape` | string | - | The shape of the level, in 16 lower-case hexadecimal digits (see [Level shape](#level-shape)). |
 | `level` | enum | - | `jungle`, `city`, `tower`, `earth_city`, `spaceport`, `alien_surface` or `alien_base`. |
 | `difficulty` | enum | - | `easy`, `normal` or `expert`. |
 | `play_walks` | u64 | - | The walks of this game, the walks of this level included. The play time comes from it. |
 | `inherited` | list of 256 Inherited | - | By character index: the flags that a character keeps from the levels before, when a level does not place it. |
-| `scene` | Scene | - | The play state of the level outside the world. |
+| `play_state` | PlayState | - | The play state of the level outside the world. |
 | `world` | World | - | The world of the level. |
 
 ### Inherited
@@ -126,14 +126,16 @@ the field must be present.
 | `mirrored` | bool | `false` | The look of the character is mirrored. |
 | `composed` | bool | `false` | The look of the character is object artwork in parts. |
 
-### Scene
+### PlayState
 
 | Field | Type | Default | Content |
 |---|---|---|---|
 | `last_direction` | u8 | - | The last input byte without a diagonal. An input with a diagonal uses its bits 0 to 3. |
 | `inventory_delay` | u8 | - | The pictures that the level presents before the inventory key works. |
 | `catch_up_due` | bool | - | The last host frame ended late: the next host frame runs two updates. |
-| `requested_scene` | ?i16 | - | The scene that the last update requested. It plays at the start of the next update. |
+
+A save holds no scene: the game does not save while a film that a rule asked for waits to start
+([Save](#save)).
 
 ### World
 
@@ -256,8 +258,8 @@ All the fields must be present.
 
 | Field | Type | Content |
 |---|---|---|
-| `version` | u32 | The format version. It must be 2. |
-| `data_set` | string | The fingerprint, as in the save record. |
+| `version` | u32 | The format version. It must be 3. |
+| `level_shape` | string | The shape of the level, as in the save record. |
 | `level` | enum | The level, as in the save record. |
 | `play_walks` | u64 | The walks, as in the save record. |
 | `date` | string | The local date and time of the save as `YYYY-MM-DD HH:MM`. Empty when the host does not give the time (the agent host). |
@@ -265,18 +267,25 @@ All the fields must be present.
 
 ## Procedures
 
-### Fingerprint
+### Level shape
 
-1. Take all the `.zon` files of the data set ([data-set.md](data-set.md)). The name of a file is
-   its path in the data set directory, with `/` between the parts.
-2. Sort the files by name, byte by byte, in ascending order.
-3. For each file, append its name, a `0x00` byte, its contents and a `0x00` byte.
-4. Hash the result with Wyhash (Zig `std.hash.Wyhash`), seed 0.
-5. Write the 64-bit hash as 16 lower-case hexadecimal digits, with zeros on the left as necessary.
+The numbers of a save point into its level: a character by its place in `characters.zon`, a
+state by its place in the behavior of its character. The shape of the level is what these
+numbers point into:
 
-A data set from `--data` and a data set that the host extracts in memory have the same
-fingerprint when they have the same files. The order in which the host lists the files does not
-change the fingerprint.
+1. Read the characters and the behaviors of the level from the data set
+   ([data-set.md](data-set.md)).
+2. For each character, in the order of `characters.zon`, append its `placement`, then the number
+   of states of its behavior, then the animation of each of these states, in the order of the
+   behavior file. Each number is a `u16`, little-endian.
+3. Hash the result with Wyhash (Zig `std.hash.Wyhash`), seed 0.
+4. Write the 64-bit hash as 16 lower-case hexadecimal digits, with zeros on the left as necessary.
+
+These changes give another shape, and the game then refuses the older saves of the level: a
+character added, removed or moved in `characters.zon`, and a state added, removed, moved or given
+another animation in a behavior that a character of the level uses. The comments, the white
+space, the names, the rules, the other levels, `messages.zon` and `scenes.zon` do not change the
+shape.
 
 ### Picture
 
@@ -298,7 +307,8 @@ original.
 ### Save
 
 The game saves only a level in play. It does not save during a film, a demo, the inventory or a
-message. A save with the options dialog open is possible. The game also needs the storage and
+message, nor while a film that a rule asked for waits to start (until the next update starts
+it). A save with the options dialog open is possible. The game also needs the storage and
 the data set. Else the save gives `error.NothingToSave`, `error.NoStorage` or
 `error.DataSetRequired`.
 
@@ -319,10 +329,12 @@ The game needs the storage, the data set and the original files.
 1. Read the save record. F9 does nothing when `QUICK` is missing.
 2. Read the `version` field only. The reader ignores the other fields in this step.
 3. Read the full record.
-4. Compare `data_set` with the fingerprint of the data set in use.
+4. Calculate the shape of the record's level in the data set in use, and compare `level_shape`
+   with it.
 5. Load the level again from the data set, at the difficulty of the record and with the
    `inherited` flags.
-6. Put back the world (`restoreWorld`) and the play state (`scene`).
+6. Put back the world (`restoreWorld`) and the play state (`play_state`). The opening film of
+   the level does not play.
 7. Stop the screen in play. The loaded level takes its place, with the level, the difficulty and
    the play walks of the record.
 
@@ -337,15 +349,16 @@ condition that applies gives the state.
 |---|---|---|---|
 | Missing, or no storage | empty | `- EMPTY -` | Nothing occurs. |
 | Other read error, or no `version` field that reads | broken | `UNREADABLE` | Refused: `IT DOES NOT READ`. |
-| `version` is not 2 | other version | `OTHER VERSION` | Refused: `ANOTHER VERSION`. |
+| `version` is not 3 | other version | `OTHER VERSION` | Refused: `ANOTHER VERSION`. |
 | The full record does not read (see [ZON notation](#zon-notation)) | broken | `UNREADABLE` | Refused: `IT DOES NOT READ`. |
-| `data_set` is not the fingerprint in use | save, not loadable | The level and the play time | Refused: `OTHER GAME DATA`. |
+| `level_shape` is not the shape of the level in use | save, not loadable | The level and the play time | Refused: `OTHER GAME DATA`. |
 | Else | save | The level and the play time | The game loads the save record. |
 
-Without a data set, the fingerprint in use is `0000000000000000`. The page shows the picture only
-when `picture` has exactly 21504 valid hexadecimal digits. On the SAVE GAME page, the game saves
-into an empty row at once. For another row, it asks first. The LOAD GAME page shows a save
-without its INFO record as empty.
+Without a data set, or for a level that does not load, no level has a shape, and no save loads. The
+game calculates the shape of a level once, when a slot list first needs it. The page shows the
+picture only when `picture` has exactly 21504 valid hexadecimal digits. On the SAVE GAME page, the
+game saves into an empty row at once. For another row, it asks first. The LOAD GAME page shows a
+save without its INFO record as empty.
 
 ## Checks
 
@@ -358,8 +371,8 @@ A load of a save record refuses these conditions:
 | The game has no original files. | `error.OriginalContentRequired` |
 | The storage cannot read the record. | `error.Io` |
 | The record is not valid ZON, a field is missing or unknown, or a value has a wrong type or range. | `error.InvalidSave` |
-| `version` is not 2. | `error.OtherVersion` |
-| `data_set` is not the fingerprint of the data set in use. | `error.OtherDataSet` |
+| `version` is not 3. | `error.OtherVersion` |
+| `level_shape` is not the shape of the level in the data set in use. | `error.OtherLevelShape` |
 | `inherited` does not have 256 items. | `error.InvalidSave` |
 | `characters` or `inbox` does not have one item for each character of the level. | `error.InvalidSave` |
 | `room_lists`, `letters`, `contacts.entries` or `contacts.slots` does not have 256 items. | `error.InvalidSave` |

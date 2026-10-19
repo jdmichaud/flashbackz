@@ -769,27 +769,29 @@ pub const Scene = struct {
 
     /// Whether the level can be saved now: in play or behind its options dialog, not a demo, a
     /// film, the inventory or a message (DESIGN.md 4).
+    /// Whether the level can be saved now: not in a demo, a film, the inventory or a message,
+    /// nor while a film that a rule asked for waits to start (the next update starts it).
     pub fn canSave(self: *const Scene) bool {
         return self.demo == null and self.outcome == .playing and self.film == null and
-            self.inventory == null and self.message_clock == null;
+            self.requested_scene == null and self.inventory == null and self.message_clock == null;
     }
 
     /// The play state outside the world that a save keeps.
-    pub fn saveState(self: *const Scene) save.Record.Scene {
+    pub fn saveState(self: *const Scene) save.Record.PlayState {
         return .{
             .last_direction = self.keys.last_direction,
             .inventory_delay = self.inventory_delay,
             .catch_up_due = self.catch_up_due,
-            .requested_scene = self.requested_scene,
         };
     }
 
     /// Puts back a save's play state in this level, loaded again; its world is put back apart.
-    pub fn restoreState(self: *Scene, state: save.Record.Scene) void {
+    /// The level's opening film does not play: no film waited when the save was made.
+    pub fn restoreState(self: *Scene, state: save.Record.PlayState) void {
         self.keys = .{ .last_direction = state.last_direction };
         self.inventory_delay = state.inventory_delay;
         self.catch_up_due = state.catch_up_due;
-        self.requested_scene = state.requested_scene;
+        self.requested_scene = null;
     }
 
     /// Every character's state and inventory links, the score, the view and the random state.

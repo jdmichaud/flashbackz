@@ -173,7 +173,7 @@ With `--trace`, the host writes these lines during the run:
 | Line | Content |
 |---|---|
 | `flashbackz-agent: save SLOT: ERROR` | A `--save` failed. `ERROR` is the name of the error, for example `NothingToSave`. |
-| `flashbackz-agent: load SLOT: ERROR` | A `--load` failed, for example `NotFound` or `OtherDataSet` ([save.md](save.md#checks)). |
+| `flashbackz-agent: load SLOT: ERROR` | A `--load` failed, for example `NotFound` or `OtherLevelShape` ([save.md](save.md#checks)). |
 | `info: ...`, `warning: ...`, `error: ...` | Log lines of the game. |
 | `flashbackz-agent: ...`, then the usage lines | An option has an error (see [Checks](#checks)). The status is 2. |
 | `flashbackz-agent: cannot open the ...` | A provider does not open (a disk, the save or configuration directory, the data set or the cartridge). The status is 2. |

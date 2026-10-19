@@ -166,6 +166,8 @@ pub const Game = struct {
     play_walks: u64 = 0,
     /// The save slots, read when a slot page opens, dropped when a save changes them.
     slot_list: ?SlotList = null,
+    /// The shapes of the data set's levels, which a save must match to load.
+    level_shapes: save.LevelShapes = .init(null),
     /// P's toggle, which only films read: they hold their picture while it is set.
     films_paused: bool = false,
     /// The music volume keypad + and - step, 0 to 63, for notes started afterwards.
@@ -230,6 +232,7 @@ pub const Game = struct {
                 .rgba = rgba,
                 .settings = settings,
                 .kept_settings = settings,
+                .level_shapes = .init(data),
                 .level = level,
                 .scene = .{ .level = scene },
                 .tunes = tunes,
@@ -253,6 +256,7 @@ pub const Game = struct {
             .rgba = rgba,
             .settings = settings,
             .kept_settings = settings,
+            .level_shapes = .init(data),
             .scene = .{ .menu = front },
             .tunes = tunes,
             .notice_font = notice_font,
@@ -904,7 +908,6 @@ pub const Game = struct {
         if (self.slot_list == null) {
             var list: SlotList = .{ .arena = .init(self.allocator), .slots = undefined };
             errdefer list.arena.deinit();
-            const print = if (self.data) |files| save.fingerprint(files) else 0;
             for (&list.slots, 0..) |*slot, row| {
                 var name: [8]u8 = undefined;
                 var info_name: [platform.max_name_len]u8 = undefined;
@@ -922,7 +925,7 @@ pub const Game = struct {
                     self.allocator,
                     list.arena.allocator(),
                     bytes.bytes,
-                    print,
+                    &self.level_shapes,
                 );
             }
             self.slot_list = list;
@@ -990,7 +993,7 @@ pub const Game = struct {
     pub fn saveGame(self: *Game, p: *platform.Platform, slot: []const u8) !void {
         if (!self.canSave()) return error.NothingToSave;
         const saves = self.saves orelse return error.NoStorage;
-        const files = self.data orelse return error.DataSetRequired;
+        if (self.data == null) return error.DataSetRequired;
         // The info record's name is checked first: a slot name the storage refuses for it
         // writes nothing.
         var name: [platform.max_name_len]u8 = undefined;
@@ -999,17 +1002,16 @@ pub const Game = struct {
         defer arena_state.deinit();
         const arena = arena_state.allocator();
         const level = &self.scene.level;
-        var print: [16]u8 = undefined;
-        const fingerprint = std.fmt.bufPrint(&print, "{x:0>16}", .{ save.fingerprint(files) }) catch
-            unreachable;
+        var shape_buffer: [16]u8 = undefined;
+        const shape = save.shapeText(save.levelShape(level.world.level), &shape_buffer);
         const text = try save.encode(arena, .{
             .version = save.version,
-            .data_set = fingerprint,
+            .level_shape = shape,
             .level = level.level,
             .difficulty = self.difficulty,
             .play_walks = self.playedWalks(),
             .inherited = &self.inherited,
-            .scene = level.saveState(),
+            .play_state = level.saveState(),
             .world = try save.captureWorld(arena, &level.world),
         });
         try saves.save(slot, text);
@@ -1031,7 +1033,7 @@ pub const Game = struct {
             "";
         const info = try save.encodeInfo(arena, .{
             .version = save.version,
-            .data_set = fingerprint,
+            .level_shape = shape,
             .level = level.level,
             .play_walks = self.playedWalks(),
             .date = when,
@@ -1042,7 +1044,8 @@ pub const Game = struct {
     }
 
     /// Loads the save in `slot` and puts its level in place of the scene in play:
-    /// 1. `save.decode` reads the record. It refuses a save of another version or data set.
+    /// 1. `save.decode` reads the record. It refuses a save of another version, or whose level's
+    ///    shape is not the data set's.
     /// 2. The level loads again from the data set.
     /// 3. The saved world and scene state go back into it.
     /// 4. The scene in play ends (`endScene`), and the loaded level takes its place.
@@ -1059,7 +1062,7 @@ pub const Game = struct {
             self.allocator,
             arena_state.allocator(),
             bytes.bytes,
-            save.fingerprint(files),
+            &self.level_shapes,
         );
         if (record.inherited.len != self.inherited.len) return error.InvalidSave;
         var inherited: [data_set.max_characters]behavior_world.Inherited = undefined;
@@ -1071,7 +1074,7 @@ pub const Game = struct {
         });
         errdefer scene.deinit();
         try save.restoreWorld(&scene.world, record.world);
-        scene.restoreState(record.scene);
+        scene.restoreState(record.play_state);
         self.endScene();
         self.inherited = inherited;
         self.level = record.level;

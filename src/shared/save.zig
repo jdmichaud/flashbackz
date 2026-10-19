@@ -1,8 +1,12 @@
-//! Saves (DESIGN.md 4, PLAN GS-4): a level in play, written as one readable record (ZON) and read
-//! back. A save holds the session's state: the level, the difficulty, what is carried between
-//! levels, the world and the few parts of the level's play that lead to its updates. Art, sound
-//! and pictures are not in it; the level is loaded again and the world put back. A record of
-//! another version, or made with another data set, is refused.
+//! Saves (DESIGN.md 4, PLAN GS-4, SV-1): a level in play, written as one readable record (ZON)
+//! and read back. A save holds the session's state: the level, the difficulty, what is carried
+//! between levels, the world and the few parts of the level's play that lead to its updates. Art,
+//! sound and pictures are not in it; the level is loaded again and the world put back.
+//!
+//! The world's numbers point into the level's data: a character by its place in the level, its
+//! state by its place in its behavior. A save keeps the level's shape (`levelShape`), and a record
+//! of another version, or of a level whose shape changed, is refused. Comments, names, rules and
+//! the other files of the data set do not change the shape.
 const std = @import("std");
 const settings = @import("settings.zig");
 const content_level = @import("content/level.zig");
@@ -15,7 +19,7 @@ const platform = @import("platform.zig");
 
 /// The record's format. Any change to it is a new version, and records of the others are
 /// refused.
-pub const version = 2;
+pub const version = 3;
 
 /// The quick slot (F5, F9) and the eight others, as storage names them.
 pub const quick_slot = "QUICK";
@@ -29,24 +33,24 @@ pub fn slotName(slot: usize, buffer: *[8]u8) []const u8 {
 
 pub const Record = struct {
     version: u32,
-    /// The data set it was made with: `fingerprint`, in hexadecimal.
-    data_set: []const u8,
+    /// The shape of its level when it was made (`levelShape`), in hexadecimal.
+    level_shape: []const u8,
     level: content_level.Id,
     difficulty: settings.Difficulty,
     /// The walks played in the game so far, which its play time counts.
     play_walks: u64,
     /// The flags the characters a level does not place keep from the levels before.
     inherited: []const world_mod.Inherited,
-    scene: Scene,
+    play_state: PlayState,
     world: World,
 
-    /// The level's play state outside the world that leads to its next updates.
-    pub const Scene = struct {
+    /// The level's play state outside the world that leads to its next updates. A film that a
+    /// rule asked for is never waiting in a save: the game does not save then.
+    pub const PlayState = struct {
         /// The last direction held without a diagonal, which a diagonal keeps.
         last_direction: u8,
         inventory_delay: u8,
         catch_up_due: bool,
-        requested_scene: ?i16,
     };
 
     pub const World = struct {
@@ -107,13 +111,14 @@ pub const Record = struct {
     };
 };
 
-pub const Error = error{ InvalidSave, OtherVersion, OtherDataSet, OutOfMemory };
+pub const Error = error{ InvalidSave, OtherVersion, OtherLevelShape, OutOfMemory };
 
 /// What a slot list shows of a save, kept beside it (`infoName`): small, so that a list reads
 /// fast.
 pub const Info = struct {
     version: u32,
-    data_set: []const u8,
+    /// As in the save record.
+    level_shape: []const u8,
     level: content_level.Id,
     play_walks: u64,
     /// The local date and time of the save, as the host gave it, or empty.
@@ -173,7 +178,7 @@ pub const Slot = union(enum) {
     other_version,
     /// A save that does not read.
     broken,
-    /// A save, `loadable` unless it was made with another data set.
+    /// A save, `loadable` unless the shape of its level changed since.
     save: struct {
         level: content_level.Id,
         play_walks: u64,
@@ -183,12 +188,13 @@ pub const Slot = union(enum) {
     },
 };
 
-/// The slot of info record `bytes` (none: `empty`), its strings in `arena`.
+/// The slot of info record `bytes` (none: `empty`), its strings in `arena`. `shapes` gives the
+/// shape of its level in the data set in use.
 pub fn readSlot(
     gpa: std.mem.Allocator,
     arena: std.mem.Allocator,
     bytes: ?[]const u8,
-    data_set_print: u64,
+    shapes: *LevelShapes,
 ) !Slot {
     const text = bytes orelse return .empty;
     const source = try arena.dupeSentinel(u8, text, 0);
@@ -210,8 +216,6 @@ pub fn readSlot(
         .source = source,
         .diagnostics = &diagnostics,
     }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else .broken;
-    var print_text: [16]u8 = undefined;
-    _ = std.fmt.bufPrint(&print_text, "{x:0>16}", .{ data_set_print }) catch unreachable;
     var shown: ?Picture = null;
     if (info.picture.len == @sizeOf(Picture) * 2) {
         var pixels: Picture = undefined;
@@ -225,37 +229,80 @@ pub fn readSlot(
             .play_walks = info.play_walks,
             .date = info.date,
             .picture = shown,
-            .loadable = std.mem.eql(u8, info.data_set, &print_text),
+            .loadable = matches(info.level_shape, try shapes.of(gpa, info.level)),
         },
     };
 }
 
-/// The data set's fingerprint: all its files, in name order, hashed, whatever order `files`
-/// lists them in. It finds the names in order one at a time, so it needs no list of its own.
-pub fn fingerprint(files: *const data_set.Files) u64 {
+/// The shape of a level: what the numbers of a save point into. Its characters in order, each by
+/// its original placement, and for each character its behavior's states in order, each by its
+/// animation. Names, rules and comments are not in it.
+pub fn levelShape(level: *const data_set.Level) u64 {
     var hash = std.hash.Wyhash.init(0);
-    var previous: ?[]const u8 = null;
-    while (true) {
-        // The smallest name after the previous one.
-        var next: ?[]const u8 = null;
-        for (files.keys()) |name| {
-            if (previous) |p| {
-                if (!std.mem.lessThan(u8, p, name)) continue;
-            }
-            if (next) |n| {
-                if (!std.mem.lessThan(u8, name, n)) continue;
-            }
-            next = name;
+    for (level.characters) |character| {
+        const states = level.behaviors[character.behavior].states;
+        hashNumber(&hash, character.placement);
+        hashNumber(&hash, @intCast(states.len));
+        for (states) |state| {
+            hashNumber(&hash, state.animation);
         }
-        const name = next orelse break;
-        hash.update(name);
-        hash.update(&.{ 0 });
-        hash.update(files.get(name).?);
-        hash.update(&.{ 0 });
-        previous = name;
     }
     return hash.final();
 }
+
+/// A number hashed little-endian: the same shape on every machine.
+fn hashNumber(hash: *std.hash.Wyhash, number: u16) void {
+    var bytes: [2]u8 = undefined;
+    std.mem.writeInt(u16, &bytes, number, .little);
+    hash.update(&bytes);
+}
+
+/// `shape` in the hexadecimal of a record.
+pub fn shapeText(shape: u64, buffer: *[16]u8) []const u8 {
+    return std.fmt.bufPrint(buffer, "{x:0>16}", .{ shape }) catch unreachable;
+}
+
+/// Whether a record's `level_shape` is `shape`; a level that has none (no data set, or a level
+/// that does not load) matches no record.
+fn matches(recorded: []const u8, shape: ?u64) bool {
+    var buffer: [16]u8 = undefined;
+    return std.mem.eql(u8, recorded, shapeText(shape orelse return false, &buffer));
+}
+
+/// The shapes of the levels of the data set in use, each worked out from its files when first
+/// asked for.
+pub const LevelShapes = struct {
+    files: ?*const data_set.Files,
+    shapes: [level_count]?u64 = @splat(null),
+
+    const level_count = @typeInfo(content_level.Id).@"enum".field_names.len;
+
+    pub fn init(files: ?*const data_set.Files) LevelShapes {
+        return .{ .files = files };
+    }
+
+    /// The shape of `level`, or null without a data set or when the level does not load.
+    pub fn of(self: *LevelShapes, gpa: std.mem.Allocator, level: content_level.Id) !?u64 {
+        const known = &self.shapes[@backingInt(level)];
+        if (known.*) |shape| return shape;
+        const files = self.files orelse return null;
+        var arena: std.heap.ArenaAllocator = .init(gpa);
+        defer arena.deinit();
+        var diagnostic: data_set.Diagnostic = .{};
+        const parsed = data_set.loadLevel(
+            gpa,
+            arena.allocator(),
+            files,
+            @tagName(level),
+            &diagnostic,
+        ) catch |err| {
+            if (err == error.OutOfMemory) return error.OutOfMemory;
+            return null;
+        };
+        known.* = levelShape(&parsed);
+        return known.*;
+    }
+};
 
 /// The world as a record; its strings are allocated in `arena`, its lists are the world's own.
 pub fn captureWorld(arena: std.mem.Allocator, world: *const world_mod.World) !Record.World {
@@ -471,12 +518,12 @@ pub fn encode(allocator: std.mem.Allocator, record: Record) ![]u8 {
 }
 
 /// The record in `bytes`, its lists and strings allocated in `arena`, if it is of this version
-/// and made with the data set of fingerprint `data_set_print`.
+/// and its level has the same shape in the data set in use (`shapes`).
 pub fn decode(
     gpa: std.mem.Allocator,
     arena: std.mem.Allocator,
     bytes: []const u8,
-    data_set_print: u64,
+    shapes: *LevelShapes,
 ) Error!Record {
     const source = try arena.dupeSentinel(u8, bytes, 0);
     var diagnostics: std.zon.parse.Diagnostics = undefined;
@@ -498,9 +545,9 @@ pub fn decode(
         .source = source,
         .diagnostics = &diagnostics,
     }) catch |err| return if (err == error.OutOfMemory) error.OutOfMemory else error.InvalidSave;
-    var print_text: [16]u8 = undefined;
-    _ = std.fmt.bufPrint(&print_text, "{x:0>16}", .{ data_set_print }) catch unreachable;
-    if (!std.mem.eql(u8, record.data_set, &print_text)) return error.OtherDataSet;
+    if (!matches(record.level_shape, try shapes.of(gpa, record.level))) {
+        return error.OtherLevelShape;
+    }
     return record;
 }
 
@@ -559,21 +606,28 @@ const synthetic = struct {
         );
     }
 
+    fn shape() u64 {
+        return levelShape(&level);
+    }
+
+    /// The shapes of a data set whose jungle has `jungle`.
+    fn shapes(jungle: ?u64) LevelShapes {
+        var result: LevelShapes = .init(null);
+        result.shapes[@backingInt(content_level.Id.jungle)] = jungle;
+        return result;
+    }
+
     /// The world's record as text, which compares the whole of its state.
     fn text(arena: std.mem.Allocator, w: *const world_mod.World) ![]u8 {
+        var buffer: [16]u8 = undefined;
         return encode(arena, .{
             .version = version,
-            .data_set = "0000000000000000",
+            .level_shape = shapeText(shape(), &buffer),
             .level = .jungle,
             .difficulty = .normal,
             .play_walks = 0,
             .inherited = &.{},
-            .scene = .{
-                .last_direction = 0,
-                .inventory_delay = 0,
-                .catch_up_due = false,
-                .requested_scene = null,
-            },
+            .play_state = .{ .last_direction = 0, .inventory_delay = 0, .catch_up_due = false },
             .world = try captureWorld(arena, w),
         });
     }
@@ -605,7 +659,8 @@ test "a world saved and read back is the same world, and goes on the same" {
     _ = try original.update(.{ .right = true }, .only);
 
     const saved = try synthetic.text(arena, &original);
-    const record = try decode(std.testing.allocator, arena, saved, 0);
+    var shapes = synthetic.shapes(synthetic.shape());
+    const record = try decode(std.testing.allocator, arena, saved, &shapes);
     var copy = try synthetic.world();
     defer copy.deinit();
     try restoreWorld(&copy, record.world);
@@ -620,31 +675,42 @@ test "a world saved and read back is the same world, and goes on the same" {
     }
 }
 
-test "a save of another version or data set, or that does not read, is refused" {
+test "a save of another version or level shape, or that does not read, is refused" {
     var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
     var w = try synthetic.world();
     defer w.deinit();
     const saved = try synthetic.text(arena, &w);
-    try std.testing.expectError(error.OtherDataSet, decode(std.testing.allocator, arena, saved, 1));
+    var shapes = synthetic.shapes(synthetic.shape());
+    var other = synthetic.shapes(synthetic.shape() +% 1);
+    try std.testing.expectError(
+        error.OtherLevelShape,
+        decode(std.testing.allocator, arena, saved, &other),
+    );
+    // Without a data set, the level has no shape.
+    var none = synthetic.shapes(null);
+    try std.testing.expectError(
+        error.OtherLevelShape,
+        decode(std.testing.allocator, arena, saved, &none),
+    );
     const other_version = try std.mem.replaceOwned(
         u8,
         arena,
         saved,
+        ".version = 3,",
         ".version = 2,",
-        ".version = 1,",
     );
     try std.testing.expectError(
         error.OtherVersion,
-        decode(std.testing.allocator, arena, other_version, 0),
+        decode(std.testing.allocator, arena, other_version, &shapes),
     );
     try std.testing.expectError(
         error.InvalidSave,
-        decode(std.testing.allocator, arena, saved[0..saved.len / 2], 0),
+        decode(std.testing.allocator, arena, saved[0..saved.len / 2], &shapes),
     );
     // A world of another size.
-    const record = try decode(std.testing.allocator, arena, saved, 0);
+    const record = try decode(std.testing.allocator, arena, saved, &shapes);
     var shorter = record.world;
     shorter.characters = shorter.characters[0..2];
     try std.testing.expectError(error.InvalidSave, restoreWorld(&w, shorter));
@@ -675,53 +741,87 @@ test "a save of another version or data set, or that does not read, is refused" 
     try restoreWorld(&w, edited);
 }
 
-test "the fingerprint covers every file, whatever the order of the list" {
-    var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
-    defer arena_state.deinit();
-    const arena = arena_state.allocator();
-    var forward: data_set.Files = .empty;
-    var backward: data_set.Files = .empty;
-    const count = 1100;
-    for (0..count) |i| {
-        try forward.put(arena, try std.fmt.allocPrint(arena, "level/{d:0>4}.zon", .{ i }), ".{}");
-        const j = count - 1 - i;
-        try backward.put(arena, try std.fmt.allocPrint(arena, "level/{d:0>4}.zon", .{ j }), ".{}");
-    }
-    try std.testing.expectEqual(fingerprint(&forward), fingerprint(&backward));
-    // The last file in name order counts too.
-    const before = fingerprint(&forward);
-    forward.getPtr("level/1099.zon").?.* = ".{ .changed = true }";
-    try std.testing.expect(fingerprint(&forward) != before);
+test "names and rules leave a level's shape; its characters' and states' order changes it" {
+    const vocabulary = synthetic.vocabulary;
+    const shape = synthetic.shape();
+    // Other names, another rule: the same shape.
+    const rule: vocabulary.Rule = .{ .turn = true, .forward = 4, .next = 0 };
+    const renamed_states = [_]vocabulary.State{.{
+        .name = "waiting",
+        .animation = 0,
+        .rules = &.{ rule },
+    }};
+    const renamed_behaviors = [_]vocabulary.Behavior{.{
+        .name = "guard",
+        .links = &.{ "partner" },
+        .numbers = &.{ "pause" },
+        .states = &renamed_states,
+    }};
+    var renamed = synthetic.level;
+    renamed.behaviors = &renamed_behaviors;
+    try std.testing.expectEqual(shape, levelShape(&renamed));
+    // A state more, or another animation for a state: another shape.
+    const more_states = [_]vocabulary.State{
+        .{ .name = "idle", .animation = 0, .rules = &.{} },
+        .{ .name = "alert", .animation = 1, .rules = &.{} },
+    };
+    var more_behaviors = synthetic.behaviors;
+    more_behaviors[0].states = &more_states;
+    var more = synthetic.level;
+    more.behaviors = &more_behaviors;
+    try std.testing.expect(levelShape(&more) != shape);
+    const other_states = [_]vocabulary.State{.{ .name = "idle", .animation = 1, .rules = &.{} }};
+    more_behaviors[0].states = &other_states;
+    try std.testing.expect(levelShape(&more) != shape);
+    // The characters in another order: another shape.
+    var swapped_characters = synthetic.characters;
+    std.mem.swap(data_set.Character, &swapped_characters[1], &swapped_characters[2]);
+    var swapped = synthetic.level;
+    swapped.characters = &swapped_characters;
+    try std.testing.expect(levelShape(&swapped) != shape);
 }
 
-test "a slot's info reads back; another version is shown, another data set not loadable" {
+test "a slot's info reads back; another version is shown, another level shape not loadable" {
     var arena_state: std.heap.ArenaAllocator = .init(std.testing.allocator);
     defer arena_state.deinit();
     const arena = arena_state.allocator();
     var pixels: Picture = @splat(7);
     const info = try encodeInfo(arena, .{
         .version = version,
-        .data_set = "00000000000000ff",
+        .level_shape = "00000000000000ff",
         .level = .city,
         .play_walks = 3505,
         .date = "2026-10-10 14:32",
         .picture = try hex(arena, &pixels),
     });
-    const shown = try readSlot(std.testing.allocator, arena, info, 0xff);
+    var shapes: LevelShapes = .init(null);
+    shapes.shapes[@backingInt(content_level.Id.city)] = 0xff;
+    const shown = try readSlot(std.testing.allocator, arena, info, &shapes);
     try std.testing.expect(shown.save.loadable);
     try std.testing.expectEqual(content_level.Id.city, shown.save.level);
     try std.testing.expectEqualStrings("2026-10-10 14:32", shown.save.date);
     try std.testing.expectEqual(pixels, shown.save.picture.?);
-    try std.testing.expect(!(try readSlot(std.testing.allocator, arena, info, 1)).save.loadable);
-    try std.testing.expectEqual(Slot.empty, try readSlot(std.testing.allocator, arena, null, 0));
-    const old = try std.mem.replaceOwned(u8, arena, info, ".version = 2,", ".version = 1,");
+    shapes.shapes[@backingInt(content_level.Id.city)] = 1;
+    try std.testing.expect(
+        !(try readSlot(std.testing.allocator, arena, info, &shapes)).save.loadable,
+    );
+    // Without a data set, no level has a shape: the save shows, but does not load.
+    var none: LevelShapes = .init(null);
+    try std.testing.expect(
+        !(try readSlot(std.testing.allocator, arena, info, &none)).save.loadable,
+    );
+    try std.testing.expectEqual(
+        Slot.empty,
+        try readSlot(std.testing.allocator, arena, null, &none),
+    );
+    const old = try std.mem.replaceOwned(u8, arena, info, ".version = 3,", ".version = 2,");
     try std.testing.expectEqual(
         Slot.other_version,
-        try readSlot(std.testing.allocator, arena, old, 0xff),
+        try readSlot(std.testing.allocator, arena, old, &none),
     );
     try std.testing.expectEqual(
         Slot.broken,
-        try readSlot(std.testing.allocator, arena, "nonsense", 0xff),
+        try readSlot(std.testing.allocator, arena, "nonsense", &none),
     );
 }
 

@@ -285,8 +285,10 @@ Other failures have other texts:
 The extraction stops with `DuplicateBehaviorFile` when two behaviors of a level get the same file
 name ([naming-overlay.md](naming-overlay.md#how-the-extractor-applies-the-overlay)).
 
-A save records a hash of the names and bytes of all the `.zon` files. A change to any `.zon` file,
-a comment included, makes the game refuse the older saves ([save.md](save.md#fingerprint)).
+A save records the shape of its level: the characters in order, and the states of their
+behaviors in order ([save.md](save.md#level-shape)). A character or a state added, removed or
+moved in that level makes the game refuse its older saves. The comments, the names, the rules and
+the other files do not.
 
 ## Sources
 
@@ -300,5 +302,5 @@ a comment included, makes the game refuse the older saves ([save.md](save.md#fin
 - `src/shared/content_check.zig`, `src/shared/scenes/level.zig` (`checkContent`) and
   `src/shared/scenes/ending.zig`: the checks at start, at level start and at the ending.
 - `src/shared/content/floppy_interface.zig`: the scene table, the ending list and the credits.
-- `src/shared/save.zig` (`fingerprint`).
+- `src/shared/save.zig` (`levelShape`, `LevelShapes`).
 - DESIGN.md, section 3.
