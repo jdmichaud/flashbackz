@@ -1108,6 +1108,11 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   GAME: the save slots' page in load mode, as on the title menu; a chosen save replaces the level
   in play. Gate: unit tests of the menu; an agent run loads a save from the dialog; sessions and
   traces unchanged or explained; previews of the rows and the page; the SDL game (user).
+  - [x] `1dcfb67`: LOAD GAME below SAVE GAME, the slots' page in load mode; tests 299/299; the
+    options session presses Down once more and gives the accepted output; an agent run loads
+    QUICK from the dialog with the saved state hash. `1b902c0`: "OVERWRITE?" asks before a save
+    over another (user, 2026-10-19).
+  - [ ] The SDL game (user).
 
 ## Historical CD implementation/research milestones
 
