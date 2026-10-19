@@ -303,8 +303,21 @@ p'    = pivot − R(pivot − o) + R(p − o)
 The arithmetic is i32 with wrap around, and `>>` is an arithmetic shift (toward minus infinity).
 The factor 512 keeps each point.
 
-The rotation uses the three angles a (first), b (second) and c (third), and a Q8 table: 256 is
-1.0. S is the sine table and C the cosine table.
+The rotation turns the flat shape in three dimensions, and the film shows it without
+perspective. The three angles turn it about three axes:
+
+- The first angle, a, turns the shape in the plane of the screen.
+- The second angle, b, turns it about the vertical axis: its width becomes |cos b| times its
+  width.
+- The third angle, c, turns it about the horizontal axis: its height becomes |sin c| times its
+  height.
+
+At b = 180 and c = 90, the shape keeps its width and height, and the rotation is a rotation in the
+plane. These are the values of the fields that a rotated shape does not give. In the supplied
+films, 739 of the 2,535 rotated shapes give a second or a third angle, in 9 films. The values are
+near 180 and 90 (for example 179 and 92): a small turn out of the plane.
+
+The rotation uses a Q8 table: 256 is 1.0. S is the sine table and C the cosine table.
 
 ```text
 xx = ((C(a) × C(b)) >> 8) − ((((C(c) × S(a)) >> 8) × S(b)) >> 8)
