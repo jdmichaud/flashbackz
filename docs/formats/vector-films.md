@@ -30,11 +30,16 @@ the first word of each table is 0.
 
 ### Commands
 
-A command is a command byte, then its operands. In the command byte, bit 7 ends the film, bits
-2-6 are the opcode, and bits 0-1 must be 0. The film ends at the first command byte with bit 7
-set. A page loop can also end the film.
+A command is one command byte, then its operands, if any. The documents name a command by its
+byte, for example 0x10. In the command byte:
 
-| Byte | Opcode | Operands | Action |
+- Bit 7 set ends the film. The film ends at the first command byte with bit 7 set. A page loop
+  can also end the film.
+- Bits 2-6 are the opcode. The opcode is not a separate byte: it is the command byte divided by
+  4. For example, the byte 0x04 is opcode 0x01, and its operand is the next byte.
+- Bits 0-1 must be 0.
+
+| Command byte | Opcode (bits 2-6) | Operands, in the bytes that follow | Action |
 | --- | --- | --- | --- |
 | 0x00 | 0x00 | None | Present the picture after 4 ticks, then start a new picture. |
 | 0x04 | 0x01 | u8 mode | Set the background mode. A mode other than 0 starts a new background. |
@@ -53,7 +58,7 @@ set. A page loop can also end the film.
 | 0x38 | 0x0e | Page loop | Do the page loop. |
 | 0x80-0xff | | None | The film ends. The supplied files use 0xff. |
 
-The reader refuses the opcodes 0x0f to 0x1f.
+The reader refuses the command bytes 0x3c to 0x7c (the opcodes 0x0f to 0x1f).
 
 ### Shape operands (0x0c, 0x28, 0x2c)
 
@@ -416,7 +421,7 @@ stops the start when the reader refuses one. A film can have more entries than t
 | `TruncatedCinematic` | A read past the end of the CMD or POL file, also for the step after a horizontal step |
 | `InvalidCinematicEntry` | N above 1024, or an entry number of N or more (1 or more when N is 0) |
 | `UnsupportedCinematicCommandFlags` | A command byte with bit 0 or 1 set |
-| `UnsupportedCinematicCommand` | The opcodes 0x0f to 0x1f |
+| `UnsupportedCinematicCommand` | The command bytes 0x3c to 0x7c (the opcodes 0x0f to 0x1f) |
 | `UnsupportedCinematicShapeFlags` | Reference bit 11, or bits 12-14 in a placed or scaled shape |
 | `UnsupportedCinematicAngle` | An angle of 360 or more |
 | `InvalidCinematicPalette` | A palette destination other than 0 and 1 |
