@@ -212,9 +212,12 @@ title menu, or with F9 during play. A save holds the session's state: level, dif
 the random generator, what is carried between levels, the world (every character, the terrain,
 contacts, mailboxes, the checkpoint) and the level's play state. Art, sound and pictures are
 reloaded and redrawn, as Retry does. It is taken only between two updates, never during a film or
-a demo. A save is one readable record, stamped with its version and a fingerprint of the data set
-it was made with; a save of another version or data set is listed and refused. Loading a save and
-replaying the same input reproduces every character on every update.
+a demo, nor while a film that a rule asked for waits to start. A save is one readable record,
+stamped with its version and the shape of its level: the level's characters in order and each
+behavior's states in order, which the save's numbers point into (user decision, 2026-10-19:
+"The save format is too brittle"). Comments, names, rule changes and the other files of the data
+set do not affect a save. A save of another version or of another shape is listed and refused.
+Loading a save and replaying the same input reproduces every character on every update.
 
 ## 5. Time and arithmetic
 
