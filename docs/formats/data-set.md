@@ -113,7 +113,8 @@ A world message with no pages shows nothing. A number past the end of the list s
 
 ```zon
 // Generated with --extract from the user's game files. Do not commit.
-// World messages by number; each page lists its lines and their ink.
+// The world messages, by number: each is a list of pages, and each page a list
+// of lines, each with its text color (ink).
 .{
     // message 0
     .{
@@ -158,13 +159,19 @@ A film is a struct literal:
 | --- | --- |
 | `.{ .text = "..." }` | Text, typed one character for each presented frame. `\|` starts a new line. The text must not be empty. |
 | `.{ .hold = N }` | Keep the picture for N timer ticks (`u8`). |
-| `.{ .at = .{ .column = C, .row = R } }` | Move the text to column C and row R, in cells of 8 pixels (`u8` each). |
+| `.{ .at = .{ .column = C, .row = R } }` | Move the text to column C and row R, in units of 8 pixels (`u8` each). |
 | `.block_end` | The end of a block of credits. |
 
 The extractor writes one element of `films` for each scene of the executable's scene table, with
 a `// scene N` comment.
 
 ```zon
+// Generated with --extract from the user's game files. Do not commit.
+// A scene is a numbered request for a film: a level makes one when it starts,
+// and a rule makes one with play_scene. The sections:
+// - openings: the scene of each level when it starts (null: none).
+// - films: the film of each scene, by number: its name, entry and music (null: none).
+// - ending: the scenes that the ending plays after scene 61, and its credits.
 .{
     .openings = .{
         .jungle = 1,

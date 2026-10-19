@@ -93,7 +93,7 @@ fn read(
     );
 }
 
-/// The film each scene request plays, and the scene each level opens with.
+/// `scenes.zon`: the scene of each level when it starts, the film of each scene, and the ending.
 fn writeScenes(
     arena: std.mem.Allocator,
     interface: *const flashbackz.content.floppy_interface.Values,
@@ -103,7 +103,11 @@ fn writeScenes(
     var w: zon.Writer = .{ .out = &text.writer };
     try text.writer.writeAll(
         \\// Generated with --extract from the user's game files. Do not commit.
-        \\// The film each scene request plays (null: none), and each level's opening scene.
+        \\// A scene is a numbered request for a film: a level makes one when it starts,
+        \\// and a rule makes one with play_scene. The sections:
+        \\// - openings: the scene of each level when it starts (null: none).
+        \\// - films: the film of each scene, by number: its name, entry and music (null: none).
+        \\// - ending: the scenes that the ending plays after scene 61, and its credits.
         \\
     );
     try w.open(null);
@@ -141,7 +145,7 @@ fn writeScenes(
 }
 
 /// The scenes the ending plays after its first, and the credits typed over them: text (`|` starts
-/// a new line), holds in timer ticks, positions in 8-pixel cells, and block ends.
+/// a new line), holds in timer ticks, positions in units of 8 pixels, and block ends.
 fn writeEnding(w: *zon.Writer, interface: *const flashbackz.content.floppy_interface.Values) !void {
     try w.open("ending");
     try w.open("scenes");
@@ -200,7 +204,8 @@ fn writeMessages(
     var w: zon.Writer = .{ .out = &text.writer };
     try text.writer.writeAll(
         \\// Generated with --extract from the user's game files. Do not commit.
-        \\// World messages by number; each page lists its lines and their ink.
+        \\// The world messages, by number: each is a list of pages, and each page a list
+        \\// of lines, each with its text color (ink).
         \\
     );
     try w.open(null);

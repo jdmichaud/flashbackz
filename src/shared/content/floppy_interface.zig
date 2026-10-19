@@ -20,7 +20,7 @@ pub const Values = struct {
     /// Per level, which enemy sprite library (an index into `actor_libraries`) each rule group
     /// draws from.
     library_groups: [7]LibraryGroups,
-    /// The film each scene request plays, by scene number.
+    /// The film of each scene, by scene number.
     scenes: [scene_count]SceneFilm,
     /// The scene each level requests when it starts, if any.
     level_scenes: [7]?u8,

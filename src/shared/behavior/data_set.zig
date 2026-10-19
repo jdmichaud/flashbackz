@@ -151,8 +151,8 @@ pub const Film = struct {
     flagged: bool = false,
 };
 
-/// `scenes.zon`: the film each scene request plays, by scene number, and the scene each level
-/// opens with.
+/// `scenes.zon`: the scene of each level when it starts, the film of each scene by its number,
+/// and the ending.
 pub const Scenes = struct {
     openings: struct {
         jungle: ?u8,
