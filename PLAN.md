@@ -1103,6 +1103,11 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   - 2026-10-19, `fe1cfbb`: tests 299/299; sessions and traces unchanged; save and load in one frame
     give the saved state (3 levels); converted version 2 saves load with their state; a comment
     edit keeps a save, a changed state refuses it.
+- [ ] **UX-7 — LOAD GAME in the in-game menu** (user, 2026-10-19: "Let's add a "LOAD GAME" entry
+  right below "SAVE GAME" in the in-game menu"). The options dialog gets LOAD GAME below SAVE
+  GAME: the save slots' page in load mode, as on the title menu; a chosen save replaces the level
+  in play. Gate: unit tests of the menu; an agent run loads a save from the dialog; sessions and
+  traces unchanged or explained; previews of the rows and the page; the SDL game (user).
 
 ## Historical CD implementation/research milestones
 
