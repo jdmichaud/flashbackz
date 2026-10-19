@@ -18,7 +18,8 @@ Rules:
   and effect once and runs every table with the original's observable evaluation order. Do not
   hand-code a behavior family in Zig when it can be expressed as a table.
 - An extractor turns the user's disks into a readable data set (characters, behavior tables,
-  text, timings) stored outside Git. Images and sound are always read from the original files.
+  text, timings) stored outside Git. Images and sound are always read from the original files,
+  except the films, which the data set keeps unchanged in their formats (DESIGN.md 3).
   Committed overlays may add or adjust data but never contain original content. Names in the
   data set are ours (states such as `aiming`, effects such as `signal(gunman)`), not opcodes.
 - Original addresses, CPU registers, segment layouts and DOS services belong in research or

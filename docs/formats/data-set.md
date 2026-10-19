@@ -1,13 +1,14 @@
-# Data set (`messages.zon`, `scenes.zon`, `report.txt`, level directories)
+# Data set (`messages.zon`, `scenes.zon`, `report.txt`, `films/`, level directories)
 
 The data set is the readable form of the game's characters, behavior tables, world messages and
-scenes. The extractor makes it from the user's disks. The game loads it together with the
-original images and sounds, which it always reads from the disks.
+scenes. It also holds the films, unchanged in their original formats, where a user can replace
+them. The extractor makes it from the user's disks. The game loads it together with the original
+images and sounds, which it always reads from the disks.
 
 | Item | Value |
 | --- | --- |
-| Files | `messages.zon`, `scenes.zon`, `report.txt`; for each level, `<level>/characters.zon` and `<level>/behaviors/<name>.zon` |
-| Format | ASCII text in ZON (Zig object notation). Byte order does not apply. |
+| Files | `messages.zon`, `scenes.zon`, `report.txt`; for each level, `<level>/characters.zon` and `<level>/behaviors/<name>.zon`; the films in `films/` |
+| Format | ASCII text in ZON (Zig object notation). Byte order does not apply. The films' files keep their original formats. |
 | Reader | `src/shared/behavior/data_set.zig`. `src/native/data_set.zig` (`readDirectory`) finds the files. |
 | Writer | The extractor: `src/extract/root.zig`, `src/extract/level.zig`, `src/extract/zon.zig`. `src/native/data_set.zig` (`writeDirectory`, `extractInMemory`) gives it a sink. |
 
@@ -30,6 +31,12 @@ DIR/
             ...
     city/
     ...
+    films/
+        ENGCINE.BIN
+        ENGCINE.TXT
+        LOGOS.CMD
+        LOGOS.POL
+        ...
 ```
 
 | Path | Content | Specification |
@@ -39,6 +46,12 @@ DIR/
 | `messages.zon` | The world messages | This document |
 | `scenes.zon` | The film of each scene, the opening scene of each level, and the ending | This document |
 | `report.txt` | The extraction report. No code reads it. | This document |
+| `films/<NAME>.CMD`, `films/<NAME>.POL` | The films, copied unchanged from the disks' `DATA/`: every CMD and POL file | [vector-films.md](vector-films.md) |
+| `films/ENGCINE.BIN`, `films/ENGCINE.TXT` | The films' captions, copied unchanged | [cinematic-text.md](cinematic-text.md) |
+
+The game plays the films from `films/`, not from the disks. A film's file that `films/` does not
+have is not found, also when the disks have it. A changed film plays as it is, so it must keep
+the format of its document.
 
 Each level has one directory. The extractor reads the placements, the rule groups and the labels
 of a level from three files of the disks: `.PGE` ([placements.md](placements.md)), `.OBJ`
@@ -228,11 +241,12 @@ gives none.
 
 ### How the game gets the data set
 
-1. With `--data DIR`, the game reads each `.zon` file under DIR, at all depths. A file must be
-   smaller than 8 MiB. The name of a file is its path in DIR, with `/` separators. The game ignores
-   all other files.
+1. With `--data DIR`, the game reads each `.zon` file under DIR, at all depths, and the films'
+   files in `DIR/films/`. A file must be smaller than 8 MiB. The name of a file is its path in
+   DIR, with `/` separators. The game ignores all other files.
 2. With no `--data`, the game extracts the data set in memory from the disks, with the built-in
-   naming overlay ([naming-overlay.md](naming-overlay.md)). It keeps only the `.zon` files.
+   naming overlay ([naming-overlay.md](naming-overlay.md)). It keeps the `.zon` files and the
+   films' files.
    When there are unexpected notes, it logs a warning with all the notes.
 3. When the extraction in memory fails, the game logs `data set not extracted: ERROR` and starts
    with no data set. The screens that need no data set still run. A level, a demo or the ending
@@ -246,7 +260,8 @@ directory. `--names FILE` replaces the built-in naming overlay; it is valid only
 
 | Time | Files |
 | --- | --- |
-| The game starts, with a data set | `scenes.zon`. The game also imports each film that it names, one time for each film and entry. |
+| The game starts, with a data set | `scenes.zon`. The game also imports each film that it names from `films/`, one time for each film and entry. |
+| A film starts | `films/<NAME>.CMD`, `films/<NAME>.POL`, and for its captions `films/ENGCINE.BIN` and `films/ENGCINE.TXT` |
 | A level or a demo starts | `<level>/characters.zon`, the `.zon` files directly in `<level>/behaviors/`, `messages.zon`, `scenes.zon` |
 | The ending starts | `scenes.zon` |
 
@@ -276,6 +291,7 @@ Other failures have other texts:
 
 | Check | Text |
 | --- | --- |
+| At start, the data set has no films' files in `films/` (a data set of an earlier build) | `data set: no films in films/; extract the data set again` |
 | At start, a film of `scenes.zon` cannot play | `scene N: film F entry E cannot play: ERROR` |
 | The `--data` directory or one of its `.zon` files cannot be read | `PROGRAM: cannot open the data set DIR: not a data set written by --extract` |
 | The `--extract` directory is not empty | `PROGRAM: DIR must be a new or empty directory` |

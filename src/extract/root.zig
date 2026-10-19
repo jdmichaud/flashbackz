@@ -60,6 +60,7 @@ pub fn extractAll(
     }
     try writeMessages(arena, source, output);
     try writeScenes(arena, &interface, output);
+    try writeFilms(source, output);
     var summary: std.Io.Writer.Allocating = .init(arena);
     try summary.writer.print(
         \\Extracted {d} characters and {d} behaviors; the overlay names {d} behaviors and {d} of
@@ -91,6 +92,21 @@ fn read(
         try std.fmt.bufPrint(&path, "DATA/{s}.{s}", .{ basename, extension }),
         limit,
     );
+}
+
+/// The films' files, unchanged, in the data set's `films/` (DESIGN.md 3): every CMD and POL file
+/// of the original's `DATA/`, and the captions' ENGCINE.BIN and ENGCINE.TXT.
+fn writeFilms(source: flashbackz.platform.AssetSource, output: Output) !void {
+    const film_files = flashbackz.film_files;
+    var entries = try source.list("DATA/");
+    defer entries.deinit();
+    for (entries.names) |name| {
+        if (!film_files.isFilmFile(name)) continue;
+        var bytes = try source.readAll(name, 1 << 20);
+        defer bytes.deinit();
+        var buffer: [flashbackz.platform.max_name_len + film_files.directory.len]u8 = undefined;
+        try output.put(output.context, try film_files.dataSetPath(name, &buffer), bytes.bytes);
+    }
 }
 
 /// `scenes.zon`: the scene of each level when it starts, the film of each scene, and the ending.

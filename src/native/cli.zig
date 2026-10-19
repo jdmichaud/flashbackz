@@ -8,7 +8,7 @@
 //!   `Providers.open` creates them if necessary. The agent keeps both in memory instead. The end
 //!   of each host's help names the defaults (`writeStorageHelp`).
 //! - `--data`: a data set directory. Without it, `Providers.open` extracts the data set in
-//!   memory from the disks.
+//!   memory from the disks. With a data set, the game's films come from it (`GameFiles`).
 //! - `--extract` with `--names` writes the data set and exits. `--scene` selects the first scene.
 //!
 //! The game gets a bound `AssetSource` and `Storage`. It does not know which kind of source it has.
@@ -314,6 +314,8 @@ pub const Providers = struct {
     /// The data set, when original files are open: read from `--data` or extracted from them.
     data_arena: ?*std.heap.ArenaAllocator = null,
     data: ?flashbackz.behavior.data_set.Files = null,
+    /// With a data set, the game's files: its films from the data set, the rest from `content`.
+    game_files: ?flashbackz.film_files.GameFiles = null,
     /// What `open` or `openAssets` was opening when it failed, for `writeFailure`.
     failed: Failure = .{},
 
@@ -402,6 +404,9 @@ pub const Providers = struct {
         }
         self.failed = .{ .what = "data set", .path = options.data orelse "" };
         try self.openDataSet(io, options.data);
+        if (self.data) |*files| {
+            self.game_files = .init(self.allocator, self.content.?.assetSource(), files);
+        }
         self.failed = .{};
     }
 
@@ -552,6 +557,9 @@ pub const Providers = struct {
     }
 
     pub fn deinit(self: *Providers) void {
+        if (self.game_files) |*files| {
+            files.deinit();
+        }
         if (self.data_arena) |arena| {
             arena.deinit();
             self.allocator.destroy(arena);
@@ -570,9 +578,11 @@ pub const Providers = struct {
         self.* = .{ .failed = self.failed };
     }
 
-    /// The bound asset source. Null when the options give no asset path and the build has no
+    /// The bound asset source: with a data set, the game's files (the films from the data set),
+    /// else the original's files. Null when the options give no asset path and the build has no
     /// built-in disks: then `open` opens only the save directory.
     pub fn assetSource(self: *Providers) ?platform.AssetSource {
+        if (self.game_files) |*files| return files.assetSource();
         return if (self.content) |*content| content.assetSource() else null;
     }
 

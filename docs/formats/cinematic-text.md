@@ -6,10 +6,10 @@ the font `FB_TXT.FNT`.
 
 | Item | Value |
 | --- | --- |
-| Files | `DATA/ENGCINE.BIN` and `DATA/ENGCINE.TXT`. In the supplied game, they have 234 and 4,723 bytes: 117 strings. |
+| Files | `DATA/ENGCINE.BIN` and `DATA/ENGCINE.TXT`. In the supplied game, they have 234 and 4,723 bytes: 117 strings. The extractor copies them unchanged into the data set's `films/`, and the game reads them from there ([data-set.md](data-set.md)). |
 | Byte order | Big-endian |
 | Reader | `src/shared/content/cinematic_text.zig` (`load`, `parseStrings`, `Text.layout`), which `src/shared/content/vector_cinematic.zig` calls |
-| Writer | None. The files come from the original game. |
+| Writer | None. The extractor copies the original files (`src/extract/root.zig`, `writeFilms`). |
 
 ## Layout of ENGCINE.BIN
 

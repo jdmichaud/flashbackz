@@ -122,7 +122,7 @@ fly) to a set of files with more modern format that can be customized for moddin
 The extractor, the game and the hosts write these files.
 
 - [Data set](data-set.md): the directory that the extractor writes, with `messages.zon`,
-  `scenes.zon` and `report.txt`.
+  `scenes.zon`, `report.txt`, and the films in their original formats in `films/`.
 - [Characters](characters.md) (`<level>/characters.zon`) and
   [behavior tables](behaviors.md) (`<level>/behaviors/<name>.zon`).
 - [Naming overlay](naming-overlay.md) (`src/extract/names.zon`): our names for behaviors and

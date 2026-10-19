@@ -1,13 +1,14 @@
 //! The data set the game runs on (DESIGN.md section 3): read from a directory the user chose,
 //! or extracted in memory from the original files when no directory is given; `--extract`
-//! writes it into a directory.
+//! writes it into a directory. Its files are the `.zon` files and the films' files in `films/`
+//! (`flashbackz.film_files`).
 const std = @import("std");
 const flashbackz = @import("flashbackz");
 const extract = @import("extract");
 const Files = flashbackz.behavior.data_set.Files;
 
-/// Every `.zon` file under `path`, by its path relative to `path` with `/` separators.
-/// Results live in `arena`.
+/// Every `.zon` file under `path`, and the films' files of its `films/`, by their path relative to
+/// `path` with `/` separators. Results live in `arena`.
 pub fn readDirectory(arena: std.mem.Allocator, io: std.Io, path: []const u8) !Files {
     var root = try std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true });
     defer root.close(io);
@@ -15,9 +16,10 @@ pub fn readDirectory(arena: std.mem.Allocator, io: std.Io, path: []const u8) !Fi
     defer walker.deinit();
     var files: Files = .empty;
     while (try walker.next(io)) |entry| {
-        if (entry.kind != .file or !std.mem.endsWith(u8, entry.basename, ".zon")) continue;
+        if (entry.kind != .file) continue;
         const name = try arena.dupe(u8, entry.path);
         std.mem.replaceScalar(u8, name, std.fs.path.sep, '/');
+        if (!isDataSetFile(name)) continue;
         const text = try root.readFileAllocOptions(
             io,
             entry.path,
@@ -94,13 +96,19 @@ const Collector = struct {
 
     fn put(context: *anyopaque, path: []const u8, bytes: []const u8) anyerror!void {
         const self: *Collector = @ptrCast(@alignCast(context));
-        if (!std.mem.endsWith(u8, path, ".zon")) return;
+        if (!isDataSetFile(path)) return;
         const text = try self.arena.dupeSentinel(u8, bytes, 0);
         try self.files.put(self.arena, try self.arena.dupe(u8, path), text);
     }
 };
 
-test "a data set directory is read by relative path, ZON files only" {
+/// A file the game reads from a data set: a `.zon` file, or a film's file in `films/`. The
+/// extraction report and other files are not.
+fn isDataSetFile(path: []const u8) bool {
+    return std.mem.endsWith(u8, path, ".zon") or flashbackz.film_files.isDataSetFile(path);
+}
+
+test "a data set directory is read by relative path, ZON files and the films' files only" {
     const io = std.testing.io;
     var tmp = std.testing.tmpDir(.{ .iterate = true });
     defer tmp.cleanup();
@@ -108,12 +116,16 @@ test "a data set directory is read by relative path, ZON files only" {
     try tmp.dir.writeFile(io, .{ .sub_path = "city/characters.zon", .data = ".{}" });
     try tmp.dir.writeFile(io, .{ .sub_path = "city/behaviors/guard.zon", .data = ".{ .a = 1 }" });
     try tmp.dir.writeFile(io, .{ .sub_path = "report.txt", .data = "notes" });
+    try tmp.dir.createDirPath(io, "films");
+    try tmp.dir.writeFile(io, .{ .sub_path = "films/LOGOS.CMD", .data = "\x00\x01" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "films/notes.txt", .data = "not a film" });
     var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
     const len = try tmp.dir.realPath(io, &path_buf);
     var arena: std.heap.ArenaAllocator = .init(std.testing.allocator);
     defer arena.deinit();
     const files = try readDirectory(arena.allocator(), io, path_buf[0..len]);
-    try std.testing.expectEqual(@as(usize, 2), files.count());
+    try std.testing.expectEqual(@as(usize, 3), files.count());
+    try std.testing.expectEqualStrings("\x00\x01", files.get("films/LOGOS.CMD").?);
     try std.testing.expectEqualStrings(".{}", files.get("city/characters.zon").?);
     try std.testing.expectEqualStrings(".{ .a = 1 }", files.get("city/behaviors/guard.zon").?);
 }

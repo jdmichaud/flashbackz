@@ -7,10 +7,10 @@ continue screen show these film frames.
 
 | Item | Value |
 | --- | --- |
-| Files | `DATA/name.CMD` and `DATA/name.POL`. The supplied game has 29 pairs, all of them in ABA archives ([aba-archive.md](aba-archive.md)). |
+| Files | `DATA/name.CMD` and `DATA/name.POL`. The supplied game has 29 pairs, all of them in ABA archives ([aba-archive.md](aba-archive.md)). The extractor copies them unchanged into the data set's `films/`, and the game plays them from there ([data-set.md](data-set.md)). |
 | Byte order | Big-endian |
 | Reader | `src/shared/content/vector_cinematic.zig` (`load`, `compile`), with `src/shared/content/cinematic_transform.zig`. The result type is `film.Frame` in `src/shared/vector_film.zig`. |
-| Writer | None. The files come from the original game. |
+| Writer | None. The extractor copies the original files (`src/extract/root.zig`, `writeFilms`). |
 
 ## Layout of the CMD file
 
