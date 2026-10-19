@@ -1,6 +1,6 @@
 //! The save slots' page (PLAN GS-5): the quick slot and eight others, each with its level and
 //! play time, and under them the selected one's picture and date. Choosing a slot saves into it,
-//! asking first over a save, or loads it; a save of another version or data set is shown and
+//! asking first over a save, or loads it; a save of another version or level shape is shown and
 //! not loaded. The game reads the slots, draws the picture and saves or loads.
 //!
 //! The page ends when it sets `outcome`. Game reads it and sets it back to null; the title

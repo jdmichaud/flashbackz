@@ -19,8 +19,9 @@ writes the two records into the save directory and reads them back.
 
 ## Slots
 
-The options dialog is the dialog that Escape opens during play. Its SAVE GAME page and the LOAD
-GAME page of the title menu show 9 rows. Row 0 is the quick slot. Row r is save slot r.
+The options dialog is the dialog that Escape opens during play. Its SAVE GAME and LOAD GAME
+pages, and the LOAD GAME page of the title menu, show 9 rows. Row 0 is the quick slot. Row r is
+save slot r. A save loaded from the options dialog replaces the level in play.
 
 | Row | Save record | INFO record | Other access |
 |---|---|---|---|

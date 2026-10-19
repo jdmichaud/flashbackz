@@ -44,8 +44,9 @@ run() {
 
 # Play: walk, run, crouch, jump.
 run walk --scene jungle --frames 420 $skip --key-down 40:right --key-up 120:right --key-down 130:left_shift --key-down 135:right --key-up 200:right --key-up 205:left_shift --key-down 220:down --key-up 240:down --key-down 260:up --key-up 300:up --key-down 320:space --key-up 330:space --key-down 360:left_shift --key-up 370:left_shift
-# Options dialog: open, move, toggle, resume with Enter, then play on.
-run options --scene jungle --frames 400 $skip --key-down 60:escape --key-up 66:escape --key 90:down --key 110:down --key 130:right --key 150:down --key 170:right --key 190:enter --key-down 220:right --key-up 300:right
+# Options dialog: open, move past SAVE GAME and LOAD GAME, toggle SOUND FX and MUSIC, resume
+# with Enter, then play on.
+run options --scene jungle --frames 400 $skip --key-down 60:escape --key-up 66:escape --key 90:down --key 100:down --key 110:down --key 130:right --key 150:down --key 170:right --key 190:enter --key-down 220:right --key-up 300:right
 # Options with keys held through it (released before it opens).
 run options-held --scene jungle --frames 400 $skip --key-down 40:right --key-up 58:right --key-down 60:escape --key-up 66:escape --key 120:space --key-down 200:left --key-up 260:left
 # Right held, the options dialog, Right released inside it, resume, Right held again.

@@ -595,21 +595,32 @@ pub const Game = struct {
                 .layout = if (shown) |model| self.settings.padLayout(model.guid) else .{},
                 .model = shown,
             };
-            if (options.menu.page == .save) {
+            if (options.menu.page == .slots) {
                 options.menu.slots = try self.slotList();
-                if (options.menu.save_page.outcome) |outcome| {
-                    options.menu.save_page.outcome = null;
+                if (options.menu.slots_page.outcome) |outcome| {
+                    options.menu.slots_page.outcome = null;
                     options.menu.page = .rows;
                     switch (outcome) {
                         .back => {},
                         .chosen => |row| {
                             var name: [8]u8 = undefined;
-                            if (self.saveGame(p, save_slots.slotName(row, &name))) {
-                                options.menu.saved = true;
-                            } else |err| {
-                                std.log.err("the game could not be saved: {s}", .{
-                                    @errorName(err),
-                                });
+                            const slot = save_slots.slotName(row, &name);
+                            switch (options.menu.slots_page.mode) {
+                                .save => if (self.saveGame(p, slot)) {
+                                    options.menu.saved = true;
+                                } else |err| {
+                                    std.log.err("the game could not be saved: {s}", .{
+                                        @errorName(err),
+                                    });
+                                },
+                                // The loaded level replaces this one, its dialog included.
+                                .load => if (self.loadGame(slot)) {
+                                    return false;
+                                } else |err| {
+                                    std.log.err("the game could not be loaded: {s}", .{
+                                        @errorName(err),
+                                    });
+                                },
                             }
                         },
                     }
@@ -945,7 +956,7 @@ pub const Game = struct {
         const list = &(self.slot_list orelse return null);
         const row = switch (self.scene) {
             .level => |*level| if (level.options) |*options|
-                if (options.menu.page == .save) options.menu.save_page.selection else return null
+                if (options.menu.page == .slots) options.menu.slots_page.selection else return null
             else
                 return null,
             .menu => |*front| if (front.view == .load) front.load_page.selection else return null,
