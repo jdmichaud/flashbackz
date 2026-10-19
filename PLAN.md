@@ -1084,12 +1084,14 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
     stay on CONTROLS); tests 299/299, with game_options.zig's tests, which did not run before;
     sessions and traces unchanged; previews with the supplied font.
   - [ ] The SDL game shows it (user).
-- [ ] **UX-6 — Clear headers in the generated files** (user, 2026-10-19, on `scenes.zon`'s header
+- [x] **UX-6 — Clear headers in the generated files** (user, 2026-10-19, on `scenes.zon`'s header
   "The film each scene request plays (null: none), and each level's opening scene": "Makes no
   sense to me"). The header says what a scene is and what each section holds; `messages.zon`'s
   says text color; the code comments that used the same words follow. A header is part of the
   data set, so the fingerprint changes and the older saves need the new one. Gate: the
   extracted headers read; tests; sessions and traces unchanged; the new fingerprint given.
+  - 2026-10-19, `81b54ec`: both headers rewritten; tests 299/299; sessions and traces unchanged;
+    the fingerprint is now `698c987d431c83c6`.
 
 ## Historical CD implementation/research milestones
 
