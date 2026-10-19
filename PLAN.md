@@ -1113,6 +1113,15 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
     QUICK from the dialog with the saved state hash. `1b902c0`: "OVERWRITE?" asks before a save
     over another (user, 2026-10-19).
   - [ ] The SDL game (user).
+- [x] **BUG-4 — The spaceport's fireballs change colors in room 60** (user, 2026-10-19: "When two
+  "green fire" from room 62 reach room 60 they are not green anymore. They are multiple color
+  (red and white). Palette issue maybe?"). Measured: the original does the same. The fireballs
+  (`behavior_174`) are composed object art with `palette_bank` 3, drawn with palette slot 3 of
+  the view room: PAL bank 5 in room 62 (green), 10 in room 60 (magenta, white and red). An
+  original capture (spaceport, `--spawn 60:48:70:left`, Conrad into room 62 and back, fireballs
+  in room 60 at updates 265 to 371, `--game-frames`) matches the port on every character for
+  600 updates and on all 597 presented frames, pixel for pixel. No change; the quirk is in
+  `docs/formats/object-art.md`.
 
 ## Historical CD implementation/research milestones
 

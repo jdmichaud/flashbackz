@@ -123,6 +123,11 @@ errors stop the level load.
   44 parts have a 1 in bit 5.
 - The reader ignores the source bounds in bytes 3 and 4 of the record. The parts give the size
   of the frame.
+- Composed art takes its colors from the room on the screen, not from the room where the
+  character started. A character that moves into a room with another PAL bank in its palette
+  slot changes colors there. The spaceport's fireballs are green in room 62 and magenta, white
+  and red in room 60. The original does the same (an original capture compared frame by frame,
+  2026-10-19).
 
 ## Sources
 
