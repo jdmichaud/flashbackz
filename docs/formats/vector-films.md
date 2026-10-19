@@ -30,35 +30,30 @@ the first word of each table is 0.
 
 ### Commands
 
-A command is one command byte, then its operands, if any. The documents name a command by its
-byte, for example 0x10. In the command byte:
+A command is one command byte, then its operands, if any. The command bytes are the multiples
+of 4 from 0x00 to 0x38. A byte with bit 7 set (0x80 to 0xff) ends the film. A page loop can also
+end the film.
 
-- Bit 7 set ends the film. The film ends at the first command byte with bit 7 set. A page loop
-  can also end the film.
-- Bits 2-6 are the opcode. The opcode is not a separate byte: it is the command byte divided by
-  4. For example, the byte 0x04 is opcode 0x01, and its operand is the next byte.
-- Bits 0-1 must be 0.
+| Command byte | Operands, in the bytes that follow | Action |
+| --- | --- | --- |
+| 0x00 | None | Present the picture after 4 ticks, then start a new picture. |
+| 0x04 | u8 mode | Set the background mode. A mode other than 0 starts a new background. |
+| 0x08 | u8 n | Wait n × 4 ticks. |
+| 0x0c | Shape operands | Draw a shape without scale or rotation. |
+| 0x10 | u8 palette, u8 destination | Set 16 film colors from a POL palette. |
+| 0x14 | None | The same as 0x00. |
+| 0x18 | u16 text | Show the caption band and a caption. |
+| 0x1c | None | Nothing. |
+| 0x20 | 3 bytes | Nothing. The reader does not use the 3 bytes. |
+| 0x24 | Page loop | Present the picture after 4 ticks, start a new picture, then do the page loop. |
+| 0x28 | Shape operands | Draw a scaled shape. |
+| 0x2c | Shape operands | Draw a rotated shape. |
+| 0x30 | None | Present the shown picture again after 9 ticks (a hold). |
+| 0x34 | u16 text, then u8 column and u8 row | Add a positioned text. The text 0xffff has no column and row bytes, and adds nothing. |
+| 0x38 | Page loop | Do the page loop. |
+| 0x80-0xff | None | The film ends. The supplied files use 0xff. |
 
-| Command byte | Opcode (bits 2-6) | Operands, in the bytes that follow | Action |
-| --- | --- | --- | --- |
-| 0x00 | 0x00 | None | Present the picture after 4 ticks, then start a new picture. |
-| 0x04 | 0x01 | u8 mode | Set the background mode. A mode other than 0 starts a new background. |
-| 0x08 | 0x02 | u8 n | Wait n × 4 ticks. |
-| 0x0c | 0x03 | Shape operands | Draw a shape without scale or rotation. |
-| 0x10 | 0x04 | u8 palette, u8 destination | Set 16 film colors from a POL palette. |
-| 0x14 | 0x05 | None | The same as 0x00. |
-| 0x18 | 0x06 | u16 text | Show the caption band and a caption. |
-| 0x1c | 0x07 | None | Nothing. |
-| 0x20 | 0x08 | 3 bytes | Nothing. The reader does not use the 3 bytes. |
-| 0x24 | 0x09 | Page loop | Present the picture after 4 ticks, start a new picture, then do the page loop. |
-| 0x28 | 0x0a | Shape operands | Draw a scaled shape. |
-| 0x2c | 0x0b | Shape operands | Draw a rotated shape. |
-| 0x30 | 0x0c | None | Present the shown picture again after 9 ticks (a hold). |
-| 0x34 | 0x0d | u16 text, then u8 column and u8 row | Add a positioned text. The text 0xffff has no column and row bytes, and adds nothing. |
-| 0x38 | 0x0e | Page loop | Do the page loop. |
-| 0x80-0xff | | None | The film ends. The supplied files use 0xff. |
-
-The reader refuses the command bytes 0x3c to 0x7c (the opcodes 0x0f to 0x1f).
+The reader refuses the other bytes: a byte with bit 0 or bit 1 set, and the bytes 0x3c to 0x7c.
 
 ### Shape operands (0x0c, 0x28, 0x2c)
 
@@ -421,7 +416,7 @@ stops the start when the reader refuses one. A film can have more entries than t
 | `TruncatedCinematic` | A read past the end of the CMD or POL file, also for the step after a horizontal step |
 | `InvalidCinematicEntry` | N above 1024, or an entry number of N or more (1 or more when N is 0) |
 | `UnsupportedCinematicCommandFlags` | A command byte with bit 0 or 1 set |
-| `UnsupportedCinematicCommand` | The command bytes 0x3c to 0x7c (the opcodes 0x0f to 0x1f) |
+| `UnsupportedCinematicCommand` | The command bytes 0x3c to 0x7c |
 | `UnsupportedCinematicShapeFlags` | Reference bit 11, or bits 12-14 in a placed or scaled shape |
 | `UnsupportedCinematicAngle` | An angle of 360 or more |
 | `InvalidCinematicPalette` | A palette destination other than 0 and 1 |
