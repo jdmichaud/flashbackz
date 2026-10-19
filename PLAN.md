@@ -1122,6 +1122,13 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   in room 60 at updates 265 to 371, `--game-frames`) matches the port on every character for
   600 updates and on all 597 presented frames, pixel for pixel. No change; the quirk is in
   `docs/formats/object-art.md`.
+- [ ] **FL-1 — The films in the data set, in their original formats** (user, 2026-10-19: "We will
+  keep the format but still extract them for edition. Please do this now."). The extractor
+  copies each film's CMD and POL files and the captions (ENGCINE.BIN, ENGCINE.TXT) unchanged into
+  `films/` of the data set; the readers of a data set keep them beside the `.zon` files; the game
+  reads them from the data set through an asset source in front of the original's files.
+  DESIGN.md 3 changed with the user's decision. Gate: tests; sessions and traces unchanged; the
+  extraction writes every film; a film changed in a `--data` directory plays changed.
 
 ## Historical CD implementation/research milestones
 

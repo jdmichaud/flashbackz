@@ -76,8 +76,11 @@ Revised 2026-10-08 with the user's approval: behavior and level content become r
 Two kinds of original content are used, in two different ways:
 
 - **Images and sound** are always read from the user's original files at runtime: room art,
-  sprites, palettes, cinematics, music and samples. They are decoded into owned assets and
-  never written out (except by the level atlas, below) or committed. So are the animations
+  sprites, palettes, music and samples. They are decoded into owned assets and never written out
+  (except by the level atlas, below) or committed. The films are the exception (user decision,
+  2026-10-19): the extractor copies their files (CMD, POL and the captions' ENGCINE.BIN and
+  ENGCINE.TXT) unchanged into the data set's `films/`, where a user can replace them, and the game
+  plays them from there. So are the animations
   (each frame's sprite and movement, a sound cue, a pose): the engine reads past an
   animation's last frame into the file's next bytes, as the original does, so the frames keep
   the file's layout (`content/animations.zig`).
