@@ -1092,7 +1092,7 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   extracted headers read; tests; sessions and traces unchanged; the new fingerprint given.
   - 2026-10-19, `81b54ec`: both headers rewritten; tests 299/299; sessions and traces unchanged;
     the fingerprint is now `698c987d431c83c6`.
-- [ ] **SV-1 — Saves that only the level's shape can refuse** (user, 2026-10-19: "The save format
+- [x] **SV-1 — Saves that only the level's shape can refuse** (user, 2026-10-19: "The save format
   is too brittle", then "Yes and option 1 too"). A save records its level's shape (the
   characters in order by their placement, and each behavior's states in order) in place of the
   data set's byte fingerprint; no save while a requested film waits (`requested_scene` leaves
@@ -1100,6 +1100,9 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   version 2 saves. DESIGN.md 4 changed with the user's approval. Gate: tests (a comment, a
   rename or a rule change keeps a save; a reordered state or character refuses it); agent
   sessions and traces unchanged or explained; a version 2 save converted by the sed loads.
+  - 2026-10-19, `fe1cfbb`: tests 299/299; sessions and traces unchanged; save and load in one frame
+    give the saved state (3 levels); converted version 2 saves load with their state; a comment
+    edit keeps a save, a changed state refuses it.
 
 ## Historical CD implementation/research milestones
 
