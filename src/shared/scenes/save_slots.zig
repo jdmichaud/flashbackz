@@ -123,7 +123,7 @@ pub const Page = struct {
             try text.draw(pixels, 256, 224, glyphs, chosen.save.date, 96, 166, style);
         }
         const status: []const u8 = if (self.confirming)
-            "SAVE OVER IT?"
+            "OVERWRITE?"
         else if (self.refused) switch (chosen) {
             .other_version => "ANOTHER VERSION",
             .broken => "IT DOES NOT READ",
