@@ -1131,6 +1131,10 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   extraction writes every film; a film changed in a `--data` directory plays changed.
   - 2026-10-19, `8f663b5`: 29 CMD, 29 POL and the 2 caption files, identical to the originals;
     sessions and traces unchanged; an edited `LOGOS.POL` in `--data` changes the title's frames.
+- [ ] **ED-1 — A film editor** (user, 2026-10-20: "Alright, let's write this down", after the
+  design discussion of the same day). A tool to trace, edit and preview the films of the data
+  set (FL-1) and export them. First step: the design note `docs/film-editor.md` (the model, the
+  project file, the UI, preview, export, resolutions, open questions). Not started beyond it.
 
 ## Historical CD implementation/research milestones
 
