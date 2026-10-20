@@ -3,6 +3,15 @@
 Status: design discussion with the user, 2026-10-19 and 2026-10-20 (PLAN ED-1). Nothing is built.
 The note records the decisions taken so far and the questions still open.
 
+## Technology
+
+A separate program, not part of flashbackz (user decision, 2026-10-20). It is written against the
+classic Win32 API: a window class, a window procedure, menus and child controls. On Windows it
+uses the real API; elsewhere it runs on ween32 (https://github.com/jdmichaud/ween32), a portable
+Zig reimplementation of that API with the classic Windows 2000 look. That look fits the classic,
+minimalist interface below. For the preview it can still link the film code of flashbackz's
+shared module, which has no host dependency.
+
 ## Purpose
 
 A tool to make and change the game's vector films: trace filmed footage the way the originals were
@@ -147,5 +156,5 @@ range of frames.
 - Editing a shape's outlines: in place, or in a separate shape mode with the frame dimmed?
 - The preview: in the drawing zone, or in its own window?
 - The modern vector format: Lottie, SVG, or both?
-- The editor's technology: part of flashbackz (Zig, SDL, the game's own renderer), or a separate
-  program?
+- Where the editor's repository lives, and how it gets flashbackz's film code (a Zig package
+  dependency, or a copy of the module).
