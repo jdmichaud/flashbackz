@@ -1075,10 +1075,10 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   - [x] `6dc17b3`: FPS and UPS of the last whole second, the level, the view room, Conrad;
     tests 294/294; sessions and traces unchanged; F3 in an agent run leaves the state and frame
     hashes as they were; a preview with the supplied font.
-  - [ ] TPF beside FPS (user, 2026-11-04: "add a TPF (time per frame) in ms (milliseconds) with
+  - [x] TPF beside FPS (user, 2026-11-04: "add a TPF (time per frame) in ms (milliseconds) with
     1 digit precision and 3 digit padding", "The padding should be space"): the mean time
     between presented frames in the last whole second, for example `TPF  16.7 MS`. Gate: unit
-    tests; sessions and traces unchanged.
+    tests; sessions and traces unchanged. Done: tests 301/301; sessions and traces unchanged.
   - [ ] The SDL game shows it (user).
 - [ ] **UX-5 — HELP in the in-game menu** (user, 2026-10-18: "add an entry in the in-game menu to
   open an help menu"). The options dialog gets a HELP entry that opens a page of the controls:

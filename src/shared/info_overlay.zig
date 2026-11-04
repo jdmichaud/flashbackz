@@ -1,13 +1,14 @@
 //! The information overlay that F3 shows or hides (PLAN UX-4), at the top left of the picture:
 //!
-//!     FPS 60  UPS 35
+//!     FPS 60  TPF  16.7 MS  UPS 35
 //!     EARTH CITY
 //!     ROOM 34  X 144  Y 142
 //!
-//! FPS counts the frames presented in the last whole second, UPS the updates. In a level, the
-//! next lines give the level, the view room and Conrad's position in his room; outside a level
-//! only FPS shows. As the pads' messages are, it is drawn over the presented picture only: the
-//! page and the agent's hashes never hold it.
+//! FPS counts the frames presented in the last whole second, TPF is the mean time between them
+//! in milliseconds, and UPS counts the updates. In a level, the next lines give the level, the
+//! view room and Conrad's position in his room; outside a level only FPS and TPF show. As the
+//! pads' messages are, it is drawn over the presented picture only: the page and the agent's
+//! hashes never hold it.
 const std = @import("std");
 const font_mod = @import("content/font.zig");
 const rgba_text = @import("render/rgba_text.zig");
@@ -36,6 +37,8 @@ pub const InfoOverlay = struct {
     /// The rates of the last whole second.
     fps: u64 = 0,
     ups: u64 = 0,
+    /// The mean time per frame of the last whole second, in nanoseconds.
+    tpf_ns: u64 = 0,
 
     /// Counts the rates at a presented frame. `frames` and `updates` are the game's totals; a
     /// total that went back (a new game) restarts the count.
@@ -50,7 +53,11 @@ pub const InfoOverlay = struct {
         }
         const elapsed = now_ns -| start;
         if (elapsed < std.time.ns_per_s) return;
-        self.fps = (frames - self.frames_at_start) * std.time.ns_per_s / elapsed;
+        const frames_counted = frames - self.frames_at_start;
+        self.fps = frames_counted * std.time.ns_per_s / elapsed;
+        if (frames_counted > 0) {
+            self.tpf_ns = elapsed / frames_counted;
+        }
         self.ups = (updates - self.updates_at_start) * std.time.ns_per_s / elapsed;
         self.restart(now_ns, frames, updates);
     }
@@ -64,12 +71,20 @@ pub const InfoOverlay = struct {
     /// The lines of the overlay, written in `buffer`.
     pub fn lines(self: *const InfoOverlay, level: ?Level, buffer: *[3][32]u8) [3][]const u8 {
         var result: [3][]const u8 = .{ "", "", "" };
+        // The milliseconds with one decimal, padded with spaces to three digits before the point.
+        const tpf_ms = @as(f64, @floatFromInt(self.tpf_ns)) / std.time.ns_per_ms;
         const level_shown = level orelse {
-            result[0] = std.fmt.bufPrint(&buffer[0], "FPS {d}", .{ self.fps }) catch unreachable;
+            result[0] = std.fmt.bufPrint(&buffer[0], "FPS {d}  TPF {d:>5.1} MS", .{
+                self.fps,
+                tpf_ms,
+            }) catch unreachable;
             return result;
         };
-        result[0] = std.fmt.bufPrint(&buffer[0], "FPS {d}  UPS {d}", .{ self.fps, self.ups }) catch
-            unreachable;
+        result[0] = std.fmt.bufPrint(&buffer[0], "FPS {d}  TPF {d:>5.1} MS  UPS {d}", .{
+            self.fps,
+            tpf_ms,
+            self.ups,
+        }) catch unreachable;
         const name = buffer[1][0..@min(level_shown.name.len, buffer[1].len)];
         for (name, level_shown.name[0..name.len]) |*out, character| {
             out.* = if (character == '_') ' ' else std.ascii.toUpper(character);
@@ -117,9 +132,11 @@ test "the rates are those of the last whole second" {
     overlay.count(1_000_000_000, 60, 35);
     try std.testing.expectEqual(@as(u64, 60), overlay.fps);
     try std.testing.expectEqual(@as(u64, 35), overlay.ups);
-    // Two seconds with 100 frames and 70 updates: 50 and 35 a second.
+    try std.testing.expectEqual(@as(u64, 16_666_666), overlay.tpf_ns);
+    // Two seconds with 100 frames and 70 updates: 50 and 35 a second, 20 ms a frame.
     overlay.count(3_000_000_000, 160, 105);
     try std.testing.expectEqual(@as(u64, 50), overlay.fps);
+    try std.testing.expectEqual(@as(u64, 20_000_000), overlay.tpf_ns);
     try std.testing.expectEqual(@as(u64, 35), overlay.ups);
     // A new game's update total goes back: the count starts again, the last rates stay.
     overlay.count(3_100_000_000, 166, 3);
@@ -129,14 +146,14 @@ test "the rates are those of the last whole second" {
 }
 
 test "the lines give the rates, and in a level its name, the room and Conrad" {
-    var overlay: InfoOverlay = .{ .fps = 60, .ups = 35 };
+    var overlay: InfoOverlay = .{ .fps = 60, .ups = 35, .tpf_ns = 16_666_666 };
     var buffer: [3][32]u8 = undefined;
     const outside = overlay.lines(null, &buffer);
-    try std.testing.expectEqualStrings("FPS 60", outside[0]);
+    try std.testing.expectEqualStrings("FPS 60  TPF  16.7 MS", outside[0]);
     try std.testing.expectEqualStrings("", outside[1]);
     const level: Level = .{ .name = "earth_city", .view_room = 34, .room = 34, .x = 144, .y = -2 };
     const inside = overlay.lines(level, &buffer);
-    try std.testing.expectEqualStrings("FPS 60  UPS 35", inside[0]);
+    try std.testing.expectEqualStrings("FPS 60  TPF  16.7 MS  UPS 35", inside[0]);
     try std.testing.expectEqualStrings("EARTH CITY", inside[1]);
     try std.testing.expectEqualStrings("ROOM 34  X 144  Y -2", inside[2]);
     var away = level;
@@ -145,6 +162,13 @@ test "the lines give the rates, and in a level its name, the room and Conrad" {
         "ROOM 34  CONRAD 35 144 -2",
         overlay.lines(away, &buffer)[2],
     );
+    // The padding keeps the point in place from 1 to 999 ms; more widens the line.
+    overlay.fps = 400;
+    overlay.tpf_ns = 2_500_000;
+    try std.testing.expectEqualStrings("FPS 400  TPF   2.5 MS", overlay.lines(null, &buffer)[0]);
+    overlay.fps = 0;
+    overlay.tpf_ns = 1_234_560_000;
+    try std.testing.expectEqualStrings("FPS 0  TPF 1234.6 MS", overlay.lines(null, &buffer)[0]);
 }
 
 test "the overlay draws only when shown" {
