@@ -1145,6 +1145,12 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   design discussion of the same day). A tool to trace, edit and preview the films of the data
   set (FL-1) and export them. First step: the design note `docs/film-editor.md` (the model, the
   project file, the UI, preview, export, resolutions, open questions). Not started beyond it.
+- [ ] **PF-1 — Shapes filled a span at a time** (user, 2026-11-04, on filling the films' polygons
+  one pixel at a time: "Using memset seems smart."). The shape canvas clips each row's span once
+  and fills it with `@memset` (a color) or one loop (a see-through mask), instead of clipping
+  every pixel; polygons, flat rows and ellipses alike. The pixels stay the same. Gate: unit
+  tests; sessions and traces unchanged (their frame hashes hold the pixels); the instructions
+  of the game's code per frame measured before and after.
 
 ## Historical CD implementation/research milestones
 
