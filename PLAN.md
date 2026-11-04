@@ -1145,12 +1145,17 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
   design discussion of the same day). A tool to trace, edit and preview the films of the data
   set (FL-1) and export them. First step: the design note `docs/film-editor.md` (the model, the
   project file, the UI, preview, export, resolutions, open questions). Not started beyond it.
-- [ ] **PF-1 — Shapes filled a span at a time** (user, 2026-11-04, on filling the films' polygons
+- [x] **PF-1 — Shapes filled a span at a time** (user, 2026-11-04, on filling the films' polygons
   one pixel at a time: "Using memset seems smart."). The shape canvas clips each row's span once
   and fills it with `@memset` (a color) or one loop (a see-through mask), instead of clipping
   every pixel; polygons, flat rows and ellipses alike. The pixels stay the same. Gate: unit
   tests; sessions and traces unchanged (their frame hashes hold the pixels); the instructions
   of the game's code per frame measured before and after.
+  - 2026-11-04: tests 301/301; sessions and traces unchanged; 164 agent runs of the title and
+    of the jungle, city and tower openings (their films), stopped every 37 frames, give the same
+    state and frame hashes as before. The agent's instructions per frame over the first 1,200
+    frames (ReleaseFast, start-up left out): jungle 766,000 to 532,000 (-31%), city 1,008,000 to
+    842,000 (-16%).
 
 ## Historical CD implementation/research milestones
 

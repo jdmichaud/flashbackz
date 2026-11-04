@@ -40,6 +40,31 @@ pub const Canvas = struct {
         }
     }
 
+    /// Inks the pixels `first` to `last` of row `y`, both included, that are inside the clip and
+    /// the canvas: the same pixels as `plot` on each, in one fill.
+    fn span(self: Canvas, first: i32, last: i32, y: i32, ink: Ink) void {
+        if (y < self.clip.y or
+            y >= @as(i32, self.clip.y) + self.clip.height or
+            y < 0 or
+            y >= self.height) {
+            return;
+        }
+        const clip_right = @as(i32, self.clip.x) + self.clip.width - 1;
+        const canvas_right = @as(i32, self.width) - 1;
+        const left = @max(first, self.clip.x, 0);
+        const right = @min(last, clip_right, canvas_right);
+        if (left > right) return;
+        const start = @as(usize, @intCast(y)) * self.width + @as(usize, @intCast(left));
+        const count: usize = @intCast(right - left + 1);
+        const pixels = self.pixels[start..][0..count];
+        switch (ink) {
+            .color => |color| @memset(pixels, color),
+            .mask => |mask| for (pixels) |*pixel| {
+                pixel.* |= mask;
+            },
+        }
+    }
+
     fn line(self: Canvas, first: Point, second: Point, ink: Ink) void {
         const a = if (first.y <= second.y) first else second;
         const b = if (first.y <= second.y) second else first;
@@ -80,17 +105,11 @@ pub const Canvas = struct {
         const lower = @as(i32, center.y) + row;
         const upper = @as(i32, center.y) - row;
         if ((lower < top or lower >= bottom) and (upper < top or upper >= bottom)) return;
-        const left = @max(@as(i32, center.x) - radius, self.clip.x);
-        const right = @min(
-            @as(i32, center.x) + radius,
-            @as(i32, self.clip.x) + self.clip.width - 1,
-        );
-        var x = left;
-        while (x <= right) : (x += 1) {
-            self.plot(x, @as(i32, center.y) + row, ink);
-            if (row != 0) {
-                self.plot(x, @as(i32, center.y) - row, ink);
-            }
+        const left = @as(i32, center.x) - radius;
+        const right = @as(i32, center.x) + radius;
+        self.span(left, right, lower, ink);
+        if (row != 0) {
+            self.span(left, right, upper, ink);
         }
     }
 
@@ -194,10 +213,7 @@ pub const Canvas = struct {
             max_x = @max(max_x, point.x);
         }
         if (top == bottom) {
-            var x = @max(min_x, self.clip.x);
-            while (x <= @min(max_x, @as(i32, self.clip.x) + self.clip.width - 1)) : (x += 1) {
-                self.plot(x, top, ink);
-            }
+            self.span(min_x, max_x, top, ink);
             return;
         }
         // From the top vertex, the left chain walks to lower indices and the right chain to
@@ -251,11 +267,7 @@ pub const Canvas = struct {
                     last -= @divTrunc(right.step, 2);
                 }
             }
-            var x = @max(first >> 16, self.clip.x);
-            const end = @min(last >> 16, @as(i32, self.clip.x) + self.clip.width - 1);
-            while (x <= end) : (x += 1) {
-                self.plot(x, y, ink);
-            }
+            self.span(first >> 16, last >> 16, y, ink);
         }
     }
 };
