@@ -1079,10 +1079,12 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
     1 digit precision and 3 digit padding", "The padding should be space"): the mean time
     between presented frames in the last whole second, for example `TPF  16.7 MS`. Gate: unit
     tests; sessions and traces unchanged. Done: tests 301/301; sessions and traces unchanged.
-  - [ ] TPF as the game's work for each frame (user, 2026-11-04, on 16.7 ms: "We take a whole
+  - [x] TPF as the game's work for each frame (user, 2026-11-04, on 16.7 ms: "We take a whole
     16ms on a Ryzen 9050X to render a flashback frame?"): the frames' interval is the display's
     (vsync) and FPS gives it already; TPF times the updates, the drawing and the sound, without
-    the host's present. Gate: unit tests; sessions and traces unchanged.
+    the host's present. Gate: unit tests; sessions and traces unchanged. Done: tests 301/301;
+    sessions and traces unchanged; measured here, 10 s of the city: 1.0 ms a frame in Debug,
+    0.13 ms in ReleaseFast.
   - [ ] The SDL game shows it (user).
 - [ ] **UX-5 — HELP in the in-game menu** (user, 2026-10-18: "add an entry in the in-game menu to
   open an help menu"). The options dialog gets a HELP entry that opens a page of the controls:

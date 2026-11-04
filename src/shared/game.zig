@@ -160,6 +160,10 @@ pub const Game = struct {
     notice_font: ?font_mod.Font = null,
     /// The information overlay that F3 shows or hides.
     info: info_overlay.InfoOverlay = .{},
+    /// The time spent in all the updates so far, and the part of it in the host's present, which
+    /// can wait for the display. The rest is the game's own work, which the overlay's TPF shows.
+    updating_ns: u64 = 0,
+    presenting_ns: u64 = 0,
     /// The pad that pressed last: the CONTROLS page shows and changes its layout.
     last_pad: ?platform.ControllerId = null,
     /// The walks of this game's levels before the one in play, which its play time counts.
@@ -348,6 +352,8 @@ pub const Game = struct {
     /// One pass of the host's loop. `step` updates the scene and presents the picture. Then
     /// `pump` gives the sound to the host. A level can show 0 to 8 frames in one update.
     pub fn update(self: *Game, p: *platform.Platform) !UpdateResult {
+        const started = p.nowNs();
+        defer self.updating_ns += p.nowNs() -| started;
         const result = try self.step(p);
         if (result == .finished) {
             self.sound.close(p);
@@ -1138,7 +1144,11 @@ pub const Game = struct {
         }
         // This machine's own overlays, over the picture only.
         const now = p.nowNs();
-        self.info.count(now, self.frames_presented, self.playedWalks());
+        self.info.count(now, .{
+            .frames = self.frames_presented,
+            .updates = self.playedWalks(),
+            .work_ns = self.updating_ns -| self.presenting_ns,
+        });
         if (self.notice_font) |*font| {
             self.info.draw(frame, picture_width, picture_height, font, self.infoLevel());
             if (self.pad_notice) |*notice| {
@@ -1148,6 +1158,8 @@ pub const Game = struct {
             }
         }
         self.last_frame_hash = std.hash.Wyhash.hash(0, indices);
+        const presenting = p.nowNs();
+        defer self.presenting_ns += p.nowNs() -| presenting;
         try p.present(.{
             .width = picture_width,
             .height = picture_height,
