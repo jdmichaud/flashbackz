@@ -338,6 +338,11 @@ pub fn Parser(comptime spec: Spec) type {
 
         pub fn writeHelp(w: *std.Io.Writer) std.Io.Writer.Error!void {
             try writeUsage(w);
+            try writeDetails(w);
+        }
+
+        /// The help after its usage line: the description, the arguments and the options.
+        pub fn writeDetails(w: *std.Io.Writer) std.Io.Writer.Error!void {
             if (spec.description.len != 0) {
                 try w.writeAll(spec.description ++ "\n");
             }
@@ -480,6 +485,35 @@ const Example = Parser(.{
 
 fn parseExample(args: []const []const u8, diagnostic: *Diagnostic) !Example {
     return Example.parse(std.testing.allocator, args, diagnostic);
+}
+
+/// The value given to `--long` in `args` (`--long VALUE` or `--long=VALUE`, the last one given),
+/// read without parsing: for a help that names what the other options set, since `--help` stops
+/// the parsing.
+pub fn lastValue(args: []const []const u8, comptime long: []const u8) ?[]const u8 {
+    var found: ?[]const u8 = null;
+    var i: usize = 0;
+    while (i < args.len) : (i += 1) {
+        const arg = args[i];
+        if (std.mem.eql(u8, arg, "--")) break;
+        if (std.mem.eql(u8, arg, "--" ++ long)) {
+            if (i + 1 < args.len) found = args[i + 1];
+            i += 1;
+        } else if (std.mem.startsWith(u8, arg, "--" ++ long ++ "=")) {
+            found = arg[long.len + 3 ..];
+        }
+    }
+    return found;
+}
+
+test "lastValue reads an option's value without parsing" {
+    const args = [_][]const u8{
+        "--saves", "a", "--help", "--config=b", "--saves=c", "--", "--saves", "d",
+    };
+    try std.testing.expectEqualStrings("c", lastValue(&args, "saves").?);
+    try std.testing.expectEqualStrings("b", lastValue(&args, "config").?);
+    try std.testing.expect(lastValue(&args, "data") == null);
+    try std.testing.expect(lastValue(&.{"--saves"}, "saves") == null);
 }
 
 test "options, values and positional groups" {

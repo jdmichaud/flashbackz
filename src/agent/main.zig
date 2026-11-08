@@ -132,13 +132,10 @@ pub fn main(init: std.process.Init) !void {
     // The arena keeps the arguments for the whole run.
     const arena = init.arena.allocator();
     var diagnostic: clap.Diagnostic = .{};
-    const args = Args.parse(
-        arena,
-        try clap.processArguments(arena, init.minimal.args),
-        &diagnostic,
-    ) catch |err|
+    const raw = try clap.processArguments(arena, init.minimal.args);
+    const args = Args.parse(arena, raw, &diagnostic) catch |err|
         return fail(io, err, diagnostic);
-    if (args.help) return help(io, arena, init.environ_map);
+    if (args.help) return help(io, arena, init.environ_map, raw);
     const frames = (args.number(u64, "frames", 0, std.math.maxInt(u64), &diagnostic) catch |err|
         return fail(io, err, diagnostic)) orelse 120;
     var options = native.cli.fromArgs(args, &diagnostic) catch |err|
@@ -487,10 +484,20 @@ fn fail(io: std.Io, err: clap.Error, diagnostic: clap.Diagnostic) !void {
     std.process.exit(2);
 }
 
-fn help(io: std.Io, allocator: std.mem.Allocator, environ: *const std.process.Environ.Map) !void {
+fn help(
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    environ: *const std.process.Environ.Map,
+    raw: []const []const u8,
+) !void {
     var buf: [4096]u8 = undefined;
     var w = std.Io.File.stdout().writerStreaming(io, &buf);
-    try Args.writeHelp(&w.interface);
-    try native.cli.writeStorageHelp(&w.interface, allocator, environ, .memory);
+    try Args.writeUsage(&w.interface);
+    const given: native.cli.GivenStorage = .{
+        .saves = clap.lastValue(raw, "saves"),
+        .config = clap.lastValue(raw, "config"),
+    };
+    try native.cli.writeStorageHelp(&w.interface, allocator, environ, .memory, given);
+    try Args.writeDetails(&w.interface);
     try w.interface.flush();
 }

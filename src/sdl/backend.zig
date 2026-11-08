@@ -163,13 +163,13 @@ pub const SdlBackend = struct {
         .poll_events = pollEvents,
         .now_ns = nowNs,
         .audio_open = audioOpen,
-        .available_memory = availableMemory,
-        .controller_model = controllerModel,
-        .local_time = localTime,
         .audio_queue = audioQueue,
         .audio_status = audioStatus,
         .audio_clear = audioClear,
         .audio_close = audioClose,
+        .available_memory = availableMemory,
+        .controller_model = controllerModel,
+        .local_time = localTime,
     };
 
     fn cast(ctx: *anyopaque) *SdlBackend {

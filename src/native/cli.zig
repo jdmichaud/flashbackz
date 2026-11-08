@@ -669,53 +669,69 @@ fn variable(environ: *const std.process.Environ.Map, name: []const u8) ?[]const 
     return if (value.len == 0) null else value;
 }
 
-/// The end of a host's help: where the saves and the settings go without `--saves` and
-/// `--config`. The user's directories come from this run's environment, as `Providers.open`
-/// makes them.
+/// What `--saves` and `--config` give, for the help.
+pub const GivenStorage = struct { saves: ?[]const u8 = null, config: ?[]const u8 = null };
+
+/// The folders in a host's help, after its usage line: `save:` the saves' directory, `config:`
+/// the settings' file, at `--saves` and `--config` when given, else as this run makes them
+/// (`Providers.open`): the user's directories from its environment, or the agent's memory.
 pub fn writeStorageHelp(
     w: *std.Io.Writer,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
     default_storage: DefaultStorage,
+    given: GivenStorage,
 ) (std.Io.Writer.Error || error{ OutOfMemory })!void {
-    try w.writeAll("\nWithout --saves and --config:\n");
-    if (default_storage == .memory) {
-        return w.writeAll("  the saves and the settings stay in memory, for this run only\n");
-    }
-    try writeDefault(w, allocator, environ, "saves     ", save_directory, "", "--saves");
-    const settings_file = std.fs.path.sep_str ++ flashbackz.settings.record_name;
-    try writeDefault(
+    try w.writeByte('\n');
+    try writeFolder(
         w,
         allocator,
         environ,
-        "settings  ",
+        default_storage,
+        "save:   ",
+        given.saves,
+        save_directory,
+        "",
+        "--saves",
+    );
+    const settings_file = std.fs.path.sep_str ++ flashbackz.settings.record_name;
+    try writeFolder(
+        w,
+        allocator,
+        environ,
+        default_storage,
+        "config: ",
+        given.config,
         config_directory,
         settings_file,
         "--config",
     );
+    try w.writeByte('\n');
 }
 
-/// One line of `writeStorageHelp`: the label, then the directory and `file`, or the option to
-/// give when the environment names no directory.
-fn writeDefault(
+/// One line of `writeStorageHelp`: the label, then the directory given or made and `file`, or
+/// what stands for it.
+fn writeFolder(
     w: *std.Io.Writer,
     allocator: std.mem.Allocator,
     environ: *const std.process.Environ.Map,
+    default_storage: DefaultStorage,
     comptime label: []const u8,
+    given: ?[]const u8,
     comptime place: UserDirectory,
     comptime file: []const u8,
     comptime option: []const u8,
 ) (std.Io.Writer.Error || error{ OutOfMemory })!void {
+    if (given) |directory| return w.print(label ++ "{s}" ++ file ++ "\n", .{ directory });
+    if (default_storage == .memory) return w.writeAll(label ++ "memory, for this run only\n");
     const directory = userDirectory(allocator, environ, place) catch |err| switch (err) {
         error.NoApplicationDirectory => {
-            return w.writeAll(
-                "  " ++ label ++ "no per-user directory here: give " ++ option ++ " DIR\n",
-            );
+            return w.writeAll(label ++ "none here: give " ++ option ++ " DIR\n");
         },
         error.OutOfMemory => return error.OutOfMemory,
     };
     defer allocator.free(directory);
-    try w.print("  " ++ label ++ "{s}" ++ file ++ "\n", .{ directory });
+    try w.print(label ++ "{s}" ++ file ++ "\n", .{ directory });
 }
 
 const contract = @import("contract.zig");
@@ -804,25 +820,36 @@ test "the configuration directory follows the platform's conventions" {
     }
 }
 
-test "the help names the save and configuration directories of this run" {
+test "the help names the save and configuration folders of this run" {
     const allocator = std.testing.allocator;
     var buf: [512]u8 = undefined;
     {
         var w: std.Io.Writer = .fixed(&buf);
         var env = try testEnviron(
             allocator,
-            &.{.{ "HOME", "/home/player" }, .{ "APPDATA", "C:\\Users\\player\\AppData\\Roaming" }},
+            &.{
+                .{ "HOME", "/home/player" },
+                .{ "APPDATA", "C:\\Users\\player\\AppData\\Roaming" },
+            },
         );
         defer env.deinit();
-        try writeStorageHelp(&w, allocator, &env, .user_directories);
+        try writeStorageHelp(&w, allocator, &env, .user_directories, .{});
         const want = if (builtin.os.tag == .windows)
-            "  saves     C:\\Users\\player\\AppData\\Roaming\\flashbackz\\saves\n" ++
-                "  settings  C:\\Users\\player\\AppData\\Roaming\\flashbackz\\settings.zon\n"
+            "save:   C:\\Users\\player\\AppData\\Roaming\\flashbackz\\saves\n" ++
+                "config: C:\\Users\\player\\AppData\\Roaming\\flashbackz\\settings.zon\n"
         else
-            "  saves     /home/player/.local/share/flashbackz/saves\n" ++
-                "  settings  /home/player/.config/flashbackz/settings.zon\n";
+            "save:   /home/player/.local/share/flashbackz/saves\n" ++
+                "config: /home/player/.config/flashbackz/settings.zon\n";
+        try std.testing.expectEqualStrings("\n" ++ want ++ "\n", w.buffered());
+    }
+    {
+        var w: std.Io.Writer = .fixed(&buf);
+        var env = try testEnviron(allocator, &.{});
+        defer env.deinit();
+        try writeStorageHelp(&w, allocator, &env, .user_directories, .{ .config = "conf" });
         try std.testing.expectEqualStrings(
-            "\nWithout --saves and --config:\n" ++ want,
+            "\nsave:   none here: give --saves DIR\n" ++
+                "config: conf" ++ std.fs.path.sep_str ++ "settings.zon\n\n",
             w.buffered(),
         );
     }
@@ -830,21 +857,10 @@ test "the help names the save and configuration directories of this run" {
         var w: std.Io.Writer = .fixed(&buf);
         var env = try testEnviron(allocator, &.{});
         defer env.deinit();
-        try writeStorageHelp(&w, allocator, &env, .user_directories);
+        try writeStorageHelp(&w, allocator, &env, .memory, .{ .saves = "mine" });
         try std.testing.expectEqualStrings(
-            "\nWithout --saves and --config:\n" ++
-                "  saves     no per-user directory here: give --saves DIR\n" ++
-                "  settings  no per-user directory here: give --config DIR\n",
+            "\nsave:   mine\nconfig: memory, for this run only\n\n",
             w.buffered(),
-        );
-    }
-    {
-        var w: std.Io.Writer = .fixed(&buf);
-        var env = try testEnviron(allocator, &.{});
-        defer env.deinit();
-        try writeStorageHelp(&w, allocator, &env, .memory);
-        try std.testing.expect(
-            std.mem.endsWith(u8, w.buffered(), "stay in memory, for this run only\n"),
         );
     }
 }

@@ -1156,13 +1156,16 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
     state and frame hashes as before. The agent's instructions per frame over the first 1,200
     frames (ReleaseFast, start-up left out): jungle 766,000 to 532,000 (-31%), city 1,008,000 to
     842,000 (-16%).
-
-- [ ] **UX-8 — `--help` names the folders first, tersely** (user, 2026-11-08: "put the info on
+- [x] **UX-8 — `--help` names the folders first, tersely** (user, 2026-11-08: "put the info on
   the config/save folder first and don't be so verbose"). Both hosts' help: the usage line, then
   `save:` the saves' directory and `config:` the settings' file, at `--saves` and `--config`
   when given (even with `--help`), else this run's per-user directories (the agent's: memory),
   then the rest. Gate: a unit test of the lines; `flashbackz --help` with and without the
   options.
+  - 2026-11-08: tests 302/302 (the lines for the user's directories, a `--config` with no
+    environment, the agent's memory with a `--saves`; `clap.lastValue`); `flashbackz --help`
+    names ~/.local/share/flashbackz/saves and ~/.config/flashbackz/settings.zon, with `--saves
+    /tmp/s --config=/tmp/c` those; `flashbackz-agent --help` names memory.
 
 ## Historical CD implementation/research milestones
 
