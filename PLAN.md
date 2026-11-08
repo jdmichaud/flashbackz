@@ -1157,6 +1157,13 @@ zigfmt clean, and `tools/agent_sessions.txt` and `tools/agent_traces.txt` reprod
     frames (ReleaseFast, start-up left out): jungle 766,000 to 532,000 (-31%), city 1,008,000 to
     842,000 (-16%).
 
+- [ ] **UX-8 — `--help` names the folders first, tersely** (user, 2026-11-08: "put the info on
+  the config/save folder first and don't be so verbose"). Both hosts' help: the usage line, then
+  `save:` the saves' directory and `config:` the settings' file, at `--saves` and `--config`
+  when given (even with `--help`), else this run's per-user directories (the agent's: memory),
+  then the rest. Gate: a unit test of the lines; `flashbackz --help` with and without the
+  options.
+
 ## Historical CD implementation/research milestones
 
 The sibling flashback-re plan owns research. Exact fidelity and maintainability are independent
